@@ -1,0 +1,30 @@
+{
+  "name": "guides",
+  "private": true,
+  "author": {
+    "name": "@codingwithmanny"
+  },
+  "scripts": {
+    "clean": "turbo clean; rm -rf node_modules; rm -rf .turbo;",
+    "build": "turbo build",
+    "dev": "turbo dev",
+    "lint": "turbo lint",
+    "format": "prettier --write \"**/*.{ts,tsx,md}\"",
+    "with-env": "dotenv -e ./.env --",
+    "deploy:berachain": "pnpm with-env turbo run deploy:berachain",
+    "verify": "pnpm with-env turbo run verify"
+  },
+  "devDependencies": {
+    "@repo/eslint-config": "workspace:*",
+    "@repo/typescript-config": "workspace:*",
+    "prettier": "^3.1.0",
+    "turbo": "latest"
+  },
+  "packageManager": "pnpm@8.9.0",
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "dotenv-cli": "^7.3.0"
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "name": "hardhat-viem-helloworld",
+  "scripts": {
+    "compile": "./node_modules/.bin/hardhat compile",
+    "node": "./node_modules/.bin/hardhat node",
+    "deploy:localhost": "./node_modules/.bin/hardhat run scripts/deploy.ts --network localhost",
+    "deploy:berachain": "echo $RPC_URL; ./node_modules/.bin/hardhat run scripts/deploy.ts --network berachainTestnet",
+    "test": "./node_modules/.bin/hardhat test",
+    "verify": "echo 'https://api.routescan.io/v2/network/testnet/evm/80085/etherscan'; ./node_modules/.bin/hardhat verify --network berachainTestnet",
+    "clean": "rm -rf node_modules; rm -rf .turbo;"
+  },
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox-viem": "^1.0.0",
+    "dotenv": "^16.3.1",
+    "dotenv-cli": "^7.3.0",
+    "hardhat": "^2.19.1",
+    "viem": "^1.19.3"
+  }
+}

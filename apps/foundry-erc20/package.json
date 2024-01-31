@@ -1,0 +1,18 @@
+{
+  "name": "foundry-erc20",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "forge test -vvv",
+    "deploy:berachain": "echo $RPC_URL; forge script script/BingBongToken.s.sol --rpc-url $RPC_URL --broadcast --gas-price 10000000000",
+    "clean": "rm -rf node_modules; rm -rf out; rm -rf cache; rm -rf .turbo;",
+    "postinstall": "forge install"
+  },
+  "keywords": [],
+  "author": "@codingwithmanny",
+  "license": "ISC",
+  "devDependencies": {
+    "dotenv-cli": "^7.3.0"
+  }
+}
