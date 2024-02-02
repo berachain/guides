@@ -18,6 +18,7 @@ This Turborepo includes the following packages/apps:
 - `apps/foundry-erc20` - Deploy ERC20 contract with foundry
 - `apps/hardhat-ethers6-erc1155` - Deploy ERC1155 contract with hardhat ethers6
 - `apps/hardhat-viem-helloworld` - Deploy HelloWorld contract with hardhat viem
+- `apps/walletconnect-nextjs` - WalletConnect Web3Modal frontend contract deployment
 
 ## Quick Start
 
