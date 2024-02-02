@@ -79,7 +79,7 @@ importers:
     devDependencies:
       '@nomicfoundation/hardhat-toolbox-viem':
         specifier: ^1.0.0
-        version: 1.0.0(@nomicfoundation/hardhat-network-helpers@1.0.10)(@nomicfoundation/hardhat-verify@1.1.1)(@nomicfoundation/hardhat-viem@1.0.2)(@types/chai-as-promised@7.1.8)(@types/chai@4.3.11)(@types/mocha@10.0.6)(@types/node@20.10.8)(chai@4.4.0)(hardhat-gas-reporter@1.0.9)(hardhat@2.19.4)(solidity-coverage@0.8.5)(ts-node@10.9.1)(typescript@5.0.4)(viem@1.21.4)
+        version: 1.0.0(@nomicfoundation/hardhat-network-helpers@1.0.10)(@nomicfoundation/hardhat-verify@1.1.1)(@nomicfoundation/hardhat-viem@1.0.3)(@types/chai-as-promised@7.1.8)(@types/chai@4.3.11)(@types/mocha@10.0.6)(@types/node@20.10.8)(chai@4.4.0)(hardhat-gas-reporter@1.0.9)(hardhat@2.19.4)(solidity-coverage@0.8.5)(ts-node@10.9.1)(typescript@5.0.4)(viem@1.21.4)
       dotenv:
         specifier: ^16.3.1
         version: 16.3.1
@@ -1381,7 +1381,7 @@ packages:
       hardhat: 2.19.4(ts-node@10.9.1)(typescript@5.2.2)
     dev: true
 
-  /@nomicfoundation/hardhat-toolbox-viem@1.0.0(@nomicfoundation/hardhat-network-helpers@1.0.10)(@nomicfoundation/hardhat-verify@1.1.1)(@nomicfoundation/hardhat-viem@1.0.2)(@types/chai-as-promised@7.1.8)(@types/chai@4.3.11)(@types/mocha@10.0.6)(@types/node@20.10.8)(chai@4.4.0)(hardhat-gas-reporter@1.0.9)(hardhat@2.19.4)(solidity-coverage@0.8.5)(ts-node@10.9.1)(typescript@5.0.4)(viem@1.21.4):
+  /@nomicfoundation/hardhat-toolbox-viem@1.0.0(@nomicfoundation/hardhat-network-helpers@1.0.10)(@nomicfoundation/hardhat-verify@1.1.1)(@nomicfoundation/hardhat-viem@1.0.3)(@types/chai-as-promised@7.1.8)(@types/chai@4.3.11)(@types/mocha@10.0.6)(@types/node@20.10.8)(chai@4.4.0)(hardhat-gas-reporter@1.0.9)(hardhat@2.19.4)(solidity-coverage@0.8.5)(ts-node@10.9.1)(typescript@5.0.4)(viem@1.21.4):
     resolution: {integrity: sha512-mXsvBc4tbtSpzifB6XRQB055rdvgsXg8DYi3lkWqV6JU27Z3ClCd8TjfZ6Oc5e5RWpw6wNbJqd9ZlcoeXCBDqw==}
     peerDependencies:
       '@nomicfoundation/hardhat-network-helpers': ^1.0.0
@@ -1401,7 +1401,7 @@ packages:
     dependencies:
       '@nomicfoundation/hardhat-network-helpers': 1.0.10(hardhat@2.19.4)
       '@nomicfoundation/hardhat-verify': 1.1.1(hardhat@2.19.4)
-      '@nomicfoundation/hardhat-viem': 1.0.2(hardhat@2.19.4)(typescript@5.0.4)(viem@1.21.4)
+      '@nomicfoundation/hardhat-viem': 1.0.3(hardhat@2.19.4)(typescript@5.0.4)(viem@1.21.4)
       '@types/chai': 4.3.11
       '@types/chai-as-promised': 7.1.8
       '@types/mocha': 10.0.6
@@ -1494,14 +1494,14 @@ packages:
       - supports-color
     dev: true
 
-  /@nomicfoundation/hardhat-viem@1.0.2(hardhat@2.19.4)(typescript@5.0.4)(viem@1.21.4):
-    resolution: {integrity: sha512-MkUWxHF++6tWr1Mj4kCtyfZasSxGZCn8a51XorKmMQaMtgMXFxGLOzkbuqxfpRyRezS+6uyrzHWYcIcZJFlrcQ==}
+  /@nomicfoundation/hardhat-viem@1.0.3(hardhat@2.19.4)(typescript@5.0.4)(viem@1.21.4):
+    resolution: {integrity: sha512-Yw8L/WXOjBzeRXxdC/TCUlzhD6k44L8Bm6wCdDF4/D/X0cDHT1CvBtnGuEcxp116Qcx3+5ebi3VJBx1m5w4iNw==}
     peerDependencies:
       hardhat: ^2.17.0
       typescript: ~5.0.0
       viem: ^1.15.1
     dependencies:
-      abitype: 0.9.10(typescript@5.0.4)
+      abitype: 0.9.8(typescript@5.0.4)
       hardhat: 2.19.4(ts-node@10.9.1)(typescript@5.0.4)
       lodash.memoize: 4.1.2
       typescript: 5.0.4
@@ -2237,20 +2237,6 @@ packages:
 
   /abbrev@1.0.9:
     resolution: {integrity: sha512-LEyx4aLEC3x6T0UguF6YILf+ntvmOaWsVfENmIW0E9H09vKlLDGelMjjSm0jkDHALj8A8quZ/HapKNigzwge+Q==}
-    dev: true
-
-  /abitype@0.9.10(typescript@5.0.4):
-    resolution: {integrity: sha512-FIS7U4n7qwAT58KibwYig5iFG4K61rbhAqaQh/UWj8v1Y8mjX3F8TC9gd8cz9yT1TYel9f8nS5NO5kZp2RW0jQ==}
-    peerDependencies:
-      typescript: '>=5.0.4'
-      zod: ^3 >=3.22.0
-    peerDependenciesMeta:
-      typescript:
-        optional: true
-      zod:
-        optional: true
-    dependencies:
-      typescript: 5.0.4
     dev: true
 
   /abitype@0.9.8(typescript@4.9.5):
@@ -4242,6 +4228,7 @@ packages:
       is-hex-prefixed: 1.0.0
       strip-hex-prefix: 1.0.0
     dev: true
+    bundledDependencies: false
 
   /evp_bytestokey@1.0.3:
     resolution: {integrity: sha512-/f2Go4TognH/KvCISP7OUsHn85hT9nUkxxA9BEWxFn+Oj9o8ZNLm/40hdlgSLyuOimsrTKLUMEorQexp/aPQeA==}
