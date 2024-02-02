@@ -35,7 +35,7 @@ async function main() {
   // NOTE: hardhat with viem currently doesn't support custom chains so there needs to be some custom functionality ↴
   if (hre.network.name === 'berachainTestnet') {
     // Retrieve contract artifact ABI & Bytecode
-    const contractName = "HelloWorldTwo";
+    const contractName = "HelloWorld";
     const artifactFile = fs.readFileSync(`${hre.artifacts._artifactsPath}/contracts/${contractName}.sol/${contractName}.json`);
     const artifactJSON = JSON.parse(artifactFile.toString()) as any;
     const account = privateKeyToAccount(hre.network.config.accounts?.[0] as `0x${string}`);
@@ -66,8 +66,7 @@ async function main() {
     const receipt = await publicClient.waitForTransactionReceipt({ hash });
     console.log(`${contractName} deployed to ${receipt?.contractAddress}`);
   } else {
-    // hre.viem.deployContract("HelloWorld")
-    const contract = await hre.viem.deployContract("HelloWorldTwo", ["Hello from the contract!"]);
+    const contract = await hre.viem.deployContract("HelloWorld", ["Hello from the contract!"]);
     console.log(`HelloWorldTwo deployed to ${contract.address}`);
   }
 }

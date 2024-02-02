@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.9;
 
-contract HelloWorldTwo {
+contract HelloWorld {
     // Events that allows for emitting a message
     event NewGreeting(address sender, string message);
 
