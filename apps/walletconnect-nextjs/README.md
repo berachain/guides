@@ -43,7 +43,7 @@ Modify the following file section
 NEXT_PUBLIC_PROJECT_ID=YOUR-WALLETCONNECT-PROJECT-ID
 ```
 
-### 2 - Run Environment
+### 3 - Run Environment
 
 ```bash
 # FROM: ./walletconnect-nextjs
@@ -62,7 +62,7 @@ pnpm dev;
 #  ✓ Ready in 1349ms
 ```
 
-### 3 - Use Mobile MetaMask
+### 4 - Use Mobile MetaMask
 
 Make sure you have the [MetaMask mobile app](https://metamask.io/download/).
 
