@@ -3,7 +3,6 @@
 // Imports
 // ========================================================
 import { useAccount, useSignMessage, useVerifyMessage } from "wagmi";
-import ClientOnly from "../ClientOnly";
 import { useState } from "react";
 import { berachainTestnet } from "wagmi/chains";
 
@@ -50,37 +49,35 @@ export default function SignMessage() {
 
   // Render
   return (
-    <ClientOnly>
-      <section className="pb-6 mb-6 border-zinc-700 border-b">
-        <>
-          <h2>Sign Message</h2>
+    <section className="pb-6 mb-6 border-zinc-700 border-b">
+      <>
+        <h2>Sign Message</h2>
 
-          {isConnected
-            ? <div>
-              <form onSubmit={onSubmitSignMessage}>
-                <div>
-                  <label>Message</label>
-                  <textarea value={message} onChange={(e) => setMessage(e.target.value)} placeholder="Ex: My Message" />
-                </div>
-                <div>
-                  <button disabled={!message} type="submit">Sign</button>
-                </div>
-              </form>
+        {isConnected
+          ? <div>
+            <form onSubmit={onSubmitSignMessage}>
+              <div>
+                <label>Message</label>
+                <textarea value={message} onChange={(e) => setMessage(e.target.value)} placeholder="Ex: My Message" />
+              </div>
+              <div>
+                <button disabled={!message} type="submit">Sign</button>
+              </div>
+            </form>
 
-              {result ? <div>
-                <label>Signature Result</label>
-                <pre><code>{result}</code></pre>
+            {result ? <div>
+              <label>Signature Result</label>
+              <pre><code>{result}</code></pre>
 
-                <label>Verification Result</label>
-                <pre><code>{verification.status === 'pending' ? `Status: ${verification.status}\n\nVerifying...` : ''}{verification.status === 'error' ? `Status: ${verification.status}\n\n${verification?.failureReason?.message}` : ''}{verification.status === 'success' ? `Status: ${verification.status}\n\nVerified signature and message` : ''}</code></pre>
-              </div> : null}
-            </div>
-            : <div>
-              <pre><code>Not Connected</code></pre>
-            </div>
-          }
-        </>
-      </section>
-    </ClientOnly>
+              <label>Verification Result</label>
+              <pre><code>{verification.status === 'pending' ? `Status: ${verification.status}\n\nVerifying...` : ''}{verification.status === 'error' ? `Status: ${verification.status}\n\n${verification?.failureReason?.message}` : ''}{verification.status === 'success' ? `Status: ${verification.status}\n\nVerified signature and message` : ''}</code></pre>
+            </div> : null}
+          </div>
+          : <div>
+            <pre><code>Not Connected</code></pre>
+          </div>
+        }
+      </>
+    </section>
   )
 };
