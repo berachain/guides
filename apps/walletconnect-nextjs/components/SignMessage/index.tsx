@@ -55,7 +55,6 @@ export default function SignMessage() {
         <>
           <h2>Sign Message</h2>
 
-          <p><b>NOTE:</b> This latest version of web3wallet, wagmi v2, and viem v2, still has an issue with using walletconnect and mobile (connecting with MetaMask mobile) - See <a href="https://github.com/WalletConnect/walletconnect-monorepo/issues/4089" target="_blank">Wallet Connect Issue 4089</a></p>
           {isConnected
             ? <div>
               <form onSubmit={onSubmitSignMessage}>

@@ -10,10 +10,10 @@ import { berachainTestnet } from 'wagmi/chains';
 export const projectId = process.env.NEXT_PUBLIC_PROJECT_ID;
 
 const metadata = {
-    name: 'Web3Modal',
-    description: 'Web3Modal Example',
+    name: 'Berachain Web3Modal',
+    description: 'Berchain Web3Modal Example',
     url: 'https://web3modal.com', // origin must match your domain & subdomain
-    icons: ['https://avatars.githubusercontent.com/u/37784886']
+    icons: ['https://avatars.githubusercontent.com/u/96059542']
   }
 
 if (!projectId) throw new Error('Project ID is not defined');
