@@ -3,7 +3,6 @@
 // Imports
 // ========================================================
 import { useAccount, useWaitForTransactionReceipt } from "wagmi";
-import ClientOnly from "../ClientOnly";
 import { useState } from "react";
 import { encodeAbiParameters } from "viem";
 import { berachainTestnet } from "wagmi/chains";
@@ -154,49 +153,47 @@ export default function Deploy() {
 
   // Render
   return (
-    <ClientOnly>
-      <section className="pb-6 mb-6 border-zinc-700 border-b">
-        <>
-          <h2>Deploy Contract</h2>
-          {isConnected
-            ? <div>
-              <form onSubmit={deployContract}>
-                <div>
-                  <label>HelloWorld.sol</label>
-                  <pre><code>{JSON.stringify(CONTRACT_ABI, null, '   ')}</code></pre>
-                </div>
-                <div>
-                  <label htmlFor="_greeting">_greeting</label>
-                  <input disabled={isLoading} placeholder="Ex: Hello There!" type="text" name="_greeting" id="_greetine" value={greeting} onChange={(e) => setGreeting(e.target.value)} />
-                </div>
-                <div>
-                  <label>ByteCode</label>
-                  <pre><code>{CONTRACT_BYTECODE}</code></pre>
-                </div>
-                <div>
-                  <button disabled={isLoading || greeting.length === 0} type="submit">Deploy</button>
-                </div>
-              </form>
-
+    <section className="pb-6 mb-6 border-zinc-700 border-b">
+      <>
+        <h2>Deploy Contract</h2>
+        {isConnected
+          ? <div>
+            <form onSubmit={deployContract}>
               <div>
-                <label>Transaction Hash Result</label>
-                <pre><code>{transactionHash}{error}</code></pre>
-                {transactionHash ? <p><a className="button" href={`${BLOCK_EXPLORER}/tx/${transactionHash}`} target="_blank">Beratrail Tx Link</a></p> : null}
+                <label>HelloWorld.sol</label>
+                <pre><code>{JSON.stringify(CONTRACT_ABI, null, '   ')}</code></pre>
               </div>
-
               <div>
-                <label>Transaction Receipt</label>
-                <pre><code>{receipt.status === 'pending' ? `Status: ${receipt.status}\n\nWaiting...` : ''}{receipt.status === 'error' ? `Status: ${receipt.status}\n\n${receipt?.failureReason?.message}` : ''}{receipt.status === 'success' ? `Status: ${receipt.status}\n\n${receipt?.data?.contractAddress}` : ''}</code></pre>
-
-                {receipt?.data?.contractAddress ? <p><a className="button" href={`${BLOCK_EXPLORER}/address/${receipt?.data?.contractAddress}`} target="_blank">Beratrail Contract Address Link</a></p> : null}
+                <label htmlFor="_greeting">_greeting</label>
+                <input disabled={isLoading} placeholder="Ex: Hello There!" type="text" name="_greeting" id="_greetine" value={greeting} onChange={(e) => setGreeting(e.target.value)} />
               </div>
+              <div>
+                <label>ByteCode</label>
+                <pre><code>{CONTRACT_BYTECODE}</code></pre>
+              </div>
+              <div>
+                <button disabled={isLoading || greeting.length === 0} type="submit">Deploy</button>
+              </div>
+            </form>
+
+            <div>
+              <label>Transaction Hash Result</label>
+              <pre><code>{transactionHash}{error}</code></pre>
+              {transactionHash ? <p><a className="button" href={`${BLOCK_EXPLORER}/tx/${transactionHash}`} target="_blank">Beratrail Tx Link</a></p> : null}
             </div>
-            : <div>
-              <pre><code>Not Connected</code></pre>
+
+            <div>
+              <label>Transaction Receipt</label>
+              <pre><code>{receipt.status === 'pending' ? `Status: ${receipt.status}\n\nWaiting...` : ''}{receipt.status === 'error' ? `Status: ${receipt.status}\n\n${receipt?.failureReason?.message}` : ''}{receipt.status === 'success' ? `Status: ${receipt.status}\n\n${receipt?.data?.contractAddress}` : ''}</code></pre>
+
+              {receipt?.data?.contractAddress ? <p><a className="button" href={`${BLOCK_EXPLORER}/address/${receipt?.data?.contractAddress}`} target="_blank">Beratrail Contract Address Link</a></p> : null}
             </div>
-          }
-        </>
-      </section>
-    </ClientOnly>
+          </div>
+          : <div>
+            <pre><code>Not Connected</code></pre>
+          </div>
+        }
+      </>
+    </section>
   )
 };
