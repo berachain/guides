@@ -34,7 +34,7 @@ npm install --save-dev @nomicfoundation/hardhat-verify
 npx hardhat verify --network berachain-artio <0x...>  
 ```
 
-Make sure to relace the whole " <0xaddress> ". Correct example would be :-
+Make sure to replace the whole " <0xaddress> ". Correct example would be :-
 
 ✅ npx hardhat verify --network berachain-artio 0x3229075dd6F75bD879F7af07d384A0856c30a806 
 <br>
