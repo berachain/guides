@@ -26,7 +26,7 @@ pnpm install;
 
 Go to [https://cloud.walletconnect.com](https://cloud.walletconnect.com]), sign up for an account, and get a project id.
 
-Create an `.env` files from `.env.example` and add `NEXT_PUBLIC_PROJECT_ID`.
+Create an `.env` file from `.env.example` and add `NEXT_PUBLIC_PROJECT_ID`.
 
 ```bash
 # FROM: ./walletconnect-nextjs
@@ -66,7 +66,7 @@ pnpm dev;
 
 Make sure you have the [MetaMask mobile app](https://metamask.io/download/).
 
-> **NOTE:** Other Mobile wallets have not been tested. You will need make sure to have a wallet that supports adding a custom RPC network.
+> **NOTE:** Other Mobile wallets have not been tested. You will need to make sure to have a wallet that supports adding a custom RPC network.
 
 For RPC configuration details, see [Berachain Docs](https://docs.berachain.com/developers).
 
@@ -76,7 +76,7 @@ B - Open up MetaMask Mobile and tap the **_QR code icon_** in the top right of t
 
 C - Scan the QR from WalletConnect with your MetaMask Mobile App
 
-D - Enter a `_greeting` for the contract input in the NextJS main pae
+D - Enter a `_greeting` for the contract input in the NextJS main page
 
 F - Click **Deploy** and confirm the transaction in MetaMask Mobile
 
