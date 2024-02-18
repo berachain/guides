@@ -79,7 +79,7 @@ pnpm run verify 0xe9470c884603c239502c4d92d108a5b3f14074b4 "YOUR-UNIQUE-BASE-URL
 
 ## Run Local Node
 
-If you'd like to run the contract locally with Hardhat, run the following commmands:
+If you'd like to run the contract locally with Hardhat, run the following commands:
 
 **Terminal 1:**
 
