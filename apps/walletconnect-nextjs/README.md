@@ -6,8 +6,6 @@ An example of Berachain being used with WalletConnect.
 
 ## Requirements
 
-> **NOTE:** Wagmi v2 support is currently in alpha for Wallet Connect - see [Web3Modal NextJS Wagmi v2](https://docs.walletconnect.com/web3modal/nextjs/about)
-
 - Node v20.11.0
 - pnpm or npm
 
