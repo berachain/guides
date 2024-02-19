@@ -19,10 +19,10 @@ const config: HardhatUserConfig = {
     // NOTE: hardhat viem currently doesn't yet support this method for custom chains through Hardhat config ↴
     berachainTestnet: {
       chainId: parseInt(`${process.env.CHAIN_ID}`),
-      url: `${process.env.RPC_URL || ''}`,
+      url: `${process.env.RPC_URL || ""}`,
       accounts: process.env.WALLET_PRIVATE_KEY
         ? [`${process.env.WALLET_PRIVATE_KEY}`]
-        : []
+        : [],
     },
   },
   // For Contract Verification
@@ -34,11 +34,11 @@ const config: HardhatUserConfig = {
         chainId: parseInt(`${process.env.CHAIN_ID}`),
         urls: {
           apiURL: `${process.env.BLOCK_EXPLORER_API_URL}`,
-          browserURL: `${process.env.BLOCK_EXPLORER_URL}`
-        }
+          browserURL: `${process.env.BLOCK_EXPLORER_URL}`,
+        },
       },
-    ]
-  }
+    ],
+  },
 };
 
 export default config;

@@ -1,8 +1,15 @@
 {
   "name": "guides",
   "private": true,
+  "contributors": [
+    {
+      "name": "De",
+      "url": "https://github.com/dethebera"
+    }
+  ],
   "author": {
-    "name": "@codingwithmanny"
+    "name": "@codingwithmanny",
+    "url": "https://github.com/codingwithmanny"
   },
   "scripts": {
     "clean": "turbo clean; rm -rf node_modules; rm -rf .turbo;",
@@ -12,9 +19,11 @@
     "format": "prettier --write \"**/*.{ts,tsx,md}\"",
     "with-env": "dotenv -e ./.env --",
     "deploy:berachain": "pnpm with-env turbo run deploy:berachain",
-    "verify": "pnpm with-env turbo run verify"
+    "verify": "pnpm with-env turbo run verify",
+    "postinstall": "cd apps/walletconnect-expo; pnpm install --ignore-workspace;"
   },
   "devDependencies": {
+    "@biomejs/biome": "^1.5.3",
     "@repo/eslint-config": "workspace:*",
     "@repo/typescript-config": "workspace:*",
     "prettier": "^3.1.0",

@@ -11,7 +11,6 @@ An example of Berachain being used with WalletConnect and Expo.
 - iOS Simulator - See [iOS Simulator Configuration](#ios-simulator-configuration)
 - Android - (coming soon)
 
-
 ## Getting Started
 
 This will walk through the steps to get up and running.
@@ -21,7 +20,8 @@ This will walk through the steps to get up and running.
 ```bash
 # FROM: ./expo-walletconnect
 
-pnpm install;
+# !!!IMPORTANT: make sure to have the flag for --ignore-workspace otherwise this will NOT WORK
+pnpm install --ignore-workspace;
 # or npm install;
 ```
 
@@ -42,7 +42,3 @@ Select `Simulator` in the top right, select `Device Type`, and for `OS Version` 
 This will then display a new window to download the latest iOS simulator.
 
 ![XCode Platforms Download](./README/xcode-platforms-download-ios.png)
-
-
-
-
