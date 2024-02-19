@@ -1,5 +1,5 @@
 {
-  "name": "hardhat-ethers6-erc1155",
+  "name": "@berachain/hardhat-ethers6-erc1155",
   "scripts": {
     "compile": "./node_modules/.bin/hardhat compile",
     "node": "./node_modules/.bin/hardhat node",

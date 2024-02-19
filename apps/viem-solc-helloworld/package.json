@@ -1,5 +1,5 @@
 {
-  "name": "viem-solc-helloworld",
+  "name": "@berachain/viem-solc-helloworld",
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
