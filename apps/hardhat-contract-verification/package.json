@@ -1,5 +1,5 @@
 {
-  "name": "hardhat-contract-verification",
+  "name": "@berachain/hardhat-contract-verification",
   "version": "1.0.0",
   "description": "",
   "main": "index.js",

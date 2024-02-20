@@ -3,7 +3,7 @@
 import hre from "hardhat";
 import fs from "fs";
 import { defineChain } from "viem";
-import { privateKeyToAccount } from 'viem/accounts';
+import { privateKeyToAccount } from "viem/accounts";
 
 // Config Needed For Custom Chain
 // ========================================================
@@ -25,7 +25,10 @@ const chainConfiguration = defineChain({
     },
   },
   blockExplorers: {
-    default: { name: `${process.env.BLOCK_EXPLORER_NAME}`, url: `${process.env.BLOCK_EXPLORER_URL}` },
+    default: {
+      name: `${process.env.BLOCK_EXPLORER_NAME}`,
+      url: `${process.env.BLOCK_EXPLORER_URL}`,
+    },
   },
 });
 
@@ -33,12 +36,16 @@ const chainConfiguration = defineChain({
 // ========================================================
 async function main() {
   // NOTE: hardhat with viem currently doesn't support custom chains so there needs to be some custom functionality ↴
-  if (hre.network.name === 'berachainTestnet') {
+  if (hre.network.name === "berachainTestnet") {
     // Retrieve contract artifact ABI & Bytecode
     const contractName = "HelloWorld";
-    const artifactFile = fs.readFileSync(`${hre.artifacts._artifactsPath}/contracts/${contractName}.sol/${contractName}.json`);
+    const artifactFile = fs.readFileSync(
+      `${hre.artifacts._artifactsPath}/contracts/${contractName}.sol/${contractName}.json`,
+    );
     const artifactJSON = JSON.parse(artifactFile.toString()) as any;
-    const account = privateKeyToAccount(hre.network.config.accounts?.[0] as `0x${string}`);
+    const account = privateKeyToAccount(
+      hre.network.config.accounts?.[0] as `0x${string}`,
+    );
 
     // Configure wallet client
     const walletClient = await hre.viem.getWalletClient(
@@ -47,26 +54,28 @@ async function main() {
       // configured chain
       {
         chain: chainConfiguration,
-        account
-      }
+        account,
+      },
     );
 
     // Deploy contract
     const hash = await walletClient.deployContract({
       abi: artifactJSON.abi,
       bytecode: artifactJSON.bytecode,
-      args: ["Hello From Deployed Contract"]
+      args: ["Hello From Deployed Contract"],
     });
     console.log({ hash });
 
     // Retrieve deployed contract address
     const publicClient = await hre.viem.getPublicClient({
-      chain: chainConfiguration
+      chain: chainConfiguration,
     });
     const receipt = await publicClient.waitForTransactionReceipt({ hash });
     console.log(`${contractName} deployed to ${receipt?.contractAddress}`);
   } else {
-    const contract = await hre.viem.deployContract("HelloWorld", ["Hello from the contract!"]);
+    const contract = await hre.viem.deployContract("HelloWorld", [
+      "Hello from the contract!",
+    ]);
     console.log(`HelloWorldTwo deployed to ${contract.address}`);
   }
 }

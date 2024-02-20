@@ -90,10 +90,10 @@ pnpm run node; # npx hardhat node;
 
 # [Expected Output]:
 # Started HTTP and WebSocket JSON-RPC server at http://127.0.0.1:8545/
-# 
+#
 # Accounts
 # ========
-# 
+#
 # WARNING: These accounts, and their private keys, are publicly known.
 # Any funds sent to them on Mainnet or any other live network WILL BE LOST.
 # ...
@@ -117,7 +117,7 @@ To run tests defined in `./test/OogaBoogaNFT.test.ts`, run the following:
 ```bash
 # FROM ./create-erc1155-contract-using-hardhat-ethers6
 
-pnpm run test; # npx hardhat test; 
+pnpm run test; # npx hardhat test;
 
 # [Expected Output]:
 #  OogaBoogaNFT

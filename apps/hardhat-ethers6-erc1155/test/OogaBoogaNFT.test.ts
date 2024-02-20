@@ -20,11 +20,11 @@ describe("OogaBoogaNFT", function () {
   }
 
   /**
-   * 
+   *
    */
   describe("Deployment", function () {
     /**
-     * 
+     *
      */
     it("Should deploy with correct owner", async function () {
       // Setup
@@ -35,7 +35,7 @@ describe("OogaBoogaNFT", function () {
     });
 
     /**
-     * 
+     *
      */
     it("Should deploy with correct uri", async function () {
       // Setup
