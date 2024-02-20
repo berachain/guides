@@ -8,8 +8,14 @@ import { View } from "react-native";
 export default function Connect() {
   return (
     <>
-      <View style={{ marginBottom: 24 }}>
-        <W3mButton />
+      <View className="bg-white rounded-full mb-4">
+        <W3mButton connectStyle={
+          {
+            backgroundColor: '#2E1E1A',
+          }
+        } accountStyle={{
+          backgroundColor: '#2E1E1A',
+        }} />
       </View>
     </>
   );

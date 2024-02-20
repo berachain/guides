@@ -2,30 +2,31 @@
 // ========================================================
 import { Text } from "react-native";
 import { useAccount, useBalance } from "wagmi";
-import { styles } from "../../App";
 
 // Component
 // ========================================================
 export default function BlockNumber() {
   // Hooks
-  const { isConnected } = useAccount();
-  const { data, isError, isLoading } = useBalance();
+  const { isConnected, address } = useAccount();
+  const { data, isError, isLoading } = useBalance({
+    address
+  });
 
   // Return
   if (!isConnected) return null;
 
   if (isLoading)
-    return <Text style={{ marginBottom: 24 }}>Fetching balance...</Text>;
+    return <Text className="mb-4">Fetching balance...</Text>;
 
   if (isError)
     return (
-      <Text style={{ marginBottom: 24 }}>Error fetching balance</Text>
+      <Text className="mb-4">Error fetching balance</Text>
     );
 
   return (
     <>
-      <Text>$BERA Balance</Text>
-      <Text>{data?.toString()}</Text>
+      <Text className="text-[#2E1E1A] mb-2">Balance</Text>
+      <Text className="bg-[#ff843d] p-2 mb-4">{(parseInt(data?.value.toString()) / 1000000000000000000).toFixed(2)} $BERA</Text>
     </>
   );
 }
