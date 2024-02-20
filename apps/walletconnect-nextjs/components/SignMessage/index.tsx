@@ -11,29 +11,31 @@ import { berachainTestnet } from "wagmi/chains";
 export default function SignMessage() {
   // Hooks
   const { isConnected, address } = useAccount();
-  const [message, setMessage] = useState('');
-  const [signature, setSignature] = useState<`0x${string}`>('0x');
-  const [result, setResult] = useState('');
+  const [message, setMessage] = useState("");
+  const [signature, setSignature] = useState<`0x${string}`>("0x");
+  const [result, setResult] = useState("");
   const { signMessageAsync } = useSignMessage();
   const verification = useVerifyMessage({
     chainId: berachainTestnet.id,
     address,
     message,
-    signature
+    signature,
   });
 
   // Functions
   /**
    * @dev Handles signing messages from whatever is placed in textarea
-   * @param event 
+   * @param event
    */
-  const onSubmitSignMessage = async (event: React.FormEvent<HTMLFormElement>) => {
+  const onSubmitSignMessage = async (
+    event: React.FormEvent<HTMLFormElement>,
+  ) => {
     event.preventDefault();
-    console.group('onSubmitSignMessage');
+    console.group("onSubmitSignMessage");
 
     try {
       const signature = await signMessageAsync({
-        message
+        message,
       });
       setSignature(signature);
       setResult(signature);
@@ -53,31 +55,56 @@ export default function SignMessage() {
       <>
         <h2>Sign Message</h2>
 
-        {isConnected
-          ? <div>
+        {isConnected ? (
+          <div>
             <form onSubmit={onSubmitSignMessage}>
               <div>
                 <label>Message</label>
-                <textarea value={message} onChange={(e) => setMessage(e.target.value)} placeholder="Ex: My Message" />
+                <textarea
+                  value={message}
+                  onChange={(e) => setMessage(e.target.value)}
+                  placeholder="Ex: My Message"
+                />
               </div>
               <div>
-                <button disabled={!message} type="submit">Sign</button>
+                <button disabled={!message} type="submit">
+                  Sign
+                </button>
               </div>
             </form>
 
-            {result ? <div>
-              <label>Signature Result</label>
-              <pre><code>{result}</code></pre>
+            {result ? (
+              <div>
+                <label>Signature Result</label>
+                <pre>
+                  <code>{result}</code>
+                </pre>
 
-              <label>Verification Result</label>
-              <pre><code>{verification.status === 'pending' ? `Status: ${verification.status}\n\nVerifying...` : ''}{verification.status === 'error' ? `Status: ${verification.status}\n\n${verification?.failureReason?.message}` : ''}{verification.status === 'success' ? `Status: ${verification.status}\n\nVerified signature and message` : ''}</code></pre>
-            </div> : null}
+                <label>Verification Result</label>
+                <pre>
+                  <code>
+                    {verification.status === "pending"
+                      ? `Status: ${verification.status}\n\nVerifying...`
+                      : ""}
+                    {verification.status === "error"
+                      ? `Status: ${verification.status}\n\n${verification?.failureReason?.message}`
+                      : ""}
+                    {verification.status === "success"
+                      ? `Status: ${verification.status}\n\nVerified signature and message`
+                      : ""}
+                  </code>
+                </pre>
+              </div>
+            ) : null}
           </div>
-          : <div>
-            <pre><code>Not Connected</code></pre>
+        ) : (
+          <div>
+            <pre>
+              <code>Not Connected</code>
+            </pre>
           </div>
-        }
+        )}
       </>
     </section>
-  )
-};
+  );
+}

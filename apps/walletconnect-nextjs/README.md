@@ -6,8 +6,6 @@ An example of Berachain being used with WalletConnect.
 
 ## Requirements
 
-> **NOTE:** Wagmi v2 support is currently in alpha for Wallet Connect - see [Web3Modal NextJS Wagmi v2](https://docs.walletconnect.com/web3modal/nextjs/about)
-
 - Node v20.11.0
 - pnpm or npm
 
@@ -54,11 +52,11 @@ pnpm dev;
 # [Expected Output]:
 # > berachain-walletconnect-nextjs@1.0.0 dev /path/to/nextjs-walletconnect-berachain
 # > next dev
-# 
+#
 #    ▲ Next.js 14.0.4
 #    - Local:        http://localhost:3000
 #    - Environments: .env
-# 
+#
 #  ✓ Ready in 1349ms
 ```
 
@@ -70,7 +68,7 @@ Make sure you have the [MetaMask mobile app](https://metamask.io/download/).
 
 For RPC configuration details, see [Berachain Docs](https://docs.berachain.com/developers).
 
-A - Click **_Connect Wallet_** and choose **_WalletConnect_** 
+A - Click **_Connect Wallet_** and choose **_WalletConnect_**
 
 B - Open up MetaMask Mobile and tap the **_QR code icon_** in the top right of the app
 
