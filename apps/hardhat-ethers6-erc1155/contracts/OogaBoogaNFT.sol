@@ -18,8 +18,10 @@ contract OogaBoogaNFT is
     ERC1155Burnable,
     ERC1155Supply
 {
+    event LogError(string error, bytes reason);
+
     /**
-     * Main constructor seting the the baseURI
+     * Main constructor setting the baseURI
      * newuri - sets the base url for where we are storing our manifest JSON files
      */
     constructor(
@@ -31,6 +33,7 @@ contract OogaBoogaNFT is
      * @dev Sets a new URI for all token types, by relying on the token type ID
      */
     function setURI(string memory newuri) public onlyOwner {
+        require(bytes(newuri).length > 0, "URI must not be empty");
         _setURI(newuri);
     }
 
@@ -57,7 +60,11 @@ contract OogaBoogaNFT is
         uint256 amount,
         bytes memory data
     ) public onlyOwner {
-        _mint(account, id, amount, data);
+        try {
+            _mint(account, id, amount, data);
+        } catch Error(bytes memory reason) {
+            emit LogError("Mint failed", reason);
+        }
     }
 
     /**
@@ -69,7 +76,11 @@ contract OogaBoogaNFT is
         uint256[] memory amounts,
         bytes memory data
     ) public onlyOwner {
-        _mintBatch(to, ids, amounts, data);
+        try {
+            _mintBatch(to, ids, amounts, data);
+        } catch Error(bytes memory reason) {
+            emit LogError("Mint batch failed", reason);
+        }
     }
 
     /**
