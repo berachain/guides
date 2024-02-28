@@ -1,11 +1,11 @@
 // Imports
 // ========================================================
-import { Text } from "react-native";
+import { View, Text } from "react-native";
 import { useAccount, useBalance } from "wagmi";
 
 // Component
 // ========================================================
-export default function BlockNumber() {
+export default function Balance() {
   // Hooks
   const { isConnected, address } = useAccount();
   const { data, isError, isLoading } = useBalance({
@@ -13,20 +13,34 @@ export default function BlockNumber() {
   });
 
   // Return
-  if (!isConnected) return null;
-
+  /**
+   * If still loading, show a loading state
+   */
   if (isLoading)
-    return <Text className="mb-4">Fetching balance...</Text>;
+    return <Text className="Text">Fetching balance...</Text>;
 
+
+  /**
+   * Show error if having a problem fetching the balance
+   */
   if (isError)
     return (
-      <Text className="mb-4">Error fetching balance</Text>
+      <Text className="mText">Error fetching balance</Text>
     );
 
+  /**
+   * If not connected don't show anything
+   */
+  if (!isConnected) return null;
+
+
+  /**
+   * Successfully connected
+   */
   return (
-    <>
-      <Text className="text-[#2E1E1A] mb-2">Balance</Text>
-      <Text className="bg-[#ff843d] p-2 mb-4">{(parseInt(data?.value.toString()) / 1000000000000000000).toFixed(2)} $BERA</Text>
-    </>
+    <View className="Balance">
+      <Text className="Text">Balance</Text>
+      <Text className="Code">{(parseInt((data?.value ?? '').toString()) / 1000000000000000000).toFixed(2)} $BERA</Text>
+    </View>
   );
 }
