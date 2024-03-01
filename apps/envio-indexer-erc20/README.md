@@ -44,19 +44,15 @@ Replace the placeholder values for network, start block and contract address wit
 - Start Block = 0
 - Contract Address = 0x8239FBb3e3D0C2cDFd7888D8aF7701240Ac4DcA4
 
-<img src="/docs-assets/envio-index-erc20-2.png" alt="envio-index-erc20-2" width="100%"/>
 
 2. **Schema.graphql**
 
 This file saves and defines the data structures for selected events, such as the `Approval` event.
 
-<img src="/docs-assets/envio-index-erc20-3.png" alt="envio-index-erc20-3" width="100%"/>
 
 3. **event-handler**
 
 This file defines what happens when an event is emitted and saves what code is going to run, allowing customization in data handling.
-
-<img src="/docs-assets/envio-index-erc20-4.png" alt="envio-index-erc20-4" width="100%"/>
 
 
 # Starting the Indexer & Exploring Indexed Data 
