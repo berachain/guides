@@ -346,7 +346,7 @@ After 5.0, the storage location of some variables were changed. This is the case
 
 ## 4.8.1 (2023-01-12)
 
-- `ERC4626`: Use staticcall instead of call when fetching underlying ERC-20 decimals. ([#3943](https://github.com/OpenZeppelin/openzeppelin-contracts/pull/3943))
+- `ERC4626`: Use statically instead of call when fetching underlying ERC-20 decimals. ([#3943](https://github.com/OpenZeppelin/openzeppelin-contracts/pull/3943))
 
 ## 4.8.0 (2022-11-08)
 

@@ -7,7 +7,7 @@ import {Vm, VmSafe} from "./Vm.sol";
 abstract contract CommonBase {
     // Cheat code address, 0x7109709ECfa91a80626fF3989D68f67F5b1DD12D.
     address internal constant VM_ADDRESS = address(uint160(uint256(keccak256("hevm cheat code"))));
-    // console.sol and console2.sol work by executing a staticcall to this address.
+    // console.sol and console2.sol work by executing a statically to this address.
     address internal constant CONSOLE = 0x000000000000000000636F6e736F6c652e6c6f67;
     // Default address for tx.origin and msg.sender, 0x1804c8AB1F12E6bbf3894d4083f33e07309d1f38.
     address internal constant DEFAULT_SENDER = address(uint160(uint256(keccak256("foundry default caller"))));
