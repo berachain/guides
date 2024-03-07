@@ -1,0 +1,28 @@
+# Token details
+type Token @entity {
+  id: ID!
+  #token name
+  name: String!
+  #token symbol
+  symbol: String!
+  #decimals used
+  decimals: BigDecimal!
+}
+
+# account details
+type Account @entity {
+  #account address
+  id: ID!
+  #balances
+  balances: [TokenBalance!]! @derivedFrom(field: "account")
+}
+# token balance details
+type TokenBalance @entity {
+  id: ID!
+  #token
+  token: Token!
+  #account
+  account: Account!
+  #amount
+  amount: BigDecimal!
+}
