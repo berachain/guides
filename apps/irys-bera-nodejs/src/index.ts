@@ -48,6 +48,8 @@ const main = async () => {
 	console.log({
 		price: `${price} $${process.env.CHAIN_NATIVECURRENCY_SYMBOL}`,
 	});
+	const priceWithBuffer = price + Number(`${process.env.IRYS_BUFFER}`);
+	console.log({ priceWithBuffer });
 
 	// Get balance
 	const currentBalance =
@@ -56,16 +58,18 @@ const main = async () => {
 		currentBalance: `${currentBalance} $${process.env.CHAIN_NATIVECURRENCY_SYMBOL}`,
 	});
 
-	if (currentBalance < price) {
+	if (currentBalance < priceWithBuffer) {
 		// Fund the Irys node
+		console.log('Not enough balance, funding node...');
 		const fundTx = await irys.fund(irys.utils.toAtomic(price));
 		console.log(
 			`Successfully funded '${irys.utils.fromAtomic(fundTx.quantity)}' $${
 				irys.token
 			}`,
 		);
-		console.log('Re-run the script until your balance meets the price.');
+		console.log("Re-run the script until your balance meets the price.");
 	} else {
+		console.log('Uploading file...');
 		// Upload file
 		const receipt = await irys.uploadFile(filePath, {
 			tags: [
