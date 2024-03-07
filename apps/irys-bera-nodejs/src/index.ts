@@ -61,7 +61,7 @@ const main = async () => {
   if (currentBalance < priceWithBuffer) {
     // Fund the Irys node
     console.log("Not enough balance, funding node...");
-    const fundTx = await irys.fund(irys.utils.toAtomic(price));
+    const fundTx = await irys.fund(irys.utils.toAtomic(priceWithBuffer));
     console.log(
       `Successfully funded '${irys.utils.fromAtomic(fundTx.quantity)}' $${
         irys.token
