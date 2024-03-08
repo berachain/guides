@@ -67,3 +67,9 @@ After your subgraph has finished indexing, navigate to your public GraphQL link 
 ```
 
 ![image](./README/goldsky-dashboard.png)
+
+### Result
+
+You can now query the subgraph in the GraphQL playground to retrieve user ERC20 token balances.
+
+![image](./README/goldsky-playground.png)
