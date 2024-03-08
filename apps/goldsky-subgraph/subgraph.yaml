@@ -7,6 +7,7 @@ dataSources:
     name: Erc20
     network: berachain-public-testnet
     source:
+      # MIM address, replace with desired ERC20 token to index
       address: "0xB734c264F83E39Ef6EC200F99550779998cC812d"
       abi: Erc20
       startBlock: 54354

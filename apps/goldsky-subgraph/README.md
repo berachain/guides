@@ -7,14 +7,14 @@ An example using the [Goldsky](https://goldsky.com/) SDK to index Berachain bloc
 
 ## Requirements
 
-- Node js > 20
+- Nodejs `v20.11.0` or greater
 - pnpm (or another prefered package manager)
 
 ## Quick Setup
 
 ### Step 1 - Install dependencies
 
-```
+```bash
 # FROM: ./goldsky-subgraph
 
 pnpm install;
@@ -22,23 +22,23 @@ pnpm install;
 
 ### Step 2 - Set up Goldsky
 
-1. Create an account at app.goldsky.com
+1. Create an account at [app.goldsky.com](https://app.goldsky.com)
 2. Create an API key on the Settings page
 3. Install the Goldsky CLI:
 
-```
+```bash
 curl https://goldsky.com | sh
 ```
 
 4. Log in with the API key created earlier:
 
-```
+```bash
 goldsky login
 ```
 
 ### Step 3 - Deploy Subgraph
 
-```
+```bash
 # FROM: ./goldsky-subgraph
 
 goldsky subgraph deploy erc20-subgraph/1.0.0 --path .
