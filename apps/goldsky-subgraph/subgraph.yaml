@@ -1,0 +1,28 @@
+specVersion: 0.0.4
+description: ERC-20 subgraph with event handlers & entities
+schema:
+  file: ./schema.graphql
+dataSources:
+  - kind: ethereum/contract
+    name: Erc20
+    network: berachain-public-testnet
+    source:
+      # MIM address, replace with desired ERC20 token to index
+      address: "0xB734c264F83E39Ef6EC200F99550779998cC812d"
+      abi: Erc20
+      startBlock: 54354
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      entities:
+        - Token
+        - Account
+        - TokenBalance
+      abis:
+        - name: Erc20
+          file: ./abis/Erc20.json
+      eventHandlers:
+        - event: Transfer(indexed address,indexed address,uint256)
+          handler: handleTransfer
+      file: ./src/mapping.ts
