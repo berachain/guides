@@ -1,66 +1,106 @@
-## Foundry
+# Query Berachain Data with Pyth Oracles
 
-**Foundry is a blazing fast, portable and modular toolkit for Ethereum application development written in Rust.**
+[Pyth Network](https://pyth.network/) is a decentralized oracle network that provides high-quality, real-time data for Berachain. This repo provides an example of how to query Pyth Network data on Berachain's Artio Testnet.
 
-Foundry consists of:
+Pyth differs from the existing oracle paradigm by using on-demand price updates, where users pull on-chain prices only when needed - learn more [here](https://pyth.network/blog/pyth-a-new-model-to-the-price-oracle).
 
--   **Forge**: Ethereum testing framework (like Truffle, Hardhat and DappTools).
--   **Cast**: Swiss army knife for interacting with EVM smart contracts, sending transactions and getting chain data.
--   **Anvil**: Local Ethereum node, akin to Ganache, Hardhat Network.
--   **Chisel**: Fast, utilitarian, and verbose solidity REPL.
+## Requirements
 
-## Documentation
+- Nodejs `v20.11.0` or greater
+- pnpm (or another prefered package manager)
+- Wallet with testnet $BERA tokens - See the [Berachain Artio Faucet](https://artio.faucet.berachain.com)
+- [Foundry](https://book.getfoundry.sh/getting-started/installation) - ensure `foundryup` is run to install binaries
 
-https://book.getfoundry.sh/
+## Quick Setup
 
-## Usage
+### Step 1 - Setup Project & Install Dependencies
 
-### Build
+```bash
+# FROM: ./pyth-oracle
+forge init;
 
-```shell
-$ forge build
+pnpm install;
+pnpm install @pythnetwork/pyth-sdk-solidity;
 ```
 
-### Test
+Add the following line to `./foundry.toml`:
 
-```shell
-$ forge test
+```toml
+remappings = ['@pythnetwork/pyth-sdk-solidity/=node_modules/@pythnetwork/pyth-sdk-solidity']
 ```
 
-### Format
+### Step 2 - Set up for Deployment
 
-```shell
-$ forge fmt
+Run the following to import your wallet's private key into Foundry's keystore (with the `deployer` alias):
+
+```bash
+cast wallet import deployer --interactive;
 ```
 
-### Gas Snapshots
+Confirm that your wallet was imported by running:
 
-```shell
-$ forge snapshot
+```bash
+cast wallet list;
+
+# [Example output]
+# deployer (Local)
 ```
 
-### Anvil
+Load the Berachain RPC into your terminal session:
 
-```shell
-$ anvil
+```bash
+export BERACHAIN_ARTIO_RPC="https://rpc.ankr.com/berachain_testnet"
 ```
 
-### Deploy
+### Step 3 - Deploying to Berachain
 
-```shell
-$ forge script script/Counter.s.sol:CounterScript --rpc-url <your_rpc_url> --private-key <your_private_key>
+Compile the smart contract:
+
+```bash
+# FROM: ./pyth-oracle
+
+forge build;
 ```
 
-### Cast
+Deploy the smart contract (you will be prompted for the keystore password you set earlier):
 
-```shell
-$ cast <subcommand>
+```bash
+# FROM: ./pyth-oracle
+
+forge create ./src/ConsumerContract.sol:ConsumerContract --rpc-url $BERACHAIN_ARTIO_RPC --account deployer
 ```
 
-### Help
+### Step 4 - Interacting with your Contract
 
-```shell
-$ forge --help
-$ anvil --help
-$ cast --help
+Fetch the payload for `priceUpdateData` from the Pyth API & write to file:
+
+```bash
+# FROM: ./pyth-oracle
+
+curl -s "https://hermes.pyth.network/v2/updates/price/latest?&ids\[\]=0xff61491a931112ddf1bd8147cd1b641375f79f5825126d665480874634fd0ace" | sed -n 's/.*"data":\["\([^"]*\)"\].*/\1/p' > price_update.txt
 ```
+
+Call `updatePrice` with the payload:
+
+```bash
+# FROM: ./pyth-oracle
+
+cast send <YOUR_DEPLOYED_CONTRACT> --rpc-url $BERACHAIN_ARTIO_RPC "updatePrice(bytes[])"  "[0x`cat price_update.txt`]" --account deployer --value 0.0001ether
+```
+
+Next, query the price with `getPrice()`:
+
+```bash
+cast call <YOUR_DEPLOYED_CONTRACT> --rpc-url $BERACHAIN_ARTIO_RPC "getPrice()"
+```
+
+Optionally, decode the hexadecimal output with `abi-decode`:
+
+```bash
+cast abi-decode "getPrice()(int64,uint64,int32,uint)"  <YOUR_GETPRICE_OUTPUT>
+```
+
+### Troubleshooting
+
+- If you don't act quick enough, you may encounter the error `0x19abf40e` representing a `StalePrice` error. This means that the `price_update.txt` was too old to be used by the contract. Re-run the sequence of commands in Step 4 to retry.
+- The error code `0x025dbdd4` represents an `InsufficientFee` error. Try raising the value of $BERA in the `updatePrice` call e.g. `0.0005ether`.
