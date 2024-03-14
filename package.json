@@ -1,39 +1,33 @@
 {
-  "name": "guides",
+  "name": "staking-app",
+  "version": "0.1.0",
   "private": true,
-  "contributors": [
-    {
-      "name": "De",
-      "url": "https://github.com/dethebera"
-    }
-  ],
-  "author": {
-    "name": "@codingwithmanny",
-    "url": "https://github.com/codingwithmanny"
-  },
   "scripts": {
-    "clean": "turbo clean; rm -rf node_modules; rm -rf .turbo;",
-    "build": "turbo build",
-    "dev": "turbo dev",
-    "lint": "turbo lint",
-    "format": "prettier --write \"**/*.{ts,tsx,md}\"",
-    "with-env": "dotenv -e ./.env --",
-    "deploy:berachain": "pnpm with-env turbo run deploy:berachain",
-    "verify": "pnpm with-env turbo run verify",
-    "postinstall": "cd apps/walletconnect-expo; pnpm install --ignore-workspace;"
-  },
-  "devDependencies": {
-    "@biomejs/biome": "^1.5.3",
-    "@repo/eslint-config": "workspace:*",
-    "@repo/typescript-config": "workspace:*",
-    "prettier": "^3.1.0",
-    "turbo": "latest"
-  },
-  "packageManager": "pnpm@8.9.0",
-  "engines": {
-    "node": ">=20"
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "export": "next export",
+    "deploy": "next build && next export && npx thirdweb@latest upload out"
   },
   "dependencies": {
-    "dotenv-cli": "^7.3.0"
+    "@chakra-ui/react": "^2.8.2",
+    "@emotion/react": "^11.11.4",
+    "@emotion/styled": "^11.11.0",
+    "@thirdweb-dev/react": "^4",
+    "@thirdweb-dev/sdk": "^4.0.38",
+    "ethers": "^5.7.2",
+    "framer-motion": "^11.0.8",
+    "next": "^13",
+    "react": "^18.2",
+    "react-dom": "^18.2"
+  },
+  "devDependencies": {
+    "@types/next": "^9.0.0",
+    "@types/node": "^18.11.11",
+    "@types/react": "^18",
+    "eslint": "^8.29.0",
+    "eslint-config-next": "^13",
+    "typescript": "^4.9.4"
   }
 }
