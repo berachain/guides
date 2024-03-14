@@ -1,46 +1,54 @@
-# Berachain Guides
 
-A collection of Berachain EVM examples: code, frameworks, languages, contracts, and more.
+# BeraCrypt
 
-## Requirements
+Beracrypt NFT Blockchain Platform: Berachain Project Description: Beracrypt NFT is an innovative project built on the Berachain blockchain, designed to provide a fun and engaging experience for the community. The project's primary aim is to enable community members to "Play To Earn," promoting user engagement and interaction. By participating in various gaming activities, users will have the opportunity to earn Beracrypt NFTs, which can be traded, sold, or held for future benefits. Join the Beracrypt NFT community and start playing and earning today!
 
-- NVM or Node `v18.18.2+`
-- pnpm (recommended)
+## Demo
 
-## Turborepo Folder Structure
+https://rastcrypt.eu.org/
 
-This Turborepo includes the following packages/apps:
+https://test-project-1dcg4jrn4-rasstcrypt.vercel.app/
 
-### Apps
 
-- `apps/ethers6-solc-helloworld` - Deploy HelloWorld contract with ethers6
-- `apps/viem-solc-helloworld` - Deploy HelloWorld contract with viem
-- `apps/foundry-erc20` - Deploy ERC20 contract with foundry
-- `apps/hardhat-ethers6-erc1155` - Deploy ERC1155 contract with hardhat ethers6
-- `apps/hardhat-viem-helloworld` - Deploy HelloWorld contract with hardhat viem
-- `apps/walletconnect-nextjs` - WalletConnect Web3Modal frontend contract deployment
 
-## Quick Start
 
-Install dependencies for all apps and packages.
+## Run Locally
+
+Clone the project
 
 ```bash
-# FROM: ./
-
-pnpm install;
+  git clone https://github.com/RasstCrypt/BeraStakingNFT.git
 ```
 
-Create and modify your `.env` and make the modifications you need to it.
+Go to the project directory
 
 ```bash
-cp .env.example .env;
+  cd BeraStakingNFT
 ```
 
-If you'd like to deploy to the chain:
+Install dependencies
 
 ```bash
-# FROM: ./
-
-# IMPORTANT: --no-cache is important to avoid caching the result of the deployments
-pnpm deploy:berachain --filter foundry-erc20 --no-cache;
+  npm install
 ```
+
+Start the server
+
+```bash
+  npm run start
+```
+
+
+## Authors
+
+- [@RasstCrypt](https://www.github.com/RasstCrypt)
+
+
+## Deployment
+
+To deploy this project run
+
+```bash
+  npm run deploy
+```
+
