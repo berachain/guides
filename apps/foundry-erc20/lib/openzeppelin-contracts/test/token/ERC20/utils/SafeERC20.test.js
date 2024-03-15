@@ -116,7 +116,7 @@ contract('SafeERC20', function (accounts) {
     shouldOnlyRevertOnErrors(accounts);
   });
 
-  describe('with usdt approval beaviour', function () {
+  describe('with usdt approval behaviour', function () {
     const spender = hasNoCode;
 
     beforeEach(async function () {
