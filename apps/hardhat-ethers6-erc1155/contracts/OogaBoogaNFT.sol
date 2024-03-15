@@ -19,7 +19,7 @@ contract OogaBoogaNFT is
     ERC1155Supply
 {
     /**
-     * Main constructor seting the the baseURI
+     * Main constructor setting the the baseURI
      * newuri - sets the base url for where we are storing our manifest JSON files
      */
     constructor(
