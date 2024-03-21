@@ -8,6 +8,6 @@ contract MyAdapter is OFTAdapter {
     constructor(
         address _token, // a deployed, already existing ERC20 token address
         address _layerZeroEndpoint, // local endpoint address
-        address _owner // token owner used as a delegate in LayerZero Endpoint
-    ) OFTAdapter(_token, _layerZeroEndpoint, _owner) Ownable(_owner) {}
+        address _delegate // token owner used as a delegate in LayerZero Endpoint
+    ) OFTAdapter(_token, _layerZeroEndpoint, _delegate) Ownable(_delegate) {}
 }

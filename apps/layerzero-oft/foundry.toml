@@ -5,7 +5,6 @@ libs = [
     'node_modules/@layerzerolabs/toolbox-foundry/lib',
     'node_modules',
 ]
-
 remappings = [
     'forge-std/=node_modules/@layerzerolabs/toolbox-foundry/lib/forge-std',
     '@layerzerolabs/=node_modules/@layerzerolabs/',

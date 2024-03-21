@@ -6,6 +6,7 @@ out/
 # Ignores development broadcast logs
 !/broadcast
 /broadcast/*
+cache/
 
 # Docs
 docs/
