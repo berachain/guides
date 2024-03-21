@@ -1,0 +1,10 @@
+{
+  "transactions": [
+    {
+      "rpc": "https://artio.rpc.berachain.com/"
+    },
+    {
+      "rpc": "https://artio.rpc.berachain.com/"
+    }
+  ]
+}
