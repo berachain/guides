@@ -25,7 +25,7 @@ Install project dependencies:
 pnpm install;
 ```
 
-Add the following remappings to `foundry.toml`:
+Run the following to add remappings to `foundry.toml`:
 
 ```bash
 # FROM: ./pyth-entropy
