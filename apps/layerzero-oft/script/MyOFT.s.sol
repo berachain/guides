@@ -8,12 +8,13 @@ contract MyOFTScript is Script {
     address constant LAYERZERO_ENDPOINT =
         0x6EDCE65403992e310A62460808c4b910D972f10f;
 
-    // REPLACE WITH YOUR DEPLOYED ADAPTER ON SEPOLIA
-    address constant SEPOLIA_PEER = 0x0000000000000000000000000000000000000000;
     uint32 constant SEPOLIA_ENDPOINT_ID = 40161;
 
     function run() public {
         // Setup
+        address SEPOLIA_ADAPTER_ADDRESS = vm.envAddress(
+            "SEPOLIA_ADAPTER_ADDRESS"
+        );
         uint256 privateKey = vm.envUint("PRIVATE_KEY");
         vm.startBroadcast(privateKey);
 
@@ -28,7 +29,7 @@ contract MyOFTScript is Script {
         // Hook up Berachain OFT to Sepolia's adapter
         myOFT.setPeer(
             SEPOLIA_ENDPOINT_ID,
-            bytes32(uint256(uint160(SEPOLIA_PEER)))
+            bytes32(uint256(uint160(SEPOLIA_ADAPTER_ADDRESS)))
         );
         vm.stopBroadcast();
     }

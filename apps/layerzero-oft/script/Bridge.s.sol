@@ -13,19 +13,15 @@ contract SendOFTScript is Script {
     using OptionsBuilder for bytes;
 
     uint32 constant BERACHAIN_ENPOINT_ID = 40256;
-
-    // REPLACE WITH ADAPTER ADDRESS FROM STEP 1
-    address constant SEPOLIA_ADAPTER_ADDRESS =
-        0x0000000000000000000000000000000000000000;
-
-    // REPLACE WITH OFT ADDRESS FROM STEP 2
-    address constant BERACHAIN_OFT_ADDRESS =
-        0x0000000000000000000000000000000000000000;
-
     address constant SEPOLIA_UNI_ADDRESS =
         0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984;
 
     function run() external {
+        address SEPOLIA_ADAPTER_ADDRESS = vm.envAddress(
+            "SEPOLIA_ADAPTER_ADDRESS"
+        );
+        address BERACHAIN_OFT_ADDRESS = vm.envAddress("BERACHAIN_OFT_ADDRESS");
+
         uint256 privateKey = vm.envUint("PRIVATE_KEY");
         vm.startBroadcast(privateKey);
         address signer = vm.addr(privateKey);

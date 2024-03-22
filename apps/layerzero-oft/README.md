@@ -14,12 +14,12 @@ This repository contains an example of how to bridge an existing ERC20 token (in
 
 ### Step 1 - Setup Project & Install Dependencies
 
+Install project dependencies:
+
 ```bash
 # FROM: ./layerzero-oft
-forge init;
 
 pnpm install;
-pnpm add -D @layerzerolabs/lz-evm-oapp-v2 @layerzerolabs/toolbox-foundry @layerzerolabs/lz-evm-protocol-v2 @layerzerolabs/lz-evm-messagelib-v2 @layerzerolabs/lz-definitions @openzeppelin/contracts --ignore-workspace;
 ```
 
 Replace the contents of `foundry.toml` with the following:
@@ -41,10 +41,12 @@ remappings = [
 
 ### Step 2 - Deploy Adapter to Sepolia
 
-Create a `/.env` file at the project root and populate it with your private key:
+Create a `/.env` file at the project root with the following and populate it with your `PRIVATE_KEY`:
 
 ```toml
-PRIVATE_KEY=<YOUR_PRIVATE_KEY>
+PRIVATE_KEY=
+SEPOLIA_ADAPTER_ADDRESS=
+BERACHAIN_OFT_ADDRESS=
 ```
 
 Deploy `MyAdapter.sol` to Sepolia:
@@ -55,9 +57,9 @@ Deploy `MyAdapter.sol` to Sepolia:
 forge script script/MyAdapter.s.sol --rpc-url https://rpc.sepolia.org/ --broadcast
 ```
 
-### Step 3 - Deploy OFT to Berachain
+Update `SEPOLIA_ADAPTER_ADDRESS` in your `.env` file with the address of your `MyAdapter` deployment.
 
-In `./script/MyOFT.s.sol`, update `SEPOLIA_PEER` with the `Contract Address` of your `MyAdapter` deployment from Step 2
+### Step 3 - Deploy OFT to Berachain
 
 Deploy `MyOFT.sol` to Berachain:
 
@@ -67,14 +69,11 @@ Deploy `MyOFT.sol` to Berachain:
 forge script script/MyOFT.s.sol --rpc-url https://artio.rpc.berachain.com/ --broadcast
 ```
 
+Update `BERACHAIN_OFT_ADDRESS` in your `.env` file with the address of your `MyOFT` deployment.
+
 ### Step 4 - Bridge Tokens from Sepolia to Berachain
 
-In `./script/Bridge.s.sol`:
-
-- update `SEPOLIA_ADAPTER_ADDRESS` with the deployed contract address from Step 2
-- update `BERACHAIN_OFT_ADDRESS` with the deployed contract address from Step 3
-
-Finally, run the following to bridge your $UNI tokens to Berachain:
+Finally, run the `Bridge.s.sol` script to bridge your $UNI tokens to Berachain:
 
 ```bash
 # FROM: ./layerzero-oft
