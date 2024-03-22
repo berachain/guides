@@ -13,6 +13,8 @@ contract EntropyNFT is ERC721Enumerable {
     uint256 public constant MAX_SUPPLY = 500;
     uint256 public nextIndex;
     uint256[] private availableTokenIds;
+
+    // Mapping of sequence numbers to minter addresses
     mapping(uint64 => address) public sequenceNumberToMinter;
 
     constructor(
@@ -24,12 +26,15 @@ contract EntropyNFT is ERC721Enumerable {
         initializeAvailableTokenIds();
     }
 
+    // Initialize array of available token IDs
     function initializeAvailableTokenIds() private {
         for (uint256 i = 0; i < MAX_SUPPLY; i++) {
             availableTokenIds.push(i);
         }
     }
 
+    // Step 1 of 2: Request a new random number for minting
+    // Returns sequence number used to obtain random number from Pyth
     function requestMint(bytes32 userCommitment) external payable {
         require(nextIndex < MAX_SUPPLY, "Reached max supply");
 
@@ -46,6 +51,8 @@ contract EntropyNFT is ERC721Enumerable {
         emit NumberRequested(sequenceNumber, msg.sender);
     }
 
+    // Step 2 of 2: Fulfill mint request using user and Pyth random numbers
+    // Ultimate random number is produced from hash of these numbers
     function fulfillMint(
         uint64 sequenceNumber,
         bytes32 userRandomness,
@@ -62,6 +69,7 @@ contract EntropyNFT is ERC721Enumerable {
         uint256 randomIndex = uint256(randomNumber) % availableTokenIds.length;
         uint256 tokenId = availableTokenIds[randomIndex];
 
+        // Swap-and-pop to replace minted tokenId
         availableTokenIds[randomIndex] = availableTokenIds[
             availableTokenIds.length - 1
         ];
