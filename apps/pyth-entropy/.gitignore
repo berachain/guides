@@ -1,0 +1,18 @@
+# Compiler files
+cache/
+out/
+.github
+
+# Ignores development broadcast logs
+!/broadcast
+/broadcast/*
+cache/
+
+# Docs
+docs/
+
+# Dotenv file
+.env
+
+# Foundry libraries
+lib/
