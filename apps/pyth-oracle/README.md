@@ -8,6 +8,7 @@ Pyth differs from the existing oracle paradigm by using on-demand price updates,
 
 - Nodejs `v20.11.0` or greater
 - pnpm (or another prefered package manager)
+- [jq ](https://jqlang.github.io/jq/download/)
 - Wallet with testnet $BERA tokens - See the [Berachain Artio Faucet](https://artio.faucet.berachain.com)
 - [Foundry](https://book.getfoundry.sh/getting-started/installation) - ensure `foundryup` is run to install binaries
 
@@ -17,16 +18,14 @@ Pyth differs from the existing oracle paradigm by using on-demand price updates,
 
 ```bash
 # FROM: ./pyth-oracle
-forge init;
 
 pnpm install;
-pnpm install @pythnetwork/pyth-sdk-solidity;
 ```
 
-Add the following line to `./foundry.toml`:
+Add remappings to `./foundry.toml` with the following:
 
 ```toml
-remappings = ['@pythnetwork/pyth-sdk-solidity/=node_modules/@pythnetwork/pyth-sdk-solidity']
+echo "remappings = ['@pythnetwork/pyth-sdk-solidity/=node_modules/@pythnetwork/pyth-sdk-solidity']" >> ./foundry.toml
 ```
 
 ### Step 2 - Set up for Deployment
@@ -77,7 +76,7 @@ Fetch the payload for `priceUpdateData` from the Pyth API & write to file:
 ```bash
 # FROM: ./pyth-oracle
 
-curl -s "https://hermes.pyth.network/v2/updates/price/latest?&ids\[\]=0xff61491a931112ddf1bd8147cd1b641375f79f5825126d665480874634fd0ace" | sed -n 's/.*"data":\["\([^"]*\)"\].*/\1/p' > price_update.txt
+curl -s "https://hermes.pyth.network/v2/updates/price/latest?&ids[]=0xff61491a931112ddf1bd8147cd1b641375f79f5825126d665480874634fd0ace" | jq -r ".binary.data[0]" > price_update.txt
 ```
 
 Call `updatePrice` with the payload:
