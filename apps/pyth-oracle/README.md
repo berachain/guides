@@ -22,12 +22,6 @@ Pyth differs from the existing oracle paradigm by using on-demand price updates,
 pnpm install;
 ```
 
-Add remappings to `./foundry.toml` with the following:
-
-```toml
-echo "remappings = ['@pythnetwork/pyth-sdk-solidity/=node_modules/@pythnetwork/pyth-sdk-solidity']" >> ./foundry.toml
-```
-
 ### Step 2 - Set up for Deployment
 
 Run the following to import your wallet's private key into Foundry's keystore (with the `deployer` alias):
@@ -67,6 +61,12 @@ Deploy the smart contract (you will be prompted for the keystore password you se
 # FROM: ./pyth-oracle
 
 forge create ./src/ConsumerContract.sol:ConsumerContract --rpc-url $BERACHAIN_ARTIO_RPC --account deployer
+
+# [Expected Similar Output]:
+# Enter keystore password:
+# Deployer: 0x529CA3A690E1bB4e9F04d132bd99D4398f626A44
+# Deployed to: 0x9106b2041C896224Af2142ea9C7349aa283Df7C6
+# Transaction hash: 0xc8efdd3132080491b42c469fb2219bc6f0432981a46cdd3f6ae73b9e834ff4e4
 ```
 
 ### Step 4 - Interacting with your Contract
@@ -85,13 +85,27 @@ Call `updatePrice` with the payload:
 # FROM: ./pyth-oracle
 
 cast send <YOUR_DEPLOYED_CONTRACT> --rpc-url $BERACHAIN_ARTIO_RPC "updatePrice(bytes[])"  "[0x`cat price_update.txt`]" --account deployer --value 0.0001ether
+
+# [Expected Similar Output]:
+# blockHash               0xf00e38ea8197d088973dc51502b9fb62d089ac31b6fe01002e83a969e9c05f93
+# blockNumber             1037572
+# contractAddress
+# cumulativeGasUsed       208351
+# effectiveGasPrice       3000000017
+# from                    0x529CA3A690E1bB4e9F04d132bd99D4398f626A44
+# ...
 ```
 
 Next, query the price with `getPrice()`:
 
 ```bash
 cast call <YOUR_DEPLOYED_CONTRACT> --rpc-url $BERACHAIN_ARTIO_RPC "getPrice()"
+
+# [Expected Similar Output]:
+# 0x0000000000000000000000000000000000000000000000000000005c7eedf820000000000000000000000000000000000000000000000000000000000eb29f7bfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff80000000000000000000000000000000000000000000000000000000065f256b1
 ```
+
+If you encounter errors, see [Troubleshooting](#troubleshooting).
 
 Optionally, decode the hexadecimal output with `abi-decode`:
 
