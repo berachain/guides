@@ -241,6 +241,12 @@ importers:
         specifier: ^3.0.4
         version: 3.2.8
 
+  apps/pyth-oracle:
+    dependencies:
+      '@pythnetwork/pyth-sdk-solidity':
+        specifier: ^2.4.1
+        version: 2.4.1
+
   apps/thirdweb-connectwallet-nextjs:
     dependencies:
       '@thirdweb-dev/react':
@@ -6195,6 +6201,10 @@ packages:
 
   /@protobufjs/utf8@1.1.0:
     resolution: {integrity: sha512-Vvn3zZrhQZkkBE8LSuW3em98c0FwgO4nxzv6OdSxPKJIEKY2bGbHn+mhGIPerzI4twdxaP8/0+06HBpwf345Lw==}
+    dev: false
+
+  /@pythnetwork/pyth-sdk-solidity@2.4.1:
+    resolution: {integrity: sha512-QNrdtv+YiEszz0hvBOWXaJ3PeKJfcSnQnB9GuSZOK1WVuJxNtPTd1Hc2hrpxPm0B4SBKwSSo10I0jb4GXHi42g==}
     dev: false
 
   /@radix-ui/colors@0.1.9:
