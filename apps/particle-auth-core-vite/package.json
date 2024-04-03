@@ -16,7 +16,7 @@
     "@vitejs/plugin-react": "^2.0.0",
     "react": "^18.2.0",
     "typescript": "^4.7.4",
-    "vite": "^3.0.4"
+    "vite": "^3.2.10"
   },
   "dependencies": {
     "@particle-network/aa": "1.2.0",
