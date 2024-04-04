@@ -4,6 +4,8 @@ This repository contains an example of how to bridge an existing ERC20 token (in
 
 👉 Learn more about [LayerZero V2](https://docs.layerzero.network/contracts/overview)
 
+![LayerZero Berachain OFT Bridging](./README/layerzero-flow.png)
+
 ## Requirements
 
 - Node `v20.11.0` or greater
@@ -22,26 +24,9 @@ Install project dependencies:
 pnpm install;
 ```
 
-Replace the contents of `foundry.toml` with the following:
-
-```toml
-[profile.default]
-src = "src"
-out = "out"
-libs = [
-    'node_modules/@layerzerolabs/toolbox-foundry/lib',
-    'node_modules',
-]
-remappings = [
-    'forge-std/=node_modules/@layerzerolabs/toolbox-foundry/lib/forge-std',
-    '@layerzerolabs/=node_modules/@layerzerolabs/',
-    '@openzeppelin/=node_modules/@openzeppelin/',
-]
-```
-
 ### Step 2 - Deploy Adapter to Sepolia
 
-Create a `/.env` file at the project root with the following and populate it with your `PRIVATE_KEY`:
+Create a `.env` file at the root of `./layerzero-oft` with the following and populate it with your `PRIVATE_KEY`:
 
 ```toml
 PRIVATE_KEY=
