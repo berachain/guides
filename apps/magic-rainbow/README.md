@@ -43,4 +43,4 @@ pnpm start;
 3. Send testnet $BERA tokens to the connected Magic wallet address
 4. Use the form to send testnet $BERA tokens to another address from the connected Magic wallet
 
-![Magic Successful Transaction](./magic-successful-transaction.png)
+![Magic Successful Transaction](./README/magic-successful-transaction.png)
