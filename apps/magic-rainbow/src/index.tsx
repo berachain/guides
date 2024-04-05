@@ -23,14 +23,14 @@ const connectors = connectorsForWallets(
       wallets: [
         getRainbowMagicWallet({
           chains: [berachainTestnet],
-          apiKey: "pk_live_78765383FA4047DB",
+          apiKey: "YOUR_MAGIC_API_KEY",
         }),
       ],
     },
   ],
   {
     appName: "My RainbowKit App",
-    projectId: "YOUR_PROJECT_ID",
+    projectId: "project_id",
   }
 );
 

@@ -28,7 +28,11 @@ Go to [https://dashboard.magic.link/signup](https://dashboard.magic.link/signup]
 
 ![Magic Signup](./README/magic-signup.png)
 
-### 3 - Run App
+### 3 - Replace API Key
+
+In `./src/index.tsx`, replace `YOUR_MAGIC_API_KEY` with the API key obtained from the Magic dashboard.
+
+### 4 - Run App
 
 ```bash
 # FROM: ./magic-rainbow
@@ -36,7 +40,7 @@ Go to [https://dashboard.magic.link/signup](https://dashboard.magic.link/signup]
 pnpm start;
 ```
 
-### 4 - Send Transaction Using Magic Wallet
+### 5 - Send Transaction Using Magic Wallet
 
 1. In the running app, click the "Connect Wallet" button and select "Magic". Follow the prompts to sign in to your Magic wallet.
 2. Copy the connected Magic wallet address

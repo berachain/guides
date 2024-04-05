@@ -1,6 +1,6 @@
 {
-  "name": "with-create-react-app",
-  "version": "0.1.83",
+  "name": "magic-rainbow",
+  "version": "1.0.0",
   "private": true,
   "dependencies": {
     "@magiclabs/wagmi-connector": "^2.0.0",
