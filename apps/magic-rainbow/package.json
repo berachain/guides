@@ -4,8 +4,8 @@
   "private": true,
   "dependencies": {
     "@magiclabs/wagmi-connector": "^2.0.0",
-    "@rainbow-me/rainbowkit": "^2.0.4",
-    "@tanstack/react-query": "^5.28.4",
+    "@rainbow-me/rainbowkit": "^2.0.5",
+    "@tanstack/react-query": "^5.28.14",
     "@testing-library/jest-dom": "^6.2.0",
     "@testing-library/react": "^14.1.2",
     "@testing-library/user-event": "^14.5.2",
@@ -19,8 +19,8 @@
     "react-scripts": "5.0.1",
     "typescript": "5.4.2",
     "util": "0.12.4",
-    "viem": "^2.8.12",
-    "wagmi": "^2.5.11",
+    "viem": "^2.9.9",
+    "wagmi": "^2.5.18",
     "web-vitals": "^2.1.4"
   },
   "scripts": {

@@ -28,12 +28,6 @@ export const rainbowMagicWallet = ({
         chains: chains,
         options: {
           apiKey: apiKey,
-          networks: [
-            {
-              rpcUrl: "https://artio.rpc.berachain.com",
-              chainId: 80085,
-            },
-          ],
           magicSdkConfiguration: {
             network: {
               rpcUrl: "https://artio.rpc.berachain.com",

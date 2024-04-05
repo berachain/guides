@@ -1,21 +1,21 @@
 @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;800&display=swap");
 
 html {
-  font-size: 62.5%;
+  font-size: 65%;
 }
 
 body {
   margin: 0;
   background-color: #19191a;
-  color: #ffffff;
+  color: #fff;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   font-size: 1.6rem;
+  font-family: "Inter", sans-serif;
 }
 
 .App {
   text-align: center;
-  font-family: "Inter", sans-serif;
   margin-top: 7rem;
   display: flex;
   flex-direction: column;
@@ -32,67 +32,25 @@ form {
   grid-gap: 10px;
 }
 
-.normal-weight {
-  font-weight: normal;
-}
-
-
 .submit-button {
-    background-color: #a799ff;
-    font-family: "Inter", sans-serif;
-    border-radius: 300px;
-    cursor: pointer;
-    border: none;
-    color: #18171a;
-    padding: 12px 24px;
-    font-weight: 600;
-    font-size: 1.6rem;
-    width: 304px;
-    height: 48px;
-    line-height: 0;
+  background-color: #a799ff;
+  border-radius: 300px;
+  cursor: pointer;
+  border: none;
+  color: #18171a;
+  padding: 12px 24px;
+  font-weight: 600;
+  font-size: 1.6rem;
+  width: 304px;
+  height: 48px;
+  line-height: 0;
 }
 
-button:hover {
-  background-color: linear-gradient(
-      0deg,
-      rgba(255, 255, 255, 0.05),
-      rgba(255, 255, 255, 0.05)
-    ),
-    linear-gradient(0deg, #a799ff, #a799ff), #191919;
-}
-
-button:active {
+.submit-button:active {
   background: #6851ff;
 }
 
-.sign-in-button {
-  border-radius: 8rem;
-  font-size: 1.8rem;
-  padding: 1.6rem 2.4rem;
-}
-
-.sign-in-container {
-  margin-top: 10rem;
-}
-
-.disconnect-button {
-  background-color: #ff9b80;
-}
-
-.disconnect-button:hover {
-  background-color: linear-gradient(
-      0deg,
-      rgba(255, 255, 255, 0.05),
-      rgba(255, 255, 255, 0.05)
-    ),
-    linear-gradient(0deg, #ff9b80, #ff9b80), #191919;
-}
-
-.disconnect-button:active {
-  background-color: #d43100;
-}
-
-.wallet-container {
+.send-container {
   background-color: #383838;
   width: fit-content;
   padding: 3rem;
@@ -103,11 +61,16 @@ button:active {
   align-items: center;
 }
 
+.confirmation-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
 input {
-  font-family: "Inter", sans-serif;
   font-weight: 400;
   font-size: 1.6rem;
-  background: #ffffff;
+  background: #fff;
   box-sizing: border-box;
   display: flex;
   flex-direction: row;
@@ -121,43 +84,9 @@ input {
   outline: none;
 }
 
-.status-container {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  width: 80px;
-}
-
-.circle {
-  background-color: #ffd594;
-  height: 1.6rem;
-  width: 1.6rem;
-  border-radius: 50%;
-}
-
-.disconnected {
-  background-color: #ff9b80;
-}
-
-.connected {
-  background-color: #90f0d3;
-}
-
 .divider {
   background-color: #ffffff70;
-  margin: 20px 0 20px 0;
+  margin: 20px 0;
   width: 190px;
   height: 1px;
-}
-
-.sign-message-container {
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  align-items: center;
-  height: 110px;
-}
-
-.message-status {
-  margin-top: 12px;
 }
