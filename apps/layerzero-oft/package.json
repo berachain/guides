@@ -6,8 +6,8 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "keywords": [],
-  "author": "",
+  "keywords": ["layerzero", "berachain", "bridging", "sepolia", "omnichain", "oft", "erc20"],
+  "author": "@larrythecucumber321",
   "license": "ISC",
   "devDependencies": {
     "@layerzerolabs/lz-definitions": "^2.1.23",
