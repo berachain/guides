@@ -3,7 +3,7 @@ import dotenv from "dotenv";
 dotenv.config();
 
 export const CONFIG = {
-  PYTH_ENDPOINT: process.env.PYTH_ENDPOINT || "",
+  PYTH_ENDPOINT: process.env.PYTH_ENDPOINT || "https://hermes.pyth.network",
   PRICE_ID: process.env.PRICE_ID || "",
   DATA_INTERVAL: parseFloat(process.env.DATA_INTERVAL || "5"),
   BOLLINGER_PERIOD: parseFloat(process.env.BOLLINGER_PERIOD || "20"),
