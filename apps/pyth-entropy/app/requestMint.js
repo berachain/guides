@@ -1,7 +1,6 @@
 const { Web3 } = require("web3");
 const EntropyNFTAbi = require("../out/EntropyNFT.sol/EntropyNFT.json");
 const EntropyAbi = require("@pythnetwork/entropy-sdk-solidity/abis/IEntropy.json");
-const fs = require("fs").promises;
 require("dotenv").config({ path: "../.env" });
 
 async function requestMint() {
@@ -10,8 +9,6 @@ async function requestMint() {
   const { address } = web3.eth.accounts.wallet.add(
     process.env["PRIVATE_KEY"]
   )[0];
-
-  web3.eth.defaultBlock = "finalized";
 
   const entropyNFTContract = new web3.eth.Contract(
     EntropyNFTAbi.abi,
@@ -26,9 +23,7 @@ async function requestMint() {
   // Step 2: generate user random number, request mint
   console.log("Generating user random number and commitment...");
   const userRandomNumber = web3.utils.randomHex(32);
-  const userCommitment = web3.utils.keccak256(userRandomNumber);
   console.log(`User Random Number: ${userRandomNumber}`);
-  console.log(`User Commitment: ${userCommitment}`);
 
   console.log("Fetching request fee...");
   const fee = await entropyContract.methods
@@ -38,7 +33,7 @@ async function requestMint() {
 
   console.log("Requesting NFT mint...");
   const requestReceipt = await entropyNFTContract.methods
-    .requestMint(userCommitment)
+    .requestMint(userRandomNumber)
     .send({ value: fee, from: address });
   console.log(`Request Transaction Hash: ${requestReceipt.transactionHash}`);
 
@@ -46,14 +41,30 @@ async function requestMint() {
     requestReceipt.events.NumberRequested.returnValues.sequenceNumber;
   console.log(`Sequence Number: ${sequenceNumber}`);
 
-  // Save variables to a JSON file
-  const data = {
-    userRandomNumber,
-    sequenceNumber: Number(sequenceNumber),
-  };
-  await fs.writeFile("mintData.json", JSON.stringify(data, null, 2));
+  // Poll for new Minted events emitted by EntropyNFT
+  // Stops polling when same sequenceNumber is fulfilled 
+  const intervalId = setInterval(async () => {
+    currentBlock = await web3.eth.getBlockNumber();
 
-  console.log("Mint data saved to mintData.json");
+    const events = await entropyNFTContract.getPastEvents("Minted", {
+      fromBlock: currentBlock - 5n,
+      toBlock: currentBlock,
+    });
+    
+    // console.log(events)
+    // Find the event with the same sequence number as the request.
+    const event = events.find(
+      (event) => event.returnValues.sequenceNumber === sequenceNumber
+    );
+    
+    // If the event is found, log the result and stop polling.
+    if (event !== undefined) {
+      const values = events[0].returnValues
+      console.log(`NFT ID ${values.tokenId} minted to ${values.minter}, based on sequenceNumber ${values.sequenceNumber}`)
+      clearInterval(intervalId);
+    }
+  }, 2000);
+
 }
 
 requestMint();
