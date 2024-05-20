@@ -39,13 +39,13 @@ Create a `.env` file at the project root and populate it with the following:
 
 ```toml
 RPC_URL=https://artio.rpc.berachain.com/
-ENTROPY_NFT_ADDRESS=<YOUR_ENTROPY_NFT_ADDRESS>
-PRIVATE_KEY=<YOUR_PRIVATE_KEY>
+ENTROPY_NFT_ADDRESS=YOUR_ENTROPY_NFT_ADDRESS
+PRIVATE_KEY=YOUR_PRIVATE_KEY
 ENTROPY_ADDRESS=0x26DD80569a8B23768A1d80869Ed7339e07595E85
 PROVIDER_ADDRESS=0x6CC14824Ea2918f5De5C2f75A9Da968ad4BD6344
 ```
 
-Replace `<YOUR_PRIVATE_KEY>` with your wallet's private key.
+Replace `YOUR_PRIVATE_KEY` with your wallet's private key.
 
 Load these environment variables into your terminal session:
 
@@ -70,20 +70,18 @@ Update the `ENTROPY_NFT_ADDRESS` in the `.env` file with your deployed contract 
 
 ### Step 3 - Mint a Randomized NFT
 
-Run the `app/requestMint.js` script to request a random number and initiate the minting process:
+Run the `app/requestMint.js` script to:
+
+1) Request a random number from Pyth; and
+2) Poll the NFT contract events for when Pyth executes the minting callback (expected to happen in a few blocks)
 
 ```bash
-# FROM: ./pyth-entropy/app
+# FROM: ./pyth-entropy
 
-node requestMint.js;
-```
+node app/requestMint.js;
 
-Wait a few moments for the Pyth/Fortuna API to update, then run the `app/fulfillMint.js` script to complete the minting process:
-
-```bash
-# FROM: ./pyth-entropy/app
-
-node fulfillMint.js;
+# [Example Output]:
+# ✅ NFT ID 303 minted to 0xf290f3d843826d00f8176182fd76550535f6dbb4, based on sequenceNumber 114
 ```
 
 You will now have minted a randomized NFT from your new collection!

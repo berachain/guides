@@ -3,10 +3,11 @@ pragma solidity ^0.8.13;
 
 import "@openzeppelin/contracts/token/ERC721/extensions/ERC721Enumerable.sol";
 import "@pythnetwork/entropy-sdk-solidity/IEntropy.sol";
+import "@pythnetwork/entropy-sdk-solidity/IEntropyConsumer.sol";
 
-contract EntropyNFT is ERC721Enumerable {
+contract EntropyNFT is ERC721Enumerable, IEntropyConsumer {
     event NumberRequested(uint64 sequenceNumber, address minter);
-    event Minted(address minter, uint256 tokenId);
+    event Minted(uint64 sequenceNumber, address minter, uint256 tokenId);
 
     IEntropy entropy;
     address provider;
@@ -26,45 +27,30 @@ contract EntropyNFT is ERC721Enumerable {
         initializeAvailableTokenIds();
     }
 
-    // Initialize array of available token IDs
-    function initializeAvailableTokenIds() private {
-        for (uint256 i = 0; i < MAX_SUPPLY; i++) {
-            availableTokenIds.push(i);
-        }
-    }
-
     // Step 1 of 2: Request a new random number for minting
     // Returns sequence number used to obtain random number from Pyth
-    function requestMint(bytes32 userCommitment) external payable {
+    function requestMint(bytes32 userRandomNumber) external payable {
         require(nextIndex < MAX_SUPPLY, "Reached max supply");
 
         uint128 requestFee = entropy.getFee(provider);
         require(msg.value >= requestFee, "not enough fees");
 
-        uint64 sequenceNumber = entropy.request{value: requestFee}(
+        uint64 sequenceNumber = entropy.requestWithCallback{value: requestFee}(
             provider,
-            userCommitment,
-            true
+            userRandomNumber
         );
+
         sequenceNumberToMinter[sequenceNumber] = msg.sender;
 
         emit NumberRequested(sequenceNumber, msg.sender);
     }
 
-    // Step 2 of 2: Fulfill mint request using user and Pyth random numbers
-    // Ultimate random number is produced from hash of these numbers
-    function fulfillMint(
+    // Step 2 of 2: Fulfill mint request on Pyth callback
+    function entropyCallback(
         uint64 sequenceNumber,
-        bytes32 userRandomness,
-        bytes32 providerRevelation
-    ) external {
-        bytes32 randomNumber = entropy.reveal(
-            provider,
-            sequenceNumber,
-            userRandomness,
-            providerRevelation
-        );
-
+        address,
+        bytes32 randomNumber
+    ) internal override {
         address minter = sequenceNumberToMinter[sequenceNumber];
         uint256 randomIndex = uint256(randomNumber) % availableTokenIds.length;
         uint256 tokenId = availableTokenIds[randomIndex];
@@ -77,6 +63,20 @@ contract EntropyNFT is ERC721Enumerable {
         nextIndex++;
 
         _safeMint(minter, tokenId);
-        emit Minted(minter, tokenId);
+        emit Minted(sequenceNumber, minter, tokenId);
     }
+
+    // This method is required by the IEntropyConsumer interface
+    function getEntropy() internal view override returns (address) {
+        return address(entropy);
+    }
+
+    // Initialize array of available token IDs
+    function initializeAvailableTokenIds() private {
+        for (uint256 i = 0; i < MAX_SUPPLY; i++) {
+            availableTokenIds.push(i);
+        }
+    }
+
+    receive() external payable {}
 }
