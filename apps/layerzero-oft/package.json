@@ -1,0 +1,20 @@
+{
+  "name": "layerzero-oft",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": ["layerzero", "berachain", "bridging", "sepolia", "omnichain", "oft", "erc20"],
+  "author": "@larrythecucumber321",
+  "license": "ISC",
+  "devDependencies": {
+    "@layerzerolabs/lz-definitions": "^2.1.23",
+    "@layerzerolabs/lz-evm-messagelib-v2": "^2.1.23",
+    "@layerzerolabs/lz-evm-oapp-v2": "^2.1.23",
+    "@layerzerolabs/lz-evm-protocol-v2": "^2.1.23",
+    "@layerzerolabs/toolbox-foundry": "^0.1.2",
+    "@openzeppelin/contracts": "^5.0.2"
+  }
+}
