@@ -66,16 +66,16 @@ contract EntropyNFT is ERC721Enumerable, IEntropyConsumer {
         emit Minted(sequenceNumber, minter, tokenId);
     }
 
-    // This method is required by the IEntropyConsumer interface
-    function getEntropy() internal view override returns (address) {
-        return address(entropy);
-    }
-
     // Initialize array of available token IDs
     function initializeAvailableTokenIds() private {
         for (uint256 i = 0; i < MAX_SUPPLY; i++) {
             availableTokenIds.push(i);
         }
+    }
+
+    // This method is required by the IEntropyConsumer interface
+    function getEntropy() internal view override returns (address) {
+        return address(entropy);
     }
 
     receive() external payable {}

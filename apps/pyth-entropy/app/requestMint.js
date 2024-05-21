@@ -41,7 +41,7 @@ async function requestMint() {
     requestReceipt.events.NumberRequested.returnValues.sequenceNumber;
   console.log(`Sequence Number: ${sequenceNumber}`);
 
-  // Poll for new Minted events emitted by EntropyNFT
+  // Step 3: Poll for new Minted events emitted by EntropyNFT
   // Stops polling when same sequenceNumber is fulfilled 
   const intervalId = setInterval(async () => {
     currentBlock = await web3.eth.getBlockNumber();
@@ -51,7 +51,6 @@ async function requestMint() {
       toBlock: currentBlock,
     });
     
-    // console.log(events)
     // Find the event with the same sequence number as the request.
     const event = events.find(
       (event) => event.returnValues.sequenceNumber === sequenceNumber
