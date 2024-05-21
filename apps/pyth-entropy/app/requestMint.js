@@ -60,7 +60,7 @@ async function requestMint() {
     // If the event is found, log the result and stop polling.
     if (event !== undefined) {
       const values = events[0].returnValues
-      console.log(`NFT ID ${values.tokenId} minted to ${values.minter}, based on sequenceNumber ${values.sequenceNumber}`)
+      console.log(`✅ NFT ID ${values.tokenId} minted to ${values.minter}, based on sequenceNumber ${values.sequenceNumber}`)
       clearInterval(intervalId);
     }
   }, 2000);
