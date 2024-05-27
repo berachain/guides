@@ -2,7 +2,7 @@
 
 This repository contains an example of how to bridge an existing ERC20 token (in this case, $UNI) from the Sepolia Testnet to the Berachain Testnet using LayerZero V2 and their Omnichain Fungible Token (OFT) standard.
 
-👉 Learn more about [LayerZero V2](https://docs.layerzero.network/contracts/overview)
+👉 Learn more about [LayerZero V2](https://docs.layerzero.network/v2)
 
 ![LayerZero Berachain OFT Bridging](./README/layerzero-flow.png)
 
