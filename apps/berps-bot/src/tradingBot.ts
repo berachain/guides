@@ -121,36 +121,34 @@ export class TradingBot {
       const tradeType = 0; // 0 for MARKET, 1 for LIMIT
       const slippage = ethers.utils.parseUnits("10", 10); // 10% slippage
 
-      // Execute sell trade
+      let tradeDirection: "buy" | "sell" | undefined;
+
+      // Determine trade direction
       if (isSell && this.lastTrade !== "sell") {
         console.log("Sell signal", { upperBand, lowerBand, currentPrice });
-
-        const tx = await this.tradingContract.openTrade(
-          trade,
-          tradeType,
-          slippage,
-          priceUpdateData,
-          { value: "2" }
-        );
-
-        await tx.wait();
-        this.lastTrade = "sell";
-        console.log("Placed sell order:", tx.hash);
-
-        // Execute buy trade
+        tradeDirection = "sell";
       } else if (isBuy && this.lastTrade !== "buy") {
         console.log("Buy signal", { upperBand, lowerBand, currentPrice });
-        const tx = await this.tradingContract.openTrade(
-          trade,
-          tradeType,
-          slippage,
-          priceUpdateData,
-          { value: "2" }
-        );
+        tradeDirection = "buy";
+      }
 
-        await tx.wait();
-        this.lastTrade = "buy";
-        console.log("Placed buy order:", tx.hash);
+      // Execute trade if trade direction is determined
+      if (tradeDirection) {
+        try {
+          const tx = await this.tradingContract.openTrade(
+            trade,
+            tradeType,
+            slippage,
+            priceUpdateData,
+            { value: "2" }
+          );
+
+          await tx.wait();
+          this.lastTrade = tradeDirection;
+          console.log(`Placed ${tradeDirection} order:`, tx.hash);
+        } catch (error) {
+          console.error(error);
+        }
       }
     } catch (error) {
       console.error(error);
