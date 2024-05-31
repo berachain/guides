@@ -7,7 +7,7 @@ Pyth differs from the existing oracle paradigm by using on-demand price updates,
 ## Requirements
 
 - Nodejs `v20.11.0` or greater
-- pnpm (or another prefered package manager)
+- pnpm (or another preferred package manager)
 - [jq ](https://jqlang.github.io/jq/download/)
 - Wallet with testnet $BERA tokens - See the [Berachain Artio Faucet](https://artio.faucet.berachain.com)
 - [Foundry](https://book.getfoundry.sh/getting-started/installation) - ensure `foundryup` is run to install binaries

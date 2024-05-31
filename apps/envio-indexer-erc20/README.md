@@ -77,4 +77,4 @@ If you view the "Account" table, you will see a column called "balance".
 
 # Full Code Repository
 
-The full github code repository can be found in the [guides section](https://github.com/berachain/guides/) of this repository under [Index ERC20 Contract Using Envio](https://github.com/berachain/guides/tree/main/apps/envio-indexing-erc20). 
+The full github code repository can be found in the [guides section](https://github.com/berachain/guides/) of this repository under [Index ERC20 Contract Using Envio](https://github.com/berachain/guides/tree/main/apps/envio-indexer-erc20). 

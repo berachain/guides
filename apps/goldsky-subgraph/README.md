@@ -8,7 +8,7 @@ An example using the [Goldsky](https://goldsky.com/) SDK to index Berachain bloc
 ## Requirements
 
 - Nodejs `v20.11.0` or greater
-- pnpm (or another prefered package manager)
+- pnpm (or another preferred package manager)
 
 ## Quick Setup
 
