@@ -97,6 +97,13 @@ export class TradingBot {
       const isBuy = currentPrice < lowerBand;
       const isSell = currentPrice > upperBand;
 
+      if (!isBuy && !isSell) return;
+
+      const priceUpdateData = await this.pythConnection.getPriceUpdateData([
+        CONFIG.PRICE_ID,
+        CONFIG.USDC_PRICE_ID,
+      ]);
+
       // Construct trade params
       const trade = {
         trader: this.wallet.address,
@@ -122,7 +129,8 @@ export class TradingBot {
           trade,
           tradeType,
           slippage,
-          []
+          priceUpdateData,
+          { value: "2" }
         );
 
         await tx.wait();
@@ -136,7 +144,8 @@ export class TradingBot {
           trade,
           tradeType,
           slippage,
-          []
+          priceUpdateData,
+          { value: "2" }
         );
 
         await tx.wait();
