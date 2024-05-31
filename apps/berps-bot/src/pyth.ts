@@ -40,6 +40,14 @@ export class PythConnection {
     await this.connection.subscribePriceFeedUpdates(priceIds, callback);
   }
 
+  async getPriceUpdateData(priceIds: string[]): Promise<string[]> {
+    const priceUpdates = await this.connection.getPriceFeedsUpdateData(
+      priceIds
+    );
+
+    return priceUpdates;
+  }
+
   async unsubscribePriceFeedUpdates(priceIds: string[]): Promise<void> {
     await this.connection.unsubscribePriceFeedUpdates(priceIds);
   }
