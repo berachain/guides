@@ -17,23 +17,9 @@
   },
   {
     "type": "function",
-    "name": "borrowingFees",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "address",
-        "internalType": "contract IBorrowingFees"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
     "name": "cancelOpenLimitOrder",
     "inputs": [
-      { "name": "pairIndex", "type": "uint256", "internalType": "uint256" },
-      { "name": "index", "type": "uint256", "internalType": "uint256" }
+      { "name": "limitIndex", "type": "uint256", "internalType": "uint256" }
     ],
     "outputs": [],
     "stateMutability": "nonpayable"
@@ -42,8 +28,7 @@
     "type": "function",
     "name": "closeTradeMarket",
     "inputs": [
-      { "name": "pairIndex", "type": "uint256", "internalType": "uint256" },
-      { "name": "index", "type": "uint256", "internalType": "uint256" },
+      { "name": "tradeIndex", "type": "uint256", "internalType": "uint256" },
       {
         "name": "priceUpdateData",
         "type": "bytes[]",
@@ -81,13 +66,6 @@
     "type": "function",
     "name": "executeLimitOrder",
     "inputs": [
-      {
-        "name": "orderType",
-        "type": "uint8",
-        "internalType": "enum ITradingStorage.LimitOrder"
-      },
-      { "name": "trader", "type": "address", "internalType": "address" },
-      { "name": "pairIndex", "type": "uint256", "internalType": "uint256" },
       { "name": "index", "type": "uint256", "internalType": "uint256" },
       {
         "name": "priceUpdateData",
@@ -100,38 +78,44 @@
   },
   {
     "type": "function",
+    "name": "feesAccrued",
+    "inputs": [],
+    "outputs": [
+      { "name": "", "type": "address", "internalType": "contract IFeesAccrued" }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "feesMarkets",
+    "inputs": [],
+    "outputs": [
+      { "name": "", "type": "address", "internalType": "contract IFeesMarkets" }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "initialize",
     "inputs": [
-      { "name": "pythContract", "type": "address", "internalType": "address" },
-      {
-        "name": "_tradingStorage",
-        "type": "address",
-        "internalType": "contract ITradingStorage"
-      },
-      {
-        "name": "_pairInfos",
-        "type": "address",
-        "internalType": "contract IPairInfos"
-      },
-      {
-        "name": "_borrowingFees",
-        "type": "address",
-        "internalType": "contract IBorrowingFees"
-      },
+      { "name": "_pyth", "type": "address", "internalType": "address" },
+      { "name": "_orders", "type": "address", "internalType": "address" },
+      { "name": "_feesMarkets", "type": "address", "internalType": "address" },
+      { "name": "_feesAccrued", "type": "address", "internalType": "address" },
       {
         "name": "_pythCfg",
         "type": "tuple",
-        "internalType": "struct ITrading.PythConfig",
+        "internalType": "struct IEntrypoint.PythConfig",
         "components": [
           {
             "name": "confThresholdP",
-            "type": "uint256",
-            "internalType": "uint256"
+            "type": "uint64",
+            "internalType": "uint64"
           },
           {
             "name": "staleTolerance",
-            "type": "uint256",
-            "internalType": "uint256"
+            "type": "uint64",
+            "internalType": "uint64"
           },
           { "name": "useEma", "type": "bool", "internalType": "bool" }
         ]
@@ -179,7 +163,7 @@
       {
         "name": "t",
         "type": "tuple",
-        "internalType": "struct ITradingStorage.Trade",
+        "internalType": "struct IOrders.Trade",
         "components": [
           { "name": "trader", "type": "address", "internalType": "address" },
           { "name": "pairIndex", "type": "uint256", "internalType": "uint256" },
@@ -194,19 +178,19 @@
             "type": "uint256",
             "internalType": "uint256"
           },
-          { "name": "openPrice", "type": "uint256", "internalType": "uint256" },
+          { "name": "openPrice", "type": "int64", "internalType": "int64" },
           { "name": "buy", "type": "bool", "internalType": "bool" },
           { "name": "leverage", "type": "uint256", "internalType": "uint256" },
-          { "name": "tp", "type": "uint256", "internalType": "uint256" },
-          { "name": "sl", "type": "uint256", "internalType": "uint256" }
+          { "name": "tp", "type": "int64", "internalType": "int64" },
+          { "name": "sl", "type": "int64", "internalType": "int64" }
         ]
       },
       {
         "name": "orderType",
         "type": "uint8",
-        "internalType": "enum ITradingCallbacks.TradeType"
+        "internalType": "enum ISettlement.TradeType"
       },
-      { "name": "slippageP", "type": "uint256", "internalType": "uint256" },
+      { "name": "slippageP", "type": "int64", "internalType": "int64" },
       {
         "name": "priceUpdateData",
         "type": "bytes[]",
@@ -218,10 +202,10 @@
   },
   {
     "type": "function",
-    "name": "pairInfos",
+    "name": "orders",
     "inputs": [],
     "outputs": [
-      { "name": "", "type": "address", "internalType": "contract IPairInfos" }
+      { "name": "", "type": "address", "internalType": "contract IOrders" }
     ],
     "stateMutability": "view"
   },
@@ -256,23 +240,30 @@
       {
         "name": "",
         "type": "tuple",
-        "internalType": "struct ITrading.PythConfig",
+        "internalType": "struct IEntrypoint.PythConfig",
         "components": [
           {
             "name": "confThresholdP",
-            "type": "uint256",
-            "internalType": "uint256"
+            "type": "uint64",
+            "internalType": "uint64"
           },
           {
             "name": "staleTolerance",
-            "type": "uint256",
-            "internalType": "uint256"
+            "type": "uint64",
+            "internalType": "uint64"
           },
           { "name": "useEma", "type": "bool", "internalType": "bool" }
         ]
       }
     ],
     "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "refundValue",
+    "inputs": [],
+    "outputs": [],
+    "stateMutability": "payable"
   },
   {
     "type": "function",
@@ -301,22 +292,31 @@
   },
   {
     "type": "function",
+    "name": "setPyth",
+    "inputs": [
+      { "name": "_pyth", "type": "address", "internalType": "contract IPyth" }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "setPythConfig",
     "inputs": [
       {
         "name": "_pythCfg",
         "type": "tuple",
-        "internalType": "struct ITrading.PythConfig",
+        "internalType": "struct IEntrypoint.PythConfig",
         "components": [
           {
             "name": "confThresholdP",
-            "type": "uint256",
-            "internalType": "uint256"
+            "type": "uint64",
+            "internalType": "uint64"
           },
           {
             "name": "staleTolerance",
-            "type": "uint256",
-            "internalType": "uint256"
+            "type": "uint64",
+            "internalType": "uint64"
           },
           { "name": "useEma", "type": "bool", "internalType": "bool" }
         ]
@@ -327,26 +327,12 @@
   },
   {
     "type": "function",
-    "name": "tradingStorage",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "address",
-        "internalType": "contract ITradingStorage"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
     "name": "updateOpenLimitOrder",
     "inputs": [
-      { "name": "pairIndex", "type": "uint256", "internalType": "uint256" },
-      { "name": "index", "type": "uint256", "internalType": "uint256" },
-      { "name": "newPrice", "type": "uint256", "internalType": "uint256" },
-      { "name": "tp", "type": "uint256", "internalType": "uint256" },
-      { "name": "sl", "type": "uint256", "internalType": "uint256" },
+      { "name": "limitIndex", "type": "uint256", "internalType": "uint256" },
+      { "name": "newPrice", "type": "int64", "internalType": "int64" },
+      { "name": "tp", "type": "int64", "internalType": "int64" },
+      { "name": "sl", "type": "int64", "internalType": "int64" },
       {
         "name": "priceUpdateData",
         "type": "bytes[]",
@@ -360,9 +346,8 @@
     "type": "function",
     "name": "updateSl",
     "inputs": [
-      { "name": "pairIndex", "type": "uint256", "internalType": "uint256" },
-      { "name": "index", "type": "uint256", "internalType": "uint256" },
-      { "name": "newSl", "type": "uint256", "internalType": "uint256" },
+      { "name": "tradeIndex", "type": "uint256", "internalType": "uint256" },
+      { "name": "newSl", "type": "int64", "internalType": "int64" },
       {
         "name": "priceUpdateData",
         "type": "bytes[]",
@@ -376,9 +361,8 @@
     "type": "function",
     "name": "updateTp",
     "inputs": [
-      { "name": "pairIndex", "type": "uint256", "internalType": "uint256" },
-      { "name": "index", "type": "uint256", "internalType": "uint256" },
-      { "name": "newTp", "type": "uint256", "internalType": "uint256" }
+      { "name": "tradeIndex", "type": "uint256", "internalType": "uint256" },
+      { "name": "newTp", "type": "int64", "internalType": "int64" }
     ],
     "outputs": [],
     "stateMutability": "nonpayable"
@@ -425,6 +409,19 @@
   },
   {
     "type": "event",
+    "name": "InvalidLimitExecution",
+    "inputs": [
+      {
+        "name": "index",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
     "name": "MaxPosHoneyUpdated",
     "inputs": [
       {
@@ -441,25 +438,7 @@
     "name": "OpenLimitCanceled",
     "inputs": [
       {
-        "name": "trader",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      },
-      {
-        "name": "pairIndex",
-        "type": "uint256",
-        "indexed": true,
-        "internalType": "uint256"
-      },
-      {
         "name": "index",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
-      },
-      {
-        "name": "openTime",
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
@@ -472,28 +451,10 @@
     "name": "OpenLimitPlaced",
     "inputs": [
       {
-        "name": "trader",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      },
-      {
-        "name": "pairIndex",
-        "type": "uint256",
-        "indexed": true,
-        "internalType": "uint256"
-      },
-      {
-        "name": "index",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
-      },
-      {
         "name": "order",
         "type": "tuple",
         "indexed": false,
-        "internalType": "struct ITradingStorage.OpenLimitOrder",
+        "internalType": "struct IOrders.OpenLimitOrder",
         "components": [
           { "name": "trader", "type": "address", "internalType": "address" },
           { "name": "pairIndex", "type": "uint256", "internalType": "uint256" },
@@ -505,11 +466,10 @@
           },
           { "name": "buy", "type": "bool", "internalType": "bool" },
           { "name": "leverage", "type": "uint256", "internalType": "uint256" },
-          { "name": "tp", "type": "uint256", "internalType": "uint256" },
-          { "name": "sl", "type": "uint256", "internalType": "uint256" },
-          { "name": "minPrice", "type": "uint256", "internalType": "uint256" },
-          { "name": "maxPrice", "type": "uint256", "internalType": "uint256" },
-          { "name": "openTime", "type": "uint256", "internalType": "uint256" }
+          { "name": "tp", "type": "int64", "internalType": "int64" },
+          { "name": "sl", "type": "int64", "internalType": "int64" },
+          { "name": "minPrice", "type": "int64", "internalType": "int64" },
+          { "name": "maxPrice", "type": "int64", "internalType": "int64" }
         ]
       }
     ],
@@ -520,18 +480,6 @@
     "name": "OpenLimitUpdated",
     "inputs": [
       {
-        "name": "trader",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      },
-      {
-        "name": "pairIndex",
-        "type": "uint256",
-        "indexed": true,
-        "internalType": "uint256"
-      },
-      {
         "name": "index",
         "type": "uint256",
         "indexed": false,
@@ -539,44 +487,21 @@
       },
       {
         "name": "newPrice",
-        "type": "uint256",
+        "type": "int64",
         "indexed": false,
-        "internalType": "uint256"
+        "internalType": "int64"
       },
       {
         "name": "newTp",
-        "type": "uint256",
+        "type": "int64",
         "indexed": false,
-        "internalType": "uint256"
+        "internalType": "int64"
       },
       {
         "name": "newSl",
-        "type": "uint256",
+        "type": "int64",
         "indexed": false,
-        "internalType": "uint256"
-      },
-      {
-        "name": "order",
-        "type": "tuple",
-        "indexed": false,
-        "internalType": "struct ITradingStorage.OpenLimitOrder",
-        "components": [
-          { "name": "trader", "type": "address", "internalType": "address" },
-          { "name": "pairIndex", "type": "uint256", "internalType": "uint256" },
-          { "name": "index", "type": "uint256", "internalType": "uint256" },
-          {
-            "name": "positionSize",
-            "type": "uint256",
-            "internalType": "uint256"
-          },
-          { "name": "buy", "type": "bool", "internalType": "bool" },
-          { "name": "leverage", "type": "uint256", "internalType": "uint256" },
-          { "name": "tp", "type": "uint256", "internalType": "uint256" },
-          { "name": "sl", "type": "uint256", "internalType": "uint256" },
-          { "name": "minPrice", "type": "uint256", "internalType": "uint256" },
-          { "name": "maxPrice", "type": "uint256", "internalType": "uint256" },
-          { "name": "openTime", "type": "uint256", "internalType": "uint256" }
-        ]
+        "internalType": "int64"
       }
     ],
     "anonymous": false
@@ -602,17 +527,17 @@
         "name": "config",
         "type": "tuple",
         "indexed": false,
-        "internalType": "struct ITrading.PythConfig",
+        "internalType": "struct IEntrypoint.PythConfig",
         "components": [
           {
             "name": "confThresholdP",
-            "type": "uint256",
-            "internalType": "uint256"
+            "type": "uint64",
+            "internalType": "uint64"
           },
           {
             "name": "staleTolerance",
-            "type": "uint256",
-            "internalType": "uint256"
+            "type": "uint64",
+            "internalType": "uint64"
           },
           { "name": "useEma", "type": "bool", "internalType": "bool" }
         ]
@@ -622,20 +547,21 @@
   },
   {
     "type": "event",
-    "name": "SlUpdated",
+    "name": "PythUpdated",
     "inputs": [
       {
-        "name": "trader",
+        "name": "pyth",
         "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      },
-      {
-        "name": "pairIndex",
-        "type": "uint256",
-        "indexed": true,
-        "internalType": "uint256"
-      },
+        "indexed": false,
+        "internalType": "contract IPyth"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "SlUpdated",
+    "inputs": [
       {
         "name": "index",
         "type": "uint256",
@@ -644,15 +570,9 @@
       },
       {
         "name": "newSl",
-        "type": "uint256",
+        "type": "int64",
         "indexed": false,
-        "internalType": "uint256"
-      },
-      {
-        "name": "openTime",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
+        "internalType": "int64"
       }
     ],
     "anonymous": false
@@ -662,18 +582,6 @@
     "name": "TpUpdated",
     "inputs": [
       {
-        "name": "trader",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      },
-      {
-        "name": "pairIndex",
-        "type": "uint256",
-        "indexed": true,
-        "internalType": "uint256"
-      },
-      {
         "name": "index",
         "type": "uint256",
         "indexed": false,
@@ -681,15 +589,9 @@
       },
       {
         "name": "newTp",
-        "type": "uint256",
+        "type": "int64",
         "indexed": false,
-        "internalType": "uint256"
-      },
-      {
-        "name": "openTime",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
+        "internalType": "int64"
       }
     ],
     "anonymous": false
@@ -707,8 +609,6 @@
     ],
     "anonymous": false
   },
-  { "type": "error", "name": "AboveMaxGroupCollateral", "inputs": [] },
-  { "type": "error", "name": "AboveMaxPos", "inputs": [] },
   {
     "type": "error",
     "name": "AddressEmptyCode",
@@ -717,8 +617,6 @@
     ]
   },
   { "type": "error", "name": "AmountOverflow", "inputs": [] },
-  { "type": "error", "name": "BelowMinPos", "inputs": [] },
-  { "type": "error", "name": "Done", "inputs": [] },
   {
     "type": "error",
     "name": "ERC1967InvalidImplementation",
@@ -729,8 +627,6 @@
   { "type": "error", "name": "ERC1967NonPayable", "inputs": [] },
   { "type": "error", "name": "EthTransferFailed", "inputs": [] },
   { "type": "error", "name": "FailedInnerCall", "inputs": [] },
-  { "type": "error", "name": "HasSl", "inputs": [] },
-  { "type": "error", "name": "InTimeout", "inputs": [] },
   {
     "type": "error",
     "name": "InvalidConfidence",
@@ -744,25 +640,12 @@
     "inputs": [{ "name": "pythExpo", "type": "int32", "internalType": "int32" }]
   },
   { "type": "error", "name": "InvalidInitialization", "inputs": [] },
-  { "type": "error", "name": "LeverageIncorrect", "inputs": [] },
   { "type": "error", "name": "MarketClosed", "inputs": [] },
-  { "type": "error", "name": "MaxTradesPerPair", "inputs": [] },
-  { "type": "error", "name": "NoLimit", "inputs": [] },
-  { "type": "error", "name": "NoSl", "inputs": [] },
-  { "type": "error", "name": "NoTp", "inputs": [] },
-  { "type": "error", "name": "NoTrade", "inputs": [] },
   { "type": "error", "name": "NotInitializing", "inputs": [] },
-  { "type": "error", "name": "Paused", "inputs": [] },
-  { "type": "error", "name": "PriceImpactTooHigh", "inputs": [] },
   { "type": "error", "name": "UUPSUnauthorizedCallContext", "inputs": [] },
   {
     "type": "error",
     "name": "UUPSUnsupportedProxiableUUID",
     "inputs": [{ "name": "slot", "type": "bytes32", "internalType": "bytes32" }]
-  },
-  { "type": "error", "name": "Unauthorized", "inputs": [] },
-  { "type": "error", "name": "WrongLimitPrice", "inputs": [] },
-  { "type": "error", "name": "WrongParams", "inputs": [] },
-  { "type": "error", "name": "WrongSl", "inputs": [] },
-  { "type": "error", "name": "WrongTp", "inputs": [] }
+  }
 ]
