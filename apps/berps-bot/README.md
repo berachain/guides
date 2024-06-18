@@ -2,7 +2,7 @@
 
 An example of a trading bot for Berps using a Bollinger Band trading strategy. When the spot price goes above the upper band, the bot will sell. When the spot price goes below the lower band, the bot will buy.
 
-Note: there is a max number of trades per pair (5 on bArtio), so this bot will not run indefinitely without modifications for closing open positions.
+> Note: there is a max number of trades per pair (5 on bArtio), so this bot will not run indefinitely without modifications to close open positions.
 
 ## Requirements
 
