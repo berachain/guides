@@ -2,10 +2,12 @@
 
 An example of a trading bot for Berps using a Bollinger Band trading strategy. When the spot price goes above the upper band, the bot will sell. When the spot price goes below the lower band, the bot will buy.
 
+Note: there is a max number of trades per pair (5 on bArtio), so this bot will not run indefinitely without modifications for closing open positions.
+
 ## Requirements
 
 - NMV or Node `v20.11.0` or greater
-- Wallet with testnet $HONEY tokens - See the [Berachain Artio Faucet](https://artio.faucet.berachain.com), receive $BERA and trade for $HONEY on [BEX](https://artio.bex.berachain.com/swap)
+- Wallet with testnet $HONEY tokens - See the [Berachain bArtio Faucet](https://bartio.faucet.berachain.com), receive $BERA and trade for $HONEY on [BEX](https://bartio.bex.berachain.com/swap)
 
 ## Quick Setup
 

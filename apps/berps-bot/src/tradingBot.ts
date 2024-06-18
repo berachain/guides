@@ -1,13 +1,13 @@
-import { BigNumber, ethers } from "ethers";
+import { ethers } from "ethers";
 import { throttle } from "lodash";
 
 import { PythConnection } from "./pyth";
 import { calculateBollingerBands } from "./bb";
 import { CONFIG } from "./config";
-import TradingContractABI from "./ABIs/TradingContract.json";
+import EntrypointABI from "./ABIs/entrypoint.json";
 import Erc20ABI from "./ABIs/ERC20.json";
 
-const HONEY = "0x124363b6D0866118A8b6899F2674856618E0Ea4c";
+const HONEY = "0x0E4aaF1351de4c0264C5c7056Ef3777b41BD8e03";
 
 export class TradingBot {
   private tradingContract: ethers.Contract;
@@ -19,12 +19,12 @@ export class TradingBot {
 
   constructor() {
     this.pythConnection = new PythConnection();
-    const provider = new ethers.providers.JsonRpcProvider(CONFIG.RPC_PROVIDER);
+    const provider = new ethers.JsonRpcProvider(CONFIG.RPC_PROVIDER);
     const wallet = new ethers.Wallet(CONFIG.PRIVATE_KEY, provider);
     this.wallet = wallet;
     this.tradingContract = new ethers.Contract(
-      CONFIG.TRADING_CONTRACT_ADDRESS,
-      TradingContractABI,
+      CONFIG.ENTRYPOINT_CONTRACT_ADDRESS,
+      EntrypointABI,
       wallet
     );
     this.honeyContract = new ethers.Contract(HONEY, Erc20ABI, wallet);
@@ -33,16 +33,17 @@ export class TradingBot {
   async start() {
     console.log("Trading bot started");
 
-    const allowance: BigNumber = await this.honeyContract.allowance(
+    const ordersContract = await this.tradingContract.orders();
+    const allowance = await this.honeyContract.allowance(
       this.wallet.address,
-      CONFIG.TRADING_CONTRACT_ADDRESS
+      ordersContract
     );
 
-    if (allowance.lt(ethers.utils.parseEther("99999999999"))) {
+    if (allowance < ethers.parseEther("99999999999")) {
       console.log("Approving honey allowance");
       const tx = await this.honeyContract.approve(
-        CONFIG.TRADING_CONTRACT_ADDRESS,
-        ethers.constants.MaxUint256
+        ordersContract,
+        ethers.MaxUint256
       );
       await tx.wait();
     }
@@ -110,16 +111,16 @@ export class TradingBot {
         pairIndex: 1, // Corresponds to pair (ETH-USD)
         index: 0, // Contract will determine
         initialPosToken: 0, // Contract will determine
-        positionSizeHoney: ethers.utils.parseEther("10"), // 10 HONEY
-        openPrice: ethers.BigNumber.from(currentPrice),
+        positionSizeHoney: ethers.parseEther("10"), // 10 HONEY
+        openPrice: currentPrice,
         buy: isBuy ? true : isSell ? false : true, // true for Long, false for Short,
-        leverage: ethers.BigNumber.from(10), // 10x leverage,
-        tp: ethers.BigNumber.from(0), // No TP,
-        sl: ethers.BigNumber.from(0), // No SL,
+        leverage: 10n, // 10x leverage,
+        tp: 0n, // No TP,
+        sl: 0n, // No SL,
       };
 
       const tradeType = 0; // 0 for MARKET, 1 for LIMIT
-      const slippage = ethers.utils.parseUnits("10", 10); // 10% slippage
+      const slippage = ethers.parseUnits("10", 10); // 10% slippage
 
       let tradeDirection: "buy" | "sell" | undefined;
 
@@ -157,8 +158,8 @@ export class TradingBot {
 
   async checkPendingTx() {
     const [currNonce, pendingNonce] = await Promise.all([
-      this.wallet.getTransactionCount(),
-      this.wallet.getTransactionCount("pending"),
+      this.wallet.getNonce(),
+      this.wallet.getNonce("pending"),
     ]);
 
     return currNonce !== pendingNonce;
