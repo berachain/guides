@@ -51,9 +51,9 @@ pnpm run deploy:berachain; # npx hardhat run scripts/deploy.ts --network beracha
 
 # [Expected Equivalent Output]:
 # {
-#   hash: '0xe6698c10e76ac89365aae141946ee8bdfef5c62b0030571155f0a934fecafd7f'
+#   hash: '0x2b25280a9fc27917b3755c07f79ae74b1249f3a03ab379d08b8f8980cd98b83f'
 # }
-# HelloWorld deployed to 0xe9470c884603c239502c4d92d108a5b3f14074b4
+# HelloWorld deployed to 0x38f8423cc4390938c01616d7a9f761972e7f116a
 ```
 
 ## Verify Contract On Berachain
@@ -63,16 +63,16 @@ In order to verify your contract, take note of the deployed contract `address` a
 ```bash
 # FROM ./create-helloworld-contract-using-hardhat
 
-# npx hardhat verify --network berachainTestnet 0xe9470c884603c239502c4d92d108a5b3f14074b4 "Hello From Deployed Contract";
-pnpm run verify 0xe9470c884603c239502c4d92d108a5b3f14074b4 "Hello From Deployed Contract";
+# npx hardhat verify --network berachainTestnet 0x38f8423cc4390938c01616d7a9f761972e7f116a "Hello From Deployed Contract";
+pnpm run verify 0x38f8423cc4390938c01616d7a9f761972e7f116a "Hello From Deployed Contract";
 
 # [Expected Output]:
 # Successfully submitted source code for contract
-# contracts/HelloWorld.sol:HelloWorld at 0xe9470c884603c239502c4d92d108a5b3f14074b4
+# contracts/HelloWorld.sol:HelloWorld at 0x38f8423cc4390938c01616d7a9f761972e7f116a
 # for verification on the block explorer. Waiting for verification result...
 
 # Successfully verified contract HelloWorld on the block explorer.
-# https://scan.berachain-internal.com/address/0xe9470c884603c239502c4d92d108a5b3f14074b4#code
+# https://bartio.beratrail.io/address/0x38f8423cc4390938c01616d7a9f761972e7f116a#code
 ```
 
 ## Run Local Node
