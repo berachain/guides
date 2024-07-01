@@ -2,7 +2,6 @@
 // ========================================================
 import Irys from "@irys/sdk";
 import { config } from "dotenv";
-import { privateKeyToAccount } from "viem/accounts";
 import fs from "fs";
 import path from "path";
 
@@ -19,79 +18,78 @@ config();
  * @dev Main upload script
  */
 const main = async () => {
-  console.group("main()");
+	console.group("main()");
 
-  // Get file and its size
-  const filePath = path.join(__dirname, "../assets", "berachain-upload.jpg");
-  const stats = fs.statSync(filePath);
-  const fileSize = stats.size;
-  console.log({ fileSize });
+	// Get file and its size
+	const filePath = path.join(__dirname, "../assets", "berachain-upload.jpg");
+	const stats = fs.statSync(filePath);
+	const fileSize = stats.size;
+	console.log({ fileSize });
 
-  // Get account wallet address from private key
-  const account = privateKeyToAccount(
-    `${process.env.WALLET_PRIVATE_KEY}` as `0x${string}`,
-  );
+	// Irys Config
+	const irys = new Irys({
+		url: `${process.env.IRYS_NODE}`, // URL of the node you want to connect to
+		token: `${process.env.IRYS_TOKEN}`, // Token used for payment
+		key: `${process.env.WALLET_PRIVATE_KEY}`, // Private key used for signing transactions and paying for uploads
+		config: {
+			providerUrl: `${process.env.CHAIN_RPC_URL}`, // Optional RPC provider URL, only required when using Devnet
+		},
+	});
+	console.log(`Connected to Irys from ${irys.address}`);
+	// Get price needed in `$BERA`
+	const price = irys.utils.fromAtomic(await irys.getPrice(fileSize));
+	console.log({
+		price: `${price} $${irys.token}`,
+	});
+	const priceWithBuffer = price.plus(Number(`${process.env.IRYS_BUFFER}`));
+	console.log(`priceWithBuffer: ${priceWithBuffer.toString()}`);
 
-  // Irys Config
-  const irys = new Irys({
-    url: `${process.env.IRYS_NODE}`, // URL of the node you want to connect to
-    token: `${process.env.IRYS_TOKEN}`, // Token used for payment
-    key: `${process.env.WALLET_PRIVATE_KEY}`, // ETH or SOL private key
-    config: {
-      providerUrl: `${process.env.CHAIN_RPC_URL}`, // Optional provider URL, only required when using Devnet
-    },
-  });
+	// Get balance
+	let currentBalance = irys.utils.fromAtomic(await irys.getLoadedBalance());
+	console.log({
+		currentBalance: `${currentBalance} $${irys.token}`,
+	});
 
-  // Get price needed in `$BERA`
-  const price =
-    (await irys.getPrice(fileSize)).toNumber() / 1000000000000000000;
-  console.log({
-    price: `${price} $${process.env.CHAIN_NATIVECURRENCY_SYMBOL}`,
-  });
-  const priceWithBuffer = price + Number(`${process.env.IRYS_BUFFER}`);
-  console.log({ priceWithBuffer });
+	// If needed fund the Irys node
+	if (currentBalance.isLessThan(priceWithBuffer)) {
+		// Fund the Irys node
+		console.log("Not enough balance, funding node...");
+		const fundTx = await irys.fund(irys.utils.toAtomic(priceWithBuffer));
+		console.log(`Successfully funded '${irys.utils.fromAtomic(fundTx.quantity)}' $${irys.token}`);
+		currentBalance = irys.utils.fromAtomic(await irys.getLoadedBalance());
+		console.log({
+			currentBalance: `${currentBalance} $${irys.token}`,
+		});
+	}
 
-  // Get balance
-  const currentBalance =
-    (await irys.getBalance(account.address)).toNumber() / 1000000000000000000;
-  console.log({
-    currentBalance: `${currentBalance} $${process.env.CHAIN_NATIVECURRENCY_SYMBOL}`,
-  });
+	console.log("Uploading file...");
+	// Upload file
+	// Irys also provides methods for uploading folders and pure binary data
+	const receipt = await irys.uploadFile(filePath, {
+		// Add optional tags
+		// Tags are indexed and are queryable using the Irys query package
+		// https://docs.irys.xyz/developer-docs/querying/query-package
+		tags: [
+			{
+				name: "application-id",
+				value: "Irys + Berachain",
+			},
+		],
+	});
+	// https://gateway.irys.xyz/mDKWFxvoIzC15z3cAyR2EAl9S3EY1ZlhKzaEOcITE0g
 
-  if (currentBalance < priceWithBuffer) {
-    // Fund the Irys node
-    console.log("Not enough balance, funding node...");
-    const fundTx = await irys.fund(irys.utils.toAtomic(priceWithBuffer));
-    console.log(
-      `Successfully funded '${irys.utils.fromAtomic(fundTx.quantity)}' $${
-        irys.token
-      }`,
-    );
-    console.log("Re-run the script until your balance meets the price.");
-  } else {
-    console.log("Uploading file...");
-    // Upload file
-    const receipt = await irys.uploadFile(filePath, {
-      tags: [
-        {
-          name: "image/jpeg",
-          value: "berachain-upload.jpg",
-        },
-      ],
-    });
-    // https://gateway.irys.xyz/mDKWFxvoIzC15z3cAyR2EAl9S3EY1ZlhKzaEOcITE0g
-    console.log(`https://gateway.irys.xyz/${receipt.id}`);
-  }
+	// Files are instantly available from the Irys gateway
+	console.log(`https://gateway.irys.xyz/${receipt.id}`);
 
-  console.groupEnd();
+	console.groupEnd();
 };
 
 // Init Script
 // ========================================================
 main()
-  .then(() => {
-    console.log("Script complete.");
-  })
-  .catch((error) => {
-    console.error({ error });
-  });
+	.then(() => {
+		console.log("Script complete.");
+	})
+	.catch((error) => {
+		console.error({ error });
+	});

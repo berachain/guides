@@ -1,13 +1,13 @@
-# Irys.xyz NodeJS Upload Script With Berachain $BERA Tokens
+# Irys NodeJS Upload Script With Berachain $BERA Tokens
 
-An example using the irys js sdk to upload files to Arweave using Berachain `$BERA` tokens to pay for the transactions.
+An example using the [Irys JS SDK](https://docs.irys.xyz) to permanently upload files to Arweave using Berachain `$BERA` tokens to pay for the transactions.
 
 ![Irys Berachain NodeJS File Upload](./README/irys-bera-nodejs-upload.png)
 
 ## Requirements
 
-- NMV or Node `v20.11.0` or greater
-- Wallet with testnet $BERA tokens - See the [Berachain Artio Faucet](https://artio.faucet.berachain.com)
+-   NMV or Node `v20.11.0` or greater
+-   Wallet with testnet $BERA tokens - See the [Berachain Artio Faucet](https://artio.faucet.berachain.com)
 
 ## Quick Setup
 
@@ -51,6 +51,3 @@ pnpm dev;
 #   https://gateway.irys.xyz/EfyLjyolNtvvYqulFj_DM8XoaLwhcDItHN3H7cnYOMg
 # Script complete.
 ```
-
-
-
