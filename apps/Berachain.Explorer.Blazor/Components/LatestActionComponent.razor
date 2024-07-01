@@ -1,0 +1,31 @@
+﻿@using Berachain.Explorer.Blazor.Hubs
+@using Berachain.Explorer.Blazor.Interfaces
+
+@inject MessageHub MessageHub
+
+@implements IDisposable
+
+@ChildContent
+
+@code {
+    [Parameter, EditorRequired]
+    public EventCallback<IMessage> OnActionReceived { get; set; }
+
+    [Parameter, EditorRequired]
+    public RenderFragment ChildContent { get; set; } = null!;
+
+    protected override void OnInitialized()
+    {
+        MessageHub.Subscribe(OnMessageReceived);
+    }
+
+    private void OnMessageReceived(IMessage message)
+    {
+        InvokeAsync(() => OnActionReceived.InvokeAsync(message));
+    }
+
+    void IDisposable.Dispose()
+    {
+        MessageHub.Unsubscribe(OnMessageReceived);
+    }
+}

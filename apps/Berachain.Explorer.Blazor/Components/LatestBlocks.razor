@@ -1,0 +1,57 @@
+﻿@using Berachain.Explorer.Blazor.Interfaces
+@using Berachain.Explorer.Blazor.Models.Responses
+@using Humanizer
+
+<div class="actions-wrapper">
+    <LatestActionComponent OnActionReceived="OnActionReceived">
+        <h3>Latest Blocks</h3>
+        @if (!Blocks.Any())
+        {
+            <div class="row">
+                <div class="col-12 text-center">
+                    Loading...
+                </div>
+            </div>
+        }
+        else
+        {
+            foreach (var block in Blocks)
+            {
+                <div class="row action">
+                    <div class="col-4">
+                        <div>
+                            <NavLink href="@($"blocks/{block.Number}")">@block.Number</NavLink>
+                        </div>
+                        <div>@block.Timestamp.Humanize()</div>
+                    </div>
+                    <div class="col-4">
+                        <div>
+                            Hash <NavLink href="@($"blocks/{block.Number}")">@Helpers.TrimHash(block.Id)</NavLink>
+                        </div>
+                        <div>Total @block.Transactions.Length txns</div>
+                    </div>
+                    <div class="col-4 text-end">
+                        @Helpers.ToFriendlyNumber(block.BurnedFees) BERA
+                    </div>
+                </div>
+            }
+            <div class="view-all-wrapper">
+                <NavLink href="blocks">View all</NavLink>
+            </div>
+        }
+    </LatestActionComponent>
+</div>
+
+@code {
+    private BlockModel[] Blocks { get; set; } = [];
+
+    private void OnActionReceived(IMessage message)
+    {
+        if (message is ResponseCollection<BlockModel> blockModel)
+        {
+            Blocks = blockModel.Items;
+
+            StateHasChanged();
+        }
+    }
+}

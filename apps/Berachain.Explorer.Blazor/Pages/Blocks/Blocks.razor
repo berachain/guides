@@ -1,0 +1,83 @@
+﻿@page "/blocks"
+
+@using Berachain.Explorer.Blazor.Models.Responses
+@using Berachain.Explorer.Blazor.Services
+@using Humanizer
+
+@inject ExplorerService ExplorerService
+@inject NavigationManager NavigationManager
+
+<PageTitle>Berachain Explorer - Blocks</PageTitle>
+
+<h1>Blocks</h1>
+
+@if (Items == null)
+{
+    <p><em>Loading...</em></p>
+}
+else
+{
+    <div class="row">
+        <div class="col text-end">
+            <button type="button" class="btn btn-sm btn-primary" @onclick="NextOnClick">Next</button>
+        </div>
+    </div>
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Block</th>
+                <th>Txn</th>
+                <th>Hash</th>
+                <th>Gas Used</th>
+                <th>Gas Limit</th>
+                <th>Txn Fees</th>
+                <th>Age</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var item in Items.Items)
+            {
+                <tr>
+                    <td>
+                        <NavLink href="@($"blocks/{item.Number}")">@item.Number</NavLink>
+                    </td>
+                    <td>@item.Transactions.Length</td>
+                    <td>
+                        <NavLink href="@($"blocks/{item.Number}")">@Helpers.TrimHash(item.Id)</NavLink>
+                    </td>
+                    <td>@item.GasUsed</td>
+                    <td>@item.GasLimit</td>
+                    <td>@Helpers.ToFriendlyNumber(item.BurnedFees)</td>
+                    <td>@item.Timestamp.Humanize()</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    private ResponseCollection<BlockModel>? Items { get; set; }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            var result = await ExplorerService.GetBlocks(take: 1000);
+
+            if (result == null)
+            {
+                NavigationManager.NavigateTo("/404");
+            }
+            else
+            {
+                Items = result;
+                StateHasChanged();
+            }
+        }
+    }
+
+    private async Task NextOnClick()
+    {
+        Items = await ExplorerService.GetBlocks(take: 1000, nextToken: Items?.Link?.NextToken);
+    }
+}

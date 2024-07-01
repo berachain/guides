@@ -1,0 +1,70 @@
+﻿@using Berachain.Explorer.Blazor.Models.Responses
+@using Berachain.Explorer.Blazor.Services
+@using Humanizer
+
+@inject ExplorerService ExplorerService
+
+@if (Items == null)
+{
+    <p><em>Loading...</em></p>
+}
+else
+{
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Txn Hash</th>
+                <th>From</th>
+                <th></th>
+                <th>To</th>
+                <th>Value</th>
+                <th>Token</th>
+                <th>Age</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var item in Items)
+            {
+                <tr>
+                    <td>
+                        <NavLink href="@($"transactions/{item.TxHash}")">@Helpers.TrimHash(item.TxHash)</NavLink>
+                        </td>
+                        <td>
+                            <div><NavLink href="@($"/address/{item.From}")">@Helpers.TrimHash(item.From)</NavLink></div>
+                        </td>
+                        <td>
+                            @(item.From == Addr ? "OUT" : "IN")
+                        </td>
+                        <td>
+                            <div><NavLink href="@($"/address/{item.To}")">@Helpers.TrimHash(item.To)</NavLink></div>
+                        </td>
+                        <td>@Helpers.ToFriendlyNumber(item.Amount)</td>
+                    <td>
+                        @item.TokenName (@item.TokenSymbol)
+                    </td>
+                    <td>@item.Timestamp.Humanize()</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public string Addr { get; set; } = null!;
+
+    private Erc20TransactionModel[]? Items { get; set; }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            var result = await ExplorerService.GetAddressErc20Transactions(Addr);
+            if (result != null)
+            {
+                Items = result.Items;
+                StateHasChanged();
+            }
+        }
+    }
+}
