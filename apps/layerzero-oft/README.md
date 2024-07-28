@@ -10,7 +10,7 @@ This repository contains an example of how to bridge an existing ERC20 token (in
 
 - Node `v20.11.0` or greater
 - pnpm (or another preferred package manager)
-- Wallet with Berachain Testnet $BERA tokens - See the [Berachain Artio Faucet](https://artio.faucet.berachain.com)
+- Wallet with Berachain Testnet $BERA tokens - See the [Berachain bArtio Faucet](https://bartio.faucet.berachain.com)
 - Wallet with Sepolia Testnet $UNI tokens - See the [Sepolia Testnet Faucet](https://faucet.quicknode.com/ethereum/sepolia), trade on [Uniswap](https://app.uniswap.org/swap?outputCurrency=0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984&inputCurrency=ETH)
 - [Foundry](https://book.getfoundry.sh/getting-started/installation) - ensure `foundryup` is run to install binaries
 
@@ -51,7 +51,7 @@ Deploy `MyOFT.sol` to Berachain:
 ```bash
 # FROM: ./layerzero-oft
 
-forge script script/MyOFT.s.sol --rpc-url https://artio.rpc.berachain.com/ --broadcast
+forge script script/MyOFT.s.sol --rpc-url https://bartio.rpc.berachain.com/ --broadcast
 ```
 
 Update `BERACHAIN_OFT_ADDRESS` in your `.env` file with the address of your `MyOFT` deployment.
