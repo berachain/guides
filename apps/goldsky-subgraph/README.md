@@ -36,7 +36,16 @@ curl https://goldsky.com | sh
 goldsky login
 ```
 
-### Step 3 - Deploy Subgraph
+### Step 3 - Build Subgraph
+
+```bash
+# FROM: ./goldsky-subgraph;
+
+pnpm codegen;
+pnpm build;
+```
+
+### Step 4 - Deploy Subgraph
 
 ```bash
 # FROM: ./goldsky-subgraph
@@ -44,7 +53,7 @@ goldsky login
 goldsky subgraph deploy erc20-subgraph/1.0.0 --path .
 ```
 
-### Step 4 - Query the Subgraph
+### Step 5 - Query the Subgraph
 
 After your subgraph has finished indexing, navigate to your public GraphQL link and try the following query:
 
