@@ -18,8 +18,6 @@
 ✅ **Request Auto-routing**: You don't need to think about which upstream supports which eth\_\* method; eRPC automatically does that.<br/><br/>
 ✅ **Normalized Errors**: Receive consistent error codes with details across 5+ third-party providers. With useful reporting of occured errors.<br/><br/>
 ✅ **RPC Metrics & Observability**: Single dashboard to observe rps throughput, errors, and avg. latency of all your RPC providers.<br/><br/>
-🏭 **Smart Batching**: Aggregates multiple RPC or contract calls into one.<br/><br/>
-🏭 **Websocket**: For new blocks and logs load-balanced across upstreams.<br/>
 
 # Quick start
 
