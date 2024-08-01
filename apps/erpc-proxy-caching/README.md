@@ -6,7 +6,7 @@
 * [docs](https://docs.erpc.cloud/)<br/>
 * [telegram](https://t.me/erpc_cloud)<br/>
 
-![Architecture](./assets/hla-diagram.svg)
+![Architecture](https://github.com/erpc/erpc/raw/main/assets/hla-diagram.svg)
 
 <br />
 
@@ -70,4 +70,4 @@ docker-compose up -d
 
 6. Send more requests and watch the metrics being collected and visualized in Grafana.
 
-![eRPC Grafana Dashboard](/assets/monitoring-example-erpc.png)
+![eRPC Grafana Dashboard](https://docs.erpc.cloud/_next/image?url=%2F_next%2Fstatic%2Fmedia%2Fmonitoring-example-erpc.2cb040a1.png&w=3840&q=75)
