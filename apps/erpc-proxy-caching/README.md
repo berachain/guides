@@ -43,7 +43,7 @@ curl --location 'http://localhost:4000/main/evm/80084' \
 --data '{
     "method": "eth_getBlockByNumber",
     "params": [
-        "0x1203319",
+        "0x226c32",
         false
     ],
     "id": 9199,
