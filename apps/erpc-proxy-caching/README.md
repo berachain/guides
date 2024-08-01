@@ -10,6 +10,14 @@
 
 <br />
 
+# Features
+- **Fault-tolerant Proxy**: Retries, circuit-breakers, failovers and hedged requests make sure fastest most-reliable upstream is used.
+- **Flexible Rate-limiters**: Define hourly, daily rate limits for each upstream provider, to control usage, costs and high-scale usage.
+- **Permanent Caching**: Avoid redundant upstream costs by locally caching RPC responses, with reorg-aware caching layer.
+- **Request Auto-routing**: You don't need to think about which upstream supports which eth\_\* method; eRPC automatically does that.
+- **Normalized Errors**: Receive consistent error codes with details across 5+ third-party providers. With useful reporting of occured errors.
+- **RPC Metrics & Observability**: Single dashboard to observe rps throughput, errors, and avg. latency of all your RPC providers.
+
 # Quick start
 
 1. Create your [`erpc.yaml`](https://docs.erpc.cloud/config/example) configuration file based on the `erpc.yaml.dist` file:
