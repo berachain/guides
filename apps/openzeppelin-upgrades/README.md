@@ -24,7 +24,7 @@ Copy the `.env.example` file to `.env`
 cp .env.example .env;
 ```
 
-Populate the `.env` file with your `PK`.
+Populate the `.env` file with your `PK` and then load the variable into your shell:
 
 ```bash
 # FROM: ./openzeppelin-upgrades
