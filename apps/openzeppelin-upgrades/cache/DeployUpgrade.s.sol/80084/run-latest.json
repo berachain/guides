@@ -1,0 +1,13 @@
+{
+  "transactions": [
+    {
+      "rpc": "https://bartio.rpc.berachain.com/"
+    },
+    {
+      "rpc": "https://bartio.rpc.berachain.com/"
+    },
+    {
+      "rpc": "https://bartio.rpc.berachain.com/"
+    }
+  ]
+}
