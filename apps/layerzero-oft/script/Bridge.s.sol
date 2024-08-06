@@ -14,8 +14,8 @@ contract SendOFTScript is Script {
     using OptionsBuilder for bytes;
 
     uint32 constant BERACHAIN_ENPOINT_ID = 40291;
-    address constant SEPOLIA_UNI_ADDRESS =
-        0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984;
+    address constant SEPOLIA_WETH_ADDRESS =
+        0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14;
 
     function run() external {
         address SEPOLIA_ADAPTER_ADDRESS = vm.envAddress(
@@ -57,8 +57,8 @@ contract SendOFTScript is Script {
         MessagingFee memory fee = sepoliaAdapter.quoteSend(sendParam, false);
         console.log("Native fee: %d", fee.nativeFee);
 
-        // Approve the OFT contract to spend UNI tokens
-        IERC20(SEPOLIA_UNI_ADDRESS).approve(
+        // Approve the OFT contract to spend WETH tokens
+        IERC20(SEPOLIA_WETH_ADDRESS).approve(
             SEPOLIA_ADAPTER_ADDRESS,
             tokensToSend
         );
