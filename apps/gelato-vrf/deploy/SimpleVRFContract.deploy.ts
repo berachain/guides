@@ -6,8 +6,10 @@ const isHardhat = hre.network.name === "hardhat";
 
 const func: DeployFunction = async (hre: HardhatRuntimeEnvironment) => {
   const { deploy } = deployments;
+  console.log("deploying SimpleVRFContract");
   const { deployer } = await getNamedAccounts();
   const dedicatedMsgSender = "0xa55e7F0dD850C5353025d3cFA5a36e648635a256";
+  console.log("deployer", deployer);
 
   if (!isHardhat) {
     console.log(
