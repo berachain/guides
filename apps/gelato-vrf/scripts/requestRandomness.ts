@@ -4,7 +4,7 @@ import * as dotenv from "dotenv";
 dotenv.config();
 
 async function main() {
-  const contractAddress = "0x41f3865cd5479B346089beACbcCC8416E1F61a05";
+  const contractAddress = "0x2f32A4796bc8A37229FCfe8018f1fd6FBA19471C";
   const PRIVATE_KEY = process.env.PRIVATE_KEY;
 
   if (!PRIVATE_KEY) {
