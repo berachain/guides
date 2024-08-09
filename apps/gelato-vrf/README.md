@@ -11,11 +11,6 @@ Verifiable Random Function (VRF) is a cryptographic primitive that generates unp
 
 This repository includes contracts and configurations necessary for implementing VRF functionality on Gelato, making it easy for developers to integrate random number generation into their projects.
 
-## Contracts
-
-There are two types of VRF contracts available in this repository:
-
-
 > [!NOTE]  
 > Check the deployed addresses for each network in the `deployments/` folder, which is automatically created at the root of the `gelato-vrf/` directory following a deployment.
 
