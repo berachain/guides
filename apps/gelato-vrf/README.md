@@ -24,6 +24,7 @@ There are two types of VRF contracts available in this repository:
 ## Gelato VRF: `SimpleVRFContract`
 
 - **Description**: Contract for using Gelato VRF directly.
+- **Contract Address on Berachain**: [0x2f32A4796bc8A37229FCfe8018f1fd6FBA19471C](https://bartio.beratrail.io/address/0x2f32A4796bc8A37229FCfe8018f1fd6FBA19471C)
 - **Features**:
   - Requests randomness from Gelato VRF.
   - Handles the fulfillment of randomness.
