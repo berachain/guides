@@ -1,0 +1,12 @@
+{
+  "name": "hardhat-project",
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^4.0.0",
+    "hardhat": "^2.20.1",
+    "hardhat-deploy": "^0.11.45"
+  },
+  "dependencies": {
+    "ethers": "^6.6.4",
+    "gelato-web3-functions-hardhat-template": "gelatodigital/vrf-contracts"
+  }
+}
