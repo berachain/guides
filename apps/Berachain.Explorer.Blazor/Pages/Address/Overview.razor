@@ -1,0 +1,87 @@
+﻿@using Berachain.Explorer.Blazor.Models
+@using Berachain.Explorer.Blazor.Services
+
+@inject ExplorerService ExplorerService
+@inject NavigationManager NavigationManager
+
+@if (Item == null)
+{
+    <p><em>Loading...</em></p>
+}
+else
+{
+    <div class="card">
+        <div class="card-header">
+            Overview
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col">
+                    <dl>
+                        <dt>Balance</dt>
+                        <dd>@(Helpers.ToFriendlyNumber(Item.Balance)) BERA</dd>
+                    </dl>
+                </div>
+            </div>
+            <div class="row">
+                <div class="col">
+                    <dl>
+                        <dt>Tokens</dt>
+                        <dd>
+                            <select>
+                                @if (Tokens == null)
+                                {
+                                    <option>Loading...</option>
+                                }
+                                else if (Tokens.Length == 0)
+                                {
+                                    <option>No tokens</option>
+                                }
+                                else
+                                {
+                                    foreach (var token in Tokens)
+                                    {
+                                        <option>@Helpers.ToFriendlyNumber(token.TokenQuantity) @token.TokenName (@token.TokenSymbol)</option>
+                                    }
+                                }
+                            </select>
+                        </dd>
+                    </dl>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public string Addr { get; set; } = null!;
+
+    private AddressModel? Item { get; set; }
+    private TokenModel[]? Tokens { get; set; }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            var result = await ExplorerService.GetAddressDetails(Addr);
+
+            if (result == null)
+            {
+                NavigationManager.NavigateTo("/404");
+            }
+            else
+            {
+                Item = result;
+                Tokens = null;
+                StateHasChanged();
+            }
+        }
+
+        if (Item != null && Tokens == null)
+        {
+            Tokens = (await ExplorerService.GetAddressTokens(Addr))?.Items ?? [];
+            StateHasChanged();
+        }
+    }
+}

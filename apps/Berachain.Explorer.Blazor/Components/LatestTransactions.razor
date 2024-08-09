@@ -1,0 +1,55 @@
+﻿@using Berachain.Explorer.Blazor.Interfaces
+@using Berachain.Explorer.Blazor.Models.Responses
+@using Humanizer
+
+<div class="actions-wrapper">
+    <LatestActionComponent OnActionReceived="OnActionReceived">
+        <h3>Latest Transactions</h3>
+        @if (!Transactions.Any())
+        {
+            <div class="row">
+                <div class="col-12 text-center">
+                    Loading...
+                </div>
+            </div>
+        }
+        else
+        {
+            foreach (var transaction in Transactions)
+            {
+                <div class="row action">
+                    <div class="col-4">
+                        <div>
+                            <NavLink href="@($"transactions/{transaction.Id}")">@Helpers.TrimHash(transaction.Id)</NavLink>
+                        </div>
+                        <div>@transaction.Timestamp.Humanize()</div>
+                    </div>
+                    <div class="col-4">
+                        <div>From <NavLink href="@($"/address/{transaction.From}")">@Helpers.TrimHash(transaction.From)</NavLink></div>
+                        <div>To <NavLink href="@($"/address/{transaction.To}")">@Helpers.TrimHash(transaction.To)</NavLink></div>
+                    </div>
+                    <div class="col-4 text-end">
+                        @Helpers.ToFriendlyNumber(transaction.Value) BERA
+                    </div>
+                </div>
+            }
+            <div class="view-all-wrapper">
+                <NavLink href="transactions">View all</NavLink>
+            </div>
+        }
+    </LatestActionComponent>
+</div>
+
+@code {
+    private TransactionModel[] Transactions { get; set; } = [];
+
+    private void OnActionReceived(IMessage message)
+    {
+        if (message is ResponseCollection<TransactionModel> transactionModel)
+        {
+            Transactions = transactionModel.Items;
+
+            StateHasChanged();
+        }
+    }
+}

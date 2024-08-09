@@ -19,6 +19,7 @@ This Turborepo includes the following packages/apps:
 - `apps/hardhat-ethers6-erc1155` - Deploy ERC1155 contract with hardhat ethers6
 - `apps/hardhat-viem-helloworld` - Deploy HelloWorld contract with hardhat viem
 - `apps/walletconnect-nextjs` - WalletConnect Web3Modal frontend contract deployment
+- `apps/berachain-explorer-blazor` - Blazor Server application integrated with Berachain blockchain explorer
 
 ## Quick Start
 

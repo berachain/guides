@@ -1,0 +1,63 @@
+﻿@page "/blocks/{BlockNumber}"
+
+@using Berachain.Explorer.Blazor.Models.Responses
+@using Berachain.Explorer.Blazor.Services
+@using Humanizer
+
+@inject ExplorerService ExplorerService
+@inject NavigationManager NavigationManager
+
+<PageTitle>Berachain Explorer - Block</PageTitle>
+
+<h3>Block</h3>
+
+@if (Item == null)
+{
+    <p><em>Loading...</em></p>
+}
+else
+{
+    <dl>
+        <dt>Block Height</dt>
+        <dd>@Item.Number</dd>
+        <dt>Timestamp</dt>
+        <dd>@Item.Timestamp.Humanize()</dd>
+        <dt>Transactions</dt>
+        <dd>@Item.Transactions.Length</dd>
+        <dt>Block Fees</dt>
+        <dd>@Helpers.ToFriendlyNumber(Item.BurnedFees) BERA</dd>
+        <dt>Size</dt>
+        <dd>@Item.Size bytes</dd>
+        <dt>Gas Used</dt>
+        <dd>@Item.GasUsed</dd>
+        <dt>Gas Limit</dt>
+        <dd>@Item.GasLimit</dd>
+    </dl>
+}
+
+@code {
+    [Parameter]
+    public string BlockNumber { get; set; } = null!;
+
+    private BlockModel? Item { get; set; } = null;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            var result = await ExplorerService.GetBlock(BlockNumber);
+
+            if (result == null)
+            {
+                NavigationManager.NavigateTo("/404");
+            }
+            else
+            {
+                Item = result;
+                StateHasChanged();
+            }
+        }
+    }
+
+
+}

@@ -1,0 +1,75 @@
+﻿@page "/address/{Addr}"
+@page "/address/{Addr}/{PageTerm}"
+
+<PageTitle>Berachain Explorer - Address Details</PageTitle>
+
+<h3>Address @Addr</h3>
+
+<Overview @key="@($"{Addr}_overview")" Addr="@Addr" />
+
+<div class="address-tabs">
+    <a href="@($"/address/{Addr}")" class="@(Page == ActivePage.Transactions ? "active" : string.Empty)">Transactions</a>
+    <a href="@($"/address/{Addr}/internalTx")" class="@(Page == ActivePage.InternalTransactions ? "active" : string.Empty)">Internal Transactions</a>
+    <a href="@($"/address/{Addr}/tokentxns")" class="@(Page == ActivePage.Erc20Transactions ? "active" : string.Empty)">ERC20 Transactions</a>
+    <a href="@($"/address/{Addr}/tokentxnsErc721")" class="@(Page == ActivePage.Erc721Transactions ? "active" : string.Empty)">ERC721 Transactions</a>
+</div>
+
+@if (Page == ActivePage.Transactions)
+{
+    <Transactions @key="Addr" Addr="@Addr" />
+}
+else if (Page == ActivePage.InternalTransactions)
+{
+    <InternalTransactions @key="Addr" Addr="@Addr" />
+}
+else if (Page == ActivePage.Erc20Transactions)
+{
+    <Erc20Transactions @key="Addr" Addr="@Addr" />
+}
+else if (Page == ActivePage.Erc721Transactions)
+{
+    <Erc721Transactions @key="Addr" Addr="@Addr" />
+}
+
+@code {
+    [Parameter]
+    public string Addr { get; set; } = null!;
+
+    [Parameter]
+    public string PageTerm { get; set; } = null!;
+
+    private ActivePage Page { get; set; } = Address.ActivePage.Transactions;
+
+    protected override void OnAfterRender(bool firstRender)
+    {
+        var page = GetPage();
+        if (page != Page)
+        {
+            Page = page;
+            StateHasChanged();
+        }
+    }
+
+    private ActivePage GetPage()
+    {
+        switch (PageTerm)
+        {
+            case "internalTx":
+                return ActivePage.InternalTransactions;
+            case "tokentxns":
+                return ActivePage.Erc20Transactions;
+            case "tokentxnsErc721":
+                return ActivePage.Erc721Transactions;
+            default:
+                return ActivePage.Transactions;
+        }
+    }
+
+    private enum ActivePage
+    {
+        Transactions,
+        InternalTransactions,
+        Erc20Transactions,
+        Erc721Transactions
+    }
+}

@@ -1,0 +1,87 @@
+﻿@page "/transactions"
+
+@using Berachain.Explorer.Blazor.Models.Responses
+@using Berachain.Explorer.Blazor.Services
+@using Humanizer
+
+@inject ExplorerService ExplorerService
+@inject NavigationManager NavigationManager
+
+<PageTitle>Berachain Explorer - Transactions</PageTitle>
+
+<h1>Transactions</h1>
+
+@if (Items == null)
+{
+    <p><em>Loading...</em></p>
+}
+else
+{
+    <div class="row">
+        <div class="col text-end">
+            <button type="button" class="btn btn-sm btn-primary" @onclick="NextOnClick">Next</button>
+        </div>
+    </div>
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Txn Hash</th>
+                <th>Block</th>
+                <th>From</th>
+                <th>To</th>
+                <th>Value</th>
+                <th>Txn Fee</th>
+                <th>Age</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var item in Items.Items)
+            {
+                <tr>
+                    <td>
+                        <NavLink href="@($"transactions/{item.Id}")">@Helpers.TrimHash(item.Id)</NavLink>
+                    </td>
+                    <td>
+                        <NavLink href="@($"blocks/{item.BlockNumber}")">@item.BlockNumber</NavLink>
+                    </td>
+                    <td>
+                        <div>From <NavLink href="@($"/address/{item.From}")">@Helpers.TrimHash(item.From)</NavLink></div>
+                    </td>
+                    <td>
+                        <div>To <NavLink href="@($"/address/{item.To}")">@Helpers.TrimHash(item.To)</NavLink></div>
+                    </td>
+                    <td>@Helpers.ToFriendlyNumber(item.Value) BERA</td>
+                    <td>@Helpers.ToFriendlyNumber(item.BurnedFees)</td>
+                    <td>@item.Timestamp.Humanize()</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    private ResponseCollection<TransactionModel>? Items { get; set; }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            var result = await ExplorerService.GetTransactions(take: 1000);
+
+            if (result == null)
+            {
+                NavigationManager.NavigateTo("/404");
+            }
+            else
+            {
+                Items = result;
+                StateHasChanged();
+            }
+        }
+    }
+
+    private async Task NextOnClick()
+    {
+        Items = await ExplorerService.GetTransactions(take: 1000, nextToken: Items?.Link?.NextToken);
+    }
+}

@@ -1,0 +1,68 @@
+﻿@page "/transactions/{TxId}"
+
+@using Berachain.Explorer.Blazor.Models.Responses
+@using Berachain.Explorer.Blazor.Services
+@using Humanizer
+
+@inject ExplorerService ExplorerService
+@inject NavigationManager NavigationManager
+
+<PageTitle>Berachain Explorer - Transaction</PageTitle>
+
+<h3>Transaction</h3>
+
+@if (Item == null)
+{
+    <p><em>Loading...</em></p>
+}
+else
+{
+    <dl>
+        <dt>Transaction Hash</dt>
+        <dd>@Item.Id</dd>
+        <dt>Status</dt>
+        <dd>@(Item.Status ? "Success" : "Fail")</dd>
+        <dt>Block</dt>
+        <dd>
+            <NavLink href="@($"blocks/{Item.BlockNumber}")">@Item.BlockNumber</NavLink>
+        </dd>
+        <dt>Timestamp</dt>
+        <dd>@Item.Timestamp.Humanize()</dd>
+        <dt>From</dt>
+        <dd>
+            <div>From <NavLink href="@($"/address/{Item.From}")">@Helpers.TrimHash(Item.From)</NavLink></div>
+        </dd>
+        <dd>
+            <div>To <NavLink href="@($"/address/{Item.To}")">@Helpers.TrimHash(Item.To)</NavLink></div>
+        </dd>
+        <dt>Value</dt>
+        <dd>@Helpers.ToFriendlyNumber(Item.Value) BERA</dd>
+        <dt>Transaction Fee</dt>
+        <dd>@Helpers.ToFriendlyNumber(Item.BurnedFees) BERA</dd>
+    </dl>
+}
+
+@code {
+    [Parameter]
+    public string TxId { get; set; } = null!;
+
+    private TransactionModel? Item { get; set; } = null;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            var result = await ExplorerService.GetTransaction(TxId);
+
+            if (result == null)
+            {
+                NavigationManager.NavigateTo("/404");
+            }
+            else
+            {
+                Item = result;
+                StateHasChanged();
+            }
+        }
+    }
+}
