@@ -341,7 +341,7 @@ async function main() {
             const targets = [beraChefAddress];
             const values = [0];
             const calldatas = [beraChef.interface.encodeFunctionData('updateFriendsOfTheChef', [vaultAddress, true])];
-            const description = "Add BBT Rewards Vault";
+            const description = "Add Rewards Vault";
             // Create the proposal
             await createProposal(targets, values, calldatas, description);
             break;
@@ -389,7 +389,7 @@ async function main() {
             // Check the current state of the proposal
             const cancelState = await checkProposalState(proposalId);
             // Allow cancellation if the proposal is in a cancellable state
-            if (!['Pending', 'Active', 'Succeeded'].includes(cancelState.stateName)) {
+            if (!['Pending'].includes(cancelState.stateName)) {
                 console.log(`Proposal is in ${cancelState.stateName} state and cannot be cancelled.`);
                 return;
             }
