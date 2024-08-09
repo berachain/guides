@@ -4,7 +4,6 @@ This repository provides example contracts and instructions for setting up Verif
 
 [![Video Walkthrough](https://img.youtube.com/vi/cUPjQYoH2OE/0.jpg)](https://youtu.be/cUPjQYoH2OE)
 
-<img src="docs/vrf.png" width="500"/>
 
 ## Overview
 
@@ -37,4 +36,3 @@ To create a Gelato VRF Task, please refer to the documentation [here](https://do
 
 [Here](https://app.gelato.network/functions/task/0x18a91b0e2538c3848c415666a402efa3510d26367d5134d33e0d23bcff011197:88153591557?origin=vrf) is an example task from the app that shows the fullfilled randomness
 
-![Gelato VRF Task](./assets/gelato-vrf-task.png)
