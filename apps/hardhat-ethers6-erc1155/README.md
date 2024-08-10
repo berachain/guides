@@ -1,6 +1,6 @@
 # Berachain Create ERC1155 Contract Using Hardhat Ethers6
 
-This Berachain guided repository will show you the configurations needed to setup Berachain testnet with Hardhat ethers, deploy, and verify the contract.
+This Berachain guided repository will show you the configurations needed to setup the Berachain testnet with Hardhat ethers, deploy, and verify the contract.
 
 ## Requirements
 
@@ -37,7 +37,7 @@ WALLET_PRIVATE_KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f
 
 ## Deploy Contract To Berachain
 
-When your `WALLET_PRIVATE_KEY` is setup correctly, run the following to compile and deploy the contract.
+When your `WALLET_PRIVATE_KEY` is set up correctly, run the following to compile and deploy the contract.
 
 > NOTE: Make sure you've got enough gas in your wallet for deployment.
 
