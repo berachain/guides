@@ -8,7 +8,7 @@ This guide analyzes all WETH token "approval" and "transfer" event logs emitted 
 
 # Requirements
 
-Before beginning, make sure you have the following installed or setup on your computer before hand.
+Before beginning, make sure you have the following installed or set up on your computer beforehand.
 
 - **[Envio](https://docs.envio.dev/docs/getting-started)**
 
