@@ -20,7 +20,12 @@ Before beginning, make sure you have the following installed or set up on your c
 
 ## Gelato VRF: `SimpleVRFContract`
 
-Create a `.env` file at the project root And populate it with your wallet's private key.
+Create a `.env` file at the project root and populate it with the following values
+
+```bash
+PRIVATE_KEY=YOUR PRIVATE KEY
+DEDICATED_MSG_SENDER=YOUR DEDICATED MSG SENDER
+```
 
 ```bash
 cp .env.example .env
@@ -69,7 +74,25 @@ Once all details are correctly entered, go ahead and launch your Gelato VRF inst
 
 ![NewTask](./assets/newtask.png)
 
+## Request Randomness
+
+To invoke the randomness request, you can run the `requestRandomness.ts` script:
+
+```bash
+npx hardhat run ./scripts/requestRandomness.ts --network berachain
+```
+
+This will produce the following response:
+```
+Requesting randomness with data: 0x7465737420646174610000000000000000000000000000000000000000000000
+Transaction hash: 0x1a33e33970c0c4e89589e863b8833d7da5138a4f13b7cc02da9b2d97863912df
+```
+
 ## Monitor Execution
 
-[Here](https://app.gelato.network/functions/task/0x245da8aefefecdcc5ee72daee5805440102381c44304ca67ea8e54326b7e520d:80084?origin=vrf) is an example task from the app that shows the fullfilled randomness
+After your randomness request has been made, you can monitor and analyze it here:
 
+[Here](https://app.gelato.network/functions/task/0x904a1cdf1d09ec7f237a887bd6924d9116351a329c5f52a64d62bdcb9b9b5568:80084?origin=vrf) is an example task from the app that shows the fullfilled randomness
+
+
+![Monitoring](./assets/monitoring.png)

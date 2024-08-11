@@ -1,6 +1,7 @@
 import hre, { deployments, getNamedAccounts } from "hardhat";
 import { HardhatRuntimeEnvironment } from "hardhat/types";
 import { DeployFunction } from "hardhat-deploy/types";
+import * as dotenv from "dotenv";
 
 const isHardhat = hre.network.name === "hardhat";
 
@@ -8,7 +9,7 @@ const func: DeployFunction = async (hre: HardhatRuntimeEnvironment) => {
   const { deploy } = deployments;
   console.log("deploying SimpleVRFContract");
   const { deployer } = await getNamedAccounts();
-  const dedicatedMsgSender = "0xa55e7F0dD850C5353025d3cFA5a36e648635a256";
+  const dedicatedMsgSender = process.env.DEDICATED_MSG_SENDER;
   console.log("deployer", deployer);
 
   if (!isHardhat) {
