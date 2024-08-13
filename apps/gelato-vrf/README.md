@@ -23,8 +23,9 @@ Before beginning, make sure you have the following installed or set up on your c
 Create a `.env` file at the project root and populate it with the following values
 
 ```bash
-PRIVATE_KEY=YOUR PRIVATE KEY
-DEDICATED_MSG_SENDER=YOUR DEDICATED MSG SENDER
+PRIVATE_KEY=<YOUR PRIVATE KEY>
+DEDICATED_MSG_SENDER=<YOUR DEDICATED MSG SENDER>
+SC_ADDRESS=<smart contract deployed in this guide>
 ```
 
 ```bash
@@ -48,7 +49,7 @@ npx hardhat deploy --network berachain
 
 
 - **Description**: Contract for using Gelato VRF directly.
-- **Contract Address on Berachain**: [0x2f32A4796bc8A37229FCfe8018f1fd6FBA19471C](https://bartio.beratrail.io/address/0x2f32A4796bc8A37229FCfe8018f1fd6FBA19471C)
+- **Contract Address on Berachain**: [0x3E183d1C8fcfdb080e3107f400786f6FA6f30810](https://bartio.beratrail.io/address/0x3E183d1C8fcfdb080e3107f400786f6FA6f30810)
 - **Features**:
   - Requests randomness from Gelato VRF.
   - Handles the fulfillment of randomness.
@@ -67,7 +68,7 @@ Navigate to the Gelato [app](https://app.gelato.network/vrf).
 Ensure you choose the `Berachain bArtio` network where your VRF requester and receiver contracts are deployed.
 
 ### Step 4. Specify the Request Contract
-You'll be asked to provide the address of the Request Contract to which the Gelato nodes should respond. Enter the address you gathered in step 1 (in our example: **0x2f32A4796bc8A37229FCfe8018f1fd6FBA19471C**).
+You'll be asked to provide the address of the Request Contract to which the Gelato nodes should respond. Enter the address you gathered in step 1 (in our example: **0x3E183d1C8fcfdb080e3107f400786f6FA6f30810**).
 
 ### Step 5. Launch your VRF Instance
 Once all details are correctly entered, go ahead and launch your Gelato VRF instance.
@@ -76,13 +77,20 @@ Once all details are correctly entered, go ahead and launch your Gelato VRF inst
 
 ## Request Randomness
 
+After deploying your contract, proceed to the `.env` file and replace the existing smart contract address with the one specific to your deployment. Regarding our example, you would set it as follows:
+
+```bash
+SC_ADDRESS=0x3E183d1C8fcfdb080e3107f400786f6FA6f30810
+```
+
 To invoke the randomness request, you can run the `requestRandomness.ts` script:
 
 ```bash
 npx hardhat run ./scripts/requestRandomness.ts --network berachain
 ```
 
-This will produce the following response:
+This will produce a similar response:
+
 ```
 Requesting randomness with data: 0x7465737420646174610000000000000000000000000000000000000000000000
 Transaction hash: 0x1a33e33970c0c4e89589e863b8833d7da5138a4f13b7cc02da9b2d97863912df
