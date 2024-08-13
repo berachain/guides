@@ -4,8 +4,10 @@ import * as dotenv from "dotenv";
 dotenv.config();
 
 async function main() {
-  const contractAddress = "0x3E183d1C8fcfdb080e3107f400786f6FA6f30810";
+  const contractAddress = process.env.SC_ADDRESS!;
   const PRIVATE_KEY = process.env.PRIVATE_KEY;
+
+  console.log("your contract address is", contractAddress);
 
   if (!PRIVATE_KEY) {
     throw new Error("PRIVATE_KEY is not set");
