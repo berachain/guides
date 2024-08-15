@@ -12,10 +12,11 @@ This repository includes contracts and configurations necessary for implementing
 
 ## Requirements
 
-Before beginning, make sure you have the following installed or set up on your computer beforehand.  
+Before beginning, make sure you have the following installed or set up on your computer beforehand.
+
 - nvm or Node `v20.0.0` or greater
-- pnpm, yarn, or npm 
-- Wallet that contains BERA token (for deployment - see the [faucet](https://artio.faucet.berachain.com/))
+- pnpm, yarn, or npm
+- Wallet that contains BERA token (for deployment - see the [faucet](https://bartio.faucet.berachain.com/))
 - hardhat
 
 ## Gelato VRF: `SimpleVRFContract`
@@ -47,7 +48,6 @@ npx hardhat deploy --network berachain
 > [!NOTE]  
 > Check the deployed addresses for each network in the `deployments/` folder, which is automatically created at the root of the `gelato-vrf/` directory following a deployment.
 
-
 - **Description**: Contract for using Gelato VRF directly.
 - **Contract Address on Berachain**: [0x3E183d1C8fcfdb080e3107f400786f6FA6f30810](https://bartio.beratrail.io/address/0x3E183d1C8fcfdb080e3107f400786f6FA6f30810)
 - **Features**:
@@ -59,18 +59,23 @@ npx hardhat deploy --network berachain
 Deploying your Gelato VRF instance is a straightforward process. Here's a step-by-step guide to get you started:
 
 ### Step 1. Gather Necessary Addresses
+
 Before you begin, make sure you have the address of your requester contract at hand. This will be essential for the deployment process.
 
 ### Step 2. Access the VRF Deployment Portal
+
 Navigate to the Gelato [app](https://app.gelato.network/vrf).
 
 ### Step 3. Select Deployment Network
+
 Ensure you choose the `Berachain bArtio` network where your VRF requester and receiver contracts are deployed.
 
 ### Step 4. Specify the Request Contract
+
 You'll be asked to provide the address of the Request Contract to which the Gelato nodes should respond. Enter the address you gathered in step 1 (in our example: **0x3E183d1C8fcfdb080e3107f400786f6FA6f30810**).
 
 ### Step 5. Launch your VRF Instance
+
 Once all details are correctly entered, go ahead and launch your Gelato VRF instance.
 
 ![NewTask](./assets/newtask.png)
@@ -101,6 +106,5 @@ Transaction hash: 0x1a33e33970c0c4e89589e863b8833d7da5138a4f13b7cc02da9b2d978639
 After your randomness request has been made, you can monitor and analyze it here:
 
 [Here](https://app.gelato.network/functions/task/0x904a1cdf1d09ec7f237a887bd6924d9116351a329c5f52a64d62bdcb9b9b5568:80084?origin=vrf) is an example task from the app that shows the fullfilled randomness
-
 
 ![Monitoring](./assets/monitoring.png)
