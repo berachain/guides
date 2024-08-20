@@ -55,7 +55,7 @@ Next, run the deployment script `script/DeployProxy.s.sol` (we pin the Solidity 
 ```base
 # FROM: ./openzeppelin-upgrades
 
-forge script script/DeployProxy.s.sol --broadcast --rpc-url https://bartio.rpc.berachain.com/ --private-key $PK --use 0.8.25;
+forge script script/DeployProxy.s.sol --broadcast --rpc-url https://bartio.rpc.berachain.com/ --private-key $PK;
 ```
 
 Take note of your `Proxy` contract address.
@@ -66,14 +66,14 @@ Take note of your `Proxy` contract address.
 ```
 # FROM: ./openzeppelin-upgrades
 
-forge verify-contract <IMPLEMENTATION_ADDRESS> ./src/BingBongToken.sol:BingBongToken --verifier-url 'https://api.routescan.io/v2/network/testnet/evm/80084/etherscan' --etherscan-api-key "verifyContract" --num-of-optimizations 200 --compiler-version 0.8.25;
+forge verify-contract <IMPLEMENTATION_ADDRESS> ./src/DeFiTokenV1.sol:DeFiToken --verifier-url 'https://api.routescan.io/v2/network/testnet/evm/80084/etherscan' --etherscan-api-key "verifyContract" --num-of-optimizations 200 --compiler-version 0.8.25;
 ```
 
 Now, when you navigate to your proxy contract on Beratrail, you will see the ERC20 token attributes hooked up to the proxy contract.
 
 ## Step 5 - Perform a Proxy Upgrade
 
-Next, we upgrade the implementation contract to v2 (`BingBongTokenV2.sol`).
+Next, we upgrade the implementation contract to v2 (`DeFiTokenV2.sol`).
 
 Clean the build artifacts and then run the upgrade script:
 
@@ -84,7 +84,7 @@ Clean the build artifacts and then run the upgrade script:
 # FROM: ./openzeppelin-upgrades
 
 forge clean;
-forge script script/DeployUpgrade.s.sol --broadcast --rpc-url https://bartio.rpc.berachain.com/ --private-key $PK --use 0.8.25;
+forge script script/DeployUpgrade.s.sol --broadcast --rpc-url https://bartio.rpc.berachain.com/ --private-key $PK;
 ````
 
 Now, when checking your proxy contract on Beratrail explorer, you will notice the token name has been updated.
