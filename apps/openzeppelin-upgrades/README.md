@@ -37,7 +37,7 @@ source .env;
 Install dependencies by running:
 
 ```bash
-forge install OpenZeppelin/openzeppelin-contracts openzeppelin-contracts-upgradeable foundry-rs/forge-std --no-commit --no-git;
+forge install OpenZeppelin/openzeppelin-contracts openzeppelin-contracts-upgradeable OpenZeppelin/openzeppelin-foundry-upgrades foundry-rs/forge-std --no-commit --no-git;
 ```
 
 ## Step 3 - Run Deployment Script for Deploying Token (v1) and Proxy
