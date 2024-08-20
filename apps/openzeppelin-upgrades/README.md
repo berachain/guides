@@ -32,7 +32,15 @@ Populate the `.env` file with your `PK` and then load the variable into your she
 source .env;
 ```
 
-## Step 2 - Run Deployment Script for Deploying Token (v1) and Proxy
+## Step 2 - Install Forge Dependencies
+
+Install dependencies by running:
+
+```bash
+forge install OpenZeppelin/openzeppelin-contracts openzeppelin-contracts-upgradeable foundry-rs/forge-std --no-commit --no-git;
+```
+
+## Step 3 - Run Deployment Script for Deploying Token (v1) and Proxy
 
 Start by compiling the contracts:
 
@@ -53,7 +61,7 @@ forge script script/DeployProxy.s.sol --broadcast --rpc-url https://bartio.rpc.b
 Take note of your `Proxy` contract address.
 ![DeployProxy Output](./README/deployProxyOutput.png)
 
-## Step 3 - Verify Implementation (v1) Contract
+## Step 4 - Verify Implementation (v1) Contract
 
 ```
 # FROM: ./openzeppelin-upgrades
@@ -63,7 +71,7 @@ forge verify-contract <IMPLEMENTATION_ADDRESS> ./src/BingBongToken.sol:BingBongT
 
 Now, when you navigate to your proxy contract on Beratrail, you will see the ERC20 token attributes hooked up to the proxy contract.
 
-## Step 4 - Perform a Proxy Upgrade
+## Step 5 - Perform a Proxy Upgrade
 
 Next, we upgrade the implementation contract to v2 (`BingBongTokenV2.sol`).
 
