@@ -55,7 +55,7 @@ Next, run the deployment script `script/DeployProxy.s.sol` (we pin the Solidity 
 ```base
 # FROM: ./openzeppelin-upgrades
 
-forge script script/DeployProxy.s.sol --broadcast --rpc-url https://bartio.rpc.berachain.com/ --private-key $PK;
+forge script script/DeployProxy.s.sol --broadcast --rpc-url https://bartio.rpc.berachain.com/ --private-key $PK --use 0.8.25;
 ```
 
 Take note of your `Proxy` contract address.
@@ -77,15 +77,12 @@ Next, we upgrade the implementation contract to v2 (`DeFiTokenV2.sol`).
 
 Clean the build artifacts and then run the upgrade script:
 
-````bash
-Clean the build artifacts and then run the upgrade script:
-
 ```bash
 # FROM: ./openzeppelin-upgrades
 
 forge clean;
-forge script script/DeployUpgrade.s.sol --broadcast --rpc-url https://bartio.rpc.berachain.com/ --private-key $PK;
-````
+forge script script/DeployUpgrade.s.sol --broadcast --rpc-url https://bartio.rpc.berachain.com/ --private-key $PK --use 0.8.25;
+```
 
 Now, when checking your proxy contract on Beratrail explorer, you will notice the token name has been updated.
 
