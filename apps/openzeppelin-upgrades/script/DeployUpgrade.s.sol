@@ -8,7 +8,7 @@ import {Upgrades} from "openzeppelin-foundry-upgrades/Upgrades.sol";
 contract DeployAndUpgrade is Script {
     function run() public {
         // Replace with your proxy address
-        address proxy = 0xC9e6086507322ee8ae1D5c283101674588B342f5;
+        address proxy = 0x0000000000000000000000000000000000000000;
         vm.startBroadcast();
 
         Upgrades.upgradeProxy(

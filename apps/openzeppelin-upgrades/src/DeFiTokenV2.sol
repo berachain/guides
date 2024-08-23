@@ -78,6 +78,7 @@ contract DeFiTokenV2 is ERC20Upgradeable, OwnableUpgradeable, UUPSUpgradeable {
         uint256 amount
     ) public override returns (bool) {
         removeBonus(msg.sender);
+        lastBonusTimestamp[to] = block.timestamp;
         return super.transfer(to, amount);
     }
 
