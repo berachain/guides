@@ -7,3 +7,6 @@
 [submodule "apps/pyth-oracle/lib/pyth-sdk-solidity"]
 	path = apps/pyth-oracle/lib/pyth-sdk-solidity
 	url = https://github.com/pythnetwork/pyth-sdk-solidity
+[submodule "apps/openzeppelin-upgrades/lib/openzeppelin-foundry-upgrades"]
+	path = apps/openzeppelin-upgrades/lib/openzeppelin-foundry-upgrades
+	url = https://github.com/OpenZeppelin/openzeppelin-foundry-upgrades
