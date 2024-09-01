@@ -2,13 +2,14 @@ const {ethers, JsonRpcProvider} = require("ethers");
 const fs = require('fs');
 require("dotenv").config();
 
-const { RPC_PROVIDER, OWNER_PRIVATE_KEY, CONTRACT_ADDRESS } = process.env;
+const { RPC_PROVIDER, OWNER_PRIVATE_KEY, USER_PRIVATE_KEY,CONTRACT_ADDRESS } = process.env;
 
 async function donateFaucet() {
      // Sepolia testnet
     const provider = new JsonRpcProvider(RPC_PROVIDER);
     const wallet = new ethers.Wallet(OWNER_PRIVATE_KEY, provider);
-    const signer = wallet.connect(provider);
+    const userWallet = new ethers.Wallet(USER_PRIVATE_KEY, provider);
+
 
     const contract = require("../artifacts/contracts/Faucet.sol/Faucet.json");
 

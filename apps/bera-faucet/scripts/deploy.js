@@ -11,7 +11,7 @@ async function main() {
   const FaucetContract = await ethers.getContractFactory("Faucet");
 
   // Deploying the contract
-  const faucetContract = await FaucetContract.deploy(ethers.parseEther("0.05"));
+  const faucetContract = await FaucetContract.deploy(ethers.parseEther("0.01"));
 
   // console.log(faucetContract);
 

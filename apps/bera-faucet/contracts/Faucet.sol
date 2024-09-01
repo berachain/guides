@@ -26,7 +26,7 @@ contract Faucet {
 
     function request() external {
         if (sendRecords[msg.sender] > 0) {
-            require(sendRecords[msg.sender] - block.timestamp >= 1 days, "You can only request tokens once every 24 hours");
+            require(block.timestamp - sendRecords[msg.sender] >= 1 days, "You can only request tokens once every 24 hours");
         }
 
         require(address(this).balance >= sendQuantity, "Insufficient balance in Faucet");
@@ -38,6 +38,13 @@ contract Faucet {
     function withdraw() external {
         require(msg.sender == owner, "Only the contract owner can withdraw");
         payable(owner).transfer(address(this).balance);
+    }
+
+    function airdrop(address to, uint256 amount) external {
+        require(address(this).balance >= amount, "Insufficient balance in Faucet");
+
+        sendRecords[to] = block.timestamp; // update receive record
+        payable(to).transfer(amount); // transfer
     }
 
     // get faucet balance
