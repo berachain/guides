@@ -305,6 +305,40 @@ async function cancelProposal(proposalId) {
     }
 }
 
+// Function to queue a proposal
+async function checkAndQueueProposal(proposalId) {
+    console.log('Checking if queueing is necessary...');
+    try {
+        const { state, stateName } = await checkProposalState(proposalId);
+        
+        if (['Queued', 'Executed', 'Expired'].includes(stateName)) {
+            console.log(`Proposal is already in ${stateName} state. No need to queue.`);
+            return;
+        }
+        
+        if (stateName !== 'Succeeded') {
+            console.log(`Proposal is in ${stateName} state. It needs to be in Succeeded state to be queued.`);
+            return;
+        }
+        
+        console.log('Proposal is in Succeeded state. Attempting to queue...');
+
+        const queueTx = await governance.queue(proposal.targets, proposal.values, proposal.calldatas, descriptionHash);
+        const receipt = await queueTx.wait();
+        
+        console.log('Proposal queued successfully. Transaction hash:', receipt.transactionHash);
+    } catch (error) {
+        console.error('Error checking or queueing proposal:', error);
+        if (error.error?.data) {
+            try {
+                console.error('Decoded error:', governance.interface.parseError(error.error.data));
+            } catch (parseError) {
+                console.error('Could not parse error. Raw error data:', error.error.data);
+            }
+        }
+    }
+}
+
 async function main() {
     // Get command-line arguments, skipping the first two (node and script name)
     const args = process.argv.slice(2);
@@ -380,6 +414,14 @@ async function main() {
             await executeProposal(proposalId);
             break;
 
+        case '--queue':
+            if (!proposalId) {
+                console.error('Please set the PROPOSAL_ID in your .env file');
+                return;
+            }
+            await checkAndQueueProposal(proposalId);
+            break;
+
         case '--cancel':
             // Ensure a proposal ID is set
             if (!proposalId) {
@@ -421,6 +463,7 @@ async function main() {
             console.log('--create-vault: Create a new rewards vault');
             console.log('--create-proposal: Create a new governance proposal');
             console.log('--vote: Vote on the proposal specified in .env');
+            console.log('--queue: Queue a Succeeded proposal for execution');
             console.log('--execute: Execute the proposal specified in .env');
             console.log('--cancel: Cancel the proposal specified in .env');
             console.log('--check-state: Check the current state of the proposal');
