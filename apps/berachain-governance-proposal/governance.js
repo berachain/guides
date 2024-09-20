@@ -339,6 +339,26 @@ async function checkAndQueueProposal(proposalId) {
     }
 }
 
+async function whitelistIncentiveToken(tokenAddress, minIncentiveRate) {
+    console.log('Whitelisting incentive token...');
+    try {
+        if (!process.env.REWARDS_VAULT_ADDRESS) {
+            console.error('Please set the REWARDS_VAULT_ADDRESS in your .env file');
+            return;
+        }
+        const vaultAddress = process.env.REWARDS_VAULT_ADDRESS;
+        rewardsVault = new ethers.Contract(vaultAddress, BerachainRewardsVaultABI, wallet);
+        const targets = [vaultAddress];
+        const values = [0];
+        const calldatas = [rewardsVault.interface.encodeFunctionData('whitelistIncentiveToken', [tokenAddress, minIncentiveRate])];
+        const description = `Whitelist incentive token ${tokenAddress}`;
+        await createProposal(targets, values, calldatas, description);
+    } catch (error) {
+        console.error('Error whitelisting incentive token:', error);
+        throw error;
+    }
+}
+
 async function main() {
     // Get command-line arguments, skipping the first two (node and script name)
     const args = process.argv.slice(2);
@@ -457,6 +477,22 @@ async function main() {
             }
             break;
 
+            case '--whitelist-incentive':
+                if (!process.env.INCENTIVE_TOKEN) {
+                    console.error('Please set the INCENTIVE_TOKEN address in your .env file');
+                    return;
+                }
+                if (!process.env.REWARDS_VAULT_ADDRESS) {
+                    console.error('Please set the REWARDS_VAULT_ADDRESS in your .env file');
+                    return;
+                }
+                // Ensure the user has enough voting power to create a proposal
+                if (!(await ensureSufficientVotingPower())) return;
+                // Set a default minIncentiveRate (you may want to make this configurable)
+                const minIncentiveRate = ethers.parseUnits('0.01', 18); // 0.01 token per BGT emission
+                await whitelistIncentiveToken(process.env.INCENTIVE_TOKEN, minIncentiveRate);
+                break;
+
         default:
             // If an invalid flag is provided, show usage instructions
             console.log('Please provide a valid flag:');
@@ -467,6 +503,7 @@ async function main() {
             console.log('--execute: Execute the proposal specified in .env');
             console.log('--cancel: Cancel the proposal specified in .env');
             console.log('--check-state: Check the current state of the proposal');
+            console.log('--whitelist-incentive: Whitelist an incentive token');
     }
 }
 
