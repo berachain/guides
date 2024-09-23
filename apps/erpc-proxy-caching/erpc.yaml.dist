@@ -1,0 +1,89 @@
+logLevel: warn
+
+database:
+  evmJsonRpcCache:
+    driver: memory
+    maxItems: 10000
+    # driver: postgresql
+    # postgresql:
+    #   connectionUri: >-
+    #     postgres://YOUR_USERNAME_HERE:YOUR_PASSWORD_HERE@your.postgres.hostname.here.com:5432/your_database_name
+    #   table: rpc_cache
+
+server:
+  httpHost: 0.0.0.0
+  httpPort: 4000
+
+metrics:
+  enabled: true
+  host: 0.0.0.0
+  port: 4001
+
+projects:
+  - id: main
+    networks:
+      - architecture: evm
+        evm:
+          chainId: 80084
+        failsafe:
+          timeout:
+            duration: 8s
+          retry:
+            maxCount: 5
+            delay: 500ms
+            backoffMaxDelay: 10s
+            backoffFactor: 0.3
+            jitter: 200ms
+          hedge:
+            delay: 3000ms
+            maxCount: 2
+    upstreams:
+      - id: chain-80084-https://bartio.rpc.berachain.com
+        type: evm
+        endpoint: https://bartio.rpc.berachain.com
+        rateLimitBucket: global
+        healthCheckGroup: aggressive
+        evm:
+          chainId: 80084
+        failsafe:
+          timeout:
+            duration: 5s
+          retry:
+            maxCount: 2
+            delay: 500ms
+            backoffMaxDelay: 10s
+            backoffFactor: 0.3
+            jitter: 100ms
+      - id: chain-80084-https://bartio.drpc.org
+        type: evm
+        endpoint: https://bartio.drpc.org
+        rateLimitBucket: global
+        healthCheckGroup: aggressive
+        evm:
+          chainId: 80084
+        failsafe:
+          timeout:
+            duration: 5s
+          retry:
+            maxCount: 2
+            delay: 500ms
+            backoffMaxDelay: 10s
+            backoffFactor: 0.3
+            jitter: 100ms
+
+rateLimiters:
+  buckets:
+    - id: global
+      rules:
+        - method: "*"
+          maxCount: 1000
+          period: 1s
+          scope: instance
+
+healthChecks:
+  groups:
+    - id: aggressive
+      checkInterval: 30s
+      maxErrorRatePercent: 10
+      maxP90LatencyMs: 5s
+      maxBlocksBehind: 5
