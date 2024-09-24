@@ -179,7 +179,23 @@ async function getOrCreateVault() {
     }
 }
 
-async function createProposal(targets, values, calldatas, description) {
+async function createProposal(targets, values, calldatas, description, whitelistToken) {
+    // If whitelistToken is provided, add it to the proposal parameters
+    if (whitelistToken) {
+        console.log(`Including token ${whitelistToken} to be whitelisted as an incentive...`);
+        const vaultAddress = process.env.REWARDS_VAULT_ADDRESS;
+        if (!vaultAddress) {
+            throw new Error('REWARDS_VAULT_ADDRESS not set in .env file');
+        }
+        rewardsVault = new ethers.Contract(vaultAddress, BerachainRewardsVaultABI, wallet);
+        const minIncentiveRate = ethers.parseUnits('0.01', 18); // Default rate, can be made configurable
+        
+        targets.push(vaultAddress);
+        values.push(0);
+        calldatas.push(rewardsVault.interface.encodeFunctionData('whitelistIncentiveToken', [whitelistToken, minIncentiveRate]));
+        description += ` and whitelist incentive token ${whitelistToken}`;
+    }
+
     // Generate a hash of the proposal description
     const hash = ethers.id(description);
 
@@ -216,6 +232,7 @@ async function createProposal(targets, values, calldatas, description) {
     try {
         // If no existing proposal, create a new one
         console.log('Creating new proposal...');
+
         const tx = await governance.propose(targets, values, calldatas, description);
         const receipt = await tx.wait();
         console.log('Proposal transaction confirmed. Transaction hash:', receipt.transactionHash);
@@ -396,8 +413,12 @@ async function main() {
             const values = [0];
             const calldatas = [beraChef.interface.encodeFunctionData('updateFriendsOfTheChef', [vaultAddress, true])];
             const description = "Add Rewards Vault";
+            
+            // Check if a token address is provided to be whitelisted
+            const whitelistToken = args[1]; // Assuming the token address is passed as the second argument
+            
             // Create the proposal
-            await createProposal(targets, values, calldatas, description);
+            await createProposal(targets, values, calldatas, description, whitelistToken);
             break;
 
         case '--vote':
@@ -497,7 +518,7 @@ async function main() {
             // If an invalid flag is provided, show usage instructions
             console.log('Please provide a valid flag:');
             console.log('--create-vault: Create a new rewards vault');
-            console.log('--create-proposal: Create a new governance proposal');
+            console.log('--create-proposal [token-address]: Create a new governance proposal (optionally whitelist a token)');
             console.log('--vote: Vote on the proposal specified in .env');
             console.log('--queue: Queue a Succeeded proposal for execution');
             console.log('--execute: Execute the proposal specified in .env');
