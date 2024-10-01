@@ -1,6 +1,6 @@
 # Berachain Guides
 
-A collection of Berachain EVM examples: code, frameworks, languages, contracts, and more.
+A collection of [Berachain](https://docs.berachain.com/learn/) EVM examples: code, frameworks, languages, contracts, and more.
 
 ## Requirements
 
