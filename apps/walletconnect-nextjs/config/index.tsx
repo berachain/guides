@@ -11,7 +11,7 @@ export const projectId = process.env.NEXT_PUBLIC_PROJECT_ID;
 
 const metadata = {
   name: "Berachain Web3Modal",
-  description: "Berchain Web3Modal Example",
+  description: "Berachain Web3Modal Example",
   url: "https://web3modal.com", // origin must match your domain & subdomain
   icons: ["https://avatars.githubusercontent.com/u/96059542"],
 };
