@@ -105,6 +105,6 @@ Transaction hash: 0x1a33e33970c0c4e89589e863b8833d7da5138a4f13b7cc02da9b2d978639
 
 After your randomness request has been made, you can monitor and analyze it here:
 
-[Here](https://app.gelato.network/functions/task/0x904a1cdf1d09ec7f237a887bd6924d9116351a329c5f52a64d62bdcb9b9b5568:80084?origin=vrf) is an example task from the app that shows the fullfilled randomness
+[Here](https://app.gelato.network/functions/task/0x904a1cdf1d09ec7f237a887bd6924d9116351a329c5f52a64d62bdcb9b9b5568:80084?origin=vrf) is an example task from the app that shows the fulfilled randomness
 
 ![Monitoring](./assets/monitoring.png)
