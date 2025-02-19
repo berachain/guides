@@ -1,8 +1,9 @@
+
 // Imports
 // ========================================================
-import Irys from "@irys/sdk";
 import { config } from "dotenv";
-import { privateKeyToAccount } from "viem/accounts";
+import { Uploader } from "@irys/upload";
+import { Bera } from "@irys/upload-ethereum";
 import fs from "fs";
 import path from "path";
 
@@ -27,61 +28,37 @@ const main = async () => {
   const fileSize = stats.size;
   console.log({ fileSize });
 
-  // Get account wallet address from private key
-  const account = privateKeyToAccount(
-    `${process.env.WALLET_PRIVATE_KEY}` as `0x${string}`,
-  );
-
-  // Irys Config
-  const irys = new Irys({
-    url: `${process.env.IRYS_NODE}`, // URL of the node you want to connect to
-    token: `${process.env.IRYS_TOKEN}`, // Token used for payment
-    key: `${process.env.WALLET_PRIVATE_KEY}`, // ETH or SOL private key
-    config: {
-      providerUrl: `${process.env.CHAIN_RPC_URL}`, // Optional provider URL, only required when using Devnet
-    },
-  });
-
-  // Get price needed in `$BERA`
-  const price =
-    (await irys.getPrice(fileSize)).toNumber() / 1000000000000000000;
-  console.log({
-    price: `${price} $${process.env.CHAIN_NATIVECURRENCY_SYMBOL}`,
-  });
-  const priceWithBuffer = price + Number(`${process.env.IRYS_BUFFER}`);
-  console.log({ priceWithBuffer });
+  // Configure Irys Uploader
+  const irysUploader = await Uploader(Bera).withWallet(process.env.WALLET_PRIVATE_KEY);
+ 
+  // Get price for file
+  const cost = (await irysUploader.getPrice(fileSize)).toNumber() / 1000000000000000000;
+  const costWithBuffer = cost + Number(`${process.env.IRYS_BUFFER}`);
+  console.log({ cost: `${cost} $BERA` });
+  console.log({ costWithBuffer: `${costWithBuffer} $BERA` });
 
   // Get balance
-  const currentBalance =
-    (await irys.getBalance(account.address)).toNumber() / 1000000000000000000;
-  console.log({
-    currentBalance: `${currentBalance} $${process.env.CHAIN_NATIVECURRENCY_SYMBOL}`,
-  });
+  const balance = (await irysUploader.getBalance()).toNumber() / 1000000000000000000;
+  console.log({ balance: `${balance} $BERA` });
 
-  if (currentBalance < priceWithBuffer) {
-    // Fund the Irys node
-    console.log("Not enough balance, funding node...");
-    const fundTx = await irys.fund(irys.utils.toAtomic(priceWithBuffer));
-    console.log(
-      `Successfully funded '${irys.utils.fromAtomic(fundTx.quantity)}' $${
-        irys.token
-      }`,
-    );
-    console.log("Re-run the script until your balance meets the price.");
-  } else {
-    console.log("Uploading file...");
-    // Upload file
-    const receipt = await irys.uploadFile(filePath, {
-      tags: [
-        {
-          name: "image/jpeg",
-          value: "berachain-upload.jpg",
-        },
-      ],
-    });
-    // https://gateway.irys.xyz/mDKWFxvoIzC15z3cAyR2EAl9S3EY1ZlhKzaEOcITE0g
-    console.log(`https://gateway.irys.xyz/${receipt.id}`);
+  if (balance < costWithBuffer) {
+    console.log(`Not enough balance, funding ${costWithBuffer} $BERA...`);
+    const fundTx = await irysUploader.fund(irysUploader.utils.toAtomic(costWithBuffer));
+    console.log(`Successfully funded '${irysUploader.utils.fromAtomic(fundTx.quantity)}' $${irysUploader.token.toUpperCase()}`);
   }
+
+  // Upload file
+  const receipt = await irysUploader.uploadFile(filePath, {
+    tags: [
+      {
+        name: "image/jpeg",
+        value: "berachain-upload.jpg",
+      },
+    ],
+  });
+  console.log("Uploaded file to Irys");
+  console.log({ receipt });
+  console.log(`https://gateway.irys.xyz/${receipt.id}`);
 
   console.groupEnd();
 };
@@ -91,7 +68,9 @@ const main = async () => {
 main()
   .then(() => {
     console.log("Script complete.");
+    process.exit(0);
   })
   .catch((error) => {
-    console.error({ error });
+    console.error(error);
+    process.exit(1);
   });
