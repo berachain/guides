@@ -1,13 +1,13 @@
 # Irys.xyz NodeJS Upload Script With Berachain $BERA Tokens
 
-An example using the irys js sdk to upload files to Arweave using Berachain `$BERA` tokens to pay for the transactions.
+An example uploading images to a decentralized storage network using Berachain `$BERA` tokens to pay for the transactions.
 
-![Irys Berachain NodeJS File Upload](./README/irys-bera-nodejs-upload.png)
+> **NOTE:** This example is using mainnet $BERA tokens.
 
 ## Requirements
 
 - NMV or Node `v20.11.0` or greater
-- Wallet with testnet $BERA tokens - See the [Berachain Artio Faucet](https://artio.faucet.berachain.com)
+- Wallet with mainnet $BERA tokens
 
 ## Quick Setup
 
@@ -46,9 +46,24 @@ pnpm dev;
 # [Expected Output]:
 # main()
 #   { fileSize: 359635 }
-#   { price: '0.020997741813795767 $BERA' }
-#   { currentBalance: '0.06270474476372734 $BERA' }
-#   https://gateway.irys.xyz/EfyLjyolNtvvYqulFj_DM8XoaLwhcDItHN3H7cnYOMg
+#   { cost: '0.000156123661127842 $BERA' }
+#   { costWithBuffer: '0.010156123661127843 $BERA' }
+#   { balance: '0.010156191810502846 $BERA' }
+#   Uploaded file to Irys
+#   {
+#     receipt: {
+#       id: 'Ehi7TfzpxHJCi5eMa4xGhSgnzybg8jQ8wL6iyq8H9Wke',
+#       timestamp: 1739997922226,
+#       version: '1.0.0',
+#       public: 'mJ9InRYCcuqNFk2A51B-...',
+#       signature: 'C2G7P8vBab_fPy_...',
+#       deadlineHeight: 1617373,
+#       block: 1617373,
+#       validatorSignatures: [],
+#       verify: [Function: bound verifyReceipt] AsyncFunction
+#     }
+#   }
+#   https://gateway.irys.xyz/Ehi7TfzpxHJCi5eMa4xGhSgnzybg8jQ8wL6iyq8H9Wke
 # Script complete.
 ```
 
