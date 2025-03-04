@@ -9,7 +9,7 @@ IP_OPTION=${MY_IP:+--nat extip:$MY_IP}
 $GETH_BIN 					\
 	--datadir $GETH_DATA			\
 	--syncmode full				\
-	--ipcpath /tmp/geth.ipc.EL_ETHRPC_PORT 	\
+	--ipcpath /tmp/geth.ipc.$EL_ETHRPC_PORT	\
 	$BOOTNODES_OPTION			\
 	$ARCHIVE_OPTION				\
 	$IP_OPTION				\
