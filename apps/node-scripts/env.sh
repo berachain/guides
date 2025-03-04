@@ -54,13 +54,14 @@ else
     export CHAIN=mainnet-beacon-80094
     export CHAIN_ID=80094
 fi
+export SEED_DATA_DIR=$(pwd)/seed-data-$CHAIN_ID
 
-if [ -f "seed-data/el-bootnodes.txt" ]; then
-    EL_BOOTNODES=$(grep '^enode://' "seed-data/el-bootnodes.txt"| tr '\n' ',' | sed 's/,$//')
+if [ -f "$SEED_DATA_DIR/el-bootnodes.txt" ]; then
+    EL_BOOTNODES=$(grep '^enode://' "$SEED_DATA_DIR/el-bootnodes.txt"| tr '\n' ',' | sed 's/,$//')
 fi
 
-if [ -f "seed-data/el-peers.txt" ]; then
-    EL_PEERS=$(grep '^enode://' "seed-data/el-peers.txt"| tr '\n' ',' | sed 's/,$//')
+if [ -f "$SEED_DATA_DIR/el-peers.txt" ]; then
+    EL_PEERS=$(grep '^enode://' "$SEED_DATA_DIR/el-peers.txt"| tr '\n' ',' | sed 's/,$//')
 fi
 
 if [[ "$OSTYPE" == "darwin"* ]]; then
