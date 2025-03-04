@@ -2,7 +2,7 @@
 
 ########
 # CHANGE THESE VALUES
-export CHAIN_SPEC=testnet   # or "testnet"
+export CHAIN_SPEC=mainnet   # "mainnet" or "testnet"
 export MONIKER_NAME=camembera
 export WALLET_ADDRESS_FEE_RECIPIENT=0x9BcaA41DC32627776b1A4D714Eef627E640b3EF5
 export EL_ARCHIVE_NODE=false # set to true if you want to run an archive node on CL and EL
@@ -74,23 +74,23 @@ if command >/dev/null -v $RETH_BIN; then
     export RETH_GENESIS_PATH=$RETH_DATA/genesis.json
 fi  
 
-if command -v $GETH_BIN; then
+if command >/dev/null -v $GETH_BIN; then
     export GETH_DATA=$(pwd)/var/geth
     export GETH_GENESIS_PATH=$GETH_DATA/genesis.json
 fi  
 
-if command -v $NETHERMIND_BIN; then
+if command >/dev/null -v $NETHERMIND_BIN; then
     export NETHERMIND_CONFIG_DIR=$(pwd)/var/nethermind/config/
     export NETHERMIND_DATA_DIR=$(pwd)/var/nethermind/data/
     export NETHERMIND_GENESIS_PATH="${NETHERMIND_CONFIG_DIR}/eth-nether-genesis.json"
 fi  
 
-if command -v $ERIGON_BIN; then
+if command >/dev/null -v $ERIGON_BIN; then
     export ERIGON_DATA=$(pwd)/var/erigon
     export ERIGON_GENESIS_PATH=$ERIGON_DATA/genesis.json
 fi  
 
-if ! command -v $RETH_BIN && ! command -v $GETH_BIN && ! command -v $NETHERMIND_BIN && ! command -v $ERIGON_BIN ; then
+if ! command >/dev/null -v $RETH_BIN && ! command >/dev/null -v $GETH_BIN && ! command >/dev/null -v $NETHERMIND_BIN && ! command >/dev/null     -v $ERIGON_BIN ; then
     echo "Error: No execution client found in PATH"
     echo "Please install either reth, geth, or Nethermind and ensure it is available in your PATH"
     exit 1
