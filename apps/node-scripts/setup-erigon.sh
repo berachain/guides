@@ -14,8 +14,8 @@ echo "ERIGON_DATA: $ERIGON_DATA"
 echo "ERIGON_BIN: $ERIGON_BIN"
 echo "  Version: $($ERIGON_BIN --version)"
 
-cp seed-data/eth-genesis.json $ERIGON_GENESIS_PATH
-$ERIGON_BIN init --datadir $ERIGON_DATA $ERIGON_GENESIS_PATH
+cp "$SEED_DATA_DIR/eth-genesis.json" "$ERIGON_GENESIS_PATH"
+$ERIGON_BIN init --datadir "$ERIGON_DATA" "$ERIGON_GENESIS_PATH"
 
 echo
 echo "✓ Erigon set up."

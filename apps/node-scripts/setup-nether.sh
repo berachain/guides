@@ -16,17 +16,17 @@ echo NETHERMIND_DATA_DIR: $NETHERMIND_DATA_DIR
 echo NETHERMIND_BIN: $NETHERMIND_BIN
 echo "  Version: $($NETHERMIND_BIN --version | grep Version)"
 
-cp seed-data/eth-nether-genesis.json $NETHERMIND_GENESIS_PATH
+cp "$SEED_DATA_DIR/eth-nether-genesis.json" "$NETHERMIND_GENESIS_PATH"
 
 PEERS_LINE=""
-if [ -f "seed-data/el-peers.txt" ]; then
-    EL_PEERS=$(grep '^enode://' "seed-data/el-peers.txt"| tr '\n' ',' | sed 's/,$//')
+if [ -f "$SEED_DATA_DIR/el-peers.txt" ]; then
+    EL_PEERS=$(grep '^enode://' "$SEED_DATA_DIR/el-peers.txt"| tr '\n' ',' | sed 's/,$//')
     PEERS_LINE=", \"StaticPeers\":  \"$EL_PEERS\""
 fi
 
 BOOTNODES_LINE=""
-if [ -f "seed-data/el-bootnodes.txt" ]; then
-    EL_BOOTNODES=$(grep '^enode://' "seed-data/el-peers.txt"| tr '\n' ',' | sed 's/,$//')
+if [ -f "$SEED_DATA_DIR/el-bootnodes.txt" ]; then
+    EL_BOOTNODES=$(grep '^enode://' "$SEED_DATA_DIR/el-peers.txt"| tr '\n' ',' | sed 's/,$//')
     BOOTNODES_LINE=", \"Bootnodes\":  \"$EL_BOOTNODES\""
 fi
 
@@ -40,7 +40,7 @@ if [ -n "$MY_IP" ]; then
     IP_OPTION=", \"ExternalIp\": \"$MY_IP\""
 fi
 
-cat <<EOF > $NETHERMIND_CONFIG_DIR/nethermind.cfg
+cat <<EOF > "$NETHERMIND_CONFIG_DIR/nethermind.cfg"
 {
   "Init": {
     "MemoryHint": 768000000,
