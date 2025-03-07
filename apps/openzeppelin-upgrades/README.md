@@ -1,6 +1,6 @@
 # Upgradeable Contracts on Berachain
 
-This repository contains an example of how to deploy and interact with upgradeable contracts. Specificaly, we leverage the [OpenZeppelin Upgrades](https://docs.openzeppelin.com/upgrades-plugins/1.x/foundry-upgrades) plugin to:
+This repository contains an example of how to deploy and interact with upgradeable contracts. Specifically, we leverage the [OpenZeppelin Upgrades](https://docs.openzeppelin.com/upgrades-plugins/1.x/foundry-upgrades) plugin to:
 
 1. Deploy an implementation token contract (v1)
 2. Deploy a Proxy contract pointing to the v1 contract
