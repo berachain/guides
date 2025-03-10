@@ -1,0 +1,14 @@
+# PRC provider
+# RPC_PROVIDER=https://eth-sepolia.g.alchemy.com/v2/i-268NfT4F9ksrCRb9r_SpKaGGeTdXBc
+RPC_PROVIDER=https://wandering-black-market.bera-artio.quiknode.pro/c6a59a5499c1b3e68f38c4574f951cc7e8a3c8c6/
+
+# 0x47cD1Ba86Adaf8dF8590a027E1a3C09cADBe59BA
+# Owner private key
+OWNER_PRIVATE_KEY=0x62f8da8921bf111be2dbd827613aa95cb743268478e88ddc5b922cb8da5a8050
+
+# 0x881d8092D47A8ACD18D28caf4d05B9E700D5faD3
+# User private key
+USER_PRIVATE_KEY=0x96231326c703ef2a81916e77ea588016bc7b1231ab0a1ac7b1457ad18c9062a3
+
+# Faucet contract address
+CONTRACT_ADDRESS=0xa3031c255945105dBaC447E4b565bfe3e4908923
