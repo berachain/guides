@@ -21,6 +21,7 @@ $GETH_BIN 					\
 	--http.addr 0.0.0.0			\
 	--http.port $EL_ETHRPC_PORT		\
 	--port $EL_ETH_PORT			\
+	--discovery.port $EL_ETH_PORT		\
 	--authrpc.addr 127.0.0.1		\
 	--authrpc.port $EL_AUTHRPC_PORT		\
 	--authrpc.jwtsecret $JWT_PATH		\
