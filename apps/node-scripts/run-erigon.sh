@@ -23,6 +23,7 @@ $ERIGON_BIN 					\
 	--http.vhosts "*"			\
 	--http.corsdomain "*"			\
 	--port $EL_ETH_PORT			\
+	--p2p.allowed-ports $EL_ETH_PORT	\
 	--metrics.port $PROMETHEUS_PORT		\
 	--authrpc.addr 127.0.0.1		\
 	--authrpc.port $EL_AUTHRPC_PORT		\
