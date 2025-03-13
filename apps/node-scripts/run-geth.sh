@@ -2,9 +2,10 @@
 
 set -e
 . ./env.sh
-BOOTNODES_OPTION=${EL_BOOTNODES:+--bootnodes $EL_BOOTNODES}
-ARCHIVE_OPTION=$([ "$EL_ARCHIVE_NODE" = true ] && echo "--gcmode archive" || echo "")
-IP_OPTION=${MY_IP:+--nat extip:$MY_IP}
+
+ARCHIVE_OPTION=$([ "$EL_ARCHIVE_NODE" = true ] && echo "--state.scheme hash --gcmode archive" || echo "--state.scheme hash")
+BOOTNODES_OPTION=$([ -n "$EL_BOOTNODES" ] && echo "--bootnodes $EL_BOOTNODES" || echo "")
+IP_OPTION=$([ -n "$MY_IP" ] && echo "--nat extip:$MY_IP" || echo "")
 
 $GETH_BIN 					\
 	--datadir $GETH_DATA			\
