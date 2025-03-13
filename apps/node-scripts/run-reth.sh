@@ -23,8 +23,8 @@ $RETH_BIN node 					\
 	--http					\
 	--http.addr 0.0.0.0			\
 	--http.port $EL_ETHRPC_PORT		\
-        --ipcpath /tmp/reth.ipc.$EL_ETHRPC_PORT \
-        --discovery.port $EL_ETHRPC_PORT	\
+	--ipcpath /tmp/reth.ipc.$EL_ETHRPC_PORT \
+	--discovery.port $EL_ETH_PORT	\
 	--http.corsdomain '*'			\
 	--log.file.directory $LOG_DIR		\
 	--engine.persistence-threshold 0	\
