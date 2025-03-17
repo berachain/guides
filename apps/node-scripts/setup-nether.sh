@@ -26,7 +26,7 @@ fi
 
 BOOTNODES_LINE=""
 if [ -f "$SEED_DATA_DIR/el-bootnodes.txt" ]; then
-    EL_BOOTNODES=$(grep '^enode://' "$SEED_DATA_DIR/el-peers.txt"| tr '\n' ',' | sed 's/,$//')
+    EL_BOOTNODES=$(grep '^enode://' "$SEED_DATA_DIR/el-bootnodes.txt"| tr '\n' ',' | sed 's/,$//')
     BOOTNODES_LINE=", \"Bootnodes\":  \"$EL_BOOTNODES\""
 fi
 
@@ -53,14 +53,13 @@ cat <<EOF > "$NETHERMIND_CONFIG_DIR/nethermind.cfg"
     "Enabled": true,
     "Port": $EL_ETHRPC_PORT,
     "Host": "0.0.0.0",
-    "EnabledModules": "net,eth,subscribe,engine,web3,client",
     "EnginePort": $EL_AUTHRPC_PORT,
     "EngineHost": "127.0.0.1",
     "EngineEnabledModules": "net,eth,subscribe,engine,web3,client",
     "JwtSecretFile": "$JWT_PATH"
   },
   "Sync": {
-    "SnapSync": true
+    "SnapSync": false
   },
   "Network": {
     "P2PPort": $EL_ETH_PORT,
@@ -75,7 +74,7 @@ cat <<EOF > "$NETHERMIND_CONFIG_DIR/nethermind.cfg"
   },
   "Metrics": {
     "Enabled": true,
-    "ExposePort": $PROMETHEUS_PORT,
+    "ExposePort": $EL_PROMETHEUS_PORT,
     "NodeName": "Berachain Mainnet"
   }
   $ARCHIVE_OPTION
