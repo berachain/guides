@@ -52,7 +52,7 @@ sed $SED_OPT 's|^proxy_app = ".*26658"|proxy_app = "tcp://127.0.0.1:'$CL_ETHPROX
 sed $SED_OPT 's|^jwt-secret-path = ".*"|jwt-secret-path = "'$JWT_PATH'"|' "$BEACOND_CONFIG/app.toml"
 sed $SED_OPT 's|^trusted-setup-path = ".*"|trusted-setup-path = "'$BEACOND_CONFIG/kzg-trusted-setup.json'"|' "$BEACOND_CONFIG/app.toml"
 sed $SED_OPT 's|^suggested-fee-recipient = ".*"|suggested-fee-recipient = "'$WALLET_ADDRESS_FEE_RECIPIENT'"|' "$BEACOND_CONFIG/app.toml"
-sed $SED_OPT 's|^prometheus_listen_addr = ".*"|prometheus_listen_addr = "':$PROMETHEUS_PORT'"|' "$BEACOND_CONFIG/config.toml"
+sed $SED_OPT 's|^prometheus_listen_addr = ".*"|prometheus_listen_addr = "':$CL_PROMETHEUS_PORT'"|' "$BEACOND_CONFIG/config.toml"
 
 echo "✓ Config files in $BEACOND_CONFIG updated"
 
