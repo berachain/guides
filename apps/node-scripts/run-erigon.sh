@@ -16,7 +16,7 @@ $ERIGON_BIN 					\
 	$IP_OPTION				\
 	--metrics				\
 	--metrics.addr 0.0.0.0			\
-	--metrics.port $PROMETHEUS_PORT		\
+	--metrics.port $EL_PROMETHEUS_PORT	\
 	--http					\
 	--http.addr 0.0.0.0			\
 	--http.port $EL_ETHRPC_PORT		\
