@@ -57,5 +57,5 @@ sed $SED_OPT 's|^prometheus_listen_addr = ".*"|prometheus_listen_addr = "':$CL_P
 echo "✓ Config files in $BEACOND_CONFIG updated"
 
 echo -n "Genesis validator root: "
-beacond genesis validator-root $BEACOND_CONFIG/genesis.json 
+$BEACOND_BIN genesis validator-root $BEACOND_CONFIG/genesis.json 
 echo "✓ Beacon-Kit set up. Confirm genesis root is correct."
