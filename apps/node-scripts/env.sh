@@ -42,8 +42,8 @@ else
     export EL_ETHRPC_PORT=8545
     export EL_AUTHRPC_PORT=8551
     export EL_ETH_PORT=30303
-    export CL_PROMETHEUS_PORT=9101
-    export EL_PROMETHEUS_PORT=9102
+    export EL_PROMETHEUS_PORT=9101
+    export CL_PROMETHEUS_PORT=9102
 fi
 
 ######
