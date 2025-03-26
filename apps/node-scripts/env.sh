@@ -25,7 +25,7 @@ export ERIGON_BIN=$(command -v erigon || echo $(pwd)/erigon)
 # Leave this blank to use the default ports for the various services.
 # Set this to a port number (for example, 30000) to 
 # have the services listen on sequential ports (30000, 30001, 30002, etc)
-export PORT_BASE=32000
+export PORT_BASE=
 if [[ -n "$PORT_BASE" ]]; then
     export CL_ETHRPC_PORT=$(($PORT_BASE+0))
     export CL_ETHP2P_PORT=$(($PORT_BASE+1))
@@ -33,7 +33,8 @@ if [[ -n "$PORT_BASE" ]]; then
     export EL_ETHRPC_PORT=$(($PORT_BASE+3))
     export EL_AUTHRPC_PORT=$(($PORT_BASE+4))
     export EL_ETH_PORT=$(($PORT_BASE+5))
-    export PROMETHEUS_PORT=$(($PORT_BASE+6))
+    export EL_PROMETHEUS_PORT=$(($PORT_BASE+6))
+    export CL_PROMETHEUS_PORT=$(($PORT_BASE+7))
 else
     export CL_ETHRPC_PORT=26657
     export CL_ETHP2P_PORT=26656
@@ -41,7 +42,8 @@ else
     export EL_ETHRPC_PORT=8545
     export EL_AUTHRPC_PORT=8551
     export EL_ETH_PORT=30303
-    export PROMETHEUS_PORT=9101
+    export CL_PROMETHEUS_PORT=9101
+    export EL_PROMETHEUS_PORT=9102
 fi
 
 ######
