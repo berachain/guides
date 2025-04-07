@@ -9,10 +9,11 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 interface IAdapter is IOAppCore, IOFT {}
 
+// Bridge tokens from Sepolia to Berachain
 contract SendOFTScript is Script {
     using OptionsBuilder for bytes;
 
-    uint32 constant BERACHAIN_ENPOINT_ID = 40256;
+    uint32 constant BERACHAIN_ENPOINT_ID = 40291;
     address constant SEPOLIA_UNI_ADDRESS =
         0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984;
 
