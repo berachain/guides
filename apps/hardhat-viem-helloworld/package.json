@@ -6,7 +6,7 @@
     "deploy:localhost": "./node_modules/.bin/hardhat run scripts/deploy.ts --network localhost",
     "deploy:berachain": "echo $RPC_URL; ./node_modules/.bin/hardhat run scripts/deploy.ts --network berachainTestnet",
     "test": "./node_modules/.bin/hardhat test",
-    "verify": "echo 'https://api.routescan.io/v2/network/testnet/evm/80085/etherscan'; ./node_modules/.bin/hardhat verify --network berachainTestnet",
+    "verify": "./node_modules/.bin/hardhat verify --network berachainTestnet",
     "clean": "rm -rf node_modules; rm -rf .turbo;"
   },
   "devDependencies": {

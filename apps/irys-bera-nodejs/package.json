@@ -1,14 +1,13 @@
 {
   "name": "@berachain/irys-bera-nodejs",
-  "version": "1.0.0",
-  "description": "NodeJS script that uses Irys.xyz to upload to Arweave paid with Berachain $BERA gas token.",
+  "version": "1.1.0",
+  "description": "NodeJS script that uses Irys.xyz to upload to decentralized storage network with Berachain $BERA gas token.",
   "main": "src/index.ts",
   "scripts": {
     "preinstall": "npx only-allow pnpm",
-    "dev": "./node_modules/.bin/ts-node src/index.ts",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "dev": "tsx src/index.ts"
   },
-  "keywords": ["irys", "bundlr", "arweave", "berachain", "nodejs"],
+  "keywords": ["irys", "bundlr", "berachain", "nodejs"],
   "author": {
     "name": "codingwithmanny",
     "url": "https://github.com/codingwithmanny"
@@ -17,13 +16,14 @@
   "engines": {
     "node": ">=20.0.0"
   },
-  "dependencies": {
-    "@irys/sdk": "^0.1.15",
-    "dotenv": "^16.4.5",
-    "viem": "^2.7.20"
-  },
   "devDependencies": {
-    "ts-node": "^10.9.2",
-    "typescript": "^5.4.2"
+    "@types/node": "^22.13.4",
+    "tsx": "^4.7.0",
+    "typescript": "^5.7.3"
+  },
+  "dependencies": {
+    "@irys/upload": "^0.0.15",
+    "@irys/upload-ethereum": "^0.0.16",
+    "dotenv": "^16.4.7"
   }
 }

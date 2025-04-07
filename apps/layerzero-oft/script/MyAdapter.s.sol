@@ -4,6 +4,7 @@ pragma solidity ^0.8.22;
 import {Script} from "forge-std/Script.sol";
 import "../src/MyAdapter.sol";
 
+// Deploys OFT adapter to Sepolia
 contract MyAdapterScript is Script {
     address constant UNI_TOKEN = 0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984;
     address constant LAYERZERO_ENDPOINT =

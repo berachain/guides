@@ -1,0 +1,7 @@
+[profile.default]
+ffi = true
+ast = true
+build_info = true
+evm_version = "cancun"
+libs = ["lib"]
+extra_output = ["storageLayout"]

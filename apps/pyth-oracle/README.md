@@ -7,7 +7,7 @@ Pyth differs from the existing oracle paradigm by using on-demand price updates,
 ## Requirements
 
 - Nodejs `v20.11.0` or greater
-- pnpm (or another prefered package manager)
+- pnpm (or another preferred package manager)
 - [jq ](https://jqlang.github.io/jq/download/)
 - Wallet with testnet $BERA tokens - See the [Berachain Artio Faucet](https://artio.faucet.berachain.com)
 - [Foundry](https://book.getfoundry.sh/getting-started/installation) - ensure `foundryup` is run to install binaries
@@ -115,5 +115,5 @@ cast abi-decode "getPrice()(int64,uint64,int32,uint)"  <YOUR_GETPRICE_OUTPUT>
 
 ### Troubleshooting
 
-- If you don't act quick enough, you may encounter the error `0x19abf40e` representing a `StalePrice` error. This means that the `price_update.txt` was too old to be used by the contract. Re-run the sequence of commands in Step 4 to retry.
+- If you don't act quickly enough, you may encounter the error `0x19abf40e` representing a `StalePrice` error. This means that the `price_update.txt` was too old to be used by the contract. Re-run the sequence of commands in Step 4 to retry.
 - The error code `0x025dbdd4` represents an `InsufficientFee` error. Try raising the value of $BERA in the `updatePrice` call e.g. `0.0005ether`.

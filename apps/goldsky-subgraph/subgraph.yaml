@@ -5,10 +5,10 @@ schema:
 dataSources:
   - kind: ethereum/contract
     name: Erc20
-    network: berachain-public-testnet
+    network: berachain-bartio
     source:
-      # MIM address, replace with desired ERC20 token to index
-      address: "0xB734c264F83E39Ef6EC200F99550779998cC812d"
+      # bHONEY address, replace with desired ERC20 token to index
+      address: "0x1306D3c36eC7E38dd2c128fBe3097C2C2449af64"
       abi: Erc20
       startBlock: 54354
     mapping:

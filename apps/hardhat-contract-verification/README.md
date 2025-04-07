@@ -1,6 +1,6 @@
 # Bera-HardhatExample
 
-This repo should serve as an example of the config and manual gas-override required for hardhat based contract deployments on Berachain Artio. The repo also should help you verify contracts via hardhat (Routescan api and configs have been provided in the repo).
+This repo should serve as an example of the config and manual gas-override required for hardhat-based contract deployments on Berachain Artio. The repo also should help you verify contracts via hardhat (Routescan api and configs have been provided in the repo).
 
 ## Sum-up on the changes made/required for contract deployments on Artio.
 
@@ -38,7 +38,7 @@ npm install --save-dev @nomicfoundation/hardhat-verify
 npx hardhat verify --network berachain-artio <0x...>
 ```
 
-Make sure to replace the whole " <0xaddress> ". Correct example would be :-
+Make sure to replace the whole " <0xaddress> ". A correct example would be:-
 
 ✅ npx hardhat verify --network berachain-artio 0x3229075dd6F75bD879F7af07d384A0856c30a806
 <br>

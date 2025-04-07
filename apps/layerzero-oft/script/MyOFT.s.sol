@@ -4,6 +4,7 @@ pragma solidity ^0.8.22;
 import {Script} from "forge-std/Script.sol";
 import "../src/MyOFT.sol";
 
+// Deploy OFT to Berachain and link to Sepolia
 contract MyOFTScript is Script {
     address constant LAYERZERO_ENDPOINT =
         0x6EDCE65403992e310A62460808c4b910D972f10f;

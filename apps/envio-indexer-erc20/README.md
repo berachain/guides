@@ -8,7 +8,7 @@ This guide analyzes all WETH token "approval" and "transfer" event logs emitted 
 
 # Requirements
 
-Before beginning, make sure you have the following installed or setup on your computer before hand.
+Before beginning, make sure you have the following installed or set up on your computer beforehand.
 
 - **[Envio](https://docs.envio.dev/docs/getting-started)**
 
@@ -77,4 +77,4 @@ If you view the "Account" table, you will see a column called "balance".
 
 # Full Code Repository
 
-The full github code repository can be found in the [guides section](https://github.com/berachain/guides/) of this repository under [Index ERC20 Contract Using Envio](https://github.com/berachain/guides/tree/main/apps/envio-indexing-erc20). 
+The full github code repository can be found in the [guides section](https://github.com/berachain/guides/) of this repository under [Index ERC20 Contract Using Envio](https://github.com/berachain/guides/tree/main/apps/envio-indexer-erc20). 
