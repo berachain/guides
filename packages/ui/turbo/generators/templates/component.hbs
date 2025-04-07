@@ -1,14 +1,12 @@
-import * as React from "react";
+import { FC, ReactNode } from "react";
 
 interface Props {
-  children?: React.ReactNode;
+  children?: ReactNode;
 }
 
-export const {{ pascalCase name }} = ({ children }: Props) => {
-  return (
-    <div>
-      <h1>{{ name }}</h1>
-      {children}
-    </div>
-  );
-};
+export const {{ pascalCase name }}: FC<Props> = ({ children }) => (
+  <div>
+    <h1>{{ name }}</h1>
+    {children}
+  </div>
+)
