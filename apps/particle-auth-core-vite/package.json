@@ -13,10 +13,10 @@
   "license": "ISC",
   "devDependencies": {
     "@types/react": "^18.0.15",
-    "@vitejs/plugin-react": "^2.0.0",
+    "@vitejs/plugin-react": "^4.3.4",
     "react": "^18.2.0",
     "typescript": "^4.7.4",
-    "vite": "^3.0.4"
+    "vite": "^6.2.5"
   },
   "dependencies": {
     "@particle-network/aa": "1.2.0",
