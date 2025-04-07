@@ -5,7 +5,7 @@ import { PythConnection } from "./pyth";
 import { calculateBollingerBands } from "./bb";
 import { CONFIG } from "./config";
 import EntrypointABI from "./ABIs/entrypoint.json";
-import Erc20ABI from "./ABIs/ERC20.json";
+import Erc20ABI from "./ABIs/erc20.json";
 
 const HONEY = "0x0E4aaF1351de4c0264C5c7056Ef3777b41BD8e03";
 
