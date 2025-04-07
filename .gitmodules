@@ -6,7 +6,7 @@
 	url = https://github.com/foundry-rs/forge-std
 [submodule "apps/pyth-oracle/lib/pyth-sdk-solidity"]
 	path = apps/pyth-oracle/lib/pyth-sdk-solidity
-	url = https://github.com/pythnetwork/pyth-sdk-solidity
+	url = https://github.com/pyth-network/pyth-sdk-solidity
 [submodule "apps/openzeppelin-upgrades/lib/openzeppelin-foundry-upgrades"]
 	path = apps/openzeppelin-upgrades/lib/openzeppelin-foundry-upgrades
 	url = https://github.com/OpenZeppelin/openzeppelin-foundry-upgrades
