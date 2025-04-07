@@ -1,6 +1,6 @@
 # Forge Standard Library • [![CI status](https://github.com/foundry-rs/forge-std/actions/workflows/ci.yml/badge.svg)](https://github.com/foundry-rs/forge-std/actions/workflows/ci.yml)
 
-Forge Standard Library is a collection of helpful contracts and libraries for use with [Forge and Foundry](https://github.com/foundry-rs/foundry). It leverages Forge's cheatcodes to make writing tests easier and faster, while improving the UX of cheatcodes.
+Forge Standard Library is a collection of helpful contracts and libraries for use with [Forge and Foundry](https://github.com/foundry-rs/foundry). It leverages Forge's cheatcodes to make writing tests easier and faster while improving the UX of cheatcodes.
 
 **Learn how to use Forge-Std with the [📖 Foundry Book (Forge-Std Guide)](https://book.getfoundry.sh/forge/forge-std.html).**
 
@@ -13,7 +13,7 @@ forge install foundry-rs/forge-std
 ## Contracts
 ### stdError
 
-This is a helper contract for errors and reverts. In Forge, this contract is particularly helpful for the `expectRevert` cheatcode, as it provides all compiler builtin errors.
+This is a helper contract for errors and reverts. In Forge, this contract is particularly helpful for the `expectRevert` cheatcode, as it provides all compiler built-in errors.
 
 See the contract itself for all error codes.
 
@@ -74,7 +74,7 @@ contract TestContract is Test {
     }
 
     function testFindExists() public {
-        // Lets say we want to find the slot for the public
+        // Let's say we want to find the slot for the public
         // variable `exists`. We just pass in the function selector
         // to the `find` command
         uint256 slot = stdstore.target(address(test)).sig("exists()").find();
@@ -82,14 +82,14 @@ contract TestContract is Test {
     }
 
     function testWriteExists() public {
-        // Lets say we want to write to the slot for the public
+        // Let's say we want to write to the slot for the public
         // variable `exists`. We just pass in the function selector
         // to the `checked_write` command
         stdstore.target(address(test)).sig("exists()").checked_write(100);
         assertEq(test.exists(), 100);
     }
 
-    // It supports arbitrary storage layouts, like assembly based storage locations
+    // It supports arbitrary storage layouts, like assembly-based storage locations
     function testFindHidden() public {
         // `hidden` is a random hash of a bytes, iteration through slots would
         // not find it. Our mechanism does
@@ -106,8 +106,8 @@ contract TestContract is Test {
             .sig(test.map_addr.selector)
             .with_key(address(this))
             .find();
-        // in the `Storage` constructor, we wrote that this address' value was 1 in the map
-        // so when we load the slot, we expect it to be 1
+        // In the `Storage` constructor, we wrote that this address' value was 1 in the map
+        // So when we load the slot, we expect it to be 1
         assertEq(uint(vm.load(address(test), bytes32(slot))), 1);
     }
 
@@ -165,7 +165,7 @@ contract Storage {
 
 ### stdCheats
 
-This is a wrapper over miscellaneous cheatcodes that need wrappers to be more dev friendly. Currently there are only functions related to `prank`. In general, users may expect ETH to be put into an address on `prank`, but this is not the case for safety reasons. Explicitly this `hoax` function should only be used for address that have expected balances as it will get overwritten. If an address already has ETH, you should just use `prank`. If you want to change that balance explicitly, just use `deal`. If you want to do both, `hoax` is also right for you.
+This is a wrapper over miscellaneous cheatcodes that need wrappers to be more dev-friendly. Currently, there are only functions related to `prank`. In general, users may expect ETH to be put into an address on `prank`, but this is not the case for safety reasons. Explicitly this `hoax` function should only be used for addresses that have expected balances as it will get overwritten. If an address already has ETH, you should just use `prank`. If you want to change that balance explicitly, just use `deal`. If you want to do both, `hoax` is also right for you.
 
 
 #### Example usage:
