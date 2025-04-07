@@ -1,6 +1,5 @@
 import { ethers } from "ethers";
 import { throttle } from "lodash";
-
 import { PythConnection } from "./pyth";
 import { calculateBollingerBands } from "./bb";
 import { CONFIG } from "./config";
@@ -20,14 +19,13 @@ export class TradingBot {
   constructor() {
     this.pythConnection = new PythConnection();
     const provider = new ethers.JsonRpcProvider(CONFIG.RPC_PROVIDER);
-    const wallet = new ethers.Wallet(CONFIG.PRIVATE_KEY, provider);
-    this.wallet = wallet;
+    this.wallet = new ethers.Wallet(CONFIG.PRIVATE_KEY, provider);
     this.tradingContract = new ethers.Contract(
       CONFIG.ENTRYPOINT_CONTRACT_ADDRESS,
       EntrypointABI,
-      wallet
+      this.wallet
     );
-    this.honeyContract = new ethers.Contract(HONEY, Erc20ABI, wallet);
+    this.honeyContract = new ethers.Contract(HONEY, Erc20ABI, this.wallet);
   }
 
   async start() {
@@ -48,7 +46,6 @@ export class TradingBot {
       await tx.wait();
     }
 
-    // Fetch historical price data
     const historicalPriceFeeds =
       await this.pythConnection.getHistoricalPriceFeeds(
         CONFIG.PRICE_ID,
@@ -57,10 +54,8 @@ export class TradingBot {
       );
     this.prices = historicalPriceFeeds;
 
-    // Subscribe to real-time price updates
-    await this.pythConnection.subscribePriceFeedUpdates(
-      [CONFIG.PRICE_ID],
-      throttle((priceFeed: any) => {
+    const throttledPriceCheck = throttle(
+      (priceFeed: any) => {
         const price = this.pythConnection.normalizeToTenDec(priceFeed);
         this.prices.push(price);
         this.checkTrade();
@@ -70,7 +65,14 @@ export class TradingBot {
             price * Math.pow(10, -10)
           ).toFixed(4)}`
         );
-      }, CONFIG.DATA_INTERVAL * 1000) // limit updates to period interval
+      },
+      CONFIG.DATA_INTERVAL * 1000,
+      { leading: true }
+    );
+
+    await this.pythConnection.subscribePriceFeedUpdates(
+      [CONFIG.PRICE_ID],
+      throttledPriceCheck
     );
   }
 
@@ -81,8 +83,7 @@ export class TradingBot {
 
   private async checkTrade() {
     try {
-      const pendingTx = await this.checkPendingTx();
-      if (pendingTx) {
+      if (await this.checkPendingTx()) {
         console.log("Pending transaction, skipping trade");
         return;
       }
@@ -92,67 +93,50 @@ export class TradingBot {
         CONFIG.BOLLINGER_PERIOD,
         CONFIG.BOLLINGER_MULTIPLIER
       );
-
-      const currentPrice = this.prices[this.prices.length - 1]!;
+      const currentPrice = this.prices[this.prices.length - 1];
 
       const isBuy = currentPrice < lowerBand;
       const isSell = currentPrice > upperBand;
 
-      if (!isBuy && !isSell) return;
+      if (!(isBuy || isSell)) return;
 
       const priceUpdateData = await this.pythConnection.getPriceUpdateData([
         CONFIG.PRICE_ID,
         CONFIG.USDC_PRICE_ID,
       ]);
 
-      // Construct trade params
       const trade = {
         trader: this.wallet.address,
-        pairIndex: 1, // Corresponds to pair (ETH-USD)
-        index: 0, // Contract will determine
-        initialPosToken: 0, // Contract will determine
-        positionSizeHoney: ethers.parseEther("10"), // 10 HONEY
+        pairIndex: 1,
+        index: 0,
+        initialPosToken: 0,
+        positionSizeHoney: ethers.parseEther("10"),
         openPrice: currentPrice,
-        buy: isBuy ? true : isSell ? false : true, // true for Long, false for Short,
-        leverage: 10n, // 10x leverage,
-        tp: 0n, // No TP,
-        sl: 0n, // No SL,
+        buy: isBuy,
+        leverage: 10n,
+        tp: 0n,
+        sl: 0n,
       };
 
-      const tradeType = 0; // 0 for MARKET, 1 for LIMIT
-      const slippage = ethers.parseUnits("10", 10); // 10% slippage
+      const tradeType = 0;
+      const slippage = ethers.parseUnits("10", 10);
 
-      let tradeDirection: "buy" | "sell" | undefined;
+      const tradeDirection = isSell && this.lastTrade !== "sell" ? "sell" : isBuy && this.lastTrade !== "buy" ? "buy" : undefined;
 
-      // Determine trade direction
-      if (isSell && this.lastTrade !== "sell") {
-        console.log("Sell signal", { upperBand, lowerBand, currentPrice });
-        tradeDirection = "sell";
-      } else if (isBuy && this.lastTrade !== "buy") {
-        console.log("Buy signal", { upperBand, lowerBand, currentPrice });
-        tradeDirection = "buy";
-      }
-
-      // Execute trade if trade direction is determined
       if (tradeDirection) {
-        try {
-          const tx = await this.tradingContract.openTrade(
-            trade,
-            tradeType,
-            slippage,
-            priceUpdateData,
-            { value: "2" }
-          );
-
-          await tx.wait();
-          this.lastTrade = tradeDirection;
-          console.log(`Placed ${tradeDirection} order:`, tx.hash);
-        } catch (error) {
-          console.error(error);
-        }
+        const tx = await this.tradingContract.openTrade(
+          trade,
+          tradeType,
+          slippage,
+          priceUpdateData,
+          { value: "2" }
+        );
+        await tx.wait();
+        this.lastTrade = tradeDirection;
+        console.log(`Placed ${tradeDirection} order:`, tx.hash);
       }
     } catch (error) {
-      console.error(error);
+      console.error("Trade execution error:", error);
     }
   }
 
