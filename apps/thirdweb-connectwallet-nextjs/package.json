@@ -15,7 +15,7 @@
     "@thirdweb-dev/react": "^4",
     "@thirdweb-dev/sdk": "^4",
     "ethers": "^5",
-    "next": "^13",
+    "next": "^14",
     "react": "^18.2",
     "react-dom": "^18.2"
   },
