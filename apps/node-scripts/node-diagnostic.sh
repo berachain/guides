@@ -93,7 +93,7 @@ fi
 
 # Get node version
 print_header "📊 NODE VERSION"
-BEACOND_VERSION=$($BEACOND_PATH version 2>/dev/null)
+BEACOND_VERSION=$($BEACOND_PATH --home $BEACOND_HOME version 2>/dev/null)
 if [ $? -eq 0 ]; then
     echo -e "${GREEN}🔖 Beacond Version: ${NC}$BEACOND_VERSION"
 else
@@ -101,26 +101,20 @@ else
     echo -e "${YELLOW}⚠️  Is beacond installed? Use --path option to specify the correct path.${NC}"
 fi
 
-# Check number of peers
-print_header "🔗 PEER CONNECTIONS"
-PEERS_COUNT=$(curl -s http://localhost:26657/net_info | grep -o '"n_peers":"[^"]*"' | cut -d'"' -f4)
-if [ -n "$PEERS_COUNT" ]; then
-    if [ "$PEERS_COUNT" -eq 0 ]; then
-        echo -e "${RED}⚠️  Number of peers: $PEERS_COUNT (Node is isolated!)${NC}"
-    elif [ "$PEERS_COUNT" -lt 3 ]; then
-        echo -e "${YELLOW}⚠️  Number of peers: $PEERS_COUNT (Low peer count)${NC}"
-    else
-        echo -e "${GREEN}✅ Number of peers: $PEERS_COUNT${NC}"
-    fi
-else
-    echo -e "${RED}❌ Could not get peer information. Is the node running?${NC}"
-fi
 
 # Check pruning config in app.toml
 print_header "🗑️  PRUNING CONFIGURATION"
 if check_file_exists "$APP_TOML"; then
     echo -e "${BLUE}Pruning settings:${NC}"
-    grep "^pruning = " "$APP_TOML" | sed 's/^/    /'
+    PRUNING_MODE=$(grep "^pruning = " "$APP_TOML" | sed 's/.*= *//' | tr -d '"')
+
+    if [ "$PRUNING_MODE" = "nothing" ]; then
+        echo -e "${RED}⚠️  WARNING: Pruning is set to 'nothing'. This will cause your disk usage to grow excessively!${NC}"
+        echo -e "${YELLOW}   Consider changing to 'default' or 'everything' pruning mode.${NC}"
+    else
+        echo -e "${GREEN}✅ Pruning mode: ${NC}$PRUNING_MODE"
+    fi
+
 else
     echo -e "${RED}❌ Could not check pruning configuration.${NC}"
 fi
@@ -130,6 +124,8 @@ print_header "⏱️  RPC TIMEOUT CONFIGURATION"
 if check_file_exists "$APP_TOML"; then
     RPC_TIMEOUT=$(grep "rpc-timeout" "$APP_TOML" | sed 's/.*= *//')
     if [ -n "$RPC_TIMEOUT" ]; then
+        # Strip quotes from RPC timeout value
+        RPC_TIMEOUT=$(echo "$RPC_TIMEOUT" | tr -d '"')
         # Convert timeout to seconds, handling both s and ms units
         if [[ $RPC_TIMEOUT == *"ms"* ]]; then
             # Convert ms to seconds
@@ -139,7 +135,7 @@ if check_file_exists "$APP_TOML"; then
             TIMEOUT_VALUE=$(echo "$RPC_TIMEOUT" | sed 's/s$//')
         fi
         
-        if (( $(echo "$TIMEOUT_VALUE < 2" | bc -l) )); then
+        if [ "$TIMEOUT_VALUE" -lt 2 ]; then
             echo -e "${RED}❌ RPC timeout value too low: ${NC}$RPC_TIMEOUT (should be at least 2s)"
         else
             echo -e "${GREEN}✅ RPC timeout value: ${NC}$RPC_TIMEOUT"
@@ -181,19 +177,120 @@ if check_file_exists "$CONFIG_TOML"; then
     fi
     
     # Show additional P2P settings
-    echo -e "\n${BLUE}Additional P2P Settings:${NC}"
-    echo -e "${BLUE}Network Settings:${NC}"
-    grep -A 20 "^\[p2p\]" "$CONFIG_TOML" | while IFS= read -r line; do
-        if [[ $line == \[* ]] && [[ $line != "[p2p]" ]]; then
-            break
+    echo -e "\n${BLUE}Additional [p2p] Settings:${NC}"
+    
+    # Initialize variables
+    INBOUND_PEERS=0
+    OUTBOUND_PEERS=0
+    
+    # Read p2p settings directly from config file
+    INBOUND_PEERS=$(grep "^max_num_inbound_peers" "$CONFIG_TOML" | sed 's/.*= *//' | tr -d '[:space:]')
+    OUTBOUND_PEERS=$(grep "^max_num_outbound_peers" "$CONFIG_TOML" | sed 's/.*= *//' | tr -d '[:space:]')
+    
+    # Display the settings
+    if [ -n "$INBOUND_PEERS" ]; then
+        echo -e "    max_num_inbound_peers = $INBOUND_PEERS"
         fi
-        if [[ $line != "[p2p]" ]] && [[ -n $line ]]; then
-            echo "    $line"
+    if [ -n "$OUTBOUND_PEERS" ]; then
+        echo -e "    max_num_outbound_peers = $OUTBOUND_PEERS"
+    fi
+
+    # Convert peer values to integers to ensure proper comparison
+    INBOUND_PEERS=$((INBOUND_PEERS + 0))
+    OUTBOUND_PEERS=$((OUTBOUND_PEERS + 0))
+    TOTAL_PEERS=$((INBOUND_PEERS + OUTBOUND_PEERS))
+
+    if [[ $TOTAL_PEERS -gt 100 ]]; then
+        echo -e "    ${RED}❌ Total peer connections ($TOTAL_PEERS) exceeds maximum of 100${NC}"
+        echo -e "    ${YELLOW}   Recommended: max_num_inbound_peers = 40, max_num_outbound_peers = 10${NC}"
+    elif [[ $INBOUND_PEERS -gt 40 ]] || [[ $OUTBOUND_PEERS -gt 80 ]]; then
+        echo -e "    ${YELLOW}⚠️  Peer connection limits need adjustment${NC}"
+        if [[ $INBOUND_PEERS -gt 40 ]]; then
+            echo -e "    ${YELLOW}   Inbound peers ($INBOUND_PEERS) exceeds recommended maximum of 40${NC}"
         fi
-    done
+        if [[ $OUTBOUND_PEERS -gt 80 ]]; then
+            echo -e "    ${YELLOW}   Outbound peers ($OUTBOUND_PEERS) exceeds recommended maximum of 80${NC}"
+        fi
+        echo -e "    ${YELLOW}   Recommended: max_num_inbound_peers = 40, max_num_outbound_peers = 10${NC}"
+    elif [[ $TOTAL_PEERS -lt 50 ]]; then
+        echo -e "    ${GREEN}✅ Total peer connections ($TOTAL_PEERS) within recommended range (under 50)${NC}"
+        echo -e "    ${YELLOW}   Recommended: max_num_inbound_peers = 40, max_num_outbound_peers = 10${NC}"
+    else
+        echo -e "    ${YELLOW}⚠️  Total peer connections ($TOTAL_PEERS) above recommended range (50)${NC}"
+        echo -e "    ${YELLOW}   Recommended: max_num_inbound_peers = 40, max_num_outbound_peers = 10${NC}"
+        fi
 else
     echo -e "${RED}❌ Could not check peers configuration.${NC}"
 fi
+
+# Check network settings
+print_header "🌐 NETWORK SETTINGS"
+
+# Check if external_address is set
+EXTERNAL_ADDRESS=$(grep "^external_address" "$CONFIG_TOML" | sed 's/.*= *//' | tr -d '"')
+if [ -n "$EXTERNAL_ADDRESS" ]; then
+    echo -e "${GREEN}✅ External address: ${NC}$EXTERNAL_ADDRESS"
+else
+    echo -e "${YELLOW}⚠️  External address: ${NC}Not configured"
+    echo -e "${YELLOW}   Consider setting external_address in config.toml for better connectivity${NC}"
+fi
+
+# Check addr_book_strict setting
+ADDR_BOOK_STRICT=$(grep "^addr_book_strict" "$CONFIG_TOML" | sed 's/.*= *//' | tr -d '[:space:]')
+if [ "$ADDR_BOOK_STRICT" = "false" ]; then
+    echo -e "${YELLOW}⚠️  addr_book_strict: ${NC}$ADDR_BOOK_STRICT (allows non-routable IPs)"
+else
+    echo -e "${GREEN}✅ addr_book_strict: ${NC}$ADDR_BOOK_STRICT"
+fi
+
+# Check unconditional_peer_ids
+UNCONDITIONAL_PEER_IDS=$(grep "^unconditional_peer_ids" "$CONFIG_TOML" | sed 's/.*= *//' | tr -d '"')
+if [ -n "$UNCONDITIONAL_PEER_IDS" ] && [ "$UNCONDITIONAL_PEER_IDS" != "\"\"" ]; then
+    UNCONDITIONAL_COUNT=$(echo "$UNCONDITIONAL_PEER_IDS" | tr ',' '\n' | wc -l)
+    echo -e "${GREEN}✅ Unconditional peer IDs: ${NC}$UNCONDITIONAL_COUNT configured"
+else
+    echo -e "${BLUE}ℹ️  Unconditional peer IDs: ${NC}None configured"
+fi
+
+# Check seed mode
+SEED_MODE=$(grep "^seed_mode" "$CONFIG_TOML" | sed 's/.*= *//' | tr -d '[:space:]')
+if [ "$SEED_MODE" = "true" ]; then
+    echo -e "${BLUE}ℹ️  Seed mode: ${NC}Enabled (node is operating as a seed node)"
+else
+    echo -e "${BLUE}ℹ️  Seed mode: ${NC}Disabled"
+fi
+
+# Check pex setting
+PEX=$(grep "^pex" "$CONFIG_TOML" | sed 's/.*= *//' | tr -d '[:space:]')
+if [ "$PEX" = "false" ]; then
+    echo -e "${YELLOW}⚠️  PEX (Peer Exchange): ${NC}Disabled (limits peer discovery)"
+else
+    echo -e "${GREEN}✅ PEX (Peer Exchange): ${NC}Enabled"
+fi
+
+RPC_URL=$(grep "^laddr =" "$CONFIG_TOML" | head -n1 | sed 's/.*= *//' | tr -d '"')
+RPC_URL=$(echo "$RPC_URL" | sed 's|^tcp://|http://|')
+if ! echo "$RPC_URL" | grep -q "127.0.0.1\|localhost"; then
+    echo -e "${YELLOW}⚠️  Warning: RPC endpoint ($RPC_URL) is not using 127.0.0.1 or localhost.${NC}"
+    echo -e "${YELLOW}   This may expose your RPC to external connections.${NC}"
+fi
+
+
+# Check number of peers
+print_header "🔗 PEER CONNECTIONS"
+PEERS_COUNT=$(curl -s $RPC_URL/net_info | grep -o '"n_peers":"[^"]*"' | cut -d'"' -f4)
+if [ -n "$PEERS_COUNT" ]; then
+    if [ "$PEERS_COUNT" -eq 0 ]; then
+        echo -e "${RED}⚠️  Number of peers: $PEERS_COUNT (Node is isolated!)${NC}"
+    elif [ "$PEERS_COUNT" -lt 3 ]; then
+        echo -e "${YELLOW}⚠️  Number of peers: $PEERS_COUNT (Low peer count)${NC}"
+    else
+        echo -e "${GREEN}✅ Number of peers: $PEERS_COUNT${NC}"
+    fi
+else
+    echo -e "${RED}❌ Could not get peer information. Is the node running?${NC}"
+fi
+
 
 # Check disk usage
 print_header "💾 DISK USAGE"
@@ -254,7 +351,8 @@ fi
 
 
 # Display current block height information
-NODE_STATUS=$($BEACOND_PATH status 2>/dev/null)
+print_header "🔍 CURRENT BLOCK INFORMATION"
+NODE_STATUS=$(curl -s $RPC_URL/status | jq .result)
 if [ $? -eq 0 ]; then
     LATEST_BLOCK_HEIGHT=$(echo "$NODE_STATUS" | grep latest_block_height | sed 's/.*: *//' | tr -d '",')
     CATCHING_UP=$(echo "$NODE_STATUS" | grep catching_up | sed 's/.*: *//' | tr -d '",')
@@ -282,6 +380,8 @@ if command -v free &> /dev/null; then
         echo -e "    ${RED}⚠️  CRITICAL: Memory usage at ${MEM_USED_PCT}%${NC}"
     elif [ $(echo "$MEM_USED_PCT > 80" | bc -l) -eq 1 ]; then
         echo -e "    ${YELLOW}⚠️  WARNING: Memory usage at ${MEM_USED_PCT}%${NC}"
+    else
+        echo -e "    ${GREEN}✅ Memory usage at ${MEM_USED_PCT}%${NC}"
     fi
 else
     echo -e "${RED}❌ Could not check memory usage (free command not available)${NC}"
