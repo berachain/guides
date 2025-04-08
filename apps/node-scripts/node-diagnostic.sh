@@ -81,7 +81,6 @@ APP_TOML="$CONFIG_DIR/app.toml"
 echo -e "${CYAN}=================================================================${NC}"
 echo -e "${CYAN}🛰️  BEACOND NODE DIAGNOSTIC TOOL 🛰️${NC}"
 echo -e "${CYAN}=================================================================${NC}"
-echo -e "${YELLOW}⏳ Running diagnostics... Please wait...${NC}"
 echo -e "${BLUE}Using beacond path: ${NC}$BEACOND_PATH"
 echo -e "${BLUE}Using beacond home: ${NC}$BEACOND_HOME\n"
 
@@ -253,12 +252,6 @@ else
     echo -e "${RED}❌ Could not check pprof configuration.${NC}"
 fi
 
-# Display summary
-print_header "📋 SUMMARY REPORT"
-echo -e "${GREEN}✅ Node diagnostic completed!${NC}"
-echo
-echo -e "${YELLOW}⚙️  If you need more detailed diagnostics, consider:${NC}"
-echo -e "   - Checking the node logs${NC}"
 
 # Display current block height information
 NODE_STATUS=$($BEACOND_PATH status 2>/dev/null)
@@ -277,10 +270,6 @@ else
     echo -e "\n${YELLOW}⚠️  Could not get current block information${NC}"
 fi
 echo
-
-echo -e "${CYAN}=================================================================${NC}"
-echo -e "${CYAN}🛰️  DIAGNOSTIC COMPLETE 🛰️${NC}"
-echo -e "${CYAN}=================================================================${NC}"
 
 print_header "💻 SYSTEM RESOURCES"
 # Check Memory Usage
