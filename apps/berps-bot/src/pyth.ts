@@ -13,7 +13,7 @@ export class PythConnection {
   async getHistoricalPriceFeeds(
     priceId: string,
     intervalSeconds: number,
-    periods: number
+    periods: number,
   ): Promise<number[]> {
     const endTime = Math.floor(Date.now() / 1000 - 5);
     const startTime = endTime - (periods + 1) * intervalSeconds;
@@ -26,7 +26,7 @@ export class PythConnection {
     ) {
       const priceFeed = await this.connection.getPriceFeed(
         priceId,
-        publishTime
+        publishTime,
       );
       prices.push(this.normalizeToTenDec(priceFeed));
     }
@@ -35,15 +35,14 @@ export class PythConnection {
 
   async subscribePriceFeedUpdates(
     priceIds: string[],
-    callback: (priceFeed: PriceFeed) => void
+    callback: (priceFeed: PriceFeed) => void,
   ): Promise<void> {
     await this.connection.subscribePriceFeedUpdates(priceIds, callback);
   }
 
   async getPriceUpdateData(priceIds: string[]): Promise<string[]> {
-    const priceUpdates = await this.connection.getPriceFeedsUpdateData(
-      priceIds
-    );
+    const priceUpdates =
+      await this.connection.getPriceFeedsUpdateData(priceIds);
 
     return priceUpdates;
   }
