@@ -17,6 +17,7 @@
     "dev": "turbo dev",
     "lint": "turbo lint",
     "format": "prettier --write \"**/*.{ts,tsx,md}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,md}\"",
     "with-env": "dotenv -e ./.env --",
     "deploy:berachain": "pnpm with-env turbo run deploy:berachain",
     "verify": "pnpm with-env turbo run verify",
@@ -27,6 +28,7 @@
     "@repo/eslint-config": "workspace:*",
     "@repo/typescript-config": "workspace:*",
     "prettier": "^3.1.0",
+    "prettier-plugin-solidity": "^1.4.2",
     "turbo": "latest"
   },
   "packageManager": "pnpm@9.0.4",

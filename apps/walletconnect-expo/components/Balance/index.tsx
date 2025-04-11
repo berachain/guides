@@ -9,30 +9,24 @@ export default function Balance() {
   // Hooks
   const { isConnected, address } = useAccount();
   const { data, isError, isLoading } = useBalance({
-    address
+    address,
   });
 
   // Return
   /**
    * If still loading, show a loading state
    */
-  if (isLoading)
-    return <Text className="Text">Fetching balance...</Text>;
-
+  if (isLoading) return <Text className="Text">Fetching balance...</Text>;
 
   /**
    * Show error if having a problem fetching the balance
    */
-  if (isError)
-    return (
-      <Text className="mText">Error fetching balance</Text>
-    );
+  if (isError) return <Text className="mText">Error fetching balance</Text>;
 
   /**
    * If not connected don't show anything
    */
   if (!isConnected) return null;
-
 
   /**
    * Successfully connected
@@ -40,7 +34,12 @@ export default function Balance() {
   return (
     <View className="Balance">
       <Text className="Text">Balance</Text>
-      <Text className="Code">{(parseInt((data?.value ?? '').toString()) / 1000000000000000000).toFixed(2)} $BERA</Text>
+      <Text className="Code">
+        {(
+          parseInt((data?.value ?? "").toString()) / 1000000000000000000
+        ).toFixed(2)}{" "}
+        $BERA
+      </Text>
     </View>
   );
 }

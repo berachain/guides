@@ -13,7 +13,8 @@ import { WagmiConfig } from "wagmi";
 // 1. Get projectId at https://cloud.walletconnect.com
 const projectId = `${process.env.EXPO_PUBLIC_WALLET_CONNECT_PROJECT_ID}`;
 
-if (!projectId) throw Error('Error: Missing `EXPO_PUBLIC_WALLET_CONNECT_PROJECT_ID`.');
+if (!projectId)
+  throw Error("Error: Missing `EXPO_PUBLIC_WALLET_CONNECT_PROJECT_ID`.");
 
 // 2. Create config for our app - defined by our env vars
 const metadata = {
@@ -32,28 +33,30 @@ const metadata = {
  * @dev Custom chain configuration
  */
 const chainConfiguration = defineChain({
-	id: parseInt(`${process.env.EXPO_PUBLIC_CHAIN_ID}`),
-	name:`${process.env.EXPO_PUBLIC_CHAIN_NAME}`,
-	network: `${process.env.EXPO_PUBLIC_CHAIN_NETWORK}`,
-	nativeCurrency: {
-		decimals: parseInt(`${process.env.EXPO_PUBLIC_CHAIN_NATIVECURRENCY_DECIMALS}`),
-		name: `${process.env.EXPO_PUBLIC_CHAIN_NATIVECURRENCY_NAME}`,
-		symbol:`${process.env.EXPO_PUBLIC_CHAIN_NATIVECURRENCY_SYMBOL}`,
-	},
-	rpcUrls: {
-		default: {
-			http: [`${process.env.EXPO_PUBLIC_CHAIN_RPC_URL}`],
-		},
-		public: {
-			http: [`${process.env.EXPO_PUBLIC_CHAIN_RPC_URL}`],
-		},
-	},
-	blockExplorers: {
-		default: { 
-      name: `${process.env.EXPO_PUBLIC_CHAIN_BLOCKEXPLORER_NAME}`,
-      url: `${process.env.EXPO_PUBLIC_CHAIN_BLOCKEXPLORER_URL}` 
+  id: parseInt(`${process.env.EXPO_PUBLIC_CHAIN_ID}`),
+  name: `${process.env.EXPO_PUBLIC_CHAIN_NAME}`,
+  network: `${process.env.EXPO_PUBLIC_CHAIN_NETWORK}`,
+  nativeCurrency: {
+    decimals: parseInt(
+      `${process.env.EXPO_PUBLIC_CHAIN_NATIVECURRENCY_DECIMALS}`,
+    ),
+    name: `${process.env.EXPO_PUBLIC_CHAIN_NATIVECURRENCY_NAME}`,
+    symbol: `${process.env.EXPO_PUBLIC_CHAIN_NATIVECURRENCY_SYMBOL}`,
+  },
+  rpcUrls: {
+    default: {
+      http: [`${process.env.EXPO_PUBLIC_CHAIN_RPC_URL}`],
     },
-	},
+    public: {
+      http: [`${process.env.EXPO_PUBLIC_CHAIN_RPC_URL}`],
+    },
+  },
+  blockExplorers: {
+    default: {
+      name: `${process.env.EXPO_PUBLIC_CHAIN_BLOCKEXPLORER_NAME}`,
+      url: `${process.env.EXPO_PUBLIC_CHAIN_BLOCKEXPLORER_URL}`,
+    },
+  },
 });
 
 /**
@@ -62,7 +65,7 @@ const chainConfiguration = defineChain({
 const chains = [chainConfiguration];
 
 /**
- * 
+ *
  */
 const wagmiConfig = defaultWagmiConfig({ chains, projectId, metadata });
 
@@ -76,5 +79,5 @@ createWeb3Modal({
 // Provider
 // ========================================================
 export default function Wagmi({ children }: { children: React.ReactNode }) {
-  return <WagmiConfig config={wagmiConfig}>{children}</WagmiConfig>
-};
+  return <WagmiConfig config={wagmiConfig}>{children}</WagmiConfig>;
+}

@@ -34,7 +34,7 @@ This is currently configured to run BeaconKit as a consensus client and Reth as 
 ./start.sh;
 
 # Give a second to start building blocks
-sleep 2; 
+sleep 2;
 
 # Test all execution clients to ensure communicating with each other and blocks are building
 ./test.sh;
@@ -112,14 +112,14 @@ docker logs $CL_MONIKER-rpc-0 -f | grep deposit;
 # 0 - Retrieving Validator Pubkey & Verifying Not A Validator...
 # ...
 # 2 - Preparing Registration Deposit Transaction...
-# 
-# Send this command to register the validator: 
-# 
+#
+# Send this command to register the validator:
+#
 # cast send 0x4242424242424242424242424242424242424242... <---- FIRST CAST COMMAND
 #
 # 3 - Preparing Activation Deposit Transaction...
 #
-# Send this command to activate the validator: 
+# Send this command to activate the validator:
 #
 # cast send 0x4242424242424242424242424242424242424242... <---- SECOND CAST COMMAND
 ```
@@ -128,7 +128,7 @@ docker logs $CL_MONIKER-rpc-0 -f | grep deposit;
 
 Copy the first `cast` command and run it:
 
-> **NOTE:** If you get an error message, please see the [IDepositContract.sol](https://github.com/berachain/beacon-kit/blob/81f64a569669fea9d88ea6107e52dd1bd6d93da7/contracts/src/staking/IDepositContract.sol#L11) for all error signatures. 
+> **NOTE:** If you get an error message, please see the [IDepositContract.sol](https://github.com/berachain/beacon-kit/blob/81f64a569669fea9d88ea6107e52dd1bd6d93da7/contracts/src/staking/IDepositContract.sol#L11) for all error signatures.
 
 **Terminal 2:**
 
@@ -141,7 +141,7 @@ cast send 0x4242424242424242424242424242424242424242 'deposit(bytes,bytes,bytes,
 # [Expected Similar Result]:
 # blockHash            0x55aa03b82660f6683c61dba0b15158bd880150f3a186c9122bd1d916f5295472
 # blockNumber          285
-# contractAddress      
+# contractAddress
 # ...
 ```
 
@@ -151,7 +151,7 @@ Immediately you should see the deposit made in **Terminal 1**:
 
 ```bash
 # ✅ [Example Successful Deposit]:
-# 
+#
 # 2025-04-11T09:49:27Z INFO Found deposits on execution layer service=blockchain block=0x14 deposits=1
 # 2025-04-11T09:49:29Z INFO Processed deposit to set Eth 1 deposit index service=state-processor previous=3 new=4
 # 2025-04-11T09:49:29Z INFO Validator does not exist so creating service=state-processor pubkey=0xaef436c629e02ebc812a7526fb6a66c17b6a2344efc5aeaaa633b15bded1370fbebe4a9aef6071e2d6f9ee3cb985965f index=0x3 deposit_amount=0x9184e72a000
@@ -243,7 +243,7 @@ cast send 0x4242424242424242424242424242424242424242 'deposit(bytes,bytes,bytes,
 # [Expected Similar Result]:
 # blockHash            0xad08fe68248dae40c72e9d517b90d22e262601549f28cdc5858c61e54f147a75
 # blockNumber          140
-# contractAddress      
+# contractAddress
 # ...
 ```
 
@@ -302,4 +302,3 @@ curl -s http://localhost:3500/eth/v1/beacon/states/head/validators | jq ".data[]
 #   }
 # }
 ```
-
