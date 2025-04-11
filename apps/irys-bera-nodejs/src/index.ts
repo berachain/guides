@@ -1,4 +1,3 @@
-
 // Imports
 // ========================================================
 import { config } from "dotenv";
@@ -29,22 +28,30 @@ const main = async () => {
   console.log({ fileSize });
 
   // Configure Irys Uploader
-  const irysUploader = await Uploader(Bera).withWallet(process.env.WALLET_PRIVATE_KEY);
- 
+  const irysUploader = await Uploader(Bera).withWallet(
+    process.env.WALLET_PRIVATE_KEY,
+  );
+
   // Get price for file
-  const cost = (await irysUploader.getPrice(fileSize)).toNumber() / 1000000000000000000;
+  const cost =
+    (await irysUploader.getPrice(fileSize)).toNumber() / 1000000000000000000;
   const costWithBuffer = cost + Number(`${process.env.IRYS_BUFFER}`);
   console.log({ cost: `${cost} $BERA` });
   console.log({ costWithBuffer: `${costWithBuffer} $BERA` });
 
   // Get balance
-  const balance = (await irysUploader.getBalance()).toNumber() / 1000000000000000000;
+  const balance =
+    (await irysUploader.getBalance()).toNumber() / 1000000000000000000;
   console.log({ balance: `${balance} $BERA` });
 
   if (balance < costWithBuffer) {
     console.log(`Not enough balance, funding ${costWithBuffer} $BERA...`);
-    const fundTx = await irysUploader.fund(irysUploader.utils.toAtomic(costWithBuffer));
-    console.log(`Successfully funded '${irysUploader.utils.fromAtomic(fundTx.quantity)}' $${irysUploader.token.toUpperCase()}`);
+    const fundTx = await irysUploader.fund(
+      irysUploader.utils.toAtomic(costWithBuffer),
+    );
+    console.log(
+      `Successfully funded '${irysUploader.utils.fromAtomic(fundTx.quantity)}' $${irysUploader.token.toUpperCase()}`,
+    );
   }
 
   // Upload file

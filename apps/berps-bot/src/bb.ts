@@ -1,7 +1,7 @@
 export function calculateBollingerBands(
   prices: number[],
   period: number,
-  multiplier: number
+  multiplier: number,
 ) {
   const sma = calculateSMA(prices, period);
   const stdDev = calculateStdDev(prices, period);
