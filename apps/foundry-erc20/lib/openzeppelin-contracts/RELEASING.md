@@ -38,7 +38,7 @@ A release branch can be updated with cherry-picked patches from `master`, or may
     checkout release-vX.Y
     cherry-pick id: "Patch B" tag: ""
     commit id: "Release vX.Y.1"
-    
+
     checkout master
     merge release-vX.Y
     commit id: "Feature E"

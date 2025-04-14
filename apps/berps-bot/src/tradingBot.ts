@@ -23,7 +23,7 @@ export class TradingBot {
     this.tradingContract = new ethers.Contract(
       CONFIG.ENTRYPOINT_CONTRACT_ADDRESS,
       EntrypointABI,
-      this.wallet
+      this.wallet,
     );
     this.honeyContract = new ethers.Contract(HONEY, Erc20ABI, this.wallet);
   }
@@ -34,14 +34,14 @@ export class TradingBot {
     const ordersContract = await this.tradingContract.orders();
     const allowance = await this.honeyContract.allowance(
       this.wallet.address,
-      ordersContract
+      ordersContract,
     );
 
     if (allowance < ethers.parseEther("99999999999")) {
       console.log("Approving honey allowance");
       const tx = await this.honeyContract.approve(
         ordersContract,
-        ethers.MaxUint256
+        ethers.MaxUint256,
       );
       await tx.wait();
     }
@@ -50,7 +50,7 @@ export class TradingBot {
       await this.pythConnection.getHistoricalPriceFeeds(
         CONFIG.PRICE_ID,
         CONFIG.DATA_INTERVAL,
-        CONFIG.BOLLINGER_PERIOD
+        CONFIG.BOLLINGER_PERIOD,
       );
     this.prices = historicalPriceFeeds;
 
@@ -63,16 +63,16 @@ export class TradingBot {
         console.log(
           `${new Date().toISOString()}: Checking for trade at price: $${(
             price * Math.pow(10, -10)
-          ).toFixed(4)}`
+          ).toFixed(4)}`,
         );
       },
       CONFIG.DATA_INTERVAL * 1000,
-      { leading: true }
+      { leading: true },
     );
 
     await this.pythConnection.subscribePriceFeedUpdates(
       [CONFIG.PRICE_ID],
-      throttledPriceCheck
+      throttledPriceCheck,
     );
   }
 
@@ -91,7 +91,7 @@ export class TradingBot {
       const { upperBand, lowerBand } = calculateBollingerBands(
         this.prices,
         CONFIG.BOLLINGER_PERIOD,
-        CONFIG.BOLLINGER_MULTIPLIER
+        CONFIG.BOLLINGER_MULTIPLIER,
       );
       const currentPrice = this.prices[this.prices.length - 1];
 
@@ -121,7 +121,12 @@ export class TradingBot {
       const tradeType = 0;
       const slippage = ethers.parseUnits("10", 10);
 
-      const tradeDirection = isSell && this.lastTrade !== "sell" ? "sell" : isBuy && this.lastTrade !== "buy" ? "buy" : undefined;
+      const tradeDirection =
+        isSell && this.lastTrade !== "sell"
+          ? "sell"
+          : isBuy && this.lastTrade !== "buy"
+            ? "buy"
+            : undefined;
 
       if (tradeDirection) {
         const tx = await this.tradingContract.openTrade(
@@ -129,7 +134,7 @@ export class TradingBot {
           tradeType,
           slippage,
           priceUpdateData,
-          { value: "2" }
+          { value: "2" },
         );
         await tx.wait();
         this.lastTrade = tradeDirection;

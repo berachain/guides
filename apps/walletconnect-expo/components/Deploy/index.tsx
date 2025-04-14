@@ -19,8 +19,10 @@ const CONTRACT_BYTECODE =
 export default function Deploy() {
   // Hooks
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [transactionHash, setTransactionHash] = useState<`0x${string}` | undefined>();
+  const [error, setError] = useState("");
+  const [transactionHash, setTransactionHash] = useState<
+    `0x${string}` | undefined
+  >();
   const { isConnected, address, connector } = useAccount();
 
   // Functions
@@ -28,15 +30,15 @@ export default function Deploy() {
    * @dev hook that waits for a transaction hash
    */
   const txResult = useWaitForTransaction({
-    hash: transactionHash
+    hash: transactionHash,
   });
 
   /**
    * @dev handles deploying the contract
    */
   const onPressDeployContract = async () => {
-    console.group('onPressDeployContract');
-    setError('');
+    console.group("onPressDeployContract");
+    setError("");
     setIsLoading(true);
     try {
       const provider = await connector?.getProvider(); // get's the provider from wagmi directly - needed for the walletconnection
@@ -47,7 +49,7 @@ export default function Deploy() {
       // encodes the function name and the input of `Hello World!`
       const encodedData = encodeAbiParameters(
         [{ name: "_greeting", type: "string" }],
-        ["Hello World!"]
+        ["Hello World!"],
       );
 
       // Need slide(2) to remove 0x from encodedData at the beginning
@@ -69,7 +71,7 @@ export default function Deploy() {
       setTransactionHash(tx);
     } catch (error: unknown) {
       console.error(error);
-      setError('Error could not deploy contract.')
+      setError("Error could not deploy contract.");
     }
     setIsLoading(false);
 
@@ -80,7 +82,9 @@ export default function Deploy() {
    * @dev function that handles opening url to the final transaction hash in a block explorer
    */
   const onPressSeeTransaction = () => {
-    openURL(`${process.env.EXPO_PUBLIC_CHAIN_BLOCKEXPLORER_URL}/tx/${txResult?.data?.transactionHash}`);
+    openURL(
+      `${process.env.EXPO_PUBLIC_CHAIN_BLOCKEXPLORER_URL}/tx/${txResult?.data?.transactionHash}`,
+    );
   };
 
   /**
@@ -94,23 +98,20 @@ export default function Deploy() {
       <Pressable
         disabled={isLoading}
         className={"Button"}
-        onPress={onPressDeployContract}>
-        <Text className="text-white text-base">
-          Deploy
-        </Text>
+        onPress={onPressDeployContract}
+      >
+        <Text className="text-white text-base">Deploy</Text>
       </Pressable>
 
       {isLoading && <Text className="Code">Loading...</Text>}
 
-      {!isLoading && txResult?.data?.transactionHash
-        ? <Pressable
-          className="Button"
-          onPress={onPressSeeTransaction}>
+      {!isLoading && txResult?.data?.transactionHash ? (
+        <Pressable className="Button" onPress={onPressSeeTransaction}>
           <Text className="text-white text-base">
             See Successful Transaction
           </Text>
         </Pressable>
-        : null}
+      ) : null}
       {error ? <Text className="TextError">{error}</Text> : null}
     </View>
   );
