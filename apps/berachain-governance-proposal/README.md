@@ -5,11 +5,13 @@ This project is a script to create, manage, and execute governance proposals for
 ## Setup and Initial Configuration
 
 1. Clone the repository and install dependencies:
+
    ```bash
    npm install
    ```
 
 2. Create a `.env` file in the project root with the following content:
+
    ```
    RPC=https://bartio.rpc.berachain.com/
    PRIVATE_KEY=your_private_key_here
@@ -26,44 +28,58 @@ This project is a script to create, manage, and execute governance proposals for
 ## Step-by-Step Guide
 
 ### 1. Create Rewards Vault
+
 Run:
+
 ```bash
 node governance.js --create-vault
 ```
+
 This will create or retrieve your Rewards Vault.
 
 ### 2. Create Governance Proposal
+
 Run:
+
 ```bash
 node governance.js --create-proposal
 ```
+
 This creates a new governance proposal to whitelist your Rewards Vault.
 
 After running this command, update your `.env` file with the new `PROPOSAL_ID`:
+
 ```
 PROPOSAL_ID=your_new_proposal_id
 ```
 
 ### 3. Monitor Proposal Progress
+
 Use this command to check the current state of your proposal:
+
 ```bash
 node governance.js --check-state
 ```
 
 The proposal goes through the following stages:
+
 - Pending: 3 hours
 - Active (Voting): 3 hours
 - Queued: 3 hours
 - Ready for Execution
 
 ### 4. Vote on the Proposal
+
 Once the proposal is in the Active state, cast your vote:
+
 ```bash
 node governance.js --vote
 ```
 
 ### 5. Execute the Proposal
+
 After the queuing period, execute the proposal:
+
 ```bash
 node governance.js --execute
 ```
@@ -71,7 +87,9 @@ node governance.js --execute
 ## Additional Commands
 
 ### Cancel a Proposal
+
 If needed, you can cancel a proposal in the Pending state:
+
 ```bash
 node governance.js --cancel
 ```
@@ -83,4 +101,4 @@ node governance.js --cancel
 - Use the `--check-state` command frequently to monitor your proposal's progress.
 - Ensure you have sufficient BGT tokens and voting power before creating a proposal(1000 to create a proposal, 2B to get a vote through).
 
-For any issues or questions, please refer to the Governance tutorial or the Berachain team on discord. 
+For any issues or questions, please refer to the Governance tutorial or the Berachain team on discord.

@@ -1,0 +1,4 @@
+tmp/*/*
+!tmp/beacond
+!tmp/reth
+.DS_Store

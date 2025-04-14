@@ -28,7 +28,7 @@ export function handleTransfer(event: Transfer): void {
   updateTokenBalance(
     token,
     fromAccount,
-    BigInt.fromI32(0).minus(event.params.value)
+    BigInt.fromI32(0).minus(event.params.value),
   );
 
   // Setting the token balance of the 'to' account
