@@ -14,7 +14,7 @@ const func: DeployFunction = async (hre: HardhatRuntimeEnvironment) => {
 
   if (!isHardhat) {
     console.log(
-      `\nDeploying SimpleVRFContract to ${hre.network.name}. Hit ctrl + c to abort`
+      `\nDeploying SimpleVRFContract to ${hre.network.name}. Hit ctrl + c to abort`,
     );
   }
 

@@ -72,8 +72,8 @@ Update the `ENTROPY_NFT_ADDRESS` in the `.env` file with your deployed contract 
 
 Run the `app/requestMint.js` script to:
 
-1) Request a random number from Pyth; and
-2) Poll the NFT contract events for when Pyth executes the minting callback (expected to happen in a few blocks)
+1. Request a random number from Pyth; and
+2. Poll the NFT contract events for when Pyth executes the minting callback (expected to happen in a few blocks)
 
 ```bash
 # FROM: ./pyth-entropy
