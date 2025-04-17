@@ -1,7 +1,8 @@
+#!/opt/homebrew/bin/node
 
 const el_node_type = 'reth' || 'geth';
-const snapshot_type = "bera-snapshot";
-const geography = "na";      // EU, North America, Asia
+const snapshot_type = "bera-testnet-snapshot" || "bera-snapshot";
+const geography = "na" || 'eu' || 'as'; // North America, EU, Asia
 
 const https = require('https');
 const path = require('path');
