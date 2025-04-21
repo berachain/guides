@@ -461,6 +461,43 @@ else
     fi
 fi
 
+# check to ensure that the right seeds are in place based on the chain ID
+# Check for correct seeds based on chain ID
+if [ -f "$CONFIG_TOML" ]; then
+    echo -e "\n${GREEN}🌱 Checking Seeds Configuration:${NC}"
+    
+    # Check if the seeds contain the required seed
+    if [ "$CHAIN_ID_DEC" = "80069" ]; then 
+        # Fetch the expected seeds configuration from GitHub
+        EXPECTED_SEEDS=$(curl -s https://raw.githubusercontent.com/berachain/beacon-kit/main/testing/networks/80069/config.toml | grep "^seeds =" | tr -d ' ')
+        CURRENT_SEEDS=$(grep "^seeds =" "$CONFIG_TOML" 2>/dev/null | tr -d ' ')
+        
+        if [ -n "$CURRENT_SEEDS" ] && [ "$CURRENT_SEEDS" = "$EXPECTED_SEEDS" ]; then
+            echo -e "${GREEN}✅ Correct seeds configuration found for Berachain (Chain ID: 80069)${NC}"
+        else
+            echo -e "${RED}❌ Seeds configuration for Berachain (Chain ID: 80069) is missing or incorrect${NC}"
+            echo -e "${YELLOW}   Expected: $EXPECTED_SEEDS${NC}"
+            echo -e "${YELLOW}   Current: $CURRENT_SEEDS${NC}"
+            echo -e "${YELLOW}   Please update the seeds in $CONFIG_TOML file to match exactly with the configuration from GitHub${NC}"
+        fi
+    elif [ "$CHAIN_ID_DEC" = "80094" ]; then
+        # Fetch the expected seeds configuration from GitHub
+        EXPECTED_SEEDS=$(curl -s https://raw.githubusercontent.com/berachain/beacon-kit/main/testing/networks/80094/config.toml | grep "^seeds =" | tr -d ' ')
+        CURRENT_SEEDS=$(grep "^seeds =" "$CONFIG_TOML" 2>/dev/null | tr -d ' ')
+        
+        if [ -n "$CURRENT_SEEDS" ] && [ "$CURRENT_SEEDS" = "$EXPECTED_SEEDS" ]; then
+            echo -e "${GREEN}✅ Correct seeds configuration found for Berachain (Chain ID: 80094)${NC}"
+        else
+            echo -e "${RED}❌ Seeds configuration for Berachain (Chain ID: 80094) is missing or incorrect${NC}"
+            echo -e "${YELLOW}   Expected: $EXPECTED_SEEDS${NC}"
+            echo -e "${YELLOW}   Current: $CURRENT_SEEDS${NC}"
+            echo -e "${YELLOW}   Please update the seeds in $CONFIG_TOML file to match exactly with the configuration from GitHub${NC}"
+        fi
+    fi
+else
+    echo -e "${RED}❌ Config file not found at $CONFIG_TOML${NC}"
+fi
+
 # Display current block height information
 NODE_STATUS=$(curl -s $RPC_URL/status | jq .result)
 if [ $? -eq 0 ]; then
