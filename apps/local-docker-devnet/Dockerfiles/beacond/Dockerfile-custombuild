@@ -12,9 +12,10 @@ RUN ARCH=$(uname -m) && \
 
 COPY ${CUSTOM_BIN_BEACOND} /tmp/beacond-custom
 
-RUN echo "Using custom beacond binary from /tmp/beacond-custom"; \
+RUN apt-get update && apt-get install -y curl wget;
+
+RUN echo "Using custom beacond binary ${CUSTOM_BIN_BEACOND}"; \
     cp /tmp/beacond-custom ./beacond; \
-    chmod +x beacond; \
-    echo "Custom beacond version:"; \
+    chmod +x beacond;  \
     ./beacond version; \
-    sleep 6;
+    sleep 3;
