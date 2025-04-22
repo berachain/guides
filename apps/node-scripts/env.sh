@@ -73,8 +73,8 @@ else
 fi
 
 if command >/dev/null -v $RETH_BIN; then
-    export RETH_DATA=$(pwd)/var/reth
-    export RETH_GENESIS_PATH=$RETH_DATA/genesis.json
+    export RETH_DATA=$(pwd)/var/reth/data
+    export RETH_GENESIS_PATH=$(pwd)/var/reth/genesis.json
 fi  
 
 if command >/dev/null -v $GETH_BIN; then
