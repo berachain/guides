@@ -15,6 +15,6 @@ RUN BEACOND_RELEASE_URL=$(curl -s https://api.github.com/repos/berachain/beacon-
     wget $BEACOND_RELEASE_URL; \
     tar -xzf beacond-*.tar.gz; \
     mv beacond-v*-linux-*64 beacond; \
-    echo "Beacond version:"; \
+    chmod +x beacond;  \
     ./beacond version; \
-    sleep 5;
+    sleep 3;
