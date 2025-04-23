@@ -67,6 +67,9 @@ docker run --rm -v $TMP_BEACOND_DIR/config-genesis:/root/.beacond $DOCKER_IMAGE_
 docker run --rm -v $TMP_BEACOND_DIR/config-genesis:/root/.beacond $DOCKER_IMAGE_BEACOND /bin/bash \
   -c "./beacond genesis execution-payload /root/.beacond/eth-genesis.json";
 
+# workaround
+sed -i '' 's/"timestamp": "0x0"/"timestamp": "0x67B5F01F"/' tmp/beacond/config-genesis/config/genesis.json
+
 # Step 4 - Add Configurations Files
 # ===========================================================
 echo "4 - Adding configurations files...\n";
