@@ -1,4 +1,5 @@
 tmp/*/*
+apps/node_scripts/var
 !tmp/beacond
 !tmp/reth
 .DS_Store
