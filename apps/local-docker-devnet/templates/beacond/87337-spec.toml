@@ -10,7 +10,7 @@ hysteresis-downward-multiplier = 1
 hysteresis-upward-multiplier = 5
 
 # Time parameters
-slots-per-epoch = 16
+slots-per-epoch = 10
 slots-per-historical-root = 8
 min-epochs-to-inactivity-penalty = 4
 
