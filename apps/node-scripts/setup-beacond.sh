@@ -21,7 +21,7 @@ echo "BEACOND_DATA: $BEACOND_DATA"
 echo "BEACOND_BIN: $BEACOND_BIN"
 echo "  Version: $($BEACOND_BIN version)"
 
-$BEACOND_BIN >/dev/null 2>&1 init $MONIKER_NAME --chain-id $CHAIN --home $BEACOND_DATA 
+$BEACOND_BIN >/dev/null 2>&1 init $MONIKER_NAME --beacon-kit.chain-spec $CHAIN_SPEC --home $BEACOND_DATA 
 CHECK_FILE=$BEACOND_CONFIG/priv_validator_key.json
 if [ ! -f "$CHECK_FILE" ]; then
     echo "Error: Private validator key was not created at $CHECK_FILE"
