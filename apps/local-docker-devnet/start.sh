@@ -83,10 +83,6 @@ docker run --rm -v $TMP_BEACOND_DIR/config-genesis:/root/.beacond $DOCKER_IMAGE_
 echo "4 - Adding configurations files...\n";
 # - Add KZG File
 
-echo yo
-ls templates/beacond/*
-echo yo
-
 cp templates/beacond/* $TMP_BEACOND_DIR/config-genesis/config;
 cp templates/beacond/* $TMP_BEACOND_DIR/config-cl-val0/config;
 if [ $NUM_VALIDATORS -gt 1 ]; then
