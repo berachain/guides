@@ -1,0 +1,311 @@
+# Set timeout to 5 minutes (300 seconds)
+set timeout 300
+
+# Define a function to check validator counts
+proc wait_for_validator_status {expected_active expected_pending expected_withdrawal_done} {
+	# Use exec to run the command and capture output directly
+	if {[catch {
+		set output [exec bash -c "curl -s http://localhost:3500/eth/v1/beacon/states/head/validators | jq -r '.data\[\].status'"]
+	} err]} {
+		puts "Error: Failed to get validator statuses: $err"
+		return 0
+	}
+	# Split output into lines
+	set lines [split $output "\n"]
+
+	# Initialize counters
+	set active_ongoing_count 0
+	set pending_initialized_count 0
+	set withdrawal_done_count 0
+
+	# Loop through each line and count
+	foreach line $lines {
+		if { $line eq "active_ongoing" } {
+			incr active_ongoing_count
+		} elseif { $line eq "pending_initialized" } {
+			incr pending_initialized_count
+		} elseif { $line eq "withdrawal_done" } {
+			incr withdrawal_done_count
+		}
+	}
+
+	# Check expected counts
+	if { $active_ongoing_count == $expected_active && 
+	     $pending_initialized_count == $expected_pending && 
+	     $withdrawal_done_count == $expected_withdrawal_done } {
+		return 1
+	} else {
+		return 0
+	}
+}
+
+
+# Stop all running containers
+puts "Stopping all running containers..."
+spawn ./clean.sh
+expect {
+	eof {
+		catch {wait} result
+		if {[lindex $result 3] != 0} {
+			puts "Warning: docker stop command returned non-zero status [lindex $result 3]"
+		}
+	}
+	timeout {
+		puts "Error: docker stop command timed out"
+		exit 1
+	}
+}
+
+# Remove tmp directory
+puts "Removing tmp directory..."
+spawn rm -rf tmp
+expect {
+	eof {
+		catch {wait} result
+		if {[lindex $result 3] != 0} {
+			puts "Error: Failed to remove tmp directory with status [lindex $result 3]"
+			exit 1
+		}
+	}
+	timeout {
+		puts "Error: rm command timed out"
+		exit 1
+	}
+}
+
+# Run start.sh
+puts "Starting the devnet with start.sh..."
+spawn ./start.sh
+expect {
+	eof {
+		catch {wait} result
+		if {[lindex $result 3] != 0} {
+			puts "Error: start.sh failed with status [lindex $result 3]"
+			exit 1
+		}
+	}
+	timeout {
+		puts "Error: start.sh timed out"
+		exit 1
+	}
+}
+
+# Run generate-deposit-tx.sh and capture the output
+puts "Running generate-deposit-tx.sh to get deposit commands..."
+set first_deposit_command ""
+set second_deposit_command ""
+spawn ./generate-deposit-tx.sh
+expect {
+	-re {cast send [^\r\n]+} {
+		set cmd $expect_out(0,string)
+		if {$first_deposit_command == ""} {
+			set first_deposit_command $cmd
+		} else {
+			set second_deposit_command $cmd
+		}
+		exp_continue
+	}
+	eof {
+		catch {wait} result
+		if {[lindex $result 3] != 0} {
+			puts "Error: generate-deposit-tx.sh failed with status [lindex $result 3]"
+			exit 1
+	   }
+	}
+	timeout {
+		puts "Error: generate-deposit-tx.sh timed out"
+		exit 1
+	}
+}
+
+if {$first_deposit_command == ""} {
+	puts "Error: Failed to capture first deposit command"
+	exit 1
+}
+
+if {$second_deposit_command == ""} {
+	puts "Error: Failed to capture second deposit command"
+	exit 1
+}
+
+puts "Executing first deposit command: $first_deposit_command"
+spawn bash -c "$first_deposit_command"
+expect {
+	eof {
+		catch {wait} result
+		if {[lindex $result 3] != 0} {
+			puts "Error: Deposit command failed with status [lindex $result 3]"
+			exit 1
+		}
+		
+		# Check for 3 active_ongoing and 1 pending_initialized validators
+		puts "Waiting for 3 active_ongoing and 1 pending_initialized validators..."
+		set max_attempts 60
+		set attempt 0
+		set success 0
+		
+		while {$attempt < $max_attempts} {
+			if { [wait_for_validator_status 3 1 0] } {
+				puts "Success: Found 3 active_ongoing and 1 pending_initialized validators"
+				set success 1
+				break
+			}
+			puts "Attempt $attempt: Waiting for validators to reach expected status..."
+			incr attempt
+			# Use sleep instead of after to ensure we actually wait
+			exec sleep 5
+		}
+		
+		if {!$success} {
+			puts "Error: Timed out waiting for validators to reach expected status"
+			exit 1
+		}
+	}
+	timeout {
+		puts "Error: Deposit command timed out"
+		exit 1
+	}
+}
+
+puts "Executing second deposit command (first time): $second_deposit_command"
+spawn bash -c "$second_deposit_command"
+expect {
+	eof {
+		catch {wait} result
+		if {[lindex $result 3] != 0} {
+			puts "Error: First execution of second deposit command failed with status [lindex $result 3]"
+			exit 1
+		}
+	}
+	"Transaction successful" {
+		puts "Transaction successful"
+	}
+	timeout {
+		puts "Error: First execution of second deposit command timed out"
+		exit 1
+	}
+}
+
+# Execute the second deposit command again, make deposit $490k
+puts "Executing second deposit command (second time): $second_deposit_command"
+spawn bash -c "$second_deposit_command"
+expect {
+	eof {
+		catch {wait} result
+		if {[lindex $result 3] != 0} {
+			puts "Error: Second execution of second deposit command failed with status [lindex $result 3]"
+			exit 1
+		}
+	}
+	"Transaction successful" {
+		puts "Transaction successful"
+	}
+	timeout {
+		puts "Error: Second execution of second deposit command timed out"
+		exit 1
+	}
+}
+
+# Wait for validators to reach final status: 3 active, 0 pending,1 withdrawal_done
+puts "Waiting for validators to reach final status: 3 active, 0 pending, 1 withdrawal_done..."
+set max_attempts 60
+set attempt 1
+set success 0
+
+while {$attempt <= $max_attempts} {
+	puts "Attempt $attempt of $max_attempts..."
+	if {[wait_for_validator_status 3 0 1]} {
+		set success 1
+		puts "Validators reached final status: 2 active, 0 pending, 1 withdrawal_done"
+		break
+	}
+	incr attempt
+	sleep 10
+}
+
+if {!$success} {
+	puts "Error: Timed out waiting for validators to reach final status: 3 active, 0 pending, 1 withdrawal_done"
+	exit 1
+}
+
+# Run generate-withdraw-tx.sh and capture the output
+puts "Running generate-withdraw-tx.sh to get withdrawal commands..."
+set first_withdraw_command ""
+set second_withdraw_command ""
+spawn ./generate-withdraw-tx.sh
+expect {
+	-re {cast send [^\r\n]+} {
+		set cmd $expect_out(0,string)
+		if {$first_withdraw_command == ""} {
+			set first_withdraw_command $cmd
+		} else {
+			set second_withdraw_command $cmd
+		}
+		exp_continue
+	}
+	eof {
+		catch {wait} result
+		if {[lindex $result 3] != 0} {
+			puts "Error: generate-withdraw-tx.sh failed with status [lindex $result 3]"
+			exit 1
+		}
+	}
+	timeout {
+		puts "Error: generate-withdraw-tx.sh timed out"
+		exit 1
+	}
+}
+
+if {$first_withdraw_command == "" || $second_withdraw_command == ""} {
+	puts "Error: Failed to capture withdrawal commands from generate-withdraw-tx.sh"
+	exit 1
+}
+
+puts "Captured withdrawal commands"
+
+# Execute the second withdrawal command
+puts "Executing second withdrawal command: $second_withdraw_command"
+spawn bash -c "$second_withdraw_command"
+expect {
+	eof {
+		catch {wait} result
+		if {[lindex $result 3] != 0} {
+			puts "Error: Second withdrawal command failed with status [lindex $result 3]"
+			exit 1
+		}
+	}
+	"Transaction successful" {
+		puts "Transaction successful"
+	}
+	timeout {
+		puts "Error: Second withdrawal command timed out"
+		exit 1
+	}
+}
+
+# Wait for 2 active_ongoing and 2 withdrawal_done validators
+puts "Waiting for 2 active_ongoing and 2 withdrawal_done validators..."
+set max_attempts 60
+set attempt 0
+set success 0
+
+while {$attempt < $max_attempts} {
+	if { [wait_for_validator_status 2 0 2] } {
+		puts "Success: Found 2 active_ongoing and 2 withdrawal_done validators"
+		set success 1
+		break
+	}
+	puts "Attempt $attempt: Waiting for validators to reach expected status..."
+	incr attempt
+	# Use sleep instead of after to ensure we actually wait
+	exec sleep 5
+}
+
+if {!$success} {
+	puts "Error: Timed out waiting for validators to reach expected status"
+	exit 1
+}
+
+
+puts "Deposit & withdrawal e2e test done!"
+exit 0
