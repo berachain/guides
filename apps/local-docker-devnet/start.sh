@@ -2,6 +2,8 @@
 set -e;
 source env.sh;
 
+
+
 echo "Starting Beacond...";
 
 # Step 0 - Create Config Folders
@@ -10,21 +12,30 @@ echo "0 - Creating config folders...\n";
 # Create config folders - ex `config0, config1, config2, config3`
 for i in $(seq 0 $((NUM_VALIDATORS - 1))); do
   mkdir -p $TMP_BEACOND_DIR/config-cl-val$i;
+  cp templates/beacond/* $TMP_BEACOND_DIR/config-cl-val$i;
 done
 
 if [ $NUM_RPC_NODES -gt 0 ]; then
   for i in $(seq 0 $((NUM_RPC_NODES - 1))); do
     mkdir -p $TMP_BEACOND_DIR/config-cl-rpc$i;
+    cp templates/beacond/* $TMP_BEACOND_DIR/config-cl-rpc$i;
   done
 fi
+
 
 # Step 1 - Create Node Configurations
 # ===========================================================
 echo "1 - Creating node configurations...\n";
 # - Validator 0
 BEACOND_MONIKER=$CL_MONIKER-0;
+if [ $CHAIN_SPEC = "file" ]; then
+  CHAIN_SPEC_OPTS="--beacon-kit.chain-spec file --beacon-kit.chain-spec-file /root/.beacond/$CHAIN_ID-spec.toml"
+else
+  CHAIN_SPEC_OPTS="--beacon-kit.chain-spec $CHAIN_SPEC"
+fi
+
 docker run --rm -v $TMP_BEACOND_DIR/config-cl-val0:/root/.beacond $DOCKER_IMAGE_BEACOND /bin/bash \
-  -c "./beacond init $BEACOND_MONIKER --chain-id $BEACOND_CHAIN_ID; echo $JWT_TOKEN > /root/.beacond/config/jwt.hex; chmod 600 /root/.beacond/config/jwt.hex; ./beacond genesis add-premined-deposit $GENESIS_DEPOSIT_AMOUNT $WITHDRAW_ADDRESS;";
+  -c "./beacond init $BEACOND_MONIKER $CHAIN_SPEC_OPTS; echo $JWT_TOKEN > /root/.beacond/config/jwt.hex; chmod 600 /root/.beacond/config/jwt.hex; ./beacond genesis add-premined-deposit $GENESIS_DEPOSIT_AMOUNT $WITHDRAW_ADDRESS;";
 cp -r $TMP_BEACOND_DIR/config-cl-val0/ $TMP_BEACOND_DIR/config-genesis;
 
 # - Validators 1 to NUM_VALIDATORS - 1
@@ -32,7 +43,7 @@ if [ $NUM_VALIDATORS -gt 1 ]; then
   for i in $(seq 1 $((NUM_VALIDATORS - 1))); do
     BEACOND_MONIKER=$CL_MONIKER-$i;
     docker run --rm -v $TMP_BEACOND_DIR/config-cl-val$i:/root/.beacond $DOCKER_IMAGE_BEACOND /bin/bash \
-    -c "./beacond init $BEACOND_MONIKER --chain-id $BEACOND_CHAIN_ID; echo $JWT_TOKEN > /root/.beacond/config/jwt.hex; chmod 600 /root/.beacond/config/jwt.hex; ./beacond genesis add-premined-deposit $GENESIS_DEPOSIT_AMOUNT $WITHDRAW_ADDRESS;";
+    -c "./beacond init $BEACOND_MONIKER $CHAIN_SPEC_OPTS; echo $JWT_TOKEN > /root/.beacond/config/jwt.hex; chmod 600 /root/.beacond/config/jwt.hex; ./beacond genesis add-premined-deposit $GENESIS_DEPOSIT_AMOUNT $WITHDRAW_ADDRESS;";
   done
 fi
 
@@ -71,11 +82,12 @@ docker run --rm -v $TMP_BEACOND_DIR/config-genesis:/root/.beacond $DOCKER_IMAGE_
 # ===========================================================
 echo "4 - Adding configurations files...\n";
 # - Add KZG File
-cp templates/beacond/kzg-trusted-setup.json $TMP_BEACOND_DIR/config-genesis/config;
-cp templates/beacond/kzg-trusted-setup.json $TMP_BEACOND_DIR/config-cl-val0/config;
+
+cp templates/beacond/* $TMP_BEACOND_DIR/config-genesis/config;
+cp templates/beacond/* $TMP_BEACOND_DIR/config-cl-val0/config;
 if [ $NUM_VALIDATORS -gt 1 ]; then
   for i in $(seq 1 $((NUM_VALIDATORS - 1))); do
-    cp templates/beacond/kzg-trusted-setup.json $TMP_BEACOND_DIR/config-cl-val$i/config;
+    cp templates/beacond/* $TMP_BEACOND_DIR/config-cl-val$i/config;
   done
 fi
 
@@ -91,7 +103,7 @@ if [ $NUM_VALIDATORS -gt 0 ]; then
     sed -i '' "s|suggested-fee-recipient = \".*\"|suggested-fee-recipient = \"$SUGGESTED_FEE_RECIPIENT\"|" $TMP_BEACOND_DIR/config-cl-val$i/config/app.toml;
     sed -i '' 's|trusted-setup-path = ".*"|trusted-setup-path = "/root/.beacond/config/kzg-trusted-setup.json"|' $TMP_BEACOND_DIR/config-cl-val$i/config/app.toml;
     sed -i '' "s|rpc-dial-url = \".*\"|rpc-dial-url = \"http://$EL_MONIKER-val-$i:8551\"|" $TMP_BEACOND_DIR/config-cl-val$i/config/app.toml;
-    sed -i '' '179s/enabled = "false"/enabled = "true"/' $TMP_BEACOND_DIR/config-cl-val$i/config/app.toml;
+    sed -i '' '170,190s/enabled = "false"/enabled = "true"/' $TMP_BEACOND_DIR/config-cl-val$i/config/app.toml;
     sed -i '' "s|address = \".*\"|address = \"0.0.0.0:3500\"|" $TMP_BEACOND_DIR/config-cl-val$i/config/app.toml;
   done
 fi
@@ -159,8 +171,8 @@ echo "5 - Creating rpc cl nodes...\n";
 if [ $NUM_RPC_NODES -gt 0 ]; then
   for i in $(seq 0 $((NUM_RPC_NODES - 1))); do
     docker run --rm -v $TMP_BEACOND_DIR/config-cl-rpc$i:/root/.beacond $DOCKER_IMAGE_BEACOND /bin/bash \
-    -c "./beacond init $CL_MONIKER-rpc$i --chain-id $BEACOND_CHAIN_ID; echo $JWT_TOKEN > /root/.beacond/config/jwt.hex; chmod 600 /root/.beacond/config/jwt.hex; ./beacond genesis add-premined-deposit $GENESIS_DEPOSIT_AMOUNT $WITHDRAW_ADDRESS;";
-    cp templates/beacond/kzg-trusted-setup.json $TMP_BEACOND_DIR/config-cl-rpc$i/config;
+    -c "./beacond init $CL_MONIKER-rpc$i $CHAIN_SPEC_OPTS; echo $JWT_TOKEN > /root/.beacond/config/jwt.hex; chmod 600 /root/.beacond/config/jwt.hex; ./beacond genesis add-premined-deposit $GENESIS_DEPOSIT_AMOUNT $WITHDRAW_ADDRESS;";
+    cp templates/beacond/* $TMP_BEACOND_DIR/config-cl-rpc$i/config;
     cp -f $TMP_BEACOND_DIR/config-cl-val0/config/app.toml $TMP_BEACOND_DIR/config-cl-rpc$i/config/app.toml;
     cp -f $TMP_BEACOND_DIR/config-cl-val0/config/config.toml $TMP_BEACOND_DIR/config-cl-rpc$i/config/config.toml;
     cp -f $TMP_BEACOND_DIR/config-genesis/config/genesis.json $TMP_BEACOND_DIR/config-cl-rpc$i/config/genesis.json;
