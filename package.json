@@ -27,6 +27,7 @@
     "@biomejs/biome": "^1.5.3",
     "@repo/eslint-config": "workspace:*",
     "@repo/typescript-config": "workspace:*",
+    "@branch/berachain-config": "workspace:*",
     "prettier": "^3.1.0",
     "prettier-plugin-solidity": "^1.4.2",
     "turbo": "latest"

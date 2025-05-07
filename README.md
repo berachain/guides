@@ -4,7 +4,7 @@ A collection of [Berachain](https://docs.berachain.com/learn/) EVM examples: cod
 
 ## Requirements
 
-- NVM or Node `v18.18.2+`
+- Node.js `v20+`
 - pnpm (recommended)
 
 ## Turborepo Folder Structure
