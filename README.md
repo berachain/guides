@@ -66,11 +66,13 @@ A collection of [Berachain](https://docs.berachain.com/learn/) EVM examples: cod
 ## Quick Start
 
 1. Install dependencies:
+
    ```bash
    pnpm install
    ```
 
 2. Set up environment variables:
+
    ```bash
    cp .env.example .env
    ```
@@ -84,10 +86,12 @@ A collection of [Berachain](https://docs.berachain.com/learn/) EVM examples: cod
 ## Getting Started
 
 1. **Core Concepts**
+
    - Start with `berachain-config` to understand network integration
    - Review basic contract deployment examples
 
 2. **Choose Your Path**
+
    - Smart Contract Development: Start with basic deployment examples
    - Frontend Integration: Begin with wallet connection examples
    - Infrastructure: Explore indexing and oracle examples

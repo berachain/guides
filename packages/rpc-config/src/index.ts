@@ -1,4 +1,4 @@
-import { Chain, defineChain } from 'viem';
+import { Chain, defineChain } from "viem";
 
 /**
  * Berachain Mainnet Configuration
@@ -6,20 +6,20 @@ import { Chain, defineChain } from 'viem';
  */
 export const berachainMainnet = defineChain({
   id: 80094,
-  name: 'Berachain',
-  network: 'berachain',
+  name: "Berachain",
+  network: "berachain",
   nativeCurrency: {
     decimals: 18,
-    name: 'BERA',
-    symbol: 'BERA',
+    name: "BERA",
+    symbol: "BERA",
   },
   rpcUrls: {
-    default: { http: ['https://rpc.berachain.com'] },
-    public: { http: ['https://rpc.berachain.com'] },
+    default: { http: ["https://rpc.berachain.com"] },
+    public: { http: ["https://rpc.berachain.com"] },
   },
   blockExplorers: {
-    default: { name: 'BeraScan', url: 'https://berascan.com' },
-    beratrail: { name: 'BeraTrail', url: 'https://beratrail.io' },
+    default: { name: "BeraScan", url: "https://berascan.com" },
+    beratrail: { name: "BeraTrail", url: "https://beratrail.io" },
   },
   testnet: false,
 });
@@ -30,19 +30,19 @@ export const berachainMainnet = defineChain({
  */
 export const berachainBepolia = defineChain({
   id: 80069,
-  name: 'Berachain Bepolia',
-  network: 'berachain-bepolia',
+  name: "Berachain Bepolia",
+  network: "berachain-bepolia",
   nativeCurrency: {
     decimals: 18,
-    name: 'BERA',
-    symbol: 'BERA',
+    name: "BERA",
+    symbol: "BERA",
   },
   rpcUrls: {
-    default: { http: ['https://bepolia.rpc.berachain.com'] },
-    public: { http: ['https://bepolia.rpc.berachain.com'] },
+    default: { http: ["https://bepolia.rpc.berachain.com"] },
+    public: { http: ["https://bepolia.rpc.berachain.com"] },
   },
   blockExplorers: {
-    default: { name: 'BeraTrail', url: 'https://bepolia.beratrail.io' },
+    default: { name: "BeraTrail", url: "https://bepolia.beratrail.io" },
   },
   testnet: true,
 });
@@ -66,15 +66,15 @@ export function getChainById(chainId: number): Chain {
  */
 export function getChainByName(network: string): Chain {
   switch (network.toLowerCase()) {
-    case 'berachain':
-    case 'mainnet':
+    case "berachain":
+    case "mainnet":
       return berachainMainnet;
-    case 'bepolia':
-    case 'testnet':
+    case "bepolia":
+    case "testnet":
       return berachainBepolia;
     default:
       throw new Error(`Network ${network} not supported`);
   }
 }
 
-export type { Chain }; 
+export type { Chain };
