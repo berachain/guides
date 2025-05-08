@@ -1,9 +1,10 @@
 //import smart contract class from generated files
+//import datatypes
+import { BigDecimal, BigInt, ethereum } from "@graphprotocol/graph-ts";
+
 import { Erc20 } from "../generated/Erc20/Erc20";
 //import entities
 import { Account, Token, TokenBalance } from "../generated/schema";
-//import datatypes
-import { BigDecimal, ethereum, BigInt } from "@graphprotocol/graph-ts";
 
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 
@@ -22,22 +23,22 @@ export function fetchTokenDetails(event: ethereum.Event): Token | null {
     token.decimals = BigDecimal.fromString("0");
 
     //bind the contract
-    let erc20 = Erc20.bind(event.address);
+    const erc20 = Erc20.bind(event.address);
 
     //fetch name
-    let tokenName = erc20.try_name();
+    const tokenName = erc20.try_name();
     if (!tokenName.reverted) {
       token.name = tokenName.value;
     }
 
     //fetch symbol
-    let tokenSymbol = erc20.try_symbol();
+    const tokenSymbol = erc20.try_symbol();
     if (!tokenSymbol.reverted) {
       token.symbol = tokenSymbol.value;
     }
 
     //fetch decimals
-    let tokenDecimal = erc20.try_decimals();
+    const tokenDecimal = erc20.try_decimals();
     if (!tokenDecimal.reverted) {
       token.decimals = BigDecimal.fromString(tokenDecimal.value.toString());
     }
@@ -64,14 +65,14 @@ export function fetchAccount(address: string): Account | null {
 export function updateTokenBalance(
   token: Token,
   account: Account,
-  amount: BigInt,
+  amount: bigint
 ): void {
   // Don't update zero address
   if (ZERO_ADDRESS == account.id) return;
 
   // Get existing account balance or create a new one
-  let accountBalance = getOrCreateAccountBalance(account, token);
-  let balance = accountBalance.amount.plus(bigIntToBigDecimal(amount));
+  const accountBalance = getOrCreateAccountBalance(account, token);
+  const balance = accountBalance.amount.plus(bigIntToBigDecimal(amount));
 
   // Update the account balance
   accountBalance.amount = balance;
@@ -80,9 +81,9 @@ export function updateTokenBalance(
 
 function getOrCreateAccountBalance(
   account: Account,
-  token: Token,
+  token: Token
 ): TokenBalance {
-  let id = token.id + "-" + account.id;
+  const id = token.id + "-" + account.id;
   let tokenBalance = TokenBalance.load(id);
 
   // If balance is not already saved
@@ -99,10 +100,10 @@ function getOrCreateAccountBalance(
   return tokenBalance;
 }
 
-function bigIntToBigDecimal(quantity: BigInt, decimals: i32 = 18): BigDecimal {
-  return quantity.divDecimal(
+function bigIntToBigDecimal(quantity: bigint, decimals: i32 = 18): BigDecimal {
+  return quantity.toBigDecimal().div(
     BigInt.fromI32(10)
       .pow(decimals as u8)
-      .toBigDecimal(),
+      .toBigDecimal()
   );
 }

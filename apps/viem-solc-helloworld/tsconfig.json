@@ -1,11 +1,18 @@
 {
   "extends": "@repo/typescript-config/base.json",
-  "include": ["scripts"],
-  "exclude": ["node_modules"],
   "compilerOptions": {
-    "moduleResolution": "node16",
-    "outDir": "./dist",
-    "rootDir": ".",
-    "allowSyntheticDefaultImports": true
-  }
+    "outDir": "dist",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "target": "ESNext",
+    "lib": ["ESNext"],
+    "allowImportingTsExtensions": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "strict": true,
+    "skipLibCheck": true
+  },
+  "include": ["scripts/**/*.ts"],
+  "exclude": ["node_modules", "dist"]
 }

@@ -1,15 +1,19 @@
+/* eslint-disable no-console */
 // Imports
 // ========================================================
-import solc from "solc";
+import { berachainBepolia } from "@repo/rpc-config";
+import {
+  createBerachainPublicClient,
+  createBerachainWalletClient,
+} from "@repo/rpc-config/viem";
+import chalk from "chalk";
+import { config } from "dotenv";
 import fs from "fs";
 import path from "path";
+import solc from "solc";
 import { fileURLToPath } from "url";
-import { config } from "dotenv";
 import { encodeAbiParameters } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import { createBerachainPublicClient, createBerachainWalletClient } from "@branch/berachain-config/viem";
-import { berachainBepolia } from "@branch/berachain-config";
-import chalk from "chalk";
 
 // Environment Configuration
 // ========================================================
@@ -31,8 +35,12 @@ const __dirname = path.dirname(__filename);
 // Main Script
 // ========================================================
 (async () => {
+  // eslint-disable-next-line no-console
   console.log(chalk.blue("\n🚀 Let's Deploy Your Contract!"));
-  console.log(chalk.gray("========================================================\n"));
+  // eslint-disable-next-line no-console
+  console.log(
+    chalk.gray("========================================================\n")
+  );
   try {
     // 💬 The message that will be stored in your contract
     const INITIAL_GREETING = "Hello From Deployed Contract";
@@ -43,8 +51,8 @@ const __dirname = path.dirname(__filename);
     // This step converts your human-readable code into bytecode that the blockchain can understand
     const baseContractPath = path.join(
       __dirname,
-      `../contracts/`,
-      `${CONTRACT_NAME}.sol`,
+      "../contracts/",
+      `${CONTRACT_NAME}.sol`
     );
     const content = await fs.readFileSync(baseContractPath).toString();
 
@@ -64,12 +72,21 @@ const __dirname = path.dirname(__filename);
       },
     };
 
-    // @ts-ignore - solc types are incorrect, but the function works
-    const output = solc.compile(JSON.stringify(input));
-    const contract = JSON.parse(output);
-    const contractBytecode =
-      contract.contracts.baseContractPath[CONTRACT_NAME].evm.bytecode.object;
-    const contractABI = contract.contracts.baseContractPath[CONTRACT_NAME].abi;
+    // Compile the contract
+    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+    // @ts-ignore - solc types are not properly typed in the package
+    // This is a known issue with the solc package types
+    const output = JSON.parse(solc.compile(JSON.stringify(input)));
+    const contract = output.contracts.baseContractPath[CONTRACT_NAME];
+    if (!contract) {
+      throw new Error(
+        `Contract ${CONTRACT_NAME} not found in compilation output`
+      );
+    }
+
+    const contractBytecode = contract.evm.bytecode.object;
+    const contractABI = contract.abi;
+    // eslint-disable-next-line no-console
     console.log(chalk.green("✓ Awesome! Your contract compiled successfully"));
 
     // Account and Client Setup
@@ -81,10 +98,15 @@ const __dirname = path.dirname(__filename);
       throw new Error("WALLET_PRIVATE_KEY not found in environment");
     }
     const account = privateKeyToAccount(privateKey);
+    // eslint-disable-next-line no-console
     console.log(chalk.cyan(`📝 Using your account: ${account.address}`));
 
     const publicClient = createBerachainPublicClient(berachainBepolia);
-    const walletClient = createBerachainWalletClient(privateKey, berachainBepolia);
+    const walletClient = createBerachainWalletClient(
+      privateKey,
+      berachainBepolia
+    );
+    // eslint-disable-next-line no-console
     console.log(chalk.green("✓ Great! Your connection is ready"));
 
     // Gas Estimation
@@ -93,13 +115,14 @@ const __dirname = path.dirname(__filename);
     // This helps ensure your transaction will go through smoothly
     const encodedData = encodeAbiParameters(
       [{ name: "_greeting", type: "string" }],
-      [INITIAL_GREETING],
+      [INITIAL_GREETING]
     );
 
     const gasEstimate = await publicClient.estimateGas({
       account: account.address,
       data: `0x${contractBytecode}${encodedData.slice(2)}` as `0x${string}`,
     });
+    // eslint-disable-next-line no-console
     console.log(chalk.yellow(`⛽ Gas needed: ${gasEstimate.toString()}`));
 
     // Contract Deployment
@@ -110,9 +133,10 @@ const __dirname = path.dirname(__filename);
       abi: contractABI,
       bytecode: `0x${contractBytecode}` as `0x${string}`,
       args: [INITIAL_GREETING],
-      account: account,
+      account: account.address,
       chain: berachainBepolia,
     });
+    // eslint-disable-next-line no-console
     console.log(chalk.cyan(`🔗 Your transaction is being processed: ${hash}`));
 
     // Deployment Verification
@@ -120,9 +144,18 @@ const __dirname = path.dirname(__filename);
     // ✨ Let's make sure everything went smoothly
     // We'll wait for the transaction to complete and get your contract's address
     const receipt = await publicClient.waitForTransactionReceipt({ hash });
-    console.log(chalk.green(`\n🎉 Congratulations! Your contract is live at ${receipt?.contractAddress}`));
-    console.log(chalk.gray("\n========================================================\n"));
-  } catch (error: any) {
+    // eslint-disable-next-line no-console
+    console.log(
+      chalk.green(
+        `\n🎉 Congratulations! Your contract is live at ${receipt?.contractAddress}`
+      )
+    );
+    // eslint-disable-next-line no-console
+    console.log(
+      chalk.gray("\n========================================================\n")
+    );
+  } catch (error: unknown) {
+    // eslint-disable-next-line no-console
     console.error(chalk.red("\n❌ Oops! Something went wrong:"), error);
   }
 })();
