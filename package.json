@@ -12,31 +12,23 @@
     "url": "https://github.com/codingwithmanny"
   },
   "scripts": {
-    "clean": "turbo clean; rm -rf node_modules; rm -rf .turbo;",
-    "build": "turbo build",
-    "dev": "turbo dev",
-    "lint": "turbo lint",
-    "format": "prettier --write \"**/*.{ts,tsx,md}\"",
-    "format:check": "prettier --check \"**/*.{ts,tsx,md}\"",
-    "with-env": "dotenv -e ./.env --",
-    "deploy:berachain": "pnpm with-env turbo run deploy:berachain",
-    "verify": "pnpm with-env turbo run verify",
-    "postinstall": "cd apps/walletconnect-expo; pnpm install --ignore-workspace;"
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "lint": "turbo run lint",
+    "format": "prettier --write \"**/*.{ts,tsx,md,json}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,md,json}\"",
+    "clean": "turbo run clean && rm -rf node_modules",
+    "test": "turbo run test"
   },
   "devDependencies": {
-    "@biomejs/biome": "^1.5.3",
-    "@repo/eslint-config": "workspace:*",
-    "@repo/typescript-config": "workspace:*",
-    "@branch/berachain-config": "workspace:*",
-    "prettier": "^3.1.0",
-    "prettier-plugin-solidity": "^1.4.2",
-    "turbo": "latest"
+    "@types/node": "^20.0.0",
+    "eslint": "^8.0.0",
+    "prettier": "^3.0.0",
+    "turbo": "^1.10.0",
+    "typescript": "^5.0.0"
   },
-  "packageManager": "pnpm@9.0.4",
+  "packageManager": "pnpm@8.0.0",
   "engines": {
-    "node": ">=20"
-  },
-  "dependencies": {
-    "dotenv-cli": "^7.3.0"
+    "node": ">=20.0.0"
   }
 }

@@ -1,16 +1,18 @@
 // Import required libraries
-const ethers = require('ethers');
-require('dotenv').config();
+import { ethers } from 'ethers';
+import { config } from 'dotenv';
 
 // Import ABI (Application Binary Interface) for various contracts
-const BeraChefABI = require('./abi/BeraChef.json');
-const BerachainGovernanceABI = require('./abi/BerachainGovernance.json');
-const BGTABI = require('./abi/BGT.json');
-const BerachainRewardsVaultABI = require('./abi/BerachainRewardsVault.json');
-const ERC20ABI = require('./abi/ERC20.json');
-const BerachainRewardsVaultFactoryABI = require('./abi/BerachainRewardsVaultFactory.json');
+import BeraChefABI from './abi/BeraChef.json';
+import BerachainGovernanceABI from './abi/BerachainGovernance.json';
+import BGTABI from './abi/BGT.json';
+import BerachainRewardsVaultABI from './abi/BerachainRewardsVault.json';
+import ERC20ABI from './abi/ERC20.json';
+import BerachainRewardsVaultFactoryABI from './abi/BerachainRewardsVaultFactory.json';
 
 // Set up the Ethereum provider using the RPC URL from the .env file
+config();
+
 const provider = new ethers.JsonRpcProvider(`${process.env.RPC}`, {
     chainId: 80084,  // Chain ID for Berachain
     name: 'Berachain',
