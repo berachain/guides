@@ -26,10 +26,10 @@ export const berachainMainnet = defineChain({
 
 /**
  * Berachain Bepolia Testnet Configuration
- * Chain ID: 80085
+ * Chain ID: 80069
  */
 export const berachainBepolia = defineChain({
-  id: 80085,
+  id: 80069,
   name: 'Berachain Bepolia',
   network: 'berachain-bepolia',
   nativeCurrency: {
@@ -54,7 +54,7 @@ export function getChainById(chainId: number): Chain {
   switch (chainId) {
     case 80094:
       return berachainMainnet;
-    case 80085:
+    case 80069:
       return berachainBepolia;
     default:
       throw new Error(`Chain ID ${chainId} not supported`);
@@ -75,4 +75,6 @@ export function getChainByName(network: string): Chain {
     default:
       throw new Error(`Network ${network} not supported`);
   }
-} 
+}
+
+export type { Chain }; 

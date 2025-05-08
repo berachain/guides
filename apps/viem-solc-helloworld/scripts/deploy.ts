@@ -1,17 +1,13 @@
 // Imports
 // ========================================================
-import solc from "solc";
+const solc = require("solc");
 import fs from "fs";
 import path from "path";
 import { config } from "dotenv";
-import {
-  createWalletClient,
-  createPublicClient,
-  defineChain,
-  http,
-  encodeAbiParameters,
-} from "viem";
+import { encodeAbiParameters } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
+import { createBerachainPublicClient, createBerachainWalletClient } from "@branch/berachain-config/viem";
+import { berachainBepolia } from "@branch/berachain-config";
 
 // Config
 // ========================================================
@@ -23,34 +19,6 @@ config();
  * @dev contract name from `./contract/HelloWorld
  */
 const CONTRACT_NAME = "HelloWorld";
-
-/**
- * @dev Custom chain configuration
- */
-const chainConfiguration = defineChain({
-  id: parseInt(`${process.env.CHAIN_ID}`),
-  name: `${process.env.NETWORK_NAME}`,
-  network: `${process.env.NETWORK_NAME}`,
-  nativeCurrency: {
-    decimals: parseInt(`${process.env.CURRENCY_DECIMALS}`),
-    name: `${process.env.CURRENCY_NAME}`,
-    symbol: `${process.env.CURRENCY_SYMBOL}`,
-  },
-  rpcUrls: {
-    default: {
-      http: [`${process.env.RPC_URL}`],
-    },
-    public: {
-      http: [`${process.env.RPC_URL}`],
-    },
-  },
-  blockExplorers: {
-    default: {
-      name: `${process.env.BLOCK_EXPLORER_NAME}`,
-      url: `${process.env.BLOCK_EXPLORER_URL}`,
-    },
-  },
-});
 
 // Main Script
 // ========================================================
@@ -91,50 +59,44 @@ const chainConfiguration = defineChain({
     const contractBytecode =
       contract.contracts.baseContractPath[CONTRACT_NAME].evm.bytecode.object;
     const contractABI = contract.contracts.baseContractPath[CONTRACT_NAME].abi;
-    // console.log({ contractBytecode });
-    // console.log({ contractABI });
+    console.log("Contract compiled successfully");
 
-    // 2 - Setup account
-    const account = privateKeyToAccount(
-      `${process.env.WALLET_PRIVATE_KEY}` as `0x${string}`,
-    );
+    // 2 - Setup account and clients
+    const privateKey = process.env.WALLET_PRIVATE_KEY as `0x${string}`;
+    if (!privateKey) {
+      throw new Error("WALLET_PRIVATE_KEY not found in environment");
+    }
+    const account = privateKeyToAccount(privateKey);
+    console.log(`Using account: ${account.address}`);
 
-    // 3 - Configure wallet client for deployment
-    const walletClient = createWalletClient({
-      account,
-      chain: chainConfiguration,
-      transport: http(),
-    });
+    const publicClient = createBerachainPublicClient(berachainBepolia);
+    const walletClient = createBerachainWalletClient(privateKey, berachainBepolia);
+    console.log("Clients configured successfully");
 
-    // 4 - Create public client to get contract address and optionally gas estimate
-    const publicClient = createPublicClient({
-      chain: chainConfiguration,
-      transport: http(),
-    });
-
-    // 5 - (optional) Estimate gas
+    // 3 - (optional) Estimate gas
     const encodedData = encodeAbiParameters(
       [{ name: "_greeting", type: "string" }],
       [INITIAL_GREETING],
     );
 
     const gasEstimate = await publicClient.estimateGas({
-      account,
+      account: account.address,
       data: `0x${contractBytecode}${encodedData.slice(2)}` as `0x${string}`,
     });
     console.log({ gasEstimate });
 
-    // 6 - Deploy contract
+    // 4 - Deploy contract
     const hash = await walletClient.deployContract({
       abi: contractABI,
-      bytecode: contractBytecode,
+      bytecode: `0x${contractBytecode}` as `0x${string}`,
       args: [INITIAL_GREETING],
+      account: account,
+      chain: berachainBepolia,
     });
     console.log({ hash });
 
-    // 7 - Get deployed contract address
+    // 5 - Get deployed contract address
     const receipt = await publicClient.waitForTransactionReceipt({ hash });
-
     console.log(`${CONTRACT_NAME} deployed to ${receipt?.contractAddress}`);
   } catch (error: any) {
     console.error({ error });

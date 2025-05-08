@@ -17,14 +17,16 @@
   "author": "@codingwithmanny",
   "license": "ISC",
   "devDependencies": {
+    "@branch/berachain-config": "workspace:*",
     "@types/node": "^20.5.9",
     "dotenv": "^16.3.1",
     "dotenv-cli": "^7.3.0",
+    "ethers": "^6.14.0",
     "tsx": "^4.7.0",
-    "typescript": "^4.5.2"
+    "typescript": "^5.8.3"
   },
   "dependencies": {
-    "solc": "0.8.23-fixed",
-    "viem": "^1.20.2"
+    "solc": "^0.8.23-fixed",
+    "viem": "^2.7.9"
   }
 }
