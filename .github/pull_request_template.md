@@ -5,6 +5,7 @@
 <!-- Briefly describe what this guide/example adds or updates. What problem does it solve or what use case does it demonstrate? -->
 
 ## Type of Change
+
 - [ ] ✨ New guide/example
 - [ ] 📝 Update to existing guide/example
 - [ ] 🐛 Bug fix in a guide/example
@@ -13,6 +14,7 @@
 - [ ] Other (please describe):
 
 ## Guide Details
+
 - **Guide Name:**
 - **Category:** (e.g., Smart Contracts, Frontend, Infrastructure, Tooling)
 - **Dependencies Added:**
@@ -20,6 +22,7 @@
 - **Entry Point:** (e.g., script, README section, etc.)
 
 ## Checklist
+
 - [ ] The guide/example is clear and easy to follow
 - [ ] All steps are reproducible (instructions/scripts work as described)
 - [ ] All new/changed code is commented where necessary
@@ -30,4 +33,4 @@
 
 ## Additional Notes
 
-<!-- Add any other information, context, or screenshots here. --> 
+<!-- Add any other information, context, or screenshots here. -->
