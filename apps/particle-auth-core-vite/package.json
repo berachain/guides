@@ -1,38 +1,41 @@
 {
   "name": "particle-avalanche-auth-core-demo",
+  "private": true,
   "version": "1.0.0",
   "type": "module",
   "description": "Example application showcasing the implementation of Particle Auth Core for social logins within Avalanche applications.",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "lint": "eslint src/ --ext .ts,.tsx",
+    "lint:fix": "eslint src/ --ext .ts,.tsx --fix",
+    "format": "prettier --write \"src/**/*.{ts,tsx}\"",
+    "test": "echo 'No test script defined for this guide'",
+    "clean": "rm -rf node_modules; rm -rf .turbo;"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "devDependencies": {
-    "@types/react": "^18.0.15",
-    "@vitejs/plugin-react": "^4.3.4",
-    "react": "^18.2.0",
-    "typescript": "^4.7.4",
-    "vite": "^6.2.6"
+    "@repo/eslint-config": "workspace:*",
+    "@repo/typescript-config": "workspace:*",
+    "@types/node": "^20.0.0",
+    "@types/react": "^18.2.43",
+    "@types/react-dom": "^18.2.17",
+    "@vitejs/plugin-react": "^4.2.1",
+    "prettier": "^3.0.0",
+    "typescript": "^5.2.2",
+    "vite": "^5.0.8"
   },
   "dependencies": {
-    "@particle-network/aa": "1.2.0",
-    "@particle-network/auth": "^1.3.1",
-    "@particle-network/auth-core": "^1.3.1",
-    "@particle-network/auth-core-modal": "^1.3.1",
-    "@particle-network/chains": "^1.3.12",
-    "@particle-network/provider": "^1.3.2",
-    "@particle-network/thresh-sig": "^0.7.8",
-    "@types/events": "^3.0.3",
-    "antd": "^5.11.5",
-    "buffer": "^6.0.3",
-    "dotenv": "^16.4.4",
-    "ethers": "5.7.2",
+    "@particle-network/auth-core-modal": "^1.3.6",
+    "@particle-network/chains": "^1.3.16",
+    "@particle-network/connect": "^1.2.1",
+    "@particle-network/connect-react-ui": "^1.2.1",
+    "@particle-network/provider": "^1.2.1",
+    "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "thresh": "^1.1.0",
-    "vite-plugin-wasm": "^3.2.2"
+    "viem": "^1.21.4"
   }
 }
