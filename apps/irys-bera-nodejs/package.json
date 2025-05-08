@@ -1,13 +1,26 @@
 {
-  "name": "@berachain/irys-bera-nodejs",
+  "name": "@repo/irys-bera-nodejs",
   "version": "1.1.0",
+  "private": true,
   "description": "NodeJS script that uses Irys.xyz to upload to decentralized storage network with Berachain $BERA gas token.",
   "main": "src/index.ts",
   "scripts": {
-    "preinstall": "npx only-allow pnpm",
-    "dev": "tsx src/index.ts"
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "lint": "eslint src/ --ext .ts,.tsx",
+    "lint:fix": "eslint src/ --ext .ts,.tsx --fix",
+    "format": "prettier --write \"src/**/*.{ts,tsx}\"",
+    "test": "jest",
+    "clean": "rm -rf .turbo && rm -rf node_modules && rm -rf dist",
+    "start": "ts-node src/index.ts",
+    "preinstall": "npx only-allow pnpm"
   },
-  "keywords": ["irys", "bundlr", "berachain", "nodejs"],
+  "keywords": [
+    "irys",
+    "bundlr",
+    "berachain",
+    "nodejs"
+  ],
   "author": {
     "name": "codingwithmanny",
     "url": "https://github.com/codingwithmanny"
@@ -17,9 +30,15 @@
     "node": ">=20.0.0"
   },
   "devDependencies": {
+    "@repo/eslint-config": "workspace:*",
+    "@repo/typescript-config": "workspace:*",
+    "@types/jest": "^29.5.0",
     "@types/node": "^22.13.4",
-    "tsx": "^4.7.0",
-    "typescript": "^5.7.3"
+    "jest": "^29.5.0",
+    "prettier": "^3.0.0",
+    "tsup": "^8.0.0",
+    "typescript": "^5.7.3",
+    "tsx": "^4.7.0"
   },
   "dependencies": {
     "@irys/upload": "^0.0.15",

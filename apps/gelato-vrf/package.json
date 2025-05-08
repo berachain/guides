@@ -1,6 +1,14 @@
 {
   "name": "hardhat-project",
   "devDependencies": {
+    "@repo/eslint-config": "workspace:*",
+    "@repo/typescript-config": "workspace:*",
+    "@types/jest": "^29.5.0",
+    "@types/node": "^20.0.0",
+    "jest": "^29.5.0",
+    "prettier": "^3.0.0",
+    "tsup": "^8.0.0",
+    "typescript": "^5.0.0",
     "@nomicfoundation/hardhat-toolbox": "^4.0.0",
     "hardhat": "^2.20.1",
     "hardhat-deploy": "^0.11.45"
@@ -8,5 +16,14 @@
   "dependencies": {
     "ethers": "^6.6.4",
     "gelato-web3-functions-hardhat-template": "gelatodigital/vrf-contracts"
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "lint": "eslint src/",
+    "lint:fix": "eslint src/ --fix",
+    "format": "prettier --write \"src/**/*.{ts,tsx}\"",
+    "test": "jest",
+    "clean": "rm -rf .turbo && rm -rf node_modules && rm -rf dist"
   }
 }

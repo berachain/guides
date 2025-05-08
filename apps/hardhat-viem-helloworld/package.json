@@ -1,19 +1,27 @@
 {
-  "name": "@berachain/hardhat-viem-helloworld",
+  "name": "@repo/hardhat-viem-helloworld",
   "scripts": {
+    "build": "hardhat compile",
+    "dev": "hardhat node",
+    "lint": "eslint scripts/ test/ --ext .ts,.tsx",
+    "lint:fix": "eslint scripts/ test/ --ext .ts,.tsx --fix",
+    "format": "prettier --write \"scripts/**/*.{ts,tsx}\" \"test/**/*.{ts,tsx}\"",
+    "test": "./node_modules/.bin/hardhat test",
+    "clean": "rm -rf node_modules; rm -rf .turbo;",
     "compile": "./node_modules/.bin/hardhat compile",
     "node": "./node_modules/.bin/hardhat node",
     "deploy:localhost": "./node_modules/.bin/hardhat run scripts/deploy.ts --network localhost",
     "deploy:berachain": "echo $RPC_URL; ./node_modules/.bin/hardhat run scripts/deploy.ts --network berachainTestnet",
-    "test": "./node_modules/.bin/hardhat test",
-    "verify": "./node_modules/.bin/hardhat verify --network berachainTestnet",
-    "clean": "rm -rf node_modules; rm -rf .turbo;"
+    "verify": "./node_modules/.bin/hardhat verify --network berachainTestnet"
   },
   "devDependencies": {
-    "@nomicfoundation/hardhat-toolbox-viem": "^1.0.0",
-    "dotenv": "^16.3.1",
-    "dotenv-cli": "^7.3.0",
-    "hardhat": "^2.19.1",
-    "viem": "^1.19.3"
+    "@repo/eslint-config": "workspace:*",
+    "@repo/typescript-config": "workspace:*",
+    "@types/node": "^20.0.0",
+    "prettier": "^3.0.0",
+    "typescript": "^5.0.0",
+    "@nomicfoundation/hardhat-toolbox": "^4.0.0",
+    "hardhat": "^2.19.4",
+    "viem": "^2.7.9"
   }
 }
