@@ -1,45 +1,83 @@
-# Viem + Solc Hello World
+# Viem + Solc Hello World Example 🚀
 
-This example demonstrates deploying a Hello World smart contract using Viem and Solc directly, without any framework.
+A simple example of deploying a smart contract on Berachain using Viem and Solc. This guide will help you get started with smart contract development on Berachain.
 
-## Prerequisites
+## Prerequisites 📋
 
-- Node.js v20+
-- pnpm
-- A wallet with some BERA tokens on Berachain Bepolia testnet
+Before you begin, make sure you have:
+- Node.js v20+ installed
+- A Berachain wallet with some test tokens
+- Your wallet's private key (we'll help you set this up)
 
-## Setup
+## Quick Start 🚀
 
-1. Install dependencies:
-```bash
-pnpm install
+1. **Clone and Install**
+   ```bash
+   git clone <repository-url>
+   cd viem-solc-helloworld
+   pnpm install
+   ```
+
+2. **Environment Setup**
+   ```bash
+   # Copy the example environment file
+   cp .env.example .env
+   ```
+   
+   Then open `.env` and add your wallet's private key:
+   ```
+   WALLET_PRIVATE_KEY=your_private_key_here
+   ```
+
+3. **Deploy Your Contract**
+   ```bash
+   pnpm deploy:berachain
+   ```
+
+## Project Structure 📁
+
+```
+viem-solc-helloworld/
+├── contracts/              # Your Solidity contracts
+│   └── HelloWorld.sol     # The contract we'll deploy
+├── scripts/               # Deployment scripts
+│   └── deploy.ts         # Main deployment script
+├── .env.example          # Example environment file
+└── package.json          # Project dependencies
 ```
 
-2. Set up your environment variables:
-```bash
-cp .env.example .env
-```
+## What's Inside? 🔍
 
-Then edit `.env` and add your wallet private key (with 0x prefix):
-```
-WALLET_PRIVATE_KEY=0x<your-private-key>
-```
+- A simple "Hello World" smart contract
+- A deployment script using Viem and Solc
+- Configuration for Berachain network
 
-## Usage
+## Need More Details? 📚
 
-To deploy the contract:
-```bash
-pnpm deploy:berachain
-```
+Check out the [WALKTHROUGH.md](./WALKTHROUGH.md) for a detailed explanation of the deployment process and code snippets.
 
-## Project Structure
-```
-.
-├── contracts/           # Solidity contract files
-├── scripts/            # Deployment and interaction scripts
-├── solc.d.ts          # TypeScript type definitions
-└── package.json       # Project dependencies and scripts
-```
+## Common Setup Issues 🔧
+
+1. **Node.js Version**
+   - Make sure you're using Node.js v20 or higher
+   - You can check your version with `node --version`
+
+2. **Private Key Format**
+   - Your private key should start with `0x`
+   - Keep it secure and never share it
+
+3. **Test Tokens**
+   - You'll need some test tokens for deployment
+   - Get them from the Berachain faucet
+
+## Need Help? 🤝
+
+If you run into any issues:
+- Check the error message carefully
+- Make sure all prerequisites are met
+- Verify your environment variables are set correctly
+
+Happy coding! 🌟
 
 ## Network Details
 

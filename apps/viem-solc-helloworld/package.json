@@ -1,6 +1,7 @@
 {
   "name": "@berachain/viem-solc-helloworld",
   "version": "1.0.0",
+  "type": "module",
   "description": "",
   "main": "index.js",
   "scripts": {
@@ -26,6 +27,7 @@
     "typescript": "^5.8.3"
   },
   "dependencies": {
+    "chalk": "^5.4.1",
     "solc": "^0.8.23-fixed",
     "viem": "^2.7.9"
   }
