@@ -7,40 +7,100 @@ A collection of [Berachain](https://docs.berachain.com/learn/) EVM examples: cod
 - Node.js `v20+`
 - pnpm (recommended)
 
-## Turborepo Folder Structure
+## Documentation Tree
 
-This Turborepo includes the following packages/apps:
-
-### Apps
-
-- `apps/ethers6-solc-helloworld` - Deploy HelloWorld contract with ethers6
-- `apps/viem-solc-helloworld` - Deploy HelloWorld contract with viem
-- `apps/foundry-erc20` - Deploy ERC20 contract with foundry
-- `apps/hardhat-ethers6-erc1155` - Deploy ERC1155 contract with hardhat ethers6
-- `apps/hardhat-viem-helloworld` - Deploy HelloWorld contract with hardhat viem
-- `apps/walletconnect-nextjs` - WalletConnect Web3Modal frontend contract deployment
+```
+📚 Berachain Guides
+├── 📦 Core Packages
+│   ├── 📄 berachain-config/                           # Network & RPC configurations
+│   │   ├── 📄 README.md                               # Integration patterns & security
+│   │   ├── 📄 viem/                                   # Viem integration utilities
+│   │   └── 📄 ethers/                                 # Ethers integration utilities
+│   ├── 📄 typescript-config/                          # Shared TypeScript configs
+│   ├── 📄 eslint-config/                              # Shared ESLint configs
+│   └── 📄 ui/                                         # Shared UI components
+│
+├── 📱 Smart Contract Development
+│   ├── 📄 Basic Deployment
+│   │   ├── 📄 viem-solc-helloworld/                   # Viem + Solc example
+│   │   ├── 📄 ethers6-solc-helloworld/                # Ethers + Solc example
+│   │   └── 📄 foundry-erc20/                          # Foundry ERC20 example
+│   │
+│   ├── 📄 Hardhat Examples
+│   │   ├── 📄 hardhat-viem-helloworld/                # Hardhat + Viem
+│   │   ├── 📄 hardhat-ethers6-erc1155/                # Hardhat + Ethers
+│   │   └── 📄 hardhat-contract-verification/          # Contract verification
+│   │
+│   └── 📄 Advanced Patterns
+│       ├── 📄 openzeppelin-upgrades/                  # Upgrade patterns
+│       ├── 📄 berachain-governance-proposal/          # Governance
+│       ├── 📄 gelato-vrf/                             # Chainlink VRF
+│       └── 📄 layerzero-oft/                          # Cross-chain
+│
+├── 🌐 Frontend Integration
+│   ├── 📄 Web Applications
+│   │   ├── 📄 walletconnect-nextjs/                   # WalletConnect
+│   │   ├── 📄 particle-auth-core-vite/                # Particle Network
+│   │   ├── 📄 rainbowkit-vite/                        # RainbowKit
+│   │   └── 📄 thirdweb-connectwallet-nextjs/          # Thirdweb
+│   │
+│   └── 📄 Mobile
+│       └── 📄 walletconnect-expo/                     # React Native
+│
+└── 🛠️ Infrastructure & Tools
+    ├── 📄 Indexing & Data
+    │   ├── 📄 goldsky-subgraph/                       # The Graph
+    │   ├── 📄 envio-indexer-erc20/                    # Envio
+    │   └── 📄 erpc-proxy-caching/                     # RPC caching
+    │
+    ├── 📄 Oracle Integration
+    │   ├── 📄 pyth-oracle/                            # Price feeds
+    │   └── 📄 pyth-entropy/                           # Entropy
+    │
+    └── 📄 Development Tools
+        ├── 📄 local-docker-devnet/                    # Local dev
+        ├── 📄 node-scripts/                           # Utilities
+        └── 📄 berps-bot/                              # Trading bot
+```
 
 ## Quick Start
 
-Install dependencies for all apps and packages.
+1. Install dependencies:
+   ```bash
+   pnpm install
+   ```
 
-```bash
-# FROM: ./
+2. Set up environment variables:
+   ```bash
+   cp .env.example .env
+   ```
 
-pnpm install;
-```
+3. Deploy a contract:
+   ```bash
+   # Deploy ERC20 contract
+   pnpm deploy:berachain --filter foundry-erc20 --no-cache
+   ```
 
-Create and modify your `.env` and make the modifications you need to it.
+## Getting Started
 
-```bash
-cp .env.example .env;
-```
+1. **Core Concepts**
+   - Start with `berachain-config` to understand network integration
+   - Review basic contract deployment examples
 
-If you'd like to deploy to the chain:
+2. **Choose Your Path**
+   - Smart Contract Development: Start with basic deployment examples
+   - Frontend Integration: Begin with wallet connection examples
+   - Infrastructure: Explore indexing and oracle examples
 
-```bash
-# FROM: ./
+3. **Advanced Topics**
+   - Contract upgrades and governance
+   - Cross-chain functionality
+   - Advanced indexing patterns
 
-# IMPORTANT: --no-cache is important to avoid caching the result of the deployments
-pnpm deploy:berachain --filter foundry-erc20 --no-cache;
-```
+## Contributing
+
+Contributions are welcome! Please read our [Contributing Guide](CONTRIBUTING.md) for details on our code of conduct and the process for submitting pull requests.
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
