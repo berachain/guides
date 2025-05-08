@@ -25,9 +25,7 @@
                 "storageLayout",
                 "evm.gasEstimates"
               ],
-              "": [
-                "ast"
-              ]
+              "": ["ast"]
             }
           },
           "metadata": {
@@ -35,15 +33,9 @@
           }
         }
       },
-      "imports": [
-        "./IGelatoVRFConsumer.sol"
-      ],
-      "versionPragmas": [
-        "^0.8.0"
-      ],
-      "artifacts": [
-        "GelatoVRFConsumerBase"
-      ]
+      "imports": ["./IGelatoVRFConsumer.sol"],
+      "versionPragmas": ["^0.8.0"],
+      "artifacts": ["GelatoVRFConsumerBase"]
     },
     "C:\\Users\\aniru\\OneDrive\\Desktop\\Gelato_internship\\guides\\apps\\gelato-vrf\\contracts\\gelato-vrf\\IGelatoVRFConsumer.sol": {
       "lastModificationDate": 1723211568075,
@@ -69,9 +61,7 @@
                 "storageLayout",
                 "evm.gasEstimates"
               ],
-              "": [
-                "ast"
-              ]
+              "": ["ast"]
             }
           },
           "metadata": {
@@ -80,12 +70,8 @@
         }
       },
       "imports": [],
-      "versionPragmas": [
-        "^0.8.0"
-      ],
-      "artifacts": [
-        "IGelatoVRFConsumer"
-      ]
+      "versionPragmas": ["^0.8.0"],
+      "artifacts": ["IGelatoVRFConsumer"]
     },
     "C:\\Users\\aniru\\OneDrive\\Desktop\\Gelato_internship\\guides\\apps\\gelato-vrf\\contracts\\gelato-vrf\\SimpleVRFContract.sol": {
       "lastModificationDate": 1723211568076,
@@ -111,9 +97,7 @@
                 "storageLayout",
                 "evm.gasEstimates"
               ],
-              "": [
-                "ast"
-              ]
+              "": ["ast"]
             }
           },
           "metadata": {
@@ -121,15 +105,9 @@
           }
         }
       },
-      "imports": [
-        "./GelatoVRFConsumerBase.sol"
-      ],
-      "versionPragmas": [
-        "^0.8.18"
-      ],
-      "artifacts": [
-        "SimpleVRFContract"
-      ]
+      "imports": ["./GelatoVRFConsumerBase.sol"],
+      "versionPragmas": ["^0.8.18"],
+      "artifacts": ["SimpleVRFContract"]
     }
   }
 }

@@ -4,7 +4,10 @@ declare module "solc" {
     compile(input: string): string;
     version(): string;
     setupMethods(soljson: any): any;
-    loadRemoteVersion(version: string, callback: (err: Error | null, solc: any) => void): void;
+    loadRemoteVersion(
+      version: string,
+      callback: (err: Error | null, solc: any) => void,
+    ): void;
   }
 
   const solc: SolcFunction;

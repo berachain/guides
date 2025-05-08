@@ -2,7 +2,9 @@
   "name": "@repo/eslint-config",
   "version": "0.0.0",
   "private": true,
+  "main": "base.js",
   "files": [
+    "base.js",
     "library.js",
     "next.js",
     "react-internal.js"
@@ -14,6 +16,7 @@
     "eslint-plugin-only-warn": "^1.1.0",
     "@typescript-eslint/parser": "^6.11.0",
     "@typescript-eslint/eslint-plugin": "^6.11.0",
+    "eslint-plugin-simple-import-sort": "^12.0.0",
     "typescript": "^5.2.2"
   }
 }

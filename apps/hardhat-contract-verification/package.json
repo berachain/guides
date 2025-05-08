@@ -1,15 +1,30 @@
 {
-  "name": "@berachain/hardhat-contract-verification",
+  "name": "@repo/hardhat-contract-verification",
   "version": "1.0.0",
+  "private": true,
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "build": "hardhat compile",
+    "dev": "hardhat node",
+    "lint": "eslint scripts/ test/ --ext .ts,.tsx",
+    "lint:fix": "eslint scripts/ test/ --ext .ts,.tsx --fix",
+    "format": "prettier --write \"scripts/**/*.{ts,tsx}\" \"test/**/*.{ts,tsx}\"",
+    "test": "hardhat test",
+    "clean": "rm -rf .turbo && rm -rf node_modules && rm -rf dist && rm -rf artifacts && rm -rf cache && rm -rf typechain-types"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "devDependencies": {
+    "@repo/eslint-config": "workspace:*",
+    "@repo/typescript-config": "workspace:*",
+    "@types/jest": "^29.5.0",
+    "@types/node": "^20.0.0",
+    "jest": "^29.5.0",
+    "prettier": "^3.0.0",
+    "tsup": "^8.0.0",
+    "typescript": "^5.0.0",
     "@nomicfoundation/hardhat-toolbox": "^4.0.0",
     "@nomicfoundation/hardhat-verify": "^2.0.4",
     "hardhat": "^2.19.5"
