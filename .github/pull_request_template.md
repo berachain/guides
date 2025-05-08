@@ -1,37 +1,33 @@
-# Guide Addition/Update
+# Guide Contribution PR
 
 ## Description
 
-<!-- Provide a brief description of the changes in this PR -->
+<!-- Briefly describe what this guide/example adds or updates. What problem does it solve or what use case does it demonstrate? -->
 
 ## Type of Change
-
-- [ ] 🐛 Bug fix (non-breaking change which fixes an issue)
-- [ ] ✨ New feature (non-breaking change which adds functionality)
-- [ ] 💥 Breaking change (fix or feature that would cause existing functionality to not work as expected)
-- [ ] 📝 Documentation update
-- [ ] 🎨 Style update (formatting, renaming)
-- [ ] ♻️ Code refactor (no functional changes)
-- [ ] ⚡️ Performance improvement
-- [ ] ✅ Test update
+- [ ] ✨ New guide/example
+- [ ] 📝 Update to existing guide/example
+- [ ] 🐛 Bug fix in a guide/example
+- [ ] 🎨 Style/formatting update
+- [ ] ♻️ Refactor (no functional changes)
+- [ ] Other (please describe):
 
 ## Guide Details
-- Name: 
-- Category: (e.g., Smart Contracts, Frontend, Infrastructure)
-- Dependencies Added:
-- Network: (e.g., Bepolia, Mainnet)
+- **Guide Name:**
+- **Category:** (e.g., Smart Contracts, Frontend, Infrastructure, Tooling)
+- **Dependencies Added:**
+- **Network(s) Used:** (e.g., Bepolia, Mainnet, Local)
+- **Entry Point:** (e.g., script, README section, etc.)
 
 ## Checklist
-
-- [ ] My code follows the style guidelines of this project
-- [ ] I have performed a self-review of my own code
-- [ ] I have commented my code, particularly in hard-to-understand areas
-- [ ] I have made corresponding changes to the documentation
-- [ ] My changes generate no new warnings
-- [ ] I have added tests that prove my fix is effective or that my feature works
-- [ ] New and existing unit tests pass locally with my changes
-- [ ] Any dependent changes have been merged and published in downstream modules
+- [ ] The guide/example is clear and easy to follow
+- [ ] All steps are reproducible (instructions/scripts work as described)
+- [ ] All new/changed code is commented where necessary
+- [ ] Documentation is updated (README, inline docs, etc.)
+- [ ] No sensitive information or secrets are included
+- [ ] Example runs without errors or warnings
+- [ ] (If applicable) Screenshots or output are included for clarity
 
 ## Additional Notes
 
-<!-- Add any other information about the PR here --> 
+<!-- Add any other information, context, or screenshots here. --> 
