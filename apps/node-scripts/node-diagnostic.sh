@@ -4,24 +4,22 @@
 # This script checks the status and configuration of a Beacond node
 
 # Colors
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[0;33m'
-BLUE='\033[0;34m'
-PURPLE='\033[0;35m'
-CYAN='\033[0;36m'
-NC='\033[0m' # No Color
+RED='\033[0;31m'    # For errors and critical issues
+GREEN='\033[0;32m'  # For good/positive status
+YELLOW='\033[0;33m' # For warnings
+BLUE='\033[0;34m'   # For informational messages
+NC='\033[0m'        # No Color
+
+# Check if env.sh exists in the same directory and source it if it does
+[[ -f env.sh ]] && . ./env.sh 
 
 # Default paths - these can be overridden with command-line options
-BEACOND_PATH="beacond"
-BEACOND_HOME="$HOME/.beacond"
+BEACOND_PATH=${BEACOND_BIN:-"beacond"}
+BEACOND_HOME=${BEACOND_DATA:-"$HOME/.beacond"}
 CONFIG_DIR="$BEACOND_HOME/config"
 CHECK_DISK_IO=false
 
 print_help() {
-    echo -e "${CYAN}=================================================================${NC}"
-    echo -e "${CYAN}🛰️  BEACOND NODE DIAGNOSTIC TOOL - HELP 🛰️${NC}"
-    echo -e "${CYAN}=================================================================${NC}"
     echo -e "Usage: $0 [OPTIONS]"
     echo -e "\nOptions:"
     echo -e "  -h, --help                Show this help message"
@@ -30,7 +28,6 @@ print_help() {
     echo -e "  -i, --disk-io             Enable disk I/O checks (default: disabled)"
     echo -e "\nExample:"
     echo -e "  $0 --path /usr/local/bin/beacond --home /data/beacond --disk-io"
-    echo -e "${CYAN}=================================================================${NC}"
     exit 0
 }
 
@@ -61,8 +58,8 @@ while [[ $# -gt 0 ]]; do
 done
 
 print_header() {
-    echo -e "\n${PURPLE}🔍 $1 ${NC}"
-    echo -e "${PURPLE}=================================================${NC}"
+    echo -e "\n${BLUE}🔍 $1 ${NC}"
+    echo -e "${BLUE}--------------------------------${NC}"
 }
 
 check_file_exists() {
@@ -78,9 +75,7 @@ CONFIG_TOML="$CONFIG_DIR/config.toml"
 APP_TOML="$CONFIG_DIR/app.toml"
 
 # Script header
-echo -e "${CYAN}=================================================================${NC}"
-echo -e "${CYAN}🛰️  BEACOND NODE DIAGNOSTIC TOOL 🛰️${NC}"
-echo -e "${CYAN}=================================================================${NC}"
+echo -e "${BLUE}🛰️  BEACOND NODE DIAGNOSTIC TOOL 🛰️${NC}"
 echo -e "${BLUE}Using beacond path: ${NC}$BEACOND_PATH"
 echo -e "${BLUE}Using beacond home: ${NC}$BEACOND_HOME\n"
 
@@ -186,9 +181,9 @@ if check_file_exists "$CONFIG_TOML"; then
     
     if [ -n "$PERSISTENT_PEERS" ] && [ "$PERSISTENT_PEERS" != "" ]; then
         PERSISTENT_COUNT=$(echo "$PERSISTENT_PEERS" | tr ',' '\n' | wc -l)
-        echo -e "${GREEN}✅ Persistent peers: ${NC}Using $PERSISTENT_COUNT persistent peers"
+        echo -e "${BLUE}⚠️ Persistent peers: ${NC}Using $PERSISTENT_COUNT persistent peers. Be sure you know why they are needed."
     else
-        echo -e "${YELLOW}⚠️  Persistent peers: ${NC}None configured"
+        echo -e "${BLUE}✅ Persistent peers: ${NC}None configured"
     fi
     
 
@@ -273,17 +268,17 @@ fi
 UNCONDITIONAL_PEER_IDS=$(grep "^unconditional_peer_ids" "$CONFIG_TOML" | sed 's/.*= *//' | tr -d '"')
 if [ -n "$UNCONDITIONAL_PEER_IDS" ] && [ "$UNCONDITIONAL_PEER_IDS" != "\"\"" ]; then
     UNCONDITIONAL_COUNT=$(echo "$UNCONDITIONAL_PEER_IDS" | tr ',' '\n' | wc -l)
-    echo -e "${GREEN}✅ Unconditional peer IDs: ${NC}$UNCONDITIONAL_COUNT configured"
+    echo -e "${BLUE}⚠️ Unconditional peer IDs: ${NC}$UNCONDITIONAL_COUNT configured. Be sure you know why they are needed."
 else
-    echo -e "${BLUE}ℹ️  Unconditional peer IDs: ${NC}None configured"
+    echo -e "${BLUE}✅ Unconditional peer IDs: ${NC}None configured"
 fi
 
 # Check seed mode
 SEED_MODE=$(grep "^seed_mode" "$CONFIG_TOML" | sed 's/.*= *//' | tr -d '[:space:]')
 if [ "$SEED_MODE" = "true" ]; then
-    echo -e "${BLUE}ℹ️  Seed mode: ${NC}Enabled (node is operating as a seed node)"
+    echo -e "${BLUE}⚠️ Seed mode: ${NC}Enabled (node is operating as a seed node). Are you Chuck?"
 else
-    echo -e "${BLUE}ℹ️  Seed mode: ${NC}Disabled"
+    echo -e "${BLUE}✅ Seed mode: ${NC}Disabled"
 fi
 
 # Check pex setting
@@ -407,7 +402,6 @@ if [ -n "$ENGINE_URL" ] && [ -n "$JWT_SECRET_PATH" ] && [ -f "$JWT_SECRET_PATH" 
             fi
             
             # Get the latest block height from the public Berachain RPC
-            BERACHAIN_RPC_URL="https://rpc.berachain.com"
             if [ -n "$CHAIN_ID_DEC" ] && [ "$CHAIN_ID_DEC" -eq 80069 ]; then
                 BERACHAIN_RPC_URL="https://bepolia.rpc.berachain.com"
                 echo -e "${BLUE}Using Berachain Sepolia RPC: ${NC}$BERACHAIN_RPC_URL"
@@ -464,8 +458,6 @@ fi
 # check to ensure that the right seeds are in place based on the chain ID
 # Check for correct seeds based on chain ID
 if [ -f "$CONFIG_TOML" ]; then
-    echo -e "\n${GREEN}🌱 Checking Seeds Configuration:${NC}"
-    
     # Check if the seeds contain the required seed
     if [ "$CHAIN_ID_DEC" = "80069" ]; then 
         # Fetch the expected seeds configuration from GitHub
