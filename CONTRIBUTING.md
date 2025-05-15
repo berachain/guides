@@ -19,6 +19,7 @@ apps/your-guide-name/
 ## Documentation Standards
 
 ### README.md
+
 - Clear prerequisites
 - Step-by-step setup instructions
 - Project structure
@@ -27,6 +28,7 @@ apps/your-guide-name/
 - Links to additional resources
 
 ### WALKTHROUGH.md
+
 - Detailed process explanation
 - Code snippets with context
 - Example outputs
@@ -36,11 +38,13 @@ apps/your-guide-name/
 ## Code Standards
 
 1. **Dependencies**
+
    - Use `@branch/berachain-config` for network configuration
    - Keep dependencies up to date
    - Document any special requirements
 
 2. **Scripts**
+
    - Include clear error handling
    - Add helpful console output
    - Document all environment variables
@@ -68,4 +72,4 @@ apps/your-guide-name/
 
 ## Questions?
 
-Feel free to open an issue or reach out to the team! 
+Feel free to open an issue or reach out to the team!

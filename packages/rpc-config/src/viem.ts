@@ -5,17 +5,28 @@ declare global {
   }
 }
 
-import { createPublicClient, http, createWalletClient, custom, type PublicClient, type WalletClient, type Transport, type Account } from 'viem';
-import { privateKeyToAccount } from 'viem/accounts';
-import { berachainMainnet, berachainBepolia, type Chain } from './index';
+import {
+  createPublicClient,
+  http,
+  createWalletClient,
+  custom,
+  type PublicClient,
+  type WalletClient,
+  type Transport,
+  type Account,
+} from "viem";
+import { privateKeyToAccount } from "viem/accounts";
+import { berachainMainnet, berachainBepolia, type Chain } from "./index";
 
 /**
  * Create a viem public client for Berachain
  */
-export function createBerachainPublicClient(chain: Chain = berachainMainnet): PublicClient {
+export function createBerachainPublicClient(
+  chain: Chain = berachainMainnet,
+): PublicClient {
   return createPublicClient({
     chain,
-    transport: http()
+    transport: http(),
   });
 }
 
@@ -28,13 +39,13 @@ export function createBerachainPublicClient(chain: Chain = berachainMainnet): Pu
 export function createBerachainWalletClient(
   privateKey: `0x${string}`,
   chain: Chain = berachainMainnet,
-  transport: Transport = http()
+  transport: Transport = http(),
 ): WalletClient {
   const account = privateKeyToAccount(privateKey);
   return createWalletClient({
     account,
     chain,
-    transport
+    transport,
   });
 }
 
@@ -45,17 +56,19 @@ export function createBerachainWalletClient(
  */
 export function createBrowserWalletClient(
   chain: Chain = berachainMainnet,
-  account?: Account
+  account?: Account,
 ): WalletClient {
-  if (typeof window === 'undefined') {
-    throw new Error('Browser wallet client can only be created in browser environment');
+  if (typeof window === "undefined") {
+    throw new Error(
+      "Browser wallet client can only be created in browser environment",
+    );
   }
   if (!window.ethereum) {
-    throw new Error('No ethereum provider found in window');
+    throw new Error("No ethereum provider found in window");
   }
   return createWalletClient({
     account,
     chain,
-    transport: custom(window.ethereum)
+    transport: custom(window.ethereum),
   });
-} 
+}

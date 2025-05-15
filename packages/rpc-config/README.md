@@ -20,7 +20,12 @@ pnpm add ethers
 ### Basic Usage
 
 ```typescript
-import { berachainMainnet, berachainBepolia, getChainById, getChainByName } from '@branch/berachain-config';
+import {
+  berachainMainnet,
+  berachainBepolia,
+  getChainById,
+  getChainByName,
+} from "@branch/berachain-config";
 
 // Use predefined chains
 const mainnet = berachainMainnet;
@@ -30,7 +35,7 @@ const testnet = berachainBepolia;
 const chain = getChainById(80085); // Returns berachainMainnet
 
 // Get chain by name
-const chainByName = getChainByName('berachain'); // Returns berachainMainnet
+const chainByName = getChainByName("berachain"); // Returns berachainMainnet
 ```
 
 ## Integration Patterns
@@ -41,19 +46,20 @@ For browser-based applications, you can use either Viem or Ethers to create wall
 
 ```typescript
 // Using Viem
-import { createBrowserWalletClient } from '@branch/berachain-config/viem';
-import { berachainMainnet } from '@branch/berachain-config';
+import { createBrowserWalletClient } from "@branch/berachain-config/viem";
+import { berachainMainnet } from "@branch/berachain-config";
 
 const browserWallet = createBrowserWalletClient(berachainMainnet);
 
 // Using Ethers
-import { createBrowserEthersSigner } from '@branch/berachain-config/ethers';
-import { berachainMainnet } from '@branch/berachain-config';
+import { createBrowserEthersSigner } from "@branch/berachain-config/ethers";
+import { berachainMainnet } from "@branch/berachain-config";
 
 const browserSigner = createBrowserEthersSigner(berachainMainnet);
 ```
 
 Security considerations for browser integration:
+
 - Always use HTTPS in production
 - Implement proper error handling for wallet connection failures
 - Consider implementing wallet connection persistence
@@ -66,19 +72,23 @@ For scripts and backend services, you can use private key-based authentication:
 
 ```typescript
 // Using Viem
-import { createBerachainWalletClient } from '@branch/berachain-config/viem';
-import { berachainMainnet } from '@branch/berachain-config';
+import { createBerachainWalletClient } from "@branch/berachain-config/viem";
+import { berachainMainnet } from "@branch/berachain-config";
 
 const walletClient = createBerachainWalletClient(http(), berachainMainnet);
 
 // Using Ethers
-import { createBerachainEthersSigner } from '@branch/berachain-config/ethers';
-import { berachainMainnet } from '@branch/berachain-config';
+import { createBerachainEthersSigner } from "@branch/berachain-config/ethers";
+import { berachainMainnet } from "@branch/berachain-config";
 
-const signer = createBerachainEthersSigner('your-private-key', berachainMainnet);
+const signer = createBerachainEthersSigner(
+  "your-private-key",
+  berachainMainnet,
+);
 ```
 
 Security considerations for Node.js scripts:
+
 - Never commit private keys to version control
 - Use environment variables for sensitive data
 - Implement proper error handling and retries
@@ -90,13 +100,16 @@ Security considerations for Node.js scripts:
 The package works with various development frameworks:
 
 #### Hardhat
+
 - [hardhat-viem-helloworld](../../apps/hardhat-viem-helloworld)
 - [hardhat-ethers6-erc1155](../../apps/hardhat-ethers6-erc1155)
 
 #### Foundry
+
 - [foundry-erc20](../../apps/foundry-erc20)
 
 #### Frontend Frameworks
+
 - Next.js: [walletconnect-nextjs](../../apps/walletconnect-nextjs)
 - React Native: [walletconnect-expo](../../apps/walletconnect-expo)
 - Vite: [particle-auth-core-vite](../../apps/particle-auth-core-vite)
@@ -104,6 +117,7 @@ The package works with various development frameworks:
 ## Network Information
 
 ### Berachain Mainnet
+
 - **Chain ID**: 80085
 - **RPC URL**: https://rpc.berachain.com
 - **Block Explorer**: https://berascan.com
@@ -111,6 +125,7 @@ The package works with various development frameworks:
 - **Symbol**: BERA
 
 ### Bepolia Testnet
+
 - **Chain ID**: 80085
 - **RPC URL**: https://bepolia.rpc.berachain.com
 - **Block Explorer**: https://bepolia.beratrail.io
@@ -137,4 +152,4 @@ To add Berachain networks to MetaMask:
 
 ## Contributing
 
-This package is part of the [Berachain Guides](https://github.com/berachain/guides) repository. 
+This package is part of the [Berachain Guides](https://github.com/berachain/guides) repository.
