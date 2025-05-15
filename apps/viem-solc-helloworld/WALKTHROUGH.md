@@ -128,7 +128,7 @@ When everything works, you'll see something like this:
 
 ## Common Issues and Solutions 🔧
 
-1. **Compilation Errors**
+### Compilation Errors
    - Check your Solidity code syntax
    - Verify compiler version compatibility
    - Look for missing semicolons or brackets
