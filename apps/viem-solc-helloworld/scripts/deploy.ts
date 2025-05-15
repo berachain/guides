@@ -3,66 +3,44 @@
 import solc from "solc";
 import fs from "fs";
 import path from "path";
+import { fileURLToPath } from "url";
 import { config } from "dotenv";
-import {
-  createWalletClient,
-  createPublicClient,
-  defineChain,
-  http,
-  encodeAbiParameters,
-} from "viem";
+import { encodeAbiParameters } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
+import { createBerachainPublicClient, createBerachainWalletClient } from "@branch/berachain-config/viem";
+import { berachainBepolia } from "@branch/berachain-config";
+import chalk from "chalk";
 
-// Config
+// Environment Configuration
 // ========================================================
+// 🌍 Loading your environment variables from .env file
 config();
 
-// Constants
+// Contract Configuration
 // ========================================================
-/**
- * @dev contract name from `./contract/HelloWorld
- */
+// 📝 The name of your contract - make sure it matches your .sol file!
 const CONTRACT_NAME = "HelloWorld";
 
-/**
- * @dev Custom chain configuration
- */
-const chainConfiguration = defineChain({
-  id: parseInt(`${process.env.CHAIN_ID}`),
-  name: `${process.env.NETWORK_NAME}`,
-  network: `${process.env.NETWORK_NAME}`,
-  nativeCurrency: {
-    decimals: parseInt(`${process.env.CURRENCY_DECIMALS}`),
-    name: `${process.env.CURRENCY_NAME}`,
-    symbol: `${process.env.CURRENCY_SYMBOL}`,
-  },
-  rpcUrls: {
-    default: {
-      http: [`${process.env.RPC_URL}`],
-    },
-    public: {
-      http: [`${process.env.RPC_URL}`],
-    },
-  },
-  blockExplorers: {
-    default: {
-      name: `${process.env.BLOCK_EXPLORER_NAME}`,
-      url: `${process.env.BLOCK_EXPLORER_URL}`,
-    },
-  },
-});
+// File System Setup
+// ========================================================
+// 📂 Setting up file paths for your contract
+// This helps us find and read your Solidity file
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Main Script
 // ========================================================
 (async () => {
-  console.group(
-    "Deploy Script\n========================================================",
-  );
+  console.log(chalk.blue("\n🚀 Let's Deploy Your Contract!"));
+  console.log(chalk.gray("========================================================\n"));
   try {
-    // The initial value that will be deployed with the contract
+    // 💬 The message that will be stored in your contract
     const INITIAL_GREETING = "Hello From Deployed Contract";
 
-    // 1 - Compile Contract
+    // Contract Compilation
+    // ========================================================
+    // 🔨 Time to compile your Solidity contract!
+    // This step converts your human-readable code into bytecode that the blockchain can understand
     const baseContractPath = path.join(
       __dirname,
       `../contracts/`,
@@ -86,58 +64,65 @@ const chainConfiguration = defineChain({
       },
     };
 
+    // @ts-ignore - solc types are incorrect, but the function works
     const output = solc.compile(JSON.stringify(input));
     const contract = JSON.parse(output);
     const contractBytecode =
       contract.contracts.baseContractPath[CONTRACT_NAME].evm.bytecode.object;
     const contractABI = contract.contracts.baseContractPath[CONTRACT_NAME].abi;
-    // console.log({ contractBytecode });
-    // console.log({ contractABI });
+    console.log(chalk.green("✓ Awesome! Your contract compiled successfully"));
 
-    // 2 - Setup account
-    const account = privateKeyToAccount(
-      `${process.env.WALLET_PRIVATE_KEY}` as `0x${string}`,
-    );
+    // Account and Client Setup
+    // ========================================================
+    // 👛 Setting up your wallet and connection to Berachain
+    // This is how your contract will interact with the blockchain
+    const privateKey = process.env.WALLET_PRIVATE_KEY as `0x${string}`;
+    if (!privateKey) {
+      throw new Error("WALLET_PRIVATE_KEY not found in environment");
+    }
+    const account = privateKeyToAccount(privateKey);
+    console.log(chalk.cyan(`📝 Using your account: ${account.address}`));
 
-    // 3 - Configure wallet client for deployment
-    const walletClient = createWalletClient({
-      account,
-      chain: chainConfiguration,
-      transport: http(),
-    });
+    const publicClient = createBerachainPublicClient(berachainBepolia);
+    const walletClient = createBerachainWalletClient(privateKey, berachainBepolia);
+    console.log(chalk.green("✓ Great! Your connection is ready"));
 
-    // 4 - Create public client to get contract address and optionally gas estimate
-    const publicClient = createPublicClient({
-      chain: chainConfiguration,
-      transport: http(),
-    });
-
-    // 5 - (optional) Estimate gas
+    // Gas Estimation
+    // ========================================================
+    // ⛽ Let's check how much gas your deployment will need
+    // This helps ensure your transaction will go through smoothly
     const encodedData = encodeAbiParameters(
       [{ name: "_greeting", type: "string" }],
       [INITIAL_GREETING],
     );
 
     const gasEstimate = await publicClient.estimateGas({
-      account,
+      account: account.address,
       data: `0x${contractBytecode}${encodedData.slice(2)}` as `0x${string}`,
     });
-    console.log({ gasEstimate });
+    console.log(chalk.yellow(`⛽ Gas needed: ${gasEstimate.toString()}`));
 
-    // 6 - Deploy contract
+    // Contract Deployment
+    // ========================================================
+    // 🚀 Time to deploy your contract to Berachain!
+    // This is where the magic happens - your code goes live on the blockchain
     const hash = await walletClient.deployContract({
       abi: contractABI,
-      bytecode: contractBytecode,
+      bytecode: `0x${contractBytecode}` as `0x${string}`,
       args: [INITIAL_GREETING],
+      account: account,
+      chain: berachainBepolia,
     });
-    console.log({ hash });
+    console.log(chalk.cyan(`🔗 Your transaction is being processed: ${hash}`));
 
-    // 7 - Get deployed contract address
+    // Deployment Verification
+    // ========================================================
+    // ✨ Let's make sure everything went smoothly
+    // We'll wait for the transaction to complete and get your contract's address
     const receipt = await publicClient.waitForTransactionReceipt({ hash });
-
-    console.log(`${CONTRACT_NAME} deployed to ${receipt?.contractAddress}`);
+    console.log(chalk.green(`\n🎉 Congratulations! Your contract is live at ${receipt?.contractAddress}`));
+    console.log(chalk.gray("\n========================================================\n"));
   } catch (error: any) {
-    console.error({ error });
+    console.error(chalk.red("\n❌ Oops! Something went wrong:"), error);
   }
-  console.groupEnd();
 })();
