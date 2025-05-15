@@ -11,12 +11,12 @@ Before you begin, make sure you have:
 
 ## Quick Start 🚀
 
-1. **Clone and Install**
-   ```bash
-   git clone <repository-url>
-   cd viem-solc-helloworld
-   pnpm install
-   ```
+### Step 1 - Clone and Install
+
+```bash
+git clone <repository-url>
+cd viem-solc-helloworld
+pnpm install
 
 2. **Environment Setup**
    ```bash
