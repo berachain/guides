@@ -4,7 +4,7 @@ This walkthrough explains how the deployment script works, with code snippets to
 
 ## The Deployment Process 🛠️
 
-### 1. Contract Compilation 🔨
+### Step 1 - Contract Compilation 🔨
 
 First, we need to compile your Solidity contract into bytecode that the blockchain can understand:
 
