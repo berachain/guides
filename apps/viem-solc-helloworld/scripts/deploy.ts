@@ -39,7 +39,7 @@ const __dirname = path.dirname(__filename);
   console.log(chalk.blue("\n🚀 Let's Deploy Your Contract!"));
   // eslint-disable-next-line no-console
   console.log(
-    chalk.gray("========================================================\n")
+    chalk.gray("========================================================\n"),
   );
   try {
     // 💬 The message that will be stored in your contract
@@ -52,7 +52,7 @@ const __dirname = path.dirname(__filename);
     const baseContractPath = path.join(
       __dirname,
       "../contracts/",
-      `${CONTRACT_NAME}.sol`
+      `${CONTRACT_NAME}.sol`,
     );
     const content = await fs.readFileSync(baseContractPath).toString();
 
@@ -80,7 +80,7 @@ const __dirname = path.dirname(__filename);
     const contract = output.contracts.baseContractPath[CONTRACT_NAME];
     if (!contract) {
       throw new Error(
-        `Contract ${CONTRACT_NAME} not found in compilation output`
+        `Contract ${CONTRACT_NAME} not found in compilation output`,
       );
     }
 
@@ -104,7 +104,7 @@ const __dirname = path.dirname(__filename);
     const publicClient = createBerachainPublicClient(berachainBepolia);
     const walletClient = createBerachainWalletClient(
       privateKey,
-      berachainBepolia
+      berachainBepolia,
     );
     // eslint-disable-next-line no-console
     console.log(chalk.green("✓ Great! Your connection is ready"));
@@ -115,7 +115,7 @@ const __dirname = path.dirname(__filename);
     // This helps ensure your transaction will go through smoothly
     const encodedData = encodeAbiParameters(
       [{ name: "_greeting", type: "string" }],
-      [INITIAL_GREETING]
+      [INITIAL_GREETING],
     );
 
     const gasEstimate = await publicClient.estimateGas({
@@ -147,12 +147,14 @@ const __dirname = path.dirname(__filename);
     // eslint-disable-next-line no-console
     console.log(
       chalk.green(
-        `\n🎉 Congratulations! Your contract is live at ${receipt?.contractAddress}`
-      )
+        `\n🎉 Congratulations! Your contract is live at ${receipt?.contractAddress}`,
+      ),
     );
     // eslint-disable-next-line no-console
     console.log(
-      chalk.gray("\n========================================================\n")
+      chalk.gray(
+        "\n========================================================\n",
+      ),
     );
   } catch (error: unknown) {
     // eslint-disable-next-line no-console
