@@ -152,20 +152,41 @@ async function main() {
     const DEFAULT_SORT_BY = COL_AVG_TXS_PER_BLOCK;
     const FIXED_SORT_ORDER = 'asc';
 
-    const elRpcPort = process.env.EL_ETHRPC_PORT;
-    const clRpcPort = process.env.CL_ETHRPC_PORT;
+    const elRpcUrlEnv = process.env.EL_ETHRPC_URL;
+    const elRpcPortEnv = process.env.EL_ETHRPC_PORT;
+    const clRpcUrlEnv = process.env.CL_ETHRPC_URL;
+    const clRpcPortEnv = process.env.CL_ETHRPC_PORT;
 
-    if (!elRpcPort || isNaN(parseInt(elRpcPort)) || parseInt(elRpcPort) <= 0 || parseInt(elRpcPort) > 65535) {
-        console.error('Error: Environment variable EL_ETHRPC_PORT is not set or is invalid. Please set it to a valid port number (1-65535).');
+    let rpcUrl; // For EL
+    let clRpcBaseUrl; // For CL
+
+    if (elRpcUrlEnv && elRpcUrlEnv.startsWith('http')) {
+        rpcUrl = elRpcUrlEnv;
+    } else if (elRpcPortEnv) {
+        const port = parseInt(elRpcPortEnv);
+        if (isNaN(port) || port <= 0 || port > 65535) {
+            console.error('Error: Environment variable EL_ETHRPC_PORT is invalid. Must be a valid port number (1-65535) if EL_ETHRPC_URL is not set.');
+            process.exit(1);
+        }
+        rpcUrl = `http://localhost:${port}`;
+    } else {
+        console.error('Error: Missing Execution Layer RPC configuration. Please set either EL_ETHRPC_URL or EL_ETHRPC_PORT environment variable.');
         process.exit(1);
     }
-    if (!clRpcPort || isNaN(parseInt(clRpcPort)) || parseInt(clRpcPort) <= 0 || parseInt(clRpcPort) > 65535) {
-        console.error('Error: Environment variable CL_ETHRPC_PORT is not set or is invalid. Please set it to a valid port number (1-65535).');
+
+    if (clRpcUrlEnv && clRpcUrlEnv.startsWith('http')) {
+        clRpcBaseUrl = clRpcUrlEnv;
+    } else if (clRpcPortEnv) {
+        const port = parseInt(clRpcPortEnv);
+        if (isNaN(port) || port <= 0 || port > 65535) {
+            console.error('Error: Environment variable CL_ETHRPC_PORT is invalid. Must be a valid port number (1-65535) if CL_ETHRPC_URL is not set.');
+            process.exit(1);
+        }
+        clRpcBaseUrl = `http://localhost:${port}`;
+    } else {
+        console.error('Error: Missing Consensus Layer RPC configuration. Please set either CL_ETHRPC_URL or CL_ETHRPC_PORT environment variable.');
         process.exit(1);
     }
-
-    const rpcUrl = `http://localhost:${elRpcPort}`;
-    const clRpcBaseUrl = `http://localhost:${clRpcPort}`;
     
     let startBlock, endBlock;
     let useDefaultBlockRange = true;
@@ -222,7 +243,7 @@ async function main() {
         })
         .alias('h', 'help')
         .usage('Usage: node scan-all-blocks.js [startBlock endBlock] [-t | -g | -b]')
-        .epilogue(`Description:\n  Scans a range of blocks from an Ethereum-compatible blockchain to gather proposer statistics.\n  Relies on EL_ETHRPC_PORT and CL_ETHRPC_PORT environment variables for RPC endpoints (e.g., http://localhost:EL_ETHRPC_PORT).\n  If startBlock and endBlock are omitted, scans the prior ${BLOCKS_TO_SCAN_PRIOR} blocks from the current block.\n  Batch size is fixed at 14,400 blocks.\n  Default sort: ${DEFAULT_SORT_BY} (ascending)\n\nRequired Environment Variables:\n  EL_ETHRPC_PORT          Port for the Execution Layer (EL) RPC endpoint (e.g., 8545).\n  CL_ETHRPC_PORT          Port for the Consensus Layer (CL) RPC endpoint for header data (e.g., 50200).\n\nExamples:\n  EL_ETHRPC_PORT=8545 CL_ETHRPC_PORT=50200 node scan-all-blocks.js\n  EL_ETHRPC_PORT=8545 CL_ETHRPC_PORT=50200 node scan-all-blocks.js 1000 2000\n  EL_ETHRPC_PORT=8545 CL_ETHRPC_PORT=50200 node scan-all-blocks.js -g`)
+        .epilogue(`Description:\n  Scans a range of blocks from an Ethereum-compatible blockchain to gather proposer statistics.\n  Relies on EL_ETHRPC_URL and CL_ETHRPC_URL environment variables for RPC endpoints (e.g., http://localhost:EL_ETHRPC_URL).\n  If startBlock and endBlock are omitted, scans the prior ${BLOCKS_TO_SCAN_PRIOR} blocks from the current block.\n  Batch size is fixed at 14,400 blocks.\n  Default sort: ${DEFAULT_SORT_BY} (ascending)\n\nRequired Environment Variables:\n  EL_ETHRPC_URL           EL RPC endpoint\n  EL_ETHRPC_PORT          EL RPC port on localhost\n  CL_ETHRPC_URL           CL RPC endpoint\n  CL_ETHRPC_PORT          CL RPC port on localhost\n`)
         .fail((msg, err, yargs) => {
             if (err) throw err; // Preserve stack
             console.error('Error:', msg);
