@@ -1,5 +1,5 @@
 {
-  "name": "@repo/governance-proposal",
+  "name": "@berachain/governance-proposal",
   "version": "1.0.0",
   "private": true,
   "scripts": {
@@ -12,8 +12,8 @@
     "clean": "rm -rf node_modules; rm -rf .turbo;"
   },
   "devDependencies": {
-    "@repo/eslint-config": "workspace:*",
-    "@repo/typescript-config": "workspace:*",
+    "@berachain/eslint-config": "workspace:*",
+    "@berachain/typescript-config": "workspace:*",
     "@types/node": "^20.0.0",
     "prettier": "^3.0.0",
     "tsup": "^8.0.0",

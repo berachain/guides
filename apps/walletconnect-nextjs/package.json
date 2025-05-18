@@ -1,5 +1,5 @@
 {
-  "name": "@repo/berachain-walletconnect-nextjs",
+  "name": "@berachain/berachain-walletconnect-nextjs",
   "version": "1.0.0",
   "private": true,
   "author": {
@@ -26,8 +26,8 @@
     "wagmi": "^2.5.7"
   },
   "devDependencies": {
-    "@repo/eslint-config": "workspace:*",
-    "@repo/typescript-config": "workspace:*",
+    "@berachain/eslint-config": "workspace:*",
+    "@berachain/typescript-config": "workspace:*",
     "@types/jest": "^29.5.0",
     "@types/node": "^20",
     "jest": "^29.5.0",

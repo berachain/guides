@@ -15,8 +15,8 @@
     "start": "ts-node generated/src/Index.bs.js"
   },
   "devDependencies": {
-    "@repo/eslint-config": "workspace:*",
-    "@repo/typescript-config": "workspace:*",
+    "@berachain/eslint-config": "workspace:*",
+    "@berachain/typescript-config": "workspace:*",
     "@types/jest": "^29.5.0",
     "@types/node": "20.8.8",
     "jest": "^29.5.0",

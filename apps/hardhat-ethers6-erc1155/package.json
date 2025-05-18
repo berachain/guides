@@ -1,5 +1,5 @@
 {
-  "name": "@repo/hardhat-ethers6-erc1155",
+  "name": "@berachain/hardhat-ethers6-erc1155",
   "version": "1.0.0",
   "private": true,
   "scripts": {
@@ -17,8 +17,8 @@
     "verify": "./node_modules/.bin/hardhat verify --network berachainTestnet"
   },
   "devDependencies": {
-    "@repo/eslint-config": "workspace:*",
-    "@repo/typescript-config": "workspace:*",
+    "@berachain/eslint-config": "workspace:*",
+    "@berachain/typescript-config": "workspace:*",
     "@types/jest": "^29.5.0",
     "@types/node": "^20.0.0",
     "jest": "^29.5.0",
