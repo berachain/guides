@@ -1,5 +1,5 @@
 {
-  "name": "@repo/rpc-config",
+  "name": "@berachain/rpc-config",
   "version": "0.1.0",
   "private": true,
   "main": "./dist/index.js",
@@ -36,8 +36,8 @@
     "viem": "^2.0.0"
   },
   "devDependencies": {
-    "@repo/eslint-config": "workspace:*",
-    "@repo/typescript-config": "workspace:*",
+    "@berachain/eslint-config": "workspace:*",
+    "@berachain/typescript-config": "workspace:*",
     "@types/jest": "^29.5.0",
     "@types/node": "^20.0.0",
     "ethers": "^6.0.0",

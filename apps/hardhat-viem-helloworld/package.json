@@ -1,5 +1,5 @@
 {
-  "name": "@repo/hardhat-viem-helloworld",
+  "name": "@berachain/hardhat-viem-helloworld",
   "scripts": {
     "build": "hardhat compile",
     "dev": "hardhat node",
@@ -15,8 +15,8 @@
     "verify": "./node_modules/.bin/hardhat verify --network berachainTestnet"
   },
   "devDependencies": {
-    "@repo/eslint-config": "workspace:*",
-    "@repo/typescript-config": "workspace:*",
+    "@berachain/eslint-config": "workspace:*",
+    "@berachain/typescript-config": "workspace:*",
     "@types/node": "^20.0.0",
     "prettier": "^3.0.0",
     "typescript": "^5.0.0",

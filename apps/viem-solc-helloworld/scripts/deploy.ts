@@ -1,11 +1,11 @@
 /* eslint-disable no-console */
 // Imports
 // ========================================================
-import { berachainBepolia } from "@repo/rpc-config";
+import { berachainBepolia } from "@berachain/rpc-config";
 import {
   createBerachainPublicClient,
   createBerachainWalletClient,
-} from "@repo/rpc-config/viem";
+} from "@berachain/rpc-config/viem";
 import chalk from "chalk";
 import { config } from "dotenv";
 import fs from "fs";

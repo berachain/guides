@@ -1,5 +1,5 @@
 {
-  "extends": "@repo/typescript-config/base.json",
-  "include": ["src"],
-  "exclude": ["node_modules", "dist"]
+  "extends": "@berachain/typescript-config/base.json",
+  "include": ["."],
+  "exclude": ["dist", "build", "node_modules"]
 }
