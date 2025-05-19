@@ -29,7 +29,7 @@ const main = async () => {
 
   // Configure Irys Uploader
   const irysUploader = await Uploader(Bera).withWallet(
-    process.env.WALLET_PRIVATE_KEY,
+    process.env.WALLET_PRIVATE_KEY
   );
 
   // Get price for file
@@ -47,12 +47,12 @@ const main = async () => {
   if (balance < costWithBuffer) {
     console.log(`Not enough balance, funding ${costWithBuffer} $BERA...`);
     const fundTx = await irysUploader.fund(
-      irysUploader.utils.toAtomic(costWithBuffer),
+      irysUploader.utils.toAtomic(costWithBuffer)
     );
     console.log(
       `Successfully funded '${irysUploader.utils.fromAtomic(
-        fundTx.quantity,
-      )}' $${irysUploader.token.toUpperCase()}`,
+        fundTx.quantity
+      )}' $${irysUploader.token.toUpperCase()}`
     );
   }
 

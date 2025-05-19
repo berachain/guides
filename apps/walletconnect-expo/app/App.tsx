@@ -1,15 +1,17 @@
 // Imports
 // ========================================================
+import "../global.css";
+
+import { Web3Modal } from "@web3modal/wagmi-react-native";
 import { StatusBar } from "expo-status-bar";
 import { Text, View } from "react-native";
-import "../global.css";
-import { Logo } from "../components/Icons";
-import Connect from "../components/Connect";
+
 import Balance from "../components/Balance";
-import SignMessage from "../components/SignMessage";
+import Connect from "../components/Connect";
 import Deploy from "../components/Deploy";
+import { Logo } from "../components/Icons";
+import SignMessage from "../components/SignMessage";
 import RootProvider from "../providers";
-import { Web3Modal } from "@web3modal/wagmi-react-native";
 
 // Main App Component
 // ========================================================

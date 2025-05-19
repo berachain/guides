@@ -1,7 +1,7 @@
 // Imports
 // ========================================================
 import { useState } from "react";
-import { View, Pressable, Text, TextInput } from "react-native";
+import { Pressable, Text, TextInput, View } from "react-native";
 import { useAccount, useSignMessage } from "wagmi";
 
 // Component
