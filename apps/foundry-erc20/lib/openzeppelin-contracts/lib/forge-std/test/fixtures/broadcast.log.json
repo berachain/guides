@@ -144,9 +144,7 @@
       "logs": [
         {
           "address": "0x7c6b4bbe207d642d98d5c537142d85209e585087",
-          "topics": [
-            "0x0b2e13ff20ac7b474198655583edf70dedd2c1dc980e329c4fbb2fc0748b796b"
-          ],
+          "topics": ["0x0b2e13ff20ac7b474198655583edf70dedd2c1dc980e329c4fbb2fc0748b796b"],
           "data": "0x000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000046865726500000000000000000000000000000000000000000000000000000000",
           "blockHash": "0xcf61faca67dbb2c28952b0b8a379e53b1505ae0821e84779679390cb8571cadb",
           "blockNumber": "0x6",
@@ -177,9 +175,7 @@
       "effectiveGasPrice": "0xee6b2800"
     }
   ],
-  "libraries": [
-    "src/Broadcast.t.sol:F:0x5fbdb2315678afecb367f032d93f642f64180aa3"
-  ],
+  "libraries": ["src/Broadcast.t.sol:F:0x5fbdb2315678afecb367f032d93f642f64180aa3"],
   "pending": [],
   "path": "broadcast/Broadcast.t.sol/31337/run-latest.json",
   "returns": {},

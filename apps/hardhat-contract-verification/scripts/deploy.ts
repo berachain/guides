@@ -1,4 +1,3 @@
-import { setBlockGasLimit } from "@nomicfoundation/hardhat-toolbox/network-helpers";
 import { ethers } from "hardhat";
 
 async function main() {
