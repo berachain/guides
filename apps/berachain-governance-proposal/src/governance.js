@@ -143,12 +143,7 @@ async function ensureSufficientVotingPower() {
 }
 
 // Function to check if a proposal with given parameters already exists
-async function checkExistingProposal(
-  targets,
-  values,
-  calldatas,
-  description
-) {
+async function checkExistingProposal(targets, values, calldatas, description) {
   // Generate a proposal ID based on the given parameters
   const proposalId = await governance.hashProposal(
     targets,
@@ -487,7 +482,9 @@ async function checkAndQueueProposal(proposalId) {
         break;
       }
       default: {
-        console.log(`Proposal is in ${stateName} state. Next stage: ${nextStage}`);
+        console.log(
+          `Proposal is in ${stateName} state. Next stage: ${nextStage}`
+        );
         break;
       }
     }
