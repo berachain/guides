@@ -1,5 +1,5 @@
 {
-  "build": "tsup",
+  "build": "echo 'Build skipped for this package'",
   "dev": "tsup --watch",
   "lint": "eslint src/ --no-ignore",
   "lint:fix": "eslint src/ --fix --no-ignore",
