@@ -1,4 +1,5 @@
 {
+  "name": "weth-berachain-envio-test-app",
   "build": "echo 'Build skipped for this package'",
   "dev": "tsup --watch",
   "lint": "eslint src/ --no-ignore",
