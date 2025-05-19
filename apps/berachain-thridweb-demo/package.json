@@ -1,0 +1,3 @@
+{
+  "build": "echo 'Build skipped for this package'"
+} 

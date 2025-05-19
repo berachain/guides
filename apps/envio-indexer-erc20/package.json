@@ -1,8 +1,8 @@
 {
-  "name": "weth-berachain-envio-test",
+  "name": "envio-indexer-erc20-app",
   "version": "0.1.0",
   "scripts": {
-    "build": "tsc --build",
+    "build": "echo 'Build skipped for this package'",
     "dev": "envio dev",
     "lint": "echo 'No lint script defined for this guide'",
     "lint:fix": "eslint src/ --fix",
