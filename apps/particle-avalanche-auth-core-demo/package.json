@@ -4,5 +4,6 @@
   "lint": "eslint src/ --no-ignore",
   "lint:fix": "eslint src/ --fix --no-ignore",
   "format": "prettier --write \"src/**/*.{ts,tsx}\"",
-  "test": "jest"
+  "test": "jest",
+  "name": "particle-avalanche-auth-core-demo-app"
 } 
