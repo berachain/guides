@@ -50,13 +50,12 @@ const factory = createContract(
   BerachainRewardsVaultFactoryABI,
   wallet
 );
-const token = createContract(process.env.LP_TOKEN_ADDRESS, ERC20ABI, wallet);
 let rewardsVault; // This will be initialized later when creating or retrieving a vault
 
 // Function to check the current state of a proposal
 async function checkProposalState(proposalId) {
   // Get the numerical state of the proposal
-  const state = await governance.state(proposalId);
+  const stateNum = await governance.state(proposalId);
   // Define an array of state names corresponding to their numerical values
   const stateNames = [
     "Pending",
@@ -69,7 +68,7 @@ async function checkProposalState(proposalId) {
     "Executed",
   ];
   // Return both the numerical state and its corresponding name
-  return { state, stateName: stateNames[state] };
+  return { state: stateNum, stateName: stateNames[stateNum] };
 }
 
 // Function to determine the next stage in the governance process
@@ -148,20 +147,20 @@ async function checkExistingProposal(
   targets,
   values,
   calldatas,
-  descriptionHash
+  description
 ) {
   // Generate a proposal ID based on the given parameters
   const proposalId = await governance.hashProposal(
     targets,
     values,
     calldatas,
-    descriptionHash
+    ethers.keccak256(ethers.toUtf8Bytes(description))
   );
   try {
     // Try to get the state of the proposal
-    const state = await governance.state(proposalId);
+    const proposalState = await governance.state(proposalId);
     // If state is not 3 (Defeated), the proposal exists and is not defeated
-    return state !== 3;
+    return proposalState !== 3;
   } catch (error) {
     // If the error indicates the proposal doesn't exist, return false
     // Otherwise, propagate the error
@@ -294,7 +293,7 @@ async function createProposal(
     targets,
     values,
     calldatas,
-    hash
+    description
   );
 
   if (proposalExists) {
@@ -464,55 +463,36 @@ async function cancelProposal(proposalId) {
   }
 }
 
-// Function to queue a proposal
+// Function to check and queue proposal
 async function checkAndQueueProposal(proposalId) {
-  console.log("Checking if queueing is necessary...");
   try {
     const { state, stateName } = await checkProposalState(proposalId);
+    const nextStage = await getNextStage(stateName);
 
-    if (["Queued", "Executed", "Expired"].includes(stateName)) {
-      console.log(
-        `Proposal is already in ${stateName} state. No need to queue.`
-      );
-      return;
-    }
-
-    if (stateName !== "Succeeded") {
-      console.log(
-        `Proposal is in ${stateName} state. It needs to be in Succeeded state to be queued.`
-      );
-      return;
-    }
-
-    console.log("Proposal is in Succeeded state. Attempting to queue...");
-
-    const queueTx = await governance.queue(
-      proposal.targets,
-      proposal.values,
-      proposal.calldatas,
-      descriptionHash
-    );
-    const receipt = await queueTx.wait();
-
-    console.log(
-      "Proposal queued successfully. Transaction hash:",
-      receipt.transactionHash
-    );
-  } catch (error) {
-    console.error("Error checking or queueing proposal:", error);
-    if (error.error?.data) {
-      try {
-        console.error(
-          "Decoded error:",
-          governance.interface.parseError(error.error.data)
-        );
-      } catch (parseError) {
-        console.error(
-          "Could not parse error. Raw error data:",
-          error.error.data
-        );
+    switch (stateName) {
+      case "Succeeded": {
+        const queueTx = await governance.queue(proposalId);
+        await queueTx.wait();
+        console.log("Proposal queued successfully");
+        break;
+      }
+      case "Queued": {
+        const executeTx = await governance.execute(proposalId);
+        await executeTx.wait();
+        console.log("Proposal executed successfully");
+        break;
+      }
+      case "Executed": {
+        console.log("Proposal has already been executed");
+        break;
+      }
+      default: {
+        console.log(`Proposal is in ${stateName} state. Next stage: ${nextStage}`);
+        break;
       }
     }
+  } catch (error) {
+    console.error("Error checking and queueing proposal:", error);
   }
 }
 
