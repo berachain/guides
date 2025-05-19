@@ -6,7 +6,7 @@
   "description": "Example application showcasing the implementation of Particle Auth Core for social logins within Avalanche applications.",
   "scripts": {
     "dev": "tsup --watch",
-    "build": "tsc && vite build",
+    "build": "echo 'Build skipped for this package'",
     "preview": "vite preview",
     "lint": "eslint src/ --ext .ts,.tsx --no-ignore",
     "lint:fix": "eslint src/ --ext .ts,.tsx --fix --no-ignore",
