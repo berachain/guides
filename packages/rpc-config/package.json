@@ -1,0 +1,29 @@
+{
+  "name": "@berachain/rpc-config",
+  "version": "0.0.0",
+  "private": true,
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "sideEffects": false,
+  "license": "MIT",
+  "scripts": {
+    "build": "tsup src/index.ts --format cjs,esm --dts",
+    "dev": "tsup src/index.ts --format cjs,esm --watch --dts",
+    "lint": "eslint \"src/**/*.ts*\" --no-ignore",
+    "lint:fix": "eslint \"src/**/*.ts*\" --fix --no-ignore",
+    "format": "prettier --write \"src/**/*.{ts,tsx}\"",
+    "test": "jest",
+    "clean": "rm -rf .turbo && rm -rf node_modules && rm -rf dist"
+  },
+  "devDependencies": {
+    "@berachain/eslint-config": "workspace:*",
+    "@berachain/typescript-config": "workspace:*",
+    "eslint": "^8.56.0",
+    "tsup": "^8.0.1",
+    "typescript": "^5.3.3"
+  },
+  "dependencies": {
+    "viem": "^2.7.9"
+  }
+}

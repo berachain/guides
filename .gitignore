@@ -36,3 +36,6 @@ yarn-error.log*
 # Misc
 .DS_Store
 *.pem
+
+# Ignore bundled tsup config files
+tsup.config.bundled*

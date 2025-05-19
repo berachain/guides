@@ -1,7 +1,7 @@
 // Imports
 // ========================================================
-import hre from "hardhat";
 import fs from "fs";
+import hre from "hardhat";
 import { defineChain } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 
@@ -40,11 +40,11 @@ async function main() {
     // Retrieve contract artifact ABI & Bytecode
     const contractName = "HelloWorld";
     const artifactFile = fs.readFileSync(
-      `${hre.artifacts._artifactsPath}/contracts/${contractName}.sol/${contractName}.json`,
+      `${hre.artifacts._artifactsPath}/contracts/${contractName}.sol/${contractName}.json`
     );
     const artifactJSON = JSON.parse(artifactFile.toString()) as any;
     const account = privateKeyToAccount(
-      hre.network.config.accounts?.[0] as `0x${string}`,
+      hre.network.config.accounts?.[0] as `0x${string}`
     );
 
     // Configure wallet client
@@ -55,7 +55,7 @@ async function main() {
       {
         chain: chainConfiguration,
         account,
-      },
+      }
     );
 
     // Deploy contract
