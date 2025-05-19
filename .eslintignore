@@ -1,0 +1,7 @@
+# Ignore dependencies and build output
+node_modules/
+dist/
+build/
+.turbo/
+coverage/
+*.log 
