@@ -17,8 +17,7 @@
   },
   "scripts": {
     "clean": "turbo clean; rm -rf node_modules; rm -rf .turbo;",
-    "ensure-build-files": "node scripts/ensure-build-files.js",
-    "build": "pnpm ensure-build-files && turbo build",
+    "build": "turbo build",
     "dev": "turbo dev",
     "lint": "turbo lint",
     "format": "prettier --write \"**/*.{ts,tsx,md}\"",
