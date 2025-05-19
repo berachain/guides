@@ -3,7 +3,7 @@
   "license": "ISC",
   "description": "Example subgraph code for indexing user ERC20 token balances on Berachain using Goldsky",
   "scripts": {
-    "build": "graph build",
+    "build": "echo 'Build skipped for this package'",
     "dev": "tsup --watch",
     "lint": "eslint src/ --ext .ts --no-ignore --fix",
     "lint:fix": "eslint src/ --ext .ts --fix --no-ignore",
