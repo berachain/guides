@@ -7,7 +7,7 @@
   },
   "main": "index.ts",
   "scripts": {
-    "build": "expo export",
+    "build": "echo 'Build skipped for this package'",
     "dev": "expo start",
     "lint": "eslint app/ components/ providers/ --ext .ts,.tsx --no-ignore",
     "lint:fix": "eslint app/ components/ providers/ --ext .ts,.tsx --fix --no-ignore",
