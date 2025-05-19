@@ -23,10 +23,7 @@
   {
     "spec": "AccessManaged",
     "contract": "AccessManagedHarness",
-    "files": [
-      "certora/harnesses/AccessManagedHarness.sol",
-      "certora/harnesses/AccessManagerHarness.sol"
-    ],
+    "files": ["certora/harnesses/AccessManagedHarness.sol", "certora/harnesses/AccessManagerHarness.sol"],
     "options": [
       "--optimistic_hashing",
       "--optimistic_loop",
@@ -57,23 +54,14 @@
   {
     "spec": "ERC20FlashMint",
     "contract": "ERC20FlashMintHarness",
-    "files": [
-      "certora/harnesses/ERC20FlashMintHarness.sol",
-      "certora/harnesses/ERC3156FlashBorrowerHarness.sol"
-    ],
+    "files": ["certora/harnesses/ERC20FlashMintHarness.sol", "certora/harnesses/ERC3156FlashBorrowerHarness.sol"],
     "options": ["--optimistic_loop"]
   },
   {
     "spec": "ERC20Wrapper",
     "contract": "ERC20WrapperHarness",
-    "files": [
-      "certora/harnesses/ERC20PermitHarness.sol",
-      "certora/harnesses/ERC20WrapperHarness.sol"
-    ],
-    "options": [
-      "--link ERC20WrapperHarness:_underlying=ERC20PermitHarness",
-      "--optimistic_loop"
-    ]
+    "files": ["certora/harnesses/ERC20PermitHarness.sol", "certora/harnesses/ERC20WrapperHarness.sol"],
+    "options": ["--link ERC20WrapperHarness:_underlying=ERC20PermitHarness", "--optimistic_loop"]
   },
   {
     "spec": "ERC721",
