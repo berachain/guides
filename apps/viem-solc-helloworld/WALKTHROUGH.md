@@ -10,7 +10,11 @@ First, we need to compile your Solidity contract into bytecode that the blockcha
 
 ```typescript
 // Read the contract file
-const baseContractPath = path.join(__dirname, `../contracts/`, `${CONTRACT_NAME}.sol`);
+const baseContractPath = path.join(
+  __dirname,
+  `../contracts/`,
+  `${CONTRACT_NAME}.sol`,
+);
 const content = await fs.readFileSync(baseContractPath).toString();
 
 // Configure the compiler
@@ -29,11 +33,13 @@ const input = {
 // Compile and extract bytecode and ABI
 const output = solc.compile(JSON.stringify(input));
 const contract = JSON.parse(output);
-const contractBytecode = contract.contracts.baseContractPath[CONTRACT_NAME].evm.bytecode.object;
+const contractBytecode =
+  contract.contracts.baseContractPath[CONTRACT_NAME].evm.bytecode.object;
 const contractABI = contract.contracts.baseContractPath[CONTRACT_NAME].abi;
 ```
 
 The compiler takes your Solidity code and generates:
+
 - Bytecode: The actual code that runs on the blockchain
 - ABI: A description of your contract's functions and data structures
 
@@ -51,6 +57,7 @@ const walletClient = createBerachainWalletClient(privateKey, berachainBepolia);
 ```
 
 This step:
+
 - Creates your account identity from your private key
 - Sets up two clients:
   - `publicClient`: For reading from the blockchain
@@ -92,6 +99,7 @@ const hash = await walletClient.deployContract({
 ```
 
 This sends your contract to the blockchain with:
+
 - The compiled bytecode
 - The contract's ABI
 - Initial constructor arguments (in this case, the greeting message)
@@ -128,12 +136,22 @@ When everything works, you'll see something like this:
 
 ## Common Issues and Solutions 🔧
 
+<<<<<<< HEAD
+
+1. **Compilation Errors**
+
+=======
+
 ### Compilation Errors
-   - Check your Solidity code syntax
-   - Verify compiler version compatibility
-   - Look for missing semicolons or brackets
+
+> > > > > > > chore/update-package-names
+
+- Check your Solidity code syntax
+- Verify compiler version compatibility
+- Look for missing semicolons or brackets
 
 2. **Transaction Failures**
+
    - Ensure sufficient gas (check the estimate)
    - Verify your private key has enough tokens
    - Check network connectivity
@@ -146,6 +164,7 @@ When everything works, you'll see something like this:
 ## Next Steps 🎯
 
 Now that your contract is deployed, you can:
+
 - Interact with it using the contract address
 - Call its functions using the ABI
 - Monitor its events on the blockchain
@@ -153,6 +172,7 @@ Now that your contract is deployed, you can:
 ## Need Help? 🤝
 
 If you encounter issues:
+
 - Check the error message for specific details
 - Verify the transaction on the block explorer
-- Make sure your code matches the examples above 
+- Make sure your code matches the examples above

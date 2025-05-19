@@ -1,11 +1,13 @@
 {
-  "extends": "@repo/typescript-config/base.json",
-  "include": ["scripts"],
-  "exclude": ["node_modules"],
+  "extends": "@berachain/typescript-config/base.json",
   "compilerOptions": {
-    "moduleResolution": "node16",
-    "outDir": "./dist",
+    "outDir": "dist",
     "rootDir": ".",
-    "allowSyntheticDefaultImports": true
-  }
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./*"]
+    }
+  },
+  "include": ["."],
+  "exclude": ["dist", "build", "node_modules"]
 }

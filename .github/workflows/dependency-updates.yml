@@ -1,0 +1,46 @@
+name: Dependency Updates
+
+on:
+  schedule:
+    - cron: '0 0 * * 0' # Run weekly on Sunday
+  workflow_dispatch: # Allow manual trigger
+
+jobs:
+  check-updates:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 8
+          run_install: false
+          
+      - name: Install dependencies
+        run: pnpm install
+        
+      - name: Check for updates
+        run: pnpm dlx npm-check-updates
+        
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v5
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: 'chore: update dependencies'
+          title: 'chore: update dependencies'
+          body: |
+            This PR updates dependencies to their latest versions.
+            
+            Changes were made by the automated dependency update workflow.
+          branch: chore/update-dependencies
+          base: main
+          labels: |
+            dependencies
+            automated pr 

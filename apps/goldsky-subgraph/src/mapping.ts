@@ -1,23 +1,24 @@
 //import event class from generated files
-import { Transfer } from "../generated/Erc20/Erc20";
-//import the functions defined in utils.ts
-import { fetchTokenDetails, fetchAccount, updateTokenBalance } from "./utils";
 //import datatype
 import { BigInt } from "@graphprotocol/graph-ts";
 
+import { Transfer } from "../generated/Erc20/Erc20";
+//import the functions defined in utils.ts
+import { fetchAccount, fetchTokenDetails, updateTokenBalance } from "./utils";
+
 export function handleTransfer(event: Transfer): void {
   // 1. Get token details
-  let token = fetchTokenDetails(event);
+  const token = fetchTokenDetails(event);
   if (!token) {
     return;
   }
 
   // 2. Get account details
-  let fromAddress = event.params.from.toHex();
-  let toAddress = event.params.to.toHex();
+  const fromAddress = event.params.from.toHex();
+  const toAddress = event.params.to.toHex();
 
-  let fromAccount = fetchAccount(fromAddress);
-  let toAccount = fetchAccount(toAddress);
+  const fromAccount = fetchAccount(fromAddress);
+  const toAccount = fetchAccount(toAddress);
 
   if (!fromAccount || !toAccount) {
     return;

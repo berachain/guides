@@ -4,9 +4,14 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "deploy:berachain": "echo $RPC_URL; ./node_modules/.bin/tsx scripts/deploy.ts",
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "clean": "rm -rf node_modules; rm -rf .turbo;"
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "lint": "eslint scripts/ --ext .ts,.tsx --no-ignore",
+    "lint:fix": "eslint scripts/ contracts/ --fix --no-ignore",
+    "format": "prettier --write \"scripts/**/*.{ts,tsx}\" \"contracts/**/*.{ts,tsx}\"",
+    "test": "jest",
+    "clean": "rm -rf node_modules; rm -rf .turbo;",
+    "deploy:berachain": "echo $RPC_URL; ./node_modules/.bin/tsx scripts/deploy.ts"
   },
   "keywords": [
     "ethers",
@@ -18,11 +23,17 @@
   "author": "@codingwithmanny",
   "license": "ISC",
   "devDependencies": {
+    "@berachain/eslint-config": "workspace:*",
+    "@berachain/typescript-config": "workspace:*",
+    "@types/jest": "^29.5.0",
     "@types/node": "^20.5.9",
+    "jest": "^29.5.0",
+    "prettier": "^3.0.0",
+    "tsup": "^8.0.0",
+    "typescript": "^4.5.2",
     "dotenv": "^16.3.1",
     "dotenv-cli": "^7.3.0",
-    "tsx": "^4.7.0",
-    "typescript": "^4.5.2"
+    "tsx": "^4.7.0"
   },
   "dependencies": {
     "ethers": "^6.9.1",

@@ -1,17 +1,22 @@
 {
-  "name": "berachain-governance-proposal",
+  "name": "@berachain/governance-proposal",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "private": true,
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "lint": "eslint src/ --ext .ts,.tsx,.js --no-ignore --fix",
+    "lint:fix": "eslint src/ --ext .ts,.tsx,.js --fix --no-ignore",
+    "format": "prettier --write \"src/**/*.{ts,tsx,js}\"",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "clean": "rm -rf node_modules; rm -rf .turbo;"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "dependencies": {
-    "dotenv": "^16.4.5",
-    "ethers": "^6.13.2",
-    "yargs": "^17.7.2"
+  "devDependencies": {
+    "@berachain/eslint-config": "workspace:*",
+    "@berachain/typescript-config": "workspace:*",
+    "@types/node": "^20.0.0",
+    "prettier": "^3.0.0",
+    "tsup": "^8.0.0",
+    "typescript": "^5.0.0"
   }
 }

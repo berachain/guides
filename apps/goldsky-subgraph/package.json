@@ -3,11 +3,30 @@
   "license": "ISC",
   "description": "Example subgraph code for indexing user ERC20 token balances on Berachain using Goldsky",
   "scripts": {
+    "build": "graph build",
+    "dev": "tsup --watch",
+    "lint": "eslint src/ --ext .ts --no-ignore --fix",
+    "lint:fix": "eslint src/ --ext .ts --fix --no-ignore",
+    "format": "prettier --write \"src/**/*.ts\"",
+    "test": "echo 'No test script defined for this guide'",
+    "clean": "rm -rf node_modules; rm -rf .turbo;",
     "codegen": "graph codegen",
-    "build": "graph build"
+    "prepare:berachain": "mustache config/berachain.json subgraph.template.yaml > subgraph.yaml",
+    "deploy": "graph deploy --node https://api.goldsky.com/subgraphs/name/berachain/weth subgraph.yaml"
   },
   "dependencies": {
     "@graphprotocol/graph-cli": "^0.68.0",
     "@graphprotocol/graph-ts": "^0.33.0"
+  },
+  "devDependencies": {
+    "@berachain/eslint-config": "workspace:*",
+    "@berachain/typescript-config": "workspace:*",
+    "@types/jest": "^29.5.0",
+    "@types/node": "^20.0.0",
+    "jest": "^29.5.0",
+    "prettier": "^3.0.0",
+    "tsup": "^8.0.0",
+    "typescript": "^5.0.0",
+    "mustache": "^4.2.0"
   }
 }

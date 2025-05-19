@@ -5,6 +5,10 @@
     {
       "name": "De",
       "url": "https://github.com/dethebera"
+    },
+    {
+      "name": "jintao",
+      "url": "https://github.com/okjintao"
     }
   ],
   "author": {
@@ -18,18 +22,18 @@
     "lint": "turbo lint",
     "format": "prettier --write \"**/*.{ts,tsx,md}\"",
     "format:check": "prettier --check \"**/*.{ts,tsx,md}\"",
-    "with-env": "dotenv -e ./.env --",
-    "deploy:berachain": "pnpm with-env turbo run deploy:berachain",
-    "verify": "pnpm with-env turbo run verify",
-    "postinstall": "cd apps/walletconnect-expo; pnpm install --ignore-workspace;"
+    "with-env": "dotenv -e ./.env --"
   },
   "devDependencies": {
+    "@berachain/eslint-config": "workspace:*",
+    "@berachain/rpc-config": "workspace:*",
+    "@berachain/typescript-config": "workspace:*",
     "@biomejs/biome": "^1.5.3",
-    "@repo/eslint-config": "workspace:*",
-    "@repo/typescript-config": "workspace:*",
-    "@branch/berachain-config": "workspace:*",
+    "@typescript-eslint/eslint-plugin": "^8.32.1",
+    "@typescript-eslint/parser": "^8.32.1",
     "prettier": "^3.1.0",
     "prettier-plugin-solidity": "^1.4.2",
+    "tsup": "^8.5.0",
     "turbo": "latest"
   },
   "packageManager": "pnpm@9.0.4",

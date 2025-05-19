@@ -1,9 +1,9 @@
 {
-  "extends": "@repo/typescript-config/base.json",
+  "extends": "@berachain/typescript-config/base.json",
   "include": ["src"],
   "exclude": ["node_modules", "dist"],
   "compilerOptions": {
     "outDir": "./dist",
     "rootDir": "./src"
   }
-} 
+}
