@@ -1,1 +1,1 @@
-import { BerachainbArtio } from "@particle-network/chains"; 
+import { BerachainbArtio } from "@particle-network/chains";
