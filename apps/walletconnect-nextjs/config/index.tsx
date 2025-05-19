@@ -7,7 +7,7 @@ import { berachainTestnet } from "wagmi/chains";
 // Constants
 // ========================================================
 // Get projectId at https://cloud.walletconnect.com
-export const projectId = process.env.NEXT_PUBLIC_PROJECT_ID;
+export const projectId = "1234567890abcdef1234567890abcdef";
 
 const metadata = {
   name: "Berachain Web3Modal",
