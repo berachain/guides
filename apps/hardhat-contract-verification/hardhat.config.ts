@@ -12,7 +12,7 @@ const config: HardhatUserConfig = {
     // for testnet
     "berachain-artio": {
       url: "https://rpc.ankr.com/berachain_testnet",
-      accounts: [process.env.WALLET_KEY as string],
+      accounts: process.env.WALLET_KEY ? [process.env.WALLET_KEY] : [],
       chainId: 80085,
       // gas: "auto",
       gasPrice: 10000000000,
