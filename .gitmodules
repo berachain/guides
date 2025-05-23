@@ -10,3 +10,9 @@
 [submodule "apps/openzeppelin-upgrades/lib/openzeppelin-foundry-upgrades"]
 	path = apps/openzeppelin-upgrades/lib/openzeppelin-foundry-upgrades
 	url = https://github.com/OpenZeppelin/openzeppelin-foundry-upgrades
+[submodule "apps/eip-7702-gas-sponsorship/eip-7702-gas-sponsorship/lib/forge-std"]
+	path = apps/eip-7702-gas-sponsorship/eip-7702-gas-sponsorship/lib/forge-std
+	url = https://github.com/foundry-rs/forge-std
+[submodule "apps/eip-7702-gas-sponsorship/eip-7702-gas-sponsorship/lib/openzeppelin-contracts"]
+	path = apps/eip-7702-gas-sponsorship/eip-7702-gas-sponsorship/lib/openzeppelin-contracts
+	url = https://github.com/OpenZeppelin/openzeppelin-contracts
