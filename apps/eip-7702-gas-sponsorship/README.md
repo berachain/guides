@@ -2,13 +2,13 @@
 head:
   - - meta
     - property: og:title
-      content: EIP-7702 Gas Sponsorship with Bepolia
+      content: EIP-7702 Gas Sponsorship with Anvil
   - - meta
     - name: description
-      content: Set up a quick demo showcasing gas sponsorship on Bepolia unlocked by EIP-7702
+      content: Set up a quick demo showcasing gas sponsorship on an Anvil fork unlocked by EIP-7702
   - - meta
     - property: og:description
-      content: Set up a quick demo showcasing gas sponsorship on Bepolia unlocked by EIP-7702
+      content: Set up a quick demo showcasing gas sponsorship on an Anvil fork unlocked by EIP-7702
 ---
 
 <script setup>
@@ -17,231 +17,211 @@ head:
   import CopyToClipboard from '@berachain/ui/CopyToClipboard';
 </script>
 
-# EIP-7702 Gas Sponsorship with Bepolia
+# EIP-7702 Gas Sponsorship with Anvil
 
-In this guide, we will walk you through a demo of gas sponsorship on the Bepolia testnet accomplished with EIP-7702. EIP-7702 is one of the improvement proposals implemented in the Bectra upgrade, on Bepolia, mirroring the changes made within Ethereum Mainnet with Pectra. The goal is to provide a rough example on how to leverage gas sponsorship for your own dApp.
+In this guide, we will walk you through a demo of gas sponsorship accomplished with EIP-7702, all on a local anvil fork. EIP-7702 is one of the improvement proposals implemented in the Bectra upgrade, on Bepolia, mirroring the changes made within Ethereum Mainnet with Pectra. 
+
+Gas Sponsorship simply entails:
+- An EOA authorizing an implementation contract at its own address
+- Use of EIP-7702 transaction type, 0x04, to carry out transactions with this implementation logic
+- The EOA signing an authorized transaction offchain and passing the details to a Sponsor to broadcast it to the chain, where the transaction `to` variable is actually the EOA itself
+
+<!-- TODO - comparison with other ways of doing gas sponsorship -->
+
+Gas Sponsorship with EIP-7702 is an interesting design space. We have gone ahead and made this simple "Part 1" where the main flow of carrying out a gas sponsorship is highlighted. We will publish more parts outlining:
+
+- Gas Sponsorship with ERC20s, where the EOA authorizes a transaction that transfers ERC20 to the Sponsor as a payment for the Sponsor to cover the gas required for the transaction.
+- Using on-chain checks to ensure that the signer of the contract is the EOA itself. This will use solidity scripts leveraging Foundry.
+
+<!-- TODO - highlight the architecture with an excalidraw, about the "offchain service", eoa, sponsor, and implementation logic -->
 
 :::tip
 For further information on Bectra, see our breakdowns [here](TODO-GetLinksToBectraContextBlogs).
+<!-- TODO - see what is the best resource to point to. -->
 :::
 
 ## Requirements
 
 Before starting, ensure that you have carried out the following: 
 
-- Read the [high-level thread on EIP-7702 and this guide](https://typefully.com/t/eXTS8ND) for a high-level understanding on key gotchas.
-- [Foundry](https://book.getfoundry.sh/getting-started/installation) `v1.0.0` or greater
-- Clone the guides [repo](https://github.com/berachain/guides/tree/main) and make your way to the `apps/7702-Gas-Sponsorship` directory to find the Gas Sponsorship Guide and associated code we'll walk through today.
+<!-- - Read the [high-level thread on EIP-7702 and this guide](https://typefully.com/t/eXTS8ND) for a high-level understanding on key gotchas. -->
+- Installed [Foundry](https://book.getfoundry.sh/getting-started/installation) `v1.0.0` or greater
+- Clone the guides [repo](https://github.com/berachain/guides/tree/main) and make your way to the `apps/eip-7702-gas-sponsorship` directory to find the Gas Sponsorship Guide and associated code we'll walk through today.
 
-## Important Overview Notes on EIP-7702
+# Guide Walk Through
 
-Having read the [thread](https://typefully.com/t/eXTS8ND), we'll only touch on a few things before jumping into the code itself.
+Run all the commands within this guide while at the file path: `./apps/eip-7702-gas-sponsorship`.
 
-### The Anatomy of an EIP-7702 Transaction
+## Step 1 - Setup
 
-Recall that typical EVM transactions either transfer funds or work with smart contracts. The new `0x04` transaction type provides EOAs with the ability to execute code directly. Basically, EOAs now have can function more like smart contracts.
+Install dependencies for the project:
 
-**Typical EVM Account Types**
-
-- EOAs: These are controlled by a private key, and hold funds. They do not have the ability to run code.
-- Smart Contract Accounts: They can hold and carry out code, executing complex operations.
-
-There are a couple of key steps when it comes to working with EIP-7702 transactions:
-
-1. Signing Authorization - the EOA generates a signed authorization that nesures only the approved implementation contract can execute transactions for it. So basically when the user (or a sponsor) executes an EIP-7702 transaction, it will load and run the code from the address that is authorized by the EOA.
-
-2. Transaction Construction - With EIP-7702, the `to` field is set to the EOA's address and includes the `data` to call the implementation contract's function(s) with the signed authorization message. This is atypical compared to usual EVM transactions where a function call to a smart contract has the `to` field set to the contract's address with `data` to call its function.
-
-> **If another wallet (sponsor) chooses to execute this respective transaction, it simply uses the same authorization signature and delegates execution to the imiplementation contract.**
-
-### The Typical Flow of an EIP-7702 Transaction
-
-Below is the typical flow of working with an EIP-7702 Transaction to provide more details:
-
-1. Generate an authorization signature for a specific contract.
-2. Construct a transaction where the `to` field is set to the smart account's address.
-3. The `data` field is created by encoding a call to the respective implementation function call. See the callout below.
-
-> Recall that a digest, or a hash, is what is signed by an EOA to authorize a specific action. So within this guide, the EOA signs a digest to call `henlo.sayHenlo()` but it is being called indirectly through the `NoGasolinaForYou.sol` contract as this contract is an example of a separate `implementation` contract that works hand-in-hand with a dApp (in this case, the `henlo` contract). **It's kind of like imagining having a Uniswap DEX Pool, and having it so the protocol wants to enable EIP-7702 transactions (for gas sponsorship, batch transactions etc.). They could make an implementation contract that acts as a trusted and verified router to their core contracts that Smart Accounts could leverage (authorize).**
-
-### Implementation Contract Design Practice
-
-Implementation contracts carry the same, if not more, risk than traditional smart contracts. It is key to carry forward good, typical smart contract design practices when writing these. Within this guide, we have created a implementation contract `NoGasolinaForYou.sol` that has guard-railed function calls to the `Henlo.sol` contract. In comparison, other example contracts have outlined low level calls such that any transaction could arguably carried out.
-
-## Guide Walk Through
-
-Now that you have a refresher understanding of EIP-7702, we'll walk you through running the guide first. We'll follow that with explanations on the components more in detail. 
-
-### Guide Overview
-
-This guide deploys an implementation contract called `NoGasolinaForYou.sol` meant to exemplify and enable:
-
-- **Smart Accounts:** The use of an implementation contract that is authorized by an `EOA`
-- **Sponsored Transactions:** Allowing a `Sponsor` to pay for gas fees for a transaction signed by the `EOA`.
-- **Guard-Railed Implementation Contract Design:** Having an implementation contract that is bespoke to a specific underlying smart contract, `Henlo.sol`, to exemplify creating logic that does not have a wide range of attack surface, such as using low level calls within the implementation logic.
-- **Replay Protection:** The use of nonces to prevent transaction replay within the implementation logic.
-
-The high-level components and flow of this guide include:
-
-<!-- TODO: add a quick excalidraw or eraser.io sequence diagram -->
-
-**Components:**
-- `Henlo.sol` contract that simply emits an event stating "Henlo Ooga Booga"
-- `NoGasolinaForYou.sol` contract acting as an example implementation contract representing "guard-railed" transactions with gas sponsorship leveraging EIP-7702
-- `SponsorSayHenlo.s.sol` solidity script to deploy the `Henlo.sol`, `NoGasolinaForYou.sol`, and carry out EIP-7702 txs showcasing gas sponsorship with the latter.
-- `NoGasolinaForYou.t.sol` test contract providing local foundry tests to highlight EIP-7702 within foundry limitations.
-
-**Guide Flow:**
-- The deployment of `Henlo.sol` and then `SponsorSayHenlo.sol`, where the latter requires the `Henlo.sol` external address.
-- `NoGasolinaForYou.sol` used as the implementation logic that the EOA will authorize as a delegate address. AKA the EOA will use the contract logic that is at the external address of `NoGasolinaForYou.sol`, but it will use the address, storage and details of the EOA.
-<!-- TODO: confirm the last bit of the above -->
-- The `SponsorSayHenlo.s.sol` foundry script, after deploying the two contracts above, leverages EIP-7702 and:
-  - Designates the `NoGasolinaForYou.sol` implementation logic as the authorized delegate address for the EOA.
-  - Prepares the tx details as if from the EOA.
-  - The gas sponsor broadcasts the tx, and thus pays the gas on the tx that was originally signed by the EOA.
-- Additional `NoGasolinaForYou.t.sol` test contract providing local foundry tests to highlight EIP-7702 within foundry limitations.
-
-> To see the true gas expenditure as it should be leveraging EIP-7702, where the Sponsor properly pays for the tx on behalf of the EOA, the script must be ran on the actual network, Bepolia. **Gas expenditure is not properly showcased within foundry tests or on anvil forks**
-
-### Step 1 - Setup
-
-Clone the guides [repo](https://github.com/berachain/guides/tree/main) and make your way to the `apps/7702-Gas-Sponsorship` directory to find the Gas Sponsorship Guide and associated code we'll walk through today. You can do this by running:
-
-`git clone https://github.com/berachain/guides.git && cd apps/eip-7702-gas-sponsorship`
-
-Install dependencies:
-
-`pnpm install`
+   ```bash
+   pnpm install
+   ```
 
 Set up environment variables:
 
-`cp .env.example .env`
+   ```bash
+   cp .env.example .env
+   ```
+There are already `anvil` test addresses and private keys there. For this guide, keep it as is until you have walked through everything. Afterwards, feel free to use your own of course for your own testing. 
 
-and populate the vars accordingly. Make sure to have some tBERA in both the EOA and SPONSOR wallets.
+Start `anvil` fork at hard fork prague:
 
-> If you need $tBERA, simply reach out and we can send you a small amount or go to the faucet!
-
-Make sure you have Foundry installed on your machine. If you have not installed it, run the following command:
-
-`curl -L https://foundry.paradigm.xyz | bash`
-
-Check the [foundry docs](https://book.getfoundry.sh/) for more information if you are newer to Foundry.
-
-### Step 2 - Run the Solidity Script
-
-Since everything is already prepared within the repo, the next step is to simply deploy the contracts mentioned and carry out an EIP-7702 transaction showcasing the gas sponsorship!
-
-Details of the code used throughout the repo have natspec within them outlining their core functionalities.
-
-To run the script, make sure you have your `.env` populated with the appropriate wallet details. 
-
-Run:
-
-```
-source .env && forge script script/SponsorSayHenlo.s.sol:SponsorSayHenlo --rpc-url $BEPOLIA_RPC_URL --with-gas-price 25000000000 --slow --broadcast
+```bash
+anvil --hardfork prague --chain-id 80069 --port 8545
 ```
 
-The transaction will prompt you to continue, y/n, hit y. Traditionally, EOAs do not have any on-chain code, so this is a warning prompt expected before EIP-7702 was implemented. 
+## Step 2 - Deploy the `SimpleDelegate.sol` Contract
 
-The transaction should successfully be carried out now, and the transaction results can be dissected within the `broadcast/SponsorSayHenlo.s.sol/run-latest.json` file. See below for more details outlining how we know the transaction carried through properly.
+Deploy the `SimpleDelegate.sol` contract and populate `.env` with contract address. This contract logic will be what is assigned to the `EOA` to leverage EIP-7702. The below bash code will automatically update the `.env` with the new `SimpleDelegate.sol` `CONTRACT_ADRESS`.
 
-### Dissecting the `run-latest.json` Results
+```bash
+source .env && forge script script/Implementation.s.sol:SimpleDelegateScript \
+  --rpc-url $TEST_RPC_URL \
+  --private-key $EOA_PRIVATE_KEY \
+  --broadcast -vvvv \
+  | tee deployment.log && \
+CONTRACT_ADDRESS=$(grep -Eo '0x[a-fA-F0-9]{40}' deployment.log | tail -n1) && \
+sed -i '' "/^CONTRACT_ADDRESS=/d" .env && echo "CONTRACT_ADDRESS=$CONTRACT_ADDRESS" >> .env
+```
 
-The CLI output from running the script displays the three transactions being carried out.
+## Step 3 - Get the Nonce to Use for the Authorized Transaction
 
-1. Deployment of the `Henlo.sol` contract
-2. Deployment of the `NoGasolinaForYou.sol` contract
-3. EIP-7702 call broadcasted by the `Sponsor` for the `EOA`, where `EOA` is the `to` param within the transaction.
+As mentioned, gas sponsorship with EIP-7702 requires:
+- The `SPONSOR` to actually send enough gas to cover the transaction in the broadcasted call.
+- Onchain checks for replay attacks, including across different chains, is recommended as well.
 
-We can look at the saved transactions to expand on the EIP-7702 transactions. The sponsored execution transaction is shown below. Key points outlined within the `run-latest.json` page.
+The latter concern is covered in the next part of the Gas Sponsorship guide.
 
-- The `Sponsor` address is the sender, while the `EOA` is the contract address.
-- The `authorizationList`, a component of EIP-7702 transactions, contains the signed authorization, and we can see that the external address that is pointed to for the  implementation logic for `NoGasolinaForYou.sol` is included.
-- The `Sponsor` is broadcasting the transaction for the EOA, and thus is paying for the gas of the transaction.
+The implementation contract provided has a getter called `getNonceToUse()`. It is a simple function where you just pass the actual current EOA nonce to it as a param, and it will return a nonce that is ahead of the EOA nonce. The hope is to provide a nonce that is a good deal larger than the current EOA nonce so the "Service" can order transactions as needed without concern that the EOA will have done numerous transactions causing a pre-authorized transaction to become stale.
 
-![Saved Transaction Showcasing EIP-7702 Gas-Sponsorship Transaction Call](./assets/run-latest.png)
+Get current EOA nonce, `EOA_NONCE`, and query contract for `getNonceToUse()`. The `.env` is updated with the value `EOA_NONCE`.
 
-<!-- Part of the Guide that needs to be flushed out -->
+```bash
+source .env && \
+EOA_NONCE=$(cast nonce $EOA_ADDRESS --rpc-url $TEST_RPC_URL) && \
+NONCE_TO_USE=$(cast call $CONTRACT_ADDRESS "getNonceToUse(uint256)(uint256)" $EOA_NONCE --rpc-url $TEST_RPC_URL) && \
+sed -i '' "/^NONCE_TO_USE=/d" .env && echo "NONCE_TO_USE=$NONCE_TO_USE" >> .env
+```
 
-## Guide Code Details
+Double check that this nonce makes sense with what the current `EOA_NONCE`, it should be 10 less than `NONCE_TO_USE` that you'll see in your `.env`. You can do this with this cast call:
 
-TODO
+```bash
+source .env && cast nonce $EOA_ADDRESS --rpc-url $TEST_RPC_URL
+```
 
-### How does it compare to pre-signed transactions with relayers and userOps with AA
+## Step 4 - Prepare the Offchain Transaction Details to be Broadcast
 
-TODO
+Now that you have the correct nonce to use in your `.env`, the next step is to use `sign-auth` to have the `EOA` authorize the transaction to be broadcast by the `SPONSOR`. 
 
-<!-- TODO: Consolidate rough notes with proper research and references. -->
-<!-- 
-<details>
-<summary>Rough notes:</summary>
+The bash command provided does the following:
 
+Obtains the output from the `cast wallet sign-auth` call, `AUTH_SIG`. This variable will be used when the `SPONSOR` broadcasts the `EOA`'s transaction as it specifies the details of the actual transaction, and has implicit proof within it that the transaction is signed by the EOA.
 
-Why EIP 7702
-- You want immediate EOA compatibility, ok with trusted relayers, and want quick and simple gasless flows.
-- Minimial infrastructure overhead
-    - Use of Bepolia's native transaction features where it is fully compatible with existing RPC stacks, tools, and block explorers.
-    - If you're a project that wants AA without running or depending on 3rd party infra.
-- Maintains EOA compatibility
-    - Outside of the 7702 tx, accounts remain EOAs. This allows for interoperability with legacy contracts.
-    - Fallback to ECDSA signing
-    - Avoids lock-in to smart wallet (4337) architecture
-    - This means it's ideal for offering opt-in abstraction with minimal change to user key management
-- Lower cost of entry for gas sponsorship
-    - 1-off promotions, airdrops, or specific transactions dApps can add logic inline in the 7702 tx to see if user is sponsored
-    - Operate without maintaining a full paymaster contract -- basically offers a solution where 4337 is overkill
-- Off-The-Shelf batching of txs paired with this low-overhead gas sponsorship is powerful.
+Then, it prepares callData that directly invokes the `execute()` function in the smart account logic, passing no inner call for now. This is enough to test sponsorship, nonce, and signature checks implicitly using `cast` and `-auth`.
 
-Why pre-signed transactions:
-- Pre-Signed txs: Fully formed EVM tx, signed off-chain by the user (an EOA typically) and submitted via third-party relayer that pays the gas but the tx appears on-chain as if sent by the user directly.
-- Basically the relayer wraps and broadcasts signed tx to public mempool.
-- Fully compatible with legacy infra and wallets; no reliance on 4337 smart accounts or 7702 tx formatting
-- Uses standard EOA tx format and eth_sendRawTransaction.
-- Ideal for: 
-    - Hackathons, MVPs, airdrops, “connect + mint” flows.
-    - Projects okay with centralized relayers (e.g., gaming, promotions, custodial flows).
+Then it carries out the transaction using `cast send`, where the `to` is the `$EOA_ADDRESS`, and the `$AUTH_SIG` has been signed offchain by the `EOA_PK`. The call is being carried out by the `SPONSOR` though to pay the gas!
 
-BUT
-- Requires full trust in the relayer who could
-    - refuse to broadcast
-    - front-run or modify the tx
-    - delay submission
-    - there is no on-chain enforcement of gas sponsorship rules
-- Lacks flexibility
-    - Cannot enforce per-user, per-action sponsorship transparently
-    - Cannot scale or decentralize gas abstraction
+Logs are output afterwards showcasing the results, which will be expanding on more in the next step!
 
-Why 4337 with paymasters (TODO - research 4337 more)
-- Fully programmable and trustless sponsorship
-    - On-chain Paymasters enables: usage-based sponsorship, conditional gas payements, and more. They are transparent, auditable and enforceable.
-    - Ideal for decentralized systems relying on off-chain trust or manual sponsor verification.
-- Smart account extensibility
-    - Logic is persistent. This is the big difference. Thus this enables:
-        - Social recovery, session keys, signature plugins
-    - Upgradeable wallets and modular design is possible.
-    - Ideal for long term wllet UX design, DAO wallets, and programmable user IDs
-- Scalable tx abstraction:
-    - `UserOperation` abstraction enables tx batching, atomic execution and gas optimization across users (bundlers)
-    - Sponsorship is scalable and automated
-    - Ideal for high-volume apps that need abstraction at scale.
+```bash
+source .env && \
 
-tldr;
+# ⛽ Capture balances before
+EOA_BAL_BEFORE=$(cast balance $EOA_ADDRESS --rpc-url $TEST_RPC_URL) && \
+SPONSOR_BAL_BEFORE=$(cast balance $SPONSOR_ADDRESS --rpc-url $TEST_RPC_URL) && \
+echo "💰 EOA Balance Before:     $EOA_BAL_BEFORE wei" && \
+echo "💸 Sponsor Balance Before: $SPONSOR_BAL_BEFORE wei" && \
 
-**Choose Pre-signed tx + relayers when:**
+# ✍️ Sign EOA authorization
+AUTH_SIG=$(cast wallet sign-auth $CONTRACT_ADDRESS \
+  --private-key $EOA_PRIVATE_KEY \
+  --nonce $NONCE_TO_USE \
+  --rpc-url $TEST_RPC_URL) && \
 
-- You want immediate EOA compatibility
-- You’re okay with trusted relayers
-- You want quick, simple gasless flows
+# 📦 Prepare calldata for `execute(...)`
+CALLDATA=$(cast calldata "execute((bytes,address,uint256),address,uint256)" \
+  "(0x,$CONTRACT_ADDRESS,0)" $SPONSOR_ADDRESS $NONCE_TO_USE) && \
 
-**Choose EIP-7702 when:**
+# 🚀 Send the sponsored transaction
+TX_HASH=$(cast send $EOA_ADDRESS "$CALLDATA" \
+  --private-key $SPONSOR_PRIVATE_KEY \
+  --auth "$AUTH_SIG" \
+  --rpc-url $TEST_RPC_URL | grep -i 'transactionHash' | awk '{print $2}') && \
 
-- You want a balance: some smart logic, no infra overhead
-- You want to batch calls or simulate smart wallets without migrating
-- You're optimizing lightweight UX flows
+# 🧾 Retrieve gas used and cost
+RECEIPT=$(cast receipt $TX_HASH --rpc-url $TEST_RPC_URL) && \
+GAS_USED=$(echo "$RECEIPT" | grep gasUsed | awk '{print $2}') && \
+GAS_PRICE=$(echo "$RECEIPT" | grep effectiveGasPrice | awk '{print $2}') && \
+GAS_COST_WEI=$(echo "$GAS_USED * $GAS_PRICE" | bc) && \
+GAS_COST_GWEI=$(echo "scale=9; $GAS_COST_WEI / 1000000000" | bc) && \
 
-**Choose EIP-4337 when:**
+# 💰 Capture balances after
+EOA_BAL_AFTER=$(cast balance $EOA_ADDRESS --rpc-url $TEST_RPC_URL) && \
+SPONSOR_BAL_AFTER=$(cast balance $SPONSOR_ADDRESS --rpc-url $TEST_RPC_URL) && \
 
-- You want trustless, programmable gas abstraction
-- You’re building persistent smart accounts
-- You’re investing in long-term UX abstraction and infra
-</details> -->
+# 📉 Calculate deltas
+EOA_DELTA=$(echo "$EOA_BAL_BEFORE - $EOA_BAL_AFTER" | bc) && \
+SPONSOR_DELTA=$(echo "$SPONSOR_BAL_BEFORE - $SPONSOR_BAL_AFTER" | bc) && \
+
+# 🧾 Output Results
+echo "📦 Transaction Hash: $TX_HASH" && \
+echo "🔍 To view full transaction: cast tx $TX_HASH --rpc-url $TEST_RPC_URL" && \
+echo "📜 Gas Used: $GAS_USED gas units" && \
+echo "💸 Gas Cost: $GAS_COST_WEI wei (~$GAS_COST_GWEI gwei)" && \
+echo "💰 EOA Balance After:     $EOA_BAL_AFTER wei" && \
+echo "💸 Sponsor Balance After: $SPONSOR_BAL_AFTER wei" && \
+echo "📉 EOA Δ:                  $(echo "$EOA_DELTA / 10^9" | bc) Gwei" && \
+echo "📉 Sponsor Δ (gas):        $(echo "$SPONSOR_DELTA / 10^9" | bc) Gwei" && \
+
+# 🔬 Gas sanity check
+cast receipt $TX_HASH --rpc-url $TEST_RPC_URL | grep -E 'gasUsed|effectiveGasPrice' && \
+echo "✅ If sponsor delta roughly equals gasUsed * effectiveGasPrice → gas was paid by SPONSOR."
+```
+
+The output should look like this:
+
+<!-- TODO - get screenshot -->
+
+## Step 5 - Assessing the Results
+
+The output from running the last command will provide two `cast` commands to assess the results. If you prefer, just run the following commands though and copy and paste the transaction hash in accordingly.
+
+1. To see the Authorization List and other details signifying that the EIP-7702 transaction was successful, run:
+
+```bash
+source .env && cast tx $TX_HASH --rpc-url $TEST_RPC_URL
+```
+
+Here you'll see the following:
+
+_Using our example contract address to illustrate, you'll have a different one._
+
+Under authorization list, you should see the contract address:
+
+```bash
+authorizationList    [{"chainId":"0x138c5","address":"0xa513e6e4b8f2a923d98304ec87f64353c4d5c853","nonce":"0x12","yParity":"0x1","r":"0x887a9a9ea466b336e6aef4bbbe9cee6a28ad6d70fbe984e7d58c58739ba8b049","s":"0x2af166a588540a0ce9dcb053490d071725e487c94e68af6caf8a1803b214cb38"}]
+```
+
+and the `to` specified should be the EOA address, and the `from` address should be the SPONSOR address. These will be the same for you too assuming you followed the guide and are using the anvil test wallets 1 and 2:
+
+```bash
+to                   0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266
+from                 0x70997970C51812dc3A010C7d01b50e0d17dc79C8
+```
+
+2. To see the transaction receipt, run:
+
+```bash
+source .env && cast receipt $TX_HASH --rpc-url $TEST_RPC_URL
+```
+
+Here you can see the gasUsed, and thus do a check on how much gas was taken from the Sponsor, and how much was reimbursed. We do just that with the previous command you sent where gas logs were output, but of course take what we need and carry out comparisons.
+
+<!-- TODO - get screenshot of the gas comparisons -->
+
+Here you can see that the rough gas used matches the delta (gas spent) from the `SPONSOR` address, whereas the `EOA` has not spent any gas at all.
+
+That's it! Congrats you've walked through a high level example of gas sponsorship using EIP-7702 and Foundry Cast. Feel free to add comments or suggestions on our `guides` repo or reach out via Discord.
