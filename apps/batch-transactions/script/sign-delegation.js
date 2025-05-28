@@ -1,6 +1,6 @@
 const { createPublicClient, createWalletClient, http, encodeFunctionData } = require('viem');
 const { privateKeyToAccount } = require('viem/accounts');
-const { bepolia } = require('./chains');
+const { berachainBepolia } = require('viem/chains');
 require('dotenv').config();
 
 // Contract addresses
@@ -30,7 +30,7 @@ const batchTxABI = [
 async function main() {
   // Create clients
   const publicClient = createPublicClient({
-    chain: bepolia,
+    chain: berachainBepolia,
     transport: http(process.env.RPC_URL)
   });
 
@@ -44,7 +44,7 @@ async function main() {
   const account = privateKeyToAccount(privateKey);
   const walletClient = createWalletClient({
     account,
-    chain: bepolia,
+    chain: berachainBepolia,
     transport: http(process.env.RPC_URL)
   });
 
