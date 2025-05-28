@@ -1,6 +1,8 @@
 const { createPublicClient, createWalletClient, http, parseEther, encodeFunctionData, encodeDeployData } = require('viem');
 const { privateKeyToAccount } = require('viem/accounts');
-const { bepolia } = require('viem/chains');
+const { berachainBepolia } = require('viem/chains');
+const { keccak256 } = require('viem');
+
 const fs = require('fs');
 const path = require('path');
 const chalk = require('chalk');
@@ -54,14 +56,26 @@ const erc20ABI = [
   }
 ];
 
+// Function to compute CREATE2 address
+function computeCreate2Address(deployer, salt, bytecodeHash) {
+  const packed = new Uint8Array(1 + 20 + 32 + 32);
+  packed[0] = 0xff; // First byte is 0xff
+  packed.set(deployer.slice(2).match(/.{1,2}/g).map(byte => parseInt(byte, 16)), 1); // Deployer address
+  packed.set(salt.slice(2).match(/.{1,2}/g).map(byte => parseInt(byte, 16)), 21); // Salt
+  packed.set(bytecodeHash.slice(2).match(/.{1,2}/g).map(byte => parseInt(byte, 16)), 53); // Bytecode hash
+  
+  const hash = keccak256(packed);
+  return `0x${hash.slice(26)}`; // Take last 20 bytes for address
+}
+
 async function main() {
   try {
     console.log(chalk.blue('🚀 Starting batch transaction execution...'));
 
     // Create clients
     const publicClient = createPublicClient({
-      chain: bepolia,
-      transport: http(process.env.RPC_URL)
+      chain: berachainBepolia,
+      transport: http('https://bepolia.rpc.berachain.com')
     });
 
     // Ensure private key is properly formatted
@@ -74,9 +88,25 @@ async function main() {
     const account = privateKeyToAccount(privateKey);
     const walletClient = createWalletClient({
       account,
-      chain: bepolia,
-      transport: http(process.env.RPC_URL)
+      chain: berachainBepolia,
+      transport: http('https://bepolia.rpc.berachain.com')
     });
+
+    // Get the current nonce for authorization
+    const nonce = await publicClient.getTransactionCount({
+      address: account.address
+    });
+
+    console.log(chalk.blue('🔐 Preparing authorization...'));
+    
+    // Prepare and sign the authorization
+    const authorization = await walletClient.prepareAuthorization({
+      contractAddress: BATCH_TX_ADDRESS,
+      nonce: BigInt(nonce)
+    });
+
+    const signedAuthorization = await walletClient.signAuthorization(authorization);
+    console.log(chalk.green('✅ Authorization signed'));
 
     console.log(chalk.blue('📝 Reading contract artifact...'));
     // Read the artifact file
@@ -91,6 +121,23 @@ async function main() {
     });
 
     const salt = '0x0000000000000000000000000000000000000000000000000000000000000001';
+    
+    // Simulate deployCreate2 to get the predicted address
+    console.log(chalk.blue('🔍 Simulating contract deployment...'));
+    const predictedTokenAddress = await publicClient.simulateContract({
+      address: BATCH_TX_ADDRESS,
+      abi: batchTxABI,
+      functionName: 'deployCreate2',
+      args: [deployData, salt],
+      account: account.address
+    }).then(result => result.result).catch(error => {
+      console.log(chalk.yellow('⚠️ Could not simulate deployment, will use deployment transaction to get address'));
+      return null;
+    });
+
+    if (predictedTokenAddress) {
+      console.log(chalk.green('Token will be deployed at:', predictedTokenAddress));
+    }
 
     // Prepare the batch of transactions
     const transactions = [
@@ -114,21 +161,10 @@ async function main() {
     ];
     const BOARD_MEMBER_SHARE = parseEther('1000');
 
-    console.log(chalk.blue('🔮 Predicting token address...'));
-    // Get the predicted token address
-    const predictedTokenAddress = await publicClient.readContract({
-      address: BATCH_TX_ADDRESS,
-      abi: batchTxABI,
-      functionName: 'deployCreate2',
-      args: [deployData, salt]
-    });
-
-    console.log(chalk.green('Token will be deployed at:', predictedTokenAddress));
-
-    // Add transfer transactions
+    // Add transfer transactions using the predicted address
     for (const member of boardMembers) {
       transactions.push({
-        target: predictedTokenAddress,
+        target: predictedTokenAddress || BATCH_TX_ADDRESS, // Use predicted address or fallback to batch contract
         value: 0n,
         data: encodeFunctionData({
           abi: erc20ABI,
@@ -141,13 +177,20 @@ async function main() {
     console.log(chalk.blue('📦 Preparing batch transaction...'));
     console.log(chalk.gray(`Total transactions in batch: ${transactions.length}`));
 
-    // Execute the batch transaction
+    // Execute the batch transaction with authorization
     console.log(chalk.yellow('⏳ Sending transaction...'));
     const hash = await walletClient.writeContract({
       address: BATCH_TX_ADDRESS,
       abi: batchTxABI,
       functionName: 'execute',
-      args: [transactions]
+      args: [transactions.map(tx => ({
+        target: tx.target,
+        value: tx.value,
+        data: tx.data
+      }))],
+      account: account.address,
+      chain: berachainBepolia,
+      authorization: signedAuthorization
     });
 
     console.log(chalk.green('✅ Transaction sent!'));
@@ -158,6 +201,12 @@ async function main() {
     const receipt = await publicClient.waitForTransactionReceipt({ hash });
     console.log(chalk.green('✨ Transaction successful!'));
     console.log(chalk.gray('Gas used:', receipt.gasUsed.toString()));
+
+    // If we couldn't predict the address, we can get it from the transaction receipt
+    if (!predictedTokenAddress) {
+      const deployedAddress = receipt.logs[0].address;
+      console.log(chalk.green('Token deployed at:', deployedAddress));
+    }
   } catch (error) {
     console.error(chalk.red('❌ Error:'), error.message);
     if (error.details) {
