@@ -26,8 +26,23 @@ Gas Sponsorship simply entails:
 - Use of EIP-7702 transaction type, 0x04, to carry out transactions with this implementation logic
 - The EOA signing an authorized transaction offchain and passing the details to a Sponsor to broadcast it to the chain, where the transaction `to` variable is actually the EOA itself
 
-<!-- TODO - comparison with other ways of doing gas sponsorship -->
+## Gas Sponsorship with EIP 7702 vs EIP 4337 and Pre-Signed Transactions
 
+Before getting into the guide, it is important to highlight key distinctions between the alternative methods for gas sponsorship.  The three main options today include: 
+
+- Pre-signed transactions with relayers
+- EIP-4337 with account abstraction and a complex system
+- EIP-7702 where an EOA acts like a smart account offering gas sponsorship methods
+
+Pre-signed transactions with relayers are the simplest way to do gas sponsorship. The process simply includes the user signing something offchain, and a relayer sending the actual transaction onchain. It works, but it’s all custom, where the designer has to handle replay protection,  validation, and signatures manually. Since there is no standard format or infrastructure, implementation can get complicated. 
+
+On the other hand, EIP-4337 takes things further with a full account abstraction system. There are aspects such as an EntryPoint contract, UserOperations, bundlers, paymasters, and more. The standard unlocks powerful features like sponsor-paid gas, batching, and smart account logic, but the tradeoff is high complexity and more infrastructure that doesn’t exist natively on Ethereum.
+
+EIP-7702 is a newer option that offers more simplicity holistically. It lets an EOA act like a smart account. That means you get gas sponsorship and smart account behavior without needing complex infrastructure such as bundlers and more. The standard is protocol-native, easy to integrate, and flexible enough to cover most real-world use cases without the overhead of EIP-4337.
+
+In comparison to the other two, EIP-7702 gives the designer and user the benefits of account abstraction; ie. smart logic, delegated signing, sponsor support, without reinventing the transaction process. It offers the benefits of EIP-4337 without custom mempools, complex validation flows, etc., whilst also offering simplicity like pre-signed transactions. In essence, it really is just a EVM-native, standardized method to delegate behavior in a transaction. It's an exciting design space that will open up with Pectra on the EVM, and Bectra on Bepolia.
+
+## Gas Sponsorship Flow Diagram with EIP-7702
 Gas Sponsorship with EIP-7702 is an interesting design space. We have gone ahead and made this simple "Part 1" where the main flow of carrying out a gas sponsorship is highlighted. We will publish more parts outlining:
 
 - Gas Sponsorship with ERC20s, where the EOA authorizes a transaction that transfers ERC20 to the Sponsor as a payment for the Sponsor to cover the gas required for the transaction.
