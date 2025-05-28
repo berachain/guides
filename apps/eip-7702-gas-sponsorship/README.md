@@ -33,19 +33,19 @@ Gas Sponsorship with EIP-7702 is an interesting design space. We have gone ahead
 - Gas Sponsorship with ERC20s, where the EOA authorizes a transaction that transfers ERC20 to the Sponsor as a payment for the Sponsor to cover the gas required for the transaction.
 - Using on-chain checks to ensure that the signer of the contract is the EOA itself. This will use solidity scripts leveraging Foundry.
 
-<!-- TODO - highlight the architecture with an excalidraw, about the "offchain service", eoa, sponsor, and implementation logic -->
+Today's main flow consists of the following architecture and flow shown in the below diagram. The steps highlighted in the schematic will be walked through in the code walk through.
+
+![EIP-7702 Gas Sponsorship Flow Diagram](./assets/EIP7702-Gas-Sponsorship-Diagram-1.png)
 
 :::tip
-For further information on Bectra, see our breakdowns [here](TODO-GetLinksToBectraContextBlogs).
-<!-- TODO - see what is the best resource to point to. -->
+For further information on Bectra, make sure to follow our [berachaindevs twitter](https://x.com/berachaindevs) as we publish more content! 
 :::
 
 ## Requirements
 
 Before starting, ensure that you have carried out the following: 
 
-<!-- - Read the [high-level thread on EIP-7702 and this guide](https://typefully.com/t/eXTS8ND) for a high-level understanding on key gotchas. -->
-- Installed [Foundry](https://book.getfoundry.sh/getting-started/installation) `v1.0.0` or greater
+- Install [Foundry](https://book.getfoundry.sh/getting-started/installation) `v1.0.0` or greater
 - Clone the guides [repo](https://github.com/berachain/guides/tree/main) and make your way to the `apps/eip-7702-gas-sponsorship` directory to find the Gas Sponsorship Guide and associated code we'll walk through today.
 
 # Guide Walk Through
@@ -168,7 +168,10 @@ SPONSOR_DELTA=$(echo "$SPONSOR_BAL_BEFORE - $SPONSOR_BAL_AFTER" | bc) && \
 
 # 🧾 Output Results
 echo "📦 Transaction Hash: $TX_HASH" && \
-echo "🔍 To view full transaction: cast tx $TX_HASH --rpc-url $TEST_RPC_URL" && \
+echo "🔍 To view the auth list, run:" && \
+echo "source .env && cast tx $TX_HASH --rpc-url $TEST_RPC_URL" && \
+echo "To view the receipt and ensure that the transaction was successful or not, run: " && \
+echo "source .env && cast receipt $TX_HASH --rpc-url $TEST_RPC_URL" && \
 echo "📜 Gas Used: $GAS_USED gas units" && \
 echo "💸 Gas Cost: $GAS_COST_WEI wei (~$GAS_COST_GWEI gwei)" && \
 echo "💰 EOA Balance After:     $EOA_BAL_AFTER wei" && \
@@ -183,7 +186,7 @@ echo "✅ If sponsor delta roughly equals gasUsed * effectiveGasPrice → gas wa
 
 The output should look like this:
 
-<!-- TODO - get screenshot -->
+![Output from broadcasted signed EIP-7702 tx](./assets/FullOutput.png)
 
 ## Step 5 - Assessing the Results
 
@@ -197,12 +200,12 @@ source .env && cast tx $TX_HASH --rpc-url $TEST_RPC_URL
 
 Here you'll see the following:
 
-_Using our example contract address to illustrate, you'll have a different one._
+_Using our example contract address to illustrate, you'll have a different one. Our contract address as seen in the previous screenshot is: 0x0DCd1Bf9A1b36cE34237eEaFef220932846BCD82_
 
 Under authorization list, you should see the contract address:
 
 ```bash
-authorizationList    [{"chainId":"0x138c5","address":"0xa513e6e4b8f2a923d98304ec87f64353c4d5c853","nonce":"0x12","yParity":"0x1","r":"0x887a9a9ea466b336e6aef4bbbe9cee6a28ad6d70fbe984e7d58c58739ba8b049","s":"0x2af166a588540a0ce9dcb053490d071725e487c94e68af6caf8a1803b214cb38"}]
+authorizationList    [{"chainId":"0x138c5","address":"0x0dcd1bf9a1b36ce34237eeafef220932846bcd82","nonce":"0x18","yParity":"0x1","r":"0x5b9ac56625105f2b627f344470290bfa3e5c5b19075ee741f5eedeb3e7288db2","s":"0xaa0bf8139cd82e5de12d33b13c1199444c9bca7f60fa7d577fafc7ddd455511"}]
 ```
 
 and the `to` specified should be the EOA address, and the `from` address should be the SPONSOR address. These will be the same for you too assuming you followed the guide and are using the anvil test wallets 1 and 2:
@@ -218,10 +221,14 @@ from                 0x70997970C51812dc3A010C7d01b50e0d17dc79C8
 source .env && cast receipt $TX_HASH --rpc-url $TEST_RPC_URL
 ```
 
-Here you can see the gasUsed, and thus do a check on how much gas was taken from the Sponsor, and how much was reimbursed. We do just that with the previous command you sent where gas logs were output, but of course take what we need and carry out comparisons.
+Here you can see the gasUsed, as well as that the transaction has successfully passed. 
 
-<!-- TODO - get screenshot of the gas comparisons -->
+![Tx Receipt](./assets/Receipt.png)
 
-Here you can see that the rough gas used matches the delta (gas spent) from the `SPONSOR` address, whereas the `EOA` has not spent any gas at all.
+Regarding the gas, we can do a check on how much gas was taken from the Sponsor, and how much was reimbursed. We do just that with the previous command you sent where gas logs were output, but of course take what we need and carry out comparisons.
+
+![Gas comparison from broadcast signed EIP-7702 tx](./assets/GasComparisonOutput.png)
+
+The rough gas used matches the delta (gas spent) from the `SPONSOR` address, whereas the `EOA` has not spent any gas at all.
 
 That's it! Congrats you've walked through a high level example of gas sponsorship using EIP-7702 and Foundry Cast. Feel free to add comments or suggestions on our `guides` repo or reach out via Discord.
