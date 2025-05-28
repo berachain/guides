@@ -8,6 +8,7 @@ set -e
 ARCHIVE_OPTION=$([ "$EL_ARCHIVE_NODE" = true ] && echo "--state.scheme hash --gcmode archive" || echo "--state.scheme hash")
 BOOTNODES_OPTION=$([ -n "$EL_BOOTNODES" ] && echo "--bootnodes $EL_BOOTNODES" || echo "")
 IP_OPTION=$([ -n "$MY_IP" ] && echo "--nat extip:$MY_IP" || echo "")
+PEERS_OPTION=$([ -n "$EL_PEERS_DNS" ] && echo "--discovery.dns $EL_PEERS_DNS" || echo "")
 
 $GETH_BIN 					\
 	--datadir $GETH_DATA			\
@@ -16,6 +17,7 @@ $GETH_BIN 					\
 	$BOOTNODES_OPTION			\
 	$ARCHIVE_OPTION				\
 	$IP_OPTION				\
+	$PEERS_OPTION				\
 	--metrics				\
 	--metrics.addr 0.0.0.0			\
 	--metrics.port $EL_PROMETHEUS_PORT	\

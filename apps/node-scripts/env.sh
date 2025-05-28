@@ -64,6 +64,7 @@ fi
 
 if [ -f "$SEED_DATA_DIR/el-peers.txt" ]; then
     EL_PEERS=$(grep '^enode://' "$SEED_DATA_DIR/el-peers.txt"| tr '\n' ',' | sed 's/,$//')
+    EL_PEERS_DNS=$(grep '^enrtree://' "$SEED_DATA_DIR/el-peers.txt"| tr '\n' ',' | sed 's/,$//')
 fi
 
 if [[ "$OSTYPE" == "darwin"* ]]; then
