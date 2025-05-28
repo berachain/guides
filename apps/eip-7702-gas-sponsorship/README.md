@@ -245,5 +245,15 @@ Regarding the gas, we can do a check on how much gas was taken from the Sponsor,
 ![Gas comparison from broadcast signed EIP-7702 tx](./assets/GasComparisonOutput.png)
 
 The rough gas used matches the delta (gas spent) from the `SPONSOR` address, whereas the `EOA` has not spent any gas at all.
-
 That's it! Congrats you've walked through a high level example of gas sponsorship using EIP-7702 and Foundry Cast. Feel free to add comments or suggestions on our `guides` repo or reach out via Discord.
+
+# Part 2 - Using Foundry Solidity Scripts and Implementing EOA Signer Checks
+
+<!-- TODO - Write up README for this part, decide if this is separate to this guide or not. -->
+
+<!-- To run the anvil fork of Bepolia at the latest block: 
+
+```bash
+source .env && anvil --fork-url $BEPOLIA_RPC_URL --chain-id 80069 --hardfork prague --port 8545
+``` -->
+
