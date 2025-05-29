@@ -15,78 +15,117 @@ pragma solidity ^0.8.19;
  * Uses Solmate's ERC20 for minimal, gas-efficient token logic.
  */
 
-import {Test, Vm} from "lib/forge-std/src/Test.sol";
-import {BatchTransaction} from "../src/BatchTransaction.sol";
+import "forge-std/Test.sol";
+import "../src/BatchTransaction.sol";
+import "../src/UrsaToken.sol";
+import "../src/VestingContract.sol";
 import {ERC20} from "lib/solmate/src/tokens/ERC20.sol";
-
-contract UrsaToken is ERC20 {
-    constructor() ERC20("Ursa Industries Token", "URSA", 18) {
-        _mint(msg.sender, 1_000_000 ether); // Mint 1M tokens to deployer
-    }
-}
 
 contract BatchTransactionTest is Test {
     BatchTransaction public batchTx;
+    UrsaToken public token;
+    VestingContract public vesting;
+    address public ursa;
     address public alice;
-    uint256 public alicePk;
-    address[] public boardMembers;
-    uint256 constant BOARD_MEMBER_SHARE = 50_000 ether; // 5% of 1M tokens
+    address public bob;
+    address public charlie;
+    uint256 public constant BOARD_MEMBER_SHARE = 50_000 ether;
+    uint256 public constant LOCK_DURATION = 365 days;
+    uint256 public constant TOTAL_SUPPLY = 1_000_000 ether;
 
     function setUp() public {
-        // Setup Alice (EOA) and board members
-        (alice, alicePk) = makeAddrAndKey("alice");
-        boardMembers = new address[](3);
-        for (uint256 i = 0; i < 3; i++) {
-            boardMembers[i] = makeAddr(string(abi.encodePacked("boardMember", i)));
-        }
-        // Deploy batch transaction contract
+        // Setup test accounts
+        ursa = vm.addr(1);
+        alice = vm.addr(2);
+        bob = vm.addr(3);
+        charlie = vm.addr(4);
+
+        // Deploy contracts
         batchTx = new BatchTransaction();
+        token = new UrsaToken();
+        vesting = new VestingContract(address(token));
+
+        // Mint total supply to Ursa
+        vm.prank(address(token.owner()));
+        token.mint(ursa, TOTAL_SUPPLY);
     }
 
-    function computeCreate2Address(address deployer, bytes32 salt, bytes32 bytecodeHash) public pure returns (address) {
-        return address(uint160(uint256(keccak256(abi.encodePacked(
-            bytes1(0xff),
-            deployer,
-            salt,
-            bytecodeHash
-        )))));
-    }
+    function test_BatchApprovalsAndLocks() public {
+        // Setup board members
+        address[] memory boardMembers = new address[](3);
+        boardMembers[0] = alice;
+        boardMembers[1] = bob;
+        boardMembers[2] = charlie;
 
-    function testBatchDelegationDeployAndMint() public {
-        // Prepare CREATE2 deployment
-        bytes memory bytecode = type(UrsaToken).creationCode;
-        bytes32 salt = keccak256("ursa-token-salt");
-        address predicted = computeCreate2Address(address(batchTx), salt, keccak256(bytecode));
-
-        // Prepare batch: deploy token, then mint to board members
-        BatchTransaction.Transaction[] memory txs = new BatchTransaction.Transaction[](4);
-        // 1. Deploy token (from Alice, via CREATE2)
-        txs[0] = BatchTransaction.Transaction({
-            target: address(batchTx),
-            value: 0,
-            data: abi.encodeWithSignature("deployCreate2(bytes,bytes32)", bytecode, salt)
-        });
-        // 2-4. Mint to board members (to predicted address)
-        for (uint256 i = 0; i < 3; i++) {
-            txs[i+1] = BatchTransaction.Transaction({
-                target: predicted,
+        // Prepare transactions (3 approvals + 3 locks)
+        BatchTransaction.Transaction[] memory txs = new BatchTransaction.Transaction[](6);
+        
+        // Approvals + Locks
+        for (uint256 i = 0; i < 5; i += 2) {
+            txs[i] = BatchTransaction.Transaction({
+                target: address(token),
                 value: 0,
-                data: abi.encodeWithSelector(ERC20.transfer.selector, boardMembers[i], BOARD_MEMBER_SHARE)
+                data: abi.encodeWithSelector(ERC20.approve.selector, address(vesting), BOARD_MEMBER_SHARE)
+            });
+            txs[i+1] = BatchTransaction.Transaction({
+                target: address(vesting),
+                value: 0,
+                data: abi.encodeWithSelector(VestingContract.lockTokens.selector, boardMembers[i/2], BOARD_MEMBER_SHARE, LOCK_DURATION)
             });
         }
-        // Alice signs delegation to BatchTransaction
-        Vm.SignedDelegation memory signedDelegation = vm.signDelegation(address(batchTx), alicePk);
-        // Attach delegation for the next call
-        vm.prank(alice);
-        vm.attachDelegation(signedDelegation);
-        // Execute batch as Alice (EOA, now delegated)
-        batchTx.execute(txs);
-        // Assertions
-        ERC20 token = ERC20(predicted);
-        assertEq(token.name(), "Ursa Industries Token");
-        assertEq(token.symbol(), "URSA");
+
+        // Sign delegation from Ursa to BatchTransaction
+        vm.signAndAttachDelegation(address(batchTx), 1);
+
+        // Execute batch as Ursa
+        vm.startPrank(ursa);
+        BatchTransaction(ursa).execute(txs);
+        vm.stopPrank();
+
+        // Verify vesting schedules
         for (uint256 i = 0; i < 3; i++) {
-            assertEq(token.balanceOf(boardMembers[i]), BOARD_MEMBER_SHARE);
+            (uint256 amount, uint256 unlockTime, bool claimed) = vesting.getVestingSchedule(boardMembers[i]);
+            assertEq(amount, BOARD_MEMBER_SHARE, "Incorrect vesting amount");
+            assertEq(unlockTime, block.timestamp + LOCK_DURATION, "Incorrect unlock time");
+            assertFalse(claimed, "Tokens should not be claimed");
         }
+
+        // Verify token balances
+        assertEq(token.balanceOf(ursa), TOTAL_SUPPLY - (BOARD_MEMBER_SHARE * 3), "Incorrect Ursa balance");
+        assertEq(token.balanceOf(address(vesting)), BOARD_MEMBER_SHARE * 3, "Incorrect vesting contract balance");
+        assertEq(token.allowance(ursa, address(vesting)), 0, "Allowance should be used up");
+    }
+
+    function test_RevertWhen_BatchSizeExceedsLimit() public {
+        // Create array exceeding MAX_BATCH_SIZE
+        BatchTransaction.Transaction[] memory txs = new BatchTransaction.Transaction[](101);
+        
+        // Sign delegation from Ursa to BatchTransaction
+        vm.signAndAttachDelegation(address(batchTx), 1);
+
+        // Execute batch as Ursa
+        vm.startPrank(ursa);
+        vm.expectRevert("Batch too large");
+        batchTx.execute(txs);
+        vm.stopPrank();
+    }
+
+    function test_RevertWhen_TransactionFails() public {
+        // Create invalid transaction that will definitely fail
+        BatchTransaction.Transaction[] memory txs = new BatchTransaction.Transaction[](1);
+        txs[0] = BatchTransaction.Transaction({
+            target: address(token),
+            value: 0,
+            data: abi.encodeWithSelector(ERC20.transfer.selector, address(0), type(uint256).max) // This will definitely fail
+        });
+
+        // Sign delegation from Ursa to BatchTransaction
+        vm.signAndAttachDelegation(address(batchTx), 1);
+
+        // Execute batch as Ursa
+        vm.startPrank(ursa);
+        vm.expectRevert("Transaction failed");
+        batchTx.execute(txs);
+        vm.stopPrank();
     }
 } 
