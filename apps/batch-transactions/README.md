@@ -1,160 +1,122 @@
-# Batch Transactions & EIP-7702 Delegation Guide
+# Batch Transactions on Berachain
 
-## Overview
+Welcome to the Batch Transactions project! This repository demonstrates how to deploy and interact with a batch transaction system on Berachain, including EIP-7702 self-executing contract writes using [viem](https://viem.sh/).
 
-This guide demonstrates how to use [EIP-7702](https://eips.ethereum.org/EIPS/eip-7702) to enable a user wallet (EOA) to delegate control to a smart contract, allowing atomic batch execution of transactions using a **single nonce**. This is achieved using Foundry's advanced testing features and Solmate's minimal ERC20 implementation.
+---
 
-## What is EIP-7702?
+## 🚀 Live Example
 
-EIP-7702 is a proposed Ethereum standard that allows an Externally Owned Account (EOA, i.e., a regular wallet) to temporarily delegate its transaction execution to a smart contract. This means:
-- A user can sign a special delegation message authorizing a contract to act on their behalf for a single nonce.
-- The EOA's code is temporarily replaced, enabling smart contract logic (like batching, validation, etc.) for that transaction.
-- After the transaction, the EOA reverts to normal.
+- **Batch Transaction Example:** [View on Berascan](https://testnet.berascan.com/tx/0x87bab52cb9f14304e2ec0de0973bb46bcd2c2ddab37818fe4c3bf5c394f3560f)
+- **Contracts Deployed:**
+  - BatchTransaction: `0xcc97617ae52535e68c535a43f466a03ae1fac8b3`
+  - UrsaToken: `0x10e5524bc00869f05ec6e636aba7dcf5881a590a`
+  - VestingContract: `0x27180feeb0ce7e497be8af44b3fdb4cfdbdc11cb`
 
-**Key Benefits:**
-- Enables account abstraction features (like batching, paymasters, etc.) without losing EOA compatibility.
-- Allows atomic, multi-step operations (e.g., deploy a token and mint to multiple users) in a single transaction, with a single signature and nonce.
+---
 
-## Installation
+## 🗂️ Repository Layout
 
-1. Clone the repository:
-```bash
-git clone https://github.com/your-username/batch-transactions.git
-cd batch-transactions
+```
+.
+├── src/
+│   ├── BatchTransaction.sol      # Batch transaction contract
+│   ├── UrsaToken.sol            # ERC20 token contract
+│   └── VestingContract.sol      # Vesting contract
+│
+├── test/
+│   └── BatchTransaction.t.sol   # Foundry tests for batch logic
+│
+├── script/
+│   ├── deploy-and-execute.js    # Node.js script for deployment & batch execution (EIP-7702)
+│   └── artifacts.js             # Compiled contract ABIs/bytecode (auto-generated)
+│
+├── deployed-addresses.json      # Persisted contract addresses (auto-generated)
+├── .env                         # Environment variables (private key, RPC, etc.)
+└── README.md                    # This documentation
 ```
 
-2. Install dependencies:
+---
+
+## 🧑‍💻 Quick Start
+
+### 1. Install Dependencies
+
 ```bash
-forge install
+npm install
 ```
 
-3. Create a `.env` file in the root directory:
-```bash
+### 2. Set Up Environment
+
+Create a `.env` file:
+
+```
 PRIVATE_KEY=your_private_key_here
 RPC_URL=https://bepolia.rpc.berachain.com
-ETHERSCAN_API_KEY=your_etherscan_api_key_here
 ```
 
-## Usage
-
-### Deploying the Contract
-
-1. Deploy the BatchTransaction contract:
-```bash
-forge script script/Deploy.s.sol:DeployScript --rpc-url $RPC_URL --broadcast
-```
-
-### Verifying the Contract
-
-To verify the contract on Berachain's Bepolia testnet:
+### 3. Compile Contracts
 
 ```bash
-forge verify-contract \
-  --verifier-url https://api-testnet.berascan.com/api \
-  --chain-id 80069 \
-  --etherscan-api-key $ETHERSCAN_API_KEY \
-  <CONTRACT_ADDRESS> \
-  src/BatchTransaction.sol:BatchTransaction
+forge build
 ```
 
-Replace `<CONTRACT_ADDRESS>` with your deployed contract address.
-
-### Setting Up Your Wallet
-
-To use the batch transaction functionality with your wallet:
-
-1. Deploy the BatchTransaction contract to your desired network
-2. Store the deployed contract address
-3. Use the contract's `execute` function to perform batch operations
-
-### Example: Batch Deploy & Mint
-
-```solidity
-// 1. Precompute the token address
-bytes memory bytecode = type(UrsaToken).creationCode;
-bytes32 salt = keccak256("ursa-token-salt");
-address predicted = computeCreate2Address(address(batchTx), salt, keccak256(bytecode));
-
-// 2. Prepare the batch
-BatchTransaction.Transaction[] memory txs = new BatchTransaction.Transaction[](4);
-// Deploy token
-txs[0] = BatchTransaction.Transaction({
-    target: address(batchTx),
-    value: 0,
-    data: abi.encodeWithSignature("deployCreate2(bytes,bytes32)", bytecode, salt)
-});
-// Mint to board members
-for (uint256 i = 0; i < 3; i++) {
-    txs[i+1] = BatchTransaction.Transaction({
-        target: predicted,
-        value: 0,
-        data: abi.encodeWithSelector(ERC20.transfer.selector, boardMembers[i], BOARD_MEMBER_SHARE)
-    });
-}
-
-// 3. Delegate EOA to batch contract for a single nonce
-Vm.SignedDelegation memory signedDelegation = vm.signDelegation(address(batchTx), alicePk);
-vm.prank(alice);
-vm.attachDelegation(signedDelegation);
-batchTx.execute(txs);
-```
-
-## Key Functions
-
-### 1. `execute`
-Executes a batch of transactions atomically. If any transaction fails, the whole batch reverts.
-
-```solidity
-function execute(Transaction[] calldata transactions) external {
-    for (uint256 i = 0; i < transactions.length; i++) {
-        Transaction calldata transaction = transactions[i];
-        (bool success, bytes memory reason) = transaction.target.call{value: transaction.value}(transaction.data);
-        if (!success) {
-            emit TransactionFailed(i, reason);
-            revert("Transaction failed");
-        }
-    }
-    emit BatchExecuted(msg.sender, transactions.length);
-}
-```
-
-### 2. `deployCreate2`
-Deploys a contract at a deterministic address using CREATE2.
-
-```solidity
-function deployCreate2(bytes memory bytecode, bytes32 salt) public returns (address deployed) {
-    require(bytecode.length != 0, "Bytecode is empty");
-    assembly {
-        deployed := create2(0, add(bytecode, 0x20), mload(bytecode), salt)
-    }
-    require(deployed != address(0), "CREATE2: Failed on deploy");
-}
-```
-
-## Running Tests
-
-To run the test suite:
+### 4. Generate Artifacts (if needed)
 
 ```bash
-forge test
+node script/compile.js
 ```
 
-For verbose output:
+### 5. Deploy & Execute Batch
 
 ```bash
-forge test -vv
+node script/deploy-and-execute.js
 ```
 
-## Benefits
+- The script will deploy contracts if not already deployed, or use existing ones.
+- It will mint tokens, set up EIP-7702 authorization, and execute a batch of approvals and locks in a single transaction.
 
-- **Security:** No risk of partial execution—either all actions succeed, or none do.
-- **User Experience:** One signature, one transaction, many actions.
-- **Future-Proof:** Demonstrates the power of EIP-7702 and account abstraction for next-gen wallets.
+---
 
-## Contributing
+## 🧪 Testing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+- All core logic is covered by Foundry tests in `test/BatchTransaction.t.sol`.
+- Run tests with:
+  ```bash
+  forge test -vvv
+  ```
 
-## License
+---
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+## 📝 How It Works
+
+- **BatchTransaction.sol**: Allows atomic execution of multiple contract calls (e.g., ERC20 approvals and vesting locks).
+- **UrsaToken.sol**: Simple ERC20 token contract for demonstration.
+- **VestingContract.sol**: Allows tokens to be locked for a period, with batch support.
+- **EIP-7702 Integration**: Uses [viem](https://viem.sh/docs/eip7702/contract-writes) to authorize and execute contract calls from an EOA in a single transaction.
+
+---
+
+## 🧩 Example Batch Transaction
+
+- [View on Berascan](https://testnet.berascan.com/tx/0x87bab52cb9f14304e2ec0de0973bb46bcd2c2ddab37818fe4c3bf5c394f3560f)
+- This transaction demonstrates:
+  - 3 ERC20 approvals
+  - 3 vesting locks
+  - All executed atomically via EIP-7702
+
+---
+
+## 🤝 Contributing
+
+PRs and issues are welcome! Please open an issue if you have questions or suggestions.
+
+---
+
+## 📚 References
+
+- [Viem EIP-7702 Contract Writes](https://viem.sh/docs/eip7702/contract-writes)
+- [Berachain Testnet Explorer](https://testnet.berascan.com/)
+
+---
+
+_Happy batching on Berachain!_ 🚀
