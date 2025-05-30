@@ -26,14 +26,14 @@ echo "Debug: CUSTOM_BIN_BEACOND: $CUSTOM_BIN_BEACOND"
 echo "Building for platform: $DOCKER_PLATFORM, OS: $OS"
 
 echo "*** Building reth";
-docker build --platform $DOCKER_PLATFORM -t $DOCKER_IMAGE_RETH \
+docker build --progress=plain  --platform $DOCKER_PLATFORM -t $DOCKER_IMAGE_RETH \
     -f ./Dockerfiles/reth/Dockerfile \
     --build-arg TARGETOS=$OS \
     . || { echo "Failed to build reth"; exit 1; }
 
 # do custom build if CUSTOM_BIN_BEACOND is set and not empty
 if [ -f "$CUSTOM_BIN_BEACOND" ]; then
-    docker build --platform $DOCKER_PLATFORM -t $DOCKER_IMAGE_BEACOND \
+    docker build --progress=plain  --platform $DOCKER_PLATFORM -t $DOCKER_IMAGE_BEACOND \
         -f ./Dockerfiles/beacond/Dockerfile-custombuild \
         --build-arg CHAIN_SPEC=$CHAIN_SPEC \
         --build-arg CUSTOM_BIN_BEACOND=$CUSTOM_BIN_BEACOND \
@@ -41,7 +41,7 @@ if [ -f "$CUSTOM_BIN_BEACOND" ]; then
         --build-arg TARGETARCH=$ARCH \
         .
 else
-    docker build --platform $DOCKER_PLATFORM -t $DOCKER_IMAGE_BEACOND \
+    docker build --progress=plain  --platform $DOCKER_PLATFORM -t $DOCKER_IMAGE_BEACOND \
         -f ./Dockerfiles/beacond/Dockerfile-officialbuild \
         --build-arg CHAIN_SPEC=$CHAIN_SPEC \
         --build-arg TARGETOS=$OS \
@@ -50,7 +50,7 @@ else
 fi
 
 echo "*** Building curl";
-docker build --platform $DOCKER_PLATFORM -t $DOCKER_IMAGE_CURL \
+docker build --progress=plain --platform $DOCKER_PLATFORM -t $DOCKER_IMAGE_CURL \
     -f ./Dockerfiles/curl/Dockerfile \
     --build-arg TARGETOS=$OS \
     . || { echo "Failed to build curl"; exit 1; }
