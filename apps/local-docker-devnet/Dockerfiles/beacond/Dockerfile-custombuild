@@ -4,12 +4,6 @@ ARG CHAIN_SPEC
 ARG CUSTOM_BIN_BEACOND
 ENV CHAIN_SPEC=${CHAIN_SPEC}
 
-RUN ARCH=$(uname -m) && \
-    if [ "$ARCH" != "aarch64" ]; then \
-        echo "This image only supports aarch64 (got $ARCH)"; \
-        exit 1; \
-    fi
-
 COPY ${CUSTOM_BIN_BEACOND} /tmp/beacond-custom
 
 RUN apt-get update && apt-get install -y curl wget;

@@ -1,6 +1,6 @@
 # Berachain Docker Local Devnet
 
-This repository will run a local devnet on your MacOS computer to test different contracts locally.
+This repository will run a local devnet on your computer to test different contracts locally.
 This is currently configured to run BeaconKit as a consensus client and Reth as an execution client.
 
 > **NOTE:** This local devnet only includes the [BeaconDeposit](https://github.com/berachain/contracts/blob/main/src/pol/BeaconDeposit.sol) contract and DOES NOT include the other [PoL contracts](https://github.com/berachain/contracts/tree/main/src/pol).
@@ -8,8 +8,13 @@ This is currently configured to run BeaconKit as a consensus client and Reth as 
 ## Requirements
 
 - Docker version 28.0.1 or greater
-- MacOS
+- Linux or MacOS (Intel/AMD64 or ARM64)
 - EVM Wallet (To import private key)
+
+## Supported Platforms
+
+- Linux (x86 and arm)
+- MacOS (arm)
 
 ## RPC Details
 

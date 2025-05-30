@@ -9,7 +9,7 @@ JWT_TOKEN=0xc4d70beb372fc886335d5bef3aabd63b4324b621132f5d8de67a06ddd0405fce;
 CHAIN_ID=87337;
 CHAIN_SPEC=file;  # mainnet or testnet or file. if file, uses above chain_id: see templates/beacond/*.toml
 BEACOND_CHAIN_ID=$CHAIN_SPEC-beacon-$CHAIN_ID;
-CUSTOM_BIN_BEACOND=./beacond-bectra;  # set this if you don't want to use the latest beacond from github
+CUSTOM_BIN_BEACOND=         ;  # set this if you don't want to use the latest beacond from github
 
 # important quantities
 GENESIS_DEPOSIT_AMOUNT=250000000000000;
