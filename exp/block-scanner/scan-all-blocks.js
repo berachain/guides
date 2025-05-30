@@ -28,7 +28,8 @@ async function analyzeBlockProposers(provider, startBlock, endBlock, clRpcBaseUr
                     .then(block => ({
                         blockNumber: blockNum,
                         transactionCount: block.transactions ? block.transactions.length : 0,
-                        gasUsed: block.gasUsed
+                        gasUsed: block.gasUsed,
+                        nonce: block.nonce
                     }))
                     .catch(error => ({
                         blockNumber: blockNum,
@@ -57,7 +58,7 @@ async function analyzeBlockProposers(provider, startBlock, endBlock, clRpcBaseUr
                     }
                     
                     proposerStats[proposerAddress].totalTransactions += result.transactionCount;
-                    proposerStats[proposerAddress].totalGasUsed += result.gasUsed;
+                    proposerStats[proposerAddress].totalGasUsed += BigInt(result.gasUsed);
                     proposerStats[proposerAddress].blockCount++;
                 } catch (error) {
                     console.error(`Error fetching header for block ${result.blockNumber}: ${error.message}`);
@@ -72,13 +73,14 @@ async function analyzeBlockProposers(provider, startBlock, endBlock, clRpcBaseUr
     
     const tableData = [];
     for (const [proposer, stats] of Object.entries(proposerStats)) {
-        const averageTransactions = stats.blockCount > 0 ? stats.totalTransactions / stats.blockCount : 0;
-        const averageGasUsedForPercentage = stats.blockCount > 0 ? Number(stats.totalGasUsed) / stats.blockCount : 0;
+        const totalGasUsedNumber = Number(stats.totalGasUsed);
+        const averageGasUsedForPercentage = stats.blockCount > 0 ? totalGasUsedNumber / stats.blockCount : 0;
         const gasPercentageOfLimit = (averageGasUsedForPercentage / GAS_LIMIT_REFERENCE) * 100;
+        const averageTxsPerBlock = stats.blockCount > 0 ? stats.totalTransactions / stats.blockCount : 0;
 
         tableData.push({
             [COL_PROPOSER]: proposer,
-            [COL_AVG_TXS_PER_BLOCK]: parseFloat(averageTransactions.toFixed(2)),
+            [COL_AVG_TXS_PER_BLOCK]: parseFloat(averageTxsPerBlock.toFixed(2)),
             [COL_GAS_PERCENT_LIMIT]: parseFloat(gasPercentageOfLimit.toFixed(2)),
             [COL_PROPOSED_BLOCKS]: stats.blockCount
         });
@@ -114,7 +116,7 @@ async function analyzeBlockProposers(provider, startBlock, endBlock, clRpcBaseUr
                 const percentage = totalBlocksScanned > 0 ? (blockCount / totalBlocksScanned) * 100 : 0;
                 valueAsString = `${blockCount} (${percentage.toFixed(2)}%)`;
             } else {
-                valueAsString = row[column].toFixed(2);
+                valueAsString = row[column].toString();
             }
             if (valueAsString.length > maxLengths[column]) {
                 maxLengths[column] = valueAsString.length;
@@ -131,7 +133,7 @@ async function analyzeBlockProposers(provider, startBlock, endBlock, clRpcBaseUr
                 const percentage = totalBlocksScanned > 0 ? (blockCount / totalBlocksScanned) * 100 : 0;
                 valueAsString = `${blockCount} (${percentage.toFixed(2)}%)`;
             } else {
-                valueAsString = row[column].toFixed(2);
+                valueAsString = row[column].toString();
             }
             newRow[column] = valueAsString.padStart(maxLengths[column], ' ');
         });
@@ -156,7 +158,8 @@ async function main() {
     const elRpcPortEnv = process.env.EL_ETHRPC_PORT;
     const clRpcUrlEnv = process.env.CL_ETHRPC_URL;
     const clRpcPortEnv = process.env.CL_ETHRPC_PORT;
-
+    var totalNonceChanges = 0;
+    
     let rpcUrl; // For EL
     let clRpcBaseUrl; // For CL
 
