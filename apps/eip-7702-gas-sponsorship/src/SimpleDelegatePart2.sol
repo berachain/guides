@@ -13,9 +13,12 @@ contract SimpleDelegatePart2 {
         uint256 value;
     }
 
+    mapping(uint256 => bool) public nonceUsed;
+
     error ExternalCallFailed();
     error ReimbursementFailed();
     error InvalidSignature();
+    error NonceAlreadyUsed();
 
     event HenloSaid(address indexed sender, address indexed eoa, string message);
     event Reimbursed(address indexed sponsor, uint256 refund);
@@ -30,10 +33,13 @@ contract SimpleDelegatePart2 {
         uint256 startGas = gasleft();
 
         bytes32 digest = keccak256(
-            abi.encodePacked(userCall.to, userCall.value, keccak256(userCall.data), sponsor, nonce)
+            abi.encodePacked(block.chainid, userCall.to, userCall.value, keccak256(userCall.data), sponsor, nonce)
         );
         address recovered = MessageHashUtils.toEthSignedMessageHash(digest).recover(signature);
         require(recovered == address(this), "Invalid signer");
+
+        if (nonceUsed[nonce]) revert NonceAlreadyUsed();
+        nonceUsed[nonce] = true;
 
         (bool success, ) = userCall.to.call{value: userCall.value}(userCall.data);
         if (!success) revert ExternalCallFailed();
@@ -58,7 +64,11 @@ contract SimpleDelegatePart2 {
         emit Burned(msg.sender, msg.value);
     }
 
-    function getNonceToUse(uint256 currentEOANonce) external pure returns (uint256) {
-        return currentEOANonce + 10;
+    function getNonceToUse(uint256 currentEOANonce) external view returns (uint256) {
+        uint256 nonceToUse = currentEOANonce + 10;
+        if (nonceUsed[nonceToUse]) {
+            nonceToUse++;
+        }
+        return nonceToUse;
     }
 }

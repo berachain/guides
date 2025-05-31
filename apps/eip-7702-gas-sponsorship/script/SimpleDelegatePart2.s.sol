@@ -46,11 +46,12 @@ contract SimpleDelegate2Script is Script {
         });
 
         bytes32 digest = keccak256(
-            abi.encodePacked(call.to, call.value, keccak256(call.data), SPONSOR, nonce)
+            abi.encodePacked(block.chainid, call.to, call.value, keccak256(call.data), SPONSOR, nonce)
         );
         bytes32 ethSigned = MessageHashUtils.toEthSignedMessageHash(digest);
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(EOA_PK, ethSigned);
         bytes memory signature = abi.encodePacked(r, s, v);
+
 
         uint256 sponsorBefore = SPONSOR.balance;
         uint256 eoaBefore = EOA.balance;
@@ -93,5 +94,63 @@ contract SimpleDelegate2Script is Script {
         console.log("Sponsor Gas Spent (wei):", sponsorDelta);
         console.log("EOA Delta (wei):", eoaDelta);
         console.log("Amount reimbursed to Sponsor (wei):", actualReimbursement);
+
+        console.log("---- Test Case 1: Replay with Same Nonce ----");
+
+        vm.startBroadcast(SPONSOR_PK);
+        // vm.attachDelegation(signedDelegation);
+
+        (bool replaySuccess, ) = EOA.call{value: transferAmount}(
+            abi.encodeWithSelector(
+                SimpleDelegatePart2.execute.selector,
+                call,
+                SPONSOR,
+                nonce,
+                signature
+            )
+        );
+
+        if (replaySuccess) {
+            console.log("Replay succeeded unexpectedly (should have failed due to nonce reuse).");
+        } else {
+            console.log("");
+        }
+
+        vm.stopBroadcast();
+
+                console.log("---- Test Case 2: Replay with Wrong ChainID ----");
+
+        uint256 fakeChainId = 1; // Ethereum Mainnet
+
+        bytes32 forgedDigest = keccak256(
+            abi.encodePacked(fakeChainId, call.to, call.value, keccak256(call.data), SPONSOR, nonce)
+        );
+        bytes32 forgedEthSigned = MessageHashUtils.toEthSignedMessageHash(forgedDigest);
+        (uint8 fv, bytes32 fr, bytes32 fs) = vm.sign(EOA_PK, forgedEthSigned);
+        bytes memory forgedSignature = abi.encodePacked(fr, fs, fv);
+
+        vm.startBroadcast(SPONSOR_PK);
+        // vm.attachDelegation(signedDelegation);
+
+        (bool forgedSuccess, ) = EOA.call{value: transferAmount}(
+            abi.encodeWithSelector(
+                SimpleDelegatePart2.execute.selector,
+                call,
+                SPONSOR,
+                nonce,
+                forgedSignature
+            )
+        );
+
+        if (forgedSuccess) {
+            console.log("Cross-chain replay succeeded unexpectedly (should have failed due to signature mismatch).");
+        } else {
+            console.log("Cross-chain replay failed as expected (invalid chainId in signature).");
+        }
+
+        vm.stopBroadcast();
+
+
+
     }
 }
