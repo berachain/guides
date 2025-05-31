@@ -19,6 +19,12 @@ head:
 
 # EIP-7702 Gas Sponsorship with Anvil
 
+<!-- TODO - figure out where to implement this as you have to rerun everything again: <!-- To run the anvil fork of Bepolia at the latest block: 
+
+```bash
+source .env && anvil --fork-url $BEPOLIA_RPC_URL --chain-id 80069 --hardfork prague --port 8545
+``` --> -->
+
 In this guide, we will walk you through a demo of gas sponsorship accomplished with EIP-7702, all on a local anvil fork. EIP-7702 is one of the improvement proposals implemented in the Bectra upgrade, on Bepolia, mirroring the changes made within Ethereum Mainnet with Pectra. 
 
 Gas Sponsorship simply entails:
@@ -249,11 +255,297 @@ That's it! Congrats you've walked through a high level example of gas sponsorshi
 
 # Part 2 - Using Foundry Solidity Scripts and Implementing EOA Signer Checks
 
-<!-- TODO - Write up README for this part, decide if this is separate to this guide or not. -->
+The guide so far walked through the high level transaction flow when working with EIP-7702 to leverage gas sponsorship for an EOA. In this second part of the guide, we will cover the usage of Foundry Solidity Scripts and changes within the authorized implementation logic, `SimpleDelegatePart2.sol`. The below steps walk through each core lesson, and the commands to run the entire guide is in step # [](TODO GET LINK TO BELOW STEP).
 
-<!-- To run the anvil fork of Bepolia at the latest block: 
+The files used include:
+
+- `SimpleDelegatePart2.sol` - An expansion on `SimpleDelegate.sol` contract where it showcases signer recovery, nonce management, and use of inner calls with calldata.
+- `SimpleDelegatePart2.s.sol` - A solidity script that is used to enact deployment of the implementation contract, authorization of the implementation logic for the EOA as per EIP-7702, and the broadcast of the sponsored transaction from the `SPONSOR` on behalf of the `EOA`.
+
+Make sure to set up your `.env` so you can broadcast properly to Bepolia. You will need to have $tBERA within your wallets that you are using for both the EOA and the SPONSOR. 
+
+> If you need $tBERA, you can get some from our [faucet](TODO-GetLink), or contact us directly.
+
+```
+# YOUR OWN WALLET DETAILS FOR DEPLOYING TO ACTUAL NETWORKS
+EOA_WALLET1_ADDRESS=
+EOA_WALLET1_PK=
+SPONSOR_WALLET2_ADDRESS=
+SPONSOR_WALLET2_PK=
+```
+
+The files are ready to test and work with. Let's briefly walk through what is going on in each of them to help solidify key lessons.
+
+## Step 1 - Signer Checks with EIP-7702
+
+It is important to check that the authorized transaction is originally signed by the EOA. Changes have been made to the Part 1 `SimpleDelegate.sol` contract where:
+
+- The address of the signer is recovered using the `call` information and the provided `signature`.
+
+The SimpleDelegatePart2.s.sol script is very different from the script used in part 1. Instead of using `cast` calls to deploy and interact with the contract and accounts, the solidity script carries out all the steps within the code.
+
+> `vm.signDelegation` and `vm.attachDelegation` are cheatcodes from Foundry that allow EOAs and Sponsors to carry out EIP-7702 transactions when broadcast to networks. Please note that within simulations, such as with `forge test` or where solidity scripts are ran but not broadcast, Foundry is still working to support EIP-7702 transactions in full. For this tutorial, we will simply test against a local anvil forked network or the network directly.
+
+The main gotcha with the script code and the changed implementation code is that the implementation code checks if the recovered address, and thus the signer, is the EOA itself. Only then will it pass and allow the transaction to carry out. 
+
+```solidity
+...
+        bytes32 digest = keccak256(
+            abi.encodePacked(userCall.to, userCall.value, keccak256(userCall.data), sponsor, nonce)
+        );
+        address recovered = MessageHashUtils.toEthSignedMessageHash(digest).recover(signature);
+        require(recovered == address(this), "Invalid signer");
+```
+
+Above is the core check that exposes a couple of things about EIP-7702. The `address(this)` value is actually the `EOA` in the context of the EIP-7702 transaction. Therefore, any call and transaction enacted through it, must be signed by the `EOA_PK` itself.
+
+This check ensures that no malicious transactions are carried through.
+
+## Step 2 - Replay Attacks Prevention via Nonce Management
+
+Replay attacks can be prevented with EIP-7702 transactions by having proper checks within the authorized implementation logic. Essentially if there is no check for the nonce being used in the authorized transaction, it could be re-used, which of course is a huge attack vector.
+
+Expanding on part 1, where the high level transaction flow was shown for Gas Sponsorship with EIP-7702, we now use the persistent storage of the EOA to our advantage and keep track of the arbitrary nonces used from the "service" preparing transactions signed by the EOA.
+
+Recall that the EOA nonce is not the same as the nonce used in these checks. The nonce used in these checks correspond to the arbitrary nonce that the offchain service uses to prepare transactions signed by the EOA ultimately. One reason for these arbitrary nonces is to prevent replay attacks by marking the nonce as used within a mapping in the implementation logic itself.
+
+> A key lesson here is that the storage of the EOA persists when it comes to using authorized implementation logic via EIP-7702. It can be transient as well. 
+<!-- TODO - confirm the last bit here. -->
+
+The changes made with respect to nonce management include:
+
+- A mapping of nonces to bool values, signifying when a nonce has been used.
+- Conditional logic that reverts if the mapping of the proposed transaction nonce shows that it is a used nonce already.
+
+```solidity
+...
+    mapping(uint256 => bool) public nonceUsed; // Whether EOA nonce has been used or not
+    error NonceAlreadyUsed();
+    
+...
+    function execute(
+        Call memory userCall,
+        address sponsor,
+        uint256 nonce,
+        bytes calldata signature
+    ) external payable {
+
+    ...
+        if (nonceUsed[nonce]) revert NonceAlreadyUsed();
+        nonceUsed[nonce] = true;
+    ...
+    }
+
+```
+
+## Step 3 - Crosschain Replay Attack Prevention via ChainID Management
+
+Crosschain replay attacks occur when an authorized, signed, transaction is replayed on a separate network then from where it originated. This exposes risks to funds on different networks, and more. 
+
+ChainIDs are used in the implementation logic as a way to prevent these crosschain attacks. Combined with the nonce mapping mentioned before, chainIDs can be used to ensure the transaction can only occur once on the specified network, and no where else.
+
+<!-- TODO - add code snippit showing chainID management in implementation code -->
+
+```solidity
+...
+    mapping(uint256 => bool) public nonceUsed; // Whether EOA nonce has been used or not
+    error NonceAlreadyUsed();
+    
+...
+    function execute(
+        Call memory userCall,
+        address sponsor,
+        uint256 nonce,
+        bytes calldata signature
+    ) external payable {
+
+    ...
+        if (nonceUsed[nonce]) revert NonceAlreadyUsed();
+        nonceUsed[nonce] = true;
+    ...
+    }
+
+```
+
+## Step 4 - Using Actual calldata via `burnNative()` with EIP-7702 Calls
+
+Within the first part of this guide, we sent empty `calldata` to focus in on the use of EIP-7702 for gas sponsorship. Typically, transactions will not have empty calldata. An additional expansion for part 2 of this guide is to include a `burnNative()` function to showcase the execution of an internal call within the authorized transaction. 
+
+It is key to understand that `msg.sender` in the internal call is the `tx.origin` which would be the `EOA`!
+
+<!-- TODO - finish writing about the burn call -->
 
 ```bash
-source .env && anvil --fork-url $BEPOLIA_RPC_URL --chain-id 80069 --hardfork prague --port 8545
-``` -->
+SimpleDelegatePart2.Call memory call = SimpleDelegatePart2.Call({
+            to: EOA,
+            value: burnAmount,
+            data: abi.encodeWithSelector(simpleDelegate.burnNative.selector)
+        });
 
+        bytes32 digest = keccak256(
+            abi.encodePacked(block.chainid, call.to, call.value, keccak256(call.data), SPONSOR, nonce)
+        );
+        bytes32 ethSigned = MessageHashUtils.toEthSignedMessageHash(digest);
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(EOA_PK, ethSigned);
+        bytes memory signature = abi.encodePacked(r, s, v);
+
+
+        uint256 sponsorBefore = SPONSOR.balance;
+        uint256 eoaBefore = EOA.balance;
+
+        vm.startBroadcast(SPONSOR_PK);
+        vm.attachDelegation(signedDelegation);
+
+        bytes memory code = address(EOA).code;
+        require(code.length > 0, "no code written to EOA");
+
+        (bool success, ) = EOA.call{value: transferAmount}(
+            abi.encodeWithSelector(
+                SimpleDelegatePart2.execute.selector,
+                call,
+                SPONSOR,
+                nonce,
+                signature
+            )
+        );
+        require(success, "Call to EOA smart account failed");
+
+        vm.stopBroadcast();
+
+```
+
+### Step 5 - Understanding and Running the Solidity Script
+
+We have discussed the changes made to the implementation logic in `SimpleDelegatePart2.sol`. Now we will walk through the main components within the Solidity Script.
+
+Instead of piecing things together with `cast`, we use a full Foundry Solidity script to handle everything: deployment, delegation, authorization, broadcasting, and even checking for replay and signature mismatches. This is a great way to simulate what a service or wallet might actually do when working with EIP-7702.
+
+Using a Foundry Solidity script gives you a lot:
+
+- You get full control over both the EOA and the sponsor inside one flow
+- Cheatcodes like `vm.sign`, `vm.envAddress`, `vm.startBroadcast` make this super clean
+- You can easily simulate replay, forged signatures, chain ID mismatches
+- You can inspect balances, gas deltas, and storage at the EOA address directly
+
+The file is `SimpleDelegatePart2.s.sol`, and the main entry point is the `SimpleDelegate2Script` contract. You can run it using:
+
+```bash
+source .env && forge script script/SimpleDelegatePart2.s.sol:SimpleDelegate2Script \
+  --rpc-url $TEST_RPC_URL \
+  --broadcast -vvvv
+```
+
+This script works on a local anvil fork or Bepolia. As mentioned before, just make sure your `.env` has the right test keys and enough $tBERA.
+
+#### What the Script Does
+
+The Solidity script does the entire 7702 lifecycle in one flow:
+
+1. Deploys the `SimpleDelegatePart2` contract
+2. Signs a delegation from the EOA to itself
+3. Constructs a call to `burnNative()` using the implementation logic
+4. Signs the transaction offchain using the EOA private key
+5. Has the sponsor broadcast the transaction using `execute(...)`
+6. Logs balances, costs, and verifies the result
+
+This is a pretty accurate simulation of how things would work in practice with a wallet frontend, sponsor backend, and protocol logic.
+
+We also run two important tests mentioned before:
+
+- **Replay attack**: Try sending the same tx again → should revert due to `nonceUsed[nonce]` being true.
+- **Cross-chain replay**: Try a forged signature using the wrong chain ID → should fail signature recovery.
+
+### Core Lessons in the Script
+
+There are a few key things this script shows:
+
+- `address(this)` inside the implementation contract equals the EOA, since EIP-7702 executes the logic at the EOA's address
+- Storage writes like `nonceUsed[nonce] = true` persist at the EOA
+- Including `block.chainid` in the digest ensures signatures only work on the intended chain
+
+All of these are things are highly recommended to get right in a production deployment of EIP-7702 sponsorship flows.
+
+### Step 6 - Assessing the New Final Results
+
+The contract has been successfully interacted with at the EOA's address by observing the following:
+
+Below you can see the `to` address is the EOA, the `from` address is the SPONSOR, and the implementation address is seen under the `authorizationList`.
+
+```json
+{
+      "hash": "0x131051742f94c2fb10422d53d134a78deb41404dd5b47e99cff721dc4eb70b02",
+      "transactionType": "CALL",
+      "contractName": null,
+      "contractAddress": "0x63e6ab65010c695805a3049546ef71e4a242eb6c",
+      "function": "execute((bytes,address,uint256),address,uint256,bytes)",
+      "arguments": [
+        "(0xfbc7c433, 0x63E6ab65010C695805a3049546EF71e4A242EB6C, 10000000000000000)",
+        "0x00195EFB66D39809EcE9AaBDa38172A5e603C0dE",
+        "17",
+        "0xbb7f5ba622d818bb258263974aaa2131dd1dda771c78f88b89152d6b432cfbfe3d02237565c005bb0e6811de03311210e04ec7224d262b2bf7c764b66ce4aff41b"
+      ],
+      "transaction": {
+        "from": "0x00195efb66d39809ece9aabda38172a5e603c0de",
+        "to": "0x63e6ab65010c695805a3049546ef71e4a242eb6c",
+        "gas": "0x2a7d1",
+        "value": "0x6a94d74f430000",
+        "input": "0xd65fcb6c000000000000000000000000000000000000000000000000000000000000008000000000000000000000000000195efb66d39809ece9aabda38172a5e603c0de00000000000000000000000000000000000000000000000000000000000000110000000000000000000000000000000000000000000000000000000000000120000000000000000000000000000000000000000000000000000000000000006000000000000000000000000063e6ab65010c695805a3049546ef71e4a242eb6c000000000000000000000000000000000000000000000000002386f26fc100000000000000000000000000000000000000000000000000000000000000000004fbc7c433000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000041bb7f5ba622d818bb258263974aaa2131dd1dda771c78f88b89152d6b432cfbfe3d02237565c005bb0e6811de03311210e04ec7224d262b2bf7c764b66ce4aff41b00000000000000000000000000000000000000000000000000000000000000",
+        "nonce": "0x2",
+        "chainId": "0x138c5",
+        "authorizationList": [
+          {
+            "chainId": "0x138c5",
+            "address": "0xddb11edb9498e778d783e1514519631db978cefe",
+            "nonce": "0x7",
+            "yParity": "0x1",
+            "r": "0xd304ce7ae24007d5f367dd397030c92686c7a10180c8094825736854a96be633",
+            "s": "0x1c304881690f634b1a2f9192137097d0e7e37d27538353f26446368925e0c2e5"
+          }
+        ]
+      },
+      "additionalContracts": [],
+      "isFixedGasLimit": false
+    }
+```
+
+The output will showcase a successful transaction and a reversion for both `NonceAlreadyUsed()` and `Invalid Signer`.
+
+```bash
+[⠊] Compiling...
+No files changed, compilation skipped
+Warning: Detected artifacts built from source files that no longer exist. Run `forge clean` to make sure builds are in sync w
+ith project files.                                                                                                            - /Users/ichiraku/Documents/1-CODE/2-Guides/May-22/guides/apps/eip-7702-gas-sponsorship/script/SimpleDelegatePart2RealDeploy
+ment.s.sol                                                                                                                   Warning: EIP-3855 is not supported in one or more of the RPCs used.
+Unsupported Chain IDs: 80069.
+Contracts deployed with a Solidity version equal or higher than 0.8.20 might not work properly.
+For more information, please see https://eips.ethereum.org/EIPS/eip-3855
+Script ran successfully.
+
+== Logs ==
+  Sponsor balance (wei): 19992485519997369932
+  ---- Execution Summary ----
+  Sponsor Gas Spent (wei): 996420000348747
+  EOA Delta (wei): 0
+  Amount reimbursed to Sponsor (wei): 29003579999651253
+  ---- Test Case 1: Replay with Same Nonce ----
+  Replay failed as expected (nonce already used).
+  ---- Test Case 2: Replay with Wrong ChainID ----
+  Cross-chain replay failed as expected (invalid chainId in signature).
+
+## Setting up 1 EVM.
+  [12323] 0x63E6ab65010C695805a3049546EF71e4A242EB6C::execute{value: 30000000000000000}(Call({ data: 0xfbc7c433, to: 0x63E6ab
+65010C695805a3049546EF71e4A242EB6C, value: 10000000000000000 [1e16] }), 0x00195EFB66D39809EcE9AaBDa38172A5e603C0dE, 19, 0x91f3ff0d4999ce2d97ad98d9c78c967e30a17e313941763f726f943d122d6f6d24d01b00050c9cf12c2a060a22c012d70787d07a174b87187b6cd083cc24b59e1b)                                                                                                                              ├─ [3000] PRECOMPILES::ecrecover(0xbaf222251f89c11d41a500b7a405321c85d41d2cbc0a926cdb39d802150a979c, 27, 6601646718486358
+1129492900441135972292030061417493464943343716828623890378605, 16650953086154607435429330488942928347914477230191894192328024569607478359454) [staticcall]                                                                                                    │   └─ ← [Return] 0x00000000000000000000000063e6ab65010c695805a3049546ef71e4a242eb6c
+    └─ ← [Revert] NonceAlreadyUsed()
+
+  [10049] 0x63E6ab65010C695805a3049546EF71e4A242EB6C::execute{value: 30000000000000000}(Call({ data: 0xfbc7c433, to: 0x63E6ab
+65010C695805a3049546EF71e4A242EB6C, value: 10000000000000000 [1e16] }), 0x00195EFB66D39809EcE9AaBDa38172A5e603C0dE, 19, 0x90574dcdf09f26952729cdbede854d50a10d377fb224970f2eb38654c8627f34293347fdd28a3d4396dbd9f7f80f157cc930a6c5b221efd916fb7441614e294d1c)                                                                                                                              ├─ [3000] PRECOMPILES::ecrecover(0xbaf222251f89c11d41a500b7a405321c85d41d2cbc0a926cdb39d802150a979c, 28, 6528730287722426
+9808226580710698351715294006742266363989773667897382331907892, 18635432859247198048365968425627914393284181918472378048396876387465699404109) [staticcall]                                                                                                    │   └─ ← [Return] 0x0000000000000000000000001191ad406538b598920074e2197cbe682dc0f449
+    └─ ← [Revert] Invalid signer
+
+Error: Simulated execution failed.
+```
+
+<!-- TODO - get code snippit of the successful tx of the gas reimbursement and sponsorship and burn -->
+
+Finally, we have walked through the second part of gas sponsorship. Congrats! In the next gas-sponsorship guide expansion, we will walk through support for ERC20 payment flows. 
