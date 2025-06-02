@@ -1,7 +1,6 @@
 # Load env from env.sh - Modify this as needed
 set -e;
 umask 002
-set -x;
 source env.sh;
 
 if [[ "$OSTYPE" == "darwin"* ]]; then
