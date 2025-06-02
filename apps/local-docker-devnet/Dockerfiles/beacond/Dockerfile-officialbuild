@@ -29,6 +29,8 @@ RUN if [ "$TARGETARCH" = "arm64" ]; then \
     rm beacond-v*.tar.gz; \
     mv ./beacond-v* ./beacond; \
     chmod +x ./beacond; \
-    ./beacond version
+    ./beacond version > /dev/null 2>&1
 
+# Set the entrypoint
+ENTRYPOINT ["./beacond"]
 
