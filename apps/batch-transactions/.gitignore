@@ -6,6 +6,7 @@ lib/
 cache/
 out/
 broadcast/
+bytecode/
 
 # IDE
 .vscode/
