@@ -1,7 +1,6 @@
 #!/bin/bash
 
 set -e;
-set -x
 source env.sh;
 
 # Detect architecture and OS
