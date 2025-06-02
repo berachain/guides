@@ -2,12 +2,6 @@
 set -e;
 source env.sh;
 
-if [[ "$OSTYPE" == "darwin"* ]]; then
-    export SED_OPT="-i ''"
-else
-    export SED_OPT='-i' 
-fi
-
 
 
 echo "Starting Beacond...";
@@ -105,12 +99,12 @@ fi
 # - address = "0.0.0.0:3500"
 if [ $NUM_VALIDATORS -gt 0 ]; then
   for i in $(seq 0 $((NUM_VALIDATORS - 1))); do
-    sed $SED_OPT 's|jwt-secret-path = ".*"|jwt-secret-path = "/root/.beacond/config/jwt.hex"|' $TMP_BEACOND_DIR/config-cl-val$i/config/app.toml;
-    sed $SED_OPT "s|suggested-fee-recipient = \".*\"|suggested-fee-recipient = \"$SUGGESTED_FEE_RECIPIENT\"|" $TMP_BEACOND_DIR/config-cl-val$i/config/app.toml;
-    sed $SED_OPT 's|trusted-setup-path = ".*"|trusted-setup-path = "/root/.beacond/config/kzg-trusted-setup.json"|' $TMP_BEACOND_DIR/config-cl-val$i/config/app.toml;
-    sed $SED_OPT "s|rpc-dial-url = \".*\"|rpc-dial-url = \"http://$EL_MONIKER-val-$i:8551\"|" $TMP_BEACOND_DIR/config-cl-val$i/config/app.toml;
-    sed $SED_OPT '170,190s/enabled = "false"/enabled = "true"/' $TMP_BEACOND_DIR/config-cl-val$i/config/app.toml;
-    sed $SED_OPT "s|address = \".*\"|address = \"0.0.0.0:3500\"|" $TMP_BEACOND_DIR/config-cl-val$i/config/app.toml;
+    sed -i '' 's|jwt-secret-path = ".*"|jwt-secret-path = "/root/.beacond/config/jwt.hex"|' $TMP_BEACOND_DIR/config-cl-val$i/config/app.toml;
+    sed -i '' "s|suggested-fee-recipient = \".*\"|suggested-fee-recipient = \"$SUGGESTED_FEE_RECIPIENT\"|" $TMP_BEACOND_DIR/config-cl-val$i/config/app.toml;
+    sed -i '' 's|trusted-setup-path = ".*"|trusted-setup-path = "/root/.beacond/config/kzg-trusted-setup.json"|' $TMP_BEACOND_DIR/config-cl-val$i/config/app.toml;
+    sed -i '' "s|rpc-dial-url = \".*\"|rpc-dial-url = \"http://$EL_MONIKER-val-$i:8551\"|" $TMP_BEACOND_DIR/config-cl-val$i/config/app.toml;
+    sed -i '' '170,190s/enabled = "false"/enabled = "true"/' $TMP_BEACOND_DIR/config-cl-val$i/config/app.toml;
+    sed -i '' "s|address = \".*\"|address = \"0.0.0.0:3500\"|" $TMP_BEACOND_DIR/config-cl-val$i/config/app.toml;
   done
 fi
 
@@ -120,10 +114,10 @@ fi
 # - indexer = "kv"
 if [ $NUM_VALIDATORS -gt 0 ]; then
   for i in $(seq 0 $((NUM_VALIDATORS - 1))); do
-    sed $SED_OPT "s|laddr = \"tcp://127.0.0.1:26657\"|laddr = \"tcp://0.0.0.0:26657\"|" $TMP_BEACOND_DIR/config-cl-val$i/config/config.toml;
-    sed $SED_OPT "s|cors_allowed_origins = \[\]|cors_allowed_origins = \[\"*\"\]|" $TMP_BEACOND_DIR/config-cl-val$i/config/config.toml;
-    sed $SED_OPT '108s/unsafe = "false"/unsafe = "true"/' $TMP_BEACOND_DIR/config-cl-val$i/config/config.toml;
-    sed $SED_OPT 's|indexer = "null"|indexer = "kv"|' $TMP_BEACOND_DIR/config-cl-val$i/config/config.toml;
+    sed -i '' "s|laddr = \"tcp://127.0.0.1:26657\"|laddr = \"tcp://0.0.0.0:26657\"|" $TMP_BEACOND_DIR/config-cl-val$i/config/config.toml;
+    sed -i '' "s|cors_allowed_origins = \[\]|cors_allowed_origins = \[\"*\"\]|" $TMP_BEACOND_DIR/config-cl-val$i/config/config.toml;
+    sed -i '' '108s/unsafe = "false"/unsafe = "true"/' $TMP_BEACOND_DIR/config-cl-val$i/config/config.toml;
+    sed -i '' 's|indexer = "null"|indexer = "kv"|' $TMP_BEACOND_DIR/config-cl-val$i/config/config.toml;
   done
 fi
 
@@ -140,7 +134,7 @@ if [ $NUM_VALIDATORS -gt 1 ]; then
   SEEDS="$NODE_ID@$CL_MONIKER-val-0:26656";
 
   for i in $(seq 1 $((NUM_VALIDATORS - 1))); do
-    sed $SED_OPT "s|seeds = \".*\"|seeds = \"$SEEDS\"|" $TMP_BEACOND_DIR/config-cl-val$i/config/config.toml;
+    sed -i '' "s|seeds = \".*\"|seeds = \"$SEEDS\"|" $TMP_BEACOND_DIR/config-cl-val$i/config/config.toml;
   done
 fi
 
@@ -167,7 +161,7 @@ if [ $NUM_VALIDATORS -gt 1 ]; then
       fi
     done
     PERSISTENT_PEERS=${PERSISTENT_PEERS%,};
-    sed $SED_OPT "s|persistent_peers = \".*\"|persistent_peers = \"$PERSISTENT_PEERS\"|" $TMP_BEACOND_DIR/config-cl-val$i/config/config.toml;
+    sed -i '' "s|persistent_peers = \".*\"|persistent_peers = \"$PERSISTENT_PEERS\"|" $TMP_BEACOND_DIR/config-cl-val$i/config/config.toml;
   done
 fi
 
@@ -182,12 +176,12 @@ if [ $NUM_RPC_NODES -gt 0 ]; then
     cp -f $TMP_BEACOND_DIR/config-cl-val0/config/app.toml $TMP_BEACOND_DIR/config-cl-rpc$i/config/app.toml;
     cp -f $TMP_BEACOND_DIR/config-cl-val0/config/config.toml $TMP_BEACOND_DIR/config-cl-rpc$i/config/config.toml;
     cp -f $TMP_BEACOND_DIR/config-genesis/config/genesis.json $TMP_BEACOND_DIR/config-cl-rpc$i/config/genesis.json;
-    sed $SED_OPT "s|persistent_peers = \".*\"|persistent_peers = \"$ALL_PERSISTENT_PEERS\"|" $TMP_BEACOND_DIR/config-cl-rpc$i/config/config.toml;
-    sed $SED_OPT "s|seeds = \".*\"|seeds = \"$SEEDS\"|" $TMP_BEACOND_DIR/config-cl-rpc$i/config/config.toml;
-    sed $SED_OPT "s|rpc-dial-url = \".*\"|rpc-dial-url = \"http://$EL_MONIKER-rpc-$i:8551\"|" $TMP_BEACOND_DIR/config-cl-rpc$i/config/app.toml;
-    sed $SED_OPT "s|laddr = \"tcp://127.0.0.1:26657\"|laddr = \"tcp://0.0.0.0:26657\"|" $TMP_BEACOND_DIR/config-cl-val$i/config/config.toml;
-    sed $SED_OPT "s|cors_allowed_origins = \[\]|cors_allowed_origins = \[\"*\"\]|" $TMP_BEACOND_DIR/config-cl-rpc$i/config/config.toml;
-    sed $SED_OPT '108s/unsafe = "false"/unsafe = "true"/' $TMP_BEACOND_DIR/config-cl-rpc$i/config/config.toml;
+    sed -i '' "s|persistent_peers = \".*\"|persistent_peers = \"$ALL_PERSISTENT_PEERS\"|" $TMP_BEACOND_DIR/config-cl-rpc$i/config/config.toml;
+    sed -i '' "s|seeds = \".*\"|seeds = \"$SEEDS\"|" $TMP_BEACOND_DIR/config-cl-rpc$i/config/config.toml;
+    sed -i '' "s|rpc-dial-url = \".*\"|rpc-dial-url = \"http://$EL_MONIKER-rpc-$i:8551\"|" $TMP_BEACOND_DIR/config-cl-rpc$i/config/app.toml;
+        sed -i '' "s|laddr = \"tcp://127.0.0.1:26657\"|laddr = \"tcp://0.0.0.0:26657\"|" $TMP_BEACOND_DIR/config-cl-val$i/config/config.toml;
+    sed -i '' "s|cors_allowed_origins = \[\]|cors_allowed_origins = \[\"*\"\]|" $TMP_BEACOND_DIR/config-cl-rpc$i/config/config.toml;
+    sed -i '' '108s/unsafe = "false"/unsafe = "true"/' $TMP_BEACOND_DIR/config-cl-rpc$i/config/config.toml;
   done
 fi
 
