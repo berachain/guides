@@ -77,10 +77,9 @@ contract BatchTransactionTest is Test {
         // Sign delegation from Ursa to BatchTransaction
         vm.signAndAttachDelegation(address(batchTx), 1);
 
-        // Execute batch as Ursa
-        vm.startPrank(ursa);
-        BatchTransaction(ursa).execute(txs);
-        vm.stopPrank();
+        // Execute batch as Ursa with delegation
+        vm.prank(ursa);
+        BatchTransaction(ursa).execute(txs, 0);
 
         // Verify vesting schedules
         for (uint256 i = 0; i < 3; i++) {
@@ -103,11 +102,10 @@ contract BatchTransactionTest is Test {
         // Sign delegation from Ursa to BatchTransaction
         vm.signAndAttachDelegation(address(batchTx), 1);
 
-        // Execute batch as Ursa
-        vm.startPrank(ursa);
+        // Execute batch as Ursa with delegation
+        vm.prank(ursa);
         vm.expectRevert("Batch too large");
-        batchTx.execute(txs);
-        vm.stopPrank();
+        BatchTransaction(ursa).execute(txs, 0);
     }
 
     function test_RevertWhen_TransactionFails() public {
@@ -122,10 +120,63 @@ contract BatchTransactionTest is Test {
         // Sign delegation from Ursa to BatchTransaction
         vm.signAndAttachDelegation(address(batchTx), 1);
 
-        // Execute batch as Ursa
-        vm.startPrank(ursa);
+        // Execute batch as Ursa with delegation
+        vm.prank(ursa);
         vm.expectRevert("Transaction failed");
-        batchTx.execute(txs);
-        vm.stopPrank();
+        BatchTransaction(ursa).execute(txs, 0);
+    }
+
+    function test_RevertWhen_NonceReused() public {
+        // Create a simple batch transaction
+        BatchTransaction.Transaction[] memory txs = new BatchTransaction.Transaction[](1);
+        txs[0] = BatchTransaction.Transaction({
+            target: address(token),
+            value: 0,
+            data: abi.encodeWithSelector(ERC20.transfer.selector, alice, 100 ether)
+        });
+
+        // Sign delegation from Ursa to BatchTransaction
+        vm.signAndAttachDelegation(address(batchTx), 1);
+
+        // Execute batch as Ursa with delegation
+        vm.prank(ursa);
+        BatchTransaction(ursa).execute(txs, 0);
+
+        // Sign new delegation for the second attempt
+        vm.signAndAttachDelegation(address(batchTx), 1);
+
+        // Try to execute the same batch again with the same nonce
+        vm.prank(ursa);
+        vm.expectRevert("Invalid nonce");
+        BatchTransaction(ursa).execute(txs, 0);
+    }
+
+    function test_NonceIncrementsCorrectly() public {
+        // Create a simple batch transaction
+        BatchTransaction.Transaction[] memory txs = new BatchTransaction.Transaction[](1);
+        txs[0] = BatchTransaction.Transaction({
+            target: address(token),
+            value: 0,
+            data: abi.encodeWithSelector(ERC20.transfer.selector, alice, 100 ether)
+        });
+
+        // Execute multiple batches with incrementing nonces
+        // First execution
+        vm.signAndAttachDelegation(address(batchTx), 1);      
+        vm.prank(ursa);
+        BatchTransaction(ursa).execute(txs, 0);
+        
+        // Second executionX        
+        vm.signAndAttachDelegation(address(batchTx), 1);  
+        vm.prank(ursa); 
+        BatchTransaction(ursa).execute(txs, 1);
+        
+        // Third execution
+        vm.signAndAttachDelegation(address(batchTx), 1);        
+        vm.prank(ursa);
+        BatchTransaction(ursa).execute(txs, 2);
+
+        // Verify final nonce
+        assertEq(BatchTransaction(ursa).getNonce(ursa), 3, "Nonce should be 3 after three executions");
     }
 } 
