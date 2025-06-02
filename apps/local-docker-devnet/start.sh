@@ -9,7 +9,13 @@ else
     export SED_OPT='-i' 
 fi
 
-
+# Function to handle permission setting based on OS
+set_permissions() {
+    local dir=$1
+    if [[ "$OSTYPE" != "darwin"* ]]; then
+        sudo chown -R $USER:docker $dir && sudo chmod -R g+rwxs $dir
+    fi
+}
 
 echo "Starting Beacond...";
 
@@ -47,7 +53,7 @@ fi
 
 docker run --rm --entrypoint /bin/bash -v $TMP_BEACOND_DIR/config-cl-val0:/root/.beacond -v $TMP_BEACOND_DIR/config-cl-val0/logs:/root/logs $DOCKER_IMAGE_BEACOND \
   -c "./beacond init $BEACOND_MONIKER $CHAIN_SPEC_OPTS; echo $JWT_TOKEN > /root/.beacond/config/jwt.hex; ./beacond genesis add-premined-deposit $GENESIS_DEPOSIT_AMOUNT $WITHDRAW_ADDRESS;";
-sudo chown -R $USER:docker $TMP_BEACOND_DIR && sudo chmod -R g+rwxs $TMP_BEACOND_DIR;
+set_permissions $TMP_BEACOND_DIR
 
 cp -r $TMP_BEACOND_DIR/config-cl-val0/ $TMP_BEACOND_DIR/config-genesis;
 
@@ -57,14 +63,14 @@ if [ $NUM_VALIDATORS -gt 1 ]; then
     BEACOND_MONIKER=$CL_MONIKER-$i;
     docker run --rm --entrypoint /bin/bash -v $TMP_BEACOND_DIR/config-cl-val$i:/root/.beacond -v $TMP_BEACOND_DIR/config-cl-val$i/logs:/root/logs $DOCKER_IMAGE_BEACOND \
     -c "./beacond init $BEACOND_MONIKER $CHAIN_SPEC_OPTS; echo $JWT_TOKEN > /root/.beacond/config/jwt.hex; ./beacond genesis add-premined-deposit $GENESIS_DEPOSIT_AMOUNT $WITHDRAW_ADDRESS;";
-    sudo chown -R $USER:docker $TMP_BEACOND_DIR && sudo chmod -R g+rwxs $TMP_BEACOND_DIR;
+    set_permissions $TMP_BEACOND_DIR
   done
 fi
 
 # - Collected premined deposits
 docker run --rm --entrypoint /bin/bash -v $TMP_BEACOND_DIR/config-genesis:/root/.beacond -v $TMP_BEACOND_DIR/config-genesis/logs:/root/logs $DOCKER_IMAGE_BEACOND \
   -c "./beacond genesis collect-premined-deposits;";
-sudo chown -R $USER:docker $TMP_BEACOND_DIR && sudo chmod -R g+rwxs $TMP_BEACOND_DIR;
+set_permissions $TMP_BEACOND_DIR
 
 # Step 2 - Create Eth Genesis File
 # ===========================================================
@@ -82,11 +88,11 @@ jq --arg genesisDepositsRoot "0x000000000000000000000000000000000000000000000000
 echo "3 - Modifying genesis with deposits...\n";
 docker run --rm --entrypoint /bin/bash -v $TMP_BEACOND_DIR/config-genesis:/root/.beacond -v $TMP_BEACOND_DIR/config-genesis/logs:/root/logs $DOCKER_IMAGE_BEACOND \
   -c "./beacond genesis set-deposit-storage /root/.beacond/eth-genesis.json";
-sudo chown -R $USER:docker $TMP_BEACOND_DIR && sudo chmod -R g+rwxs $TMP_BEACOND_DIR;
+set_permissions $TMP_BEACOND_DIR
 
 docker run --rm --entrypoint /bin/bash -v $TMP_BEACOND_DIR/config-genesis:/root/.beacond -v $TMP_BEACOND_DIR/config-genesis/logs:/root/logs $DOCKER_IMAGE_BEACOND \
   -c "./beacond genesis execution-payload /root/.beacond/eth-genesis.json";
-sudo chown -R $USER:docker $TMP_BEACOND_DIR && sudo chmod -R g+rwxs $TMP_BEACOND_DIR;
+set_permissions $TMP_BEACOND_DIR
 
 # Step 4 - Add Configurations Files
 # ===========================================================
@@ -181,7 +187,7 @@ if [ $NUM_RPC_NODES -gt 0 ]; then
   for i in $(seq 0 $((NUM_RPC_NODES - 1))); do
     docker run --rm --entrypoint /bin/bash -v $TMP_BEACOND_DIR/config-cl-rpc$i:/root/.beacond -v $TMP_BEACOND_DIR/config-cl-rpc$i/logs:/root/logs $DOCKER_IMAGE_BEACOND \
     -c "./beacond init $CL_MONIKER-rpc$i $CHAIN_SPEC_OPTS; echo $JWT_TOKEN > /root/.beacond/config/jwt.hex; ./beacond genesis add-premined-deposit $GENESIS_DEPOSIT_AMOUNT $WITHDRAW_ADDRESS;";
-    sudo chown -R $USER:docker $TMP_BEACOND_DIR && sudo chmod -R g+rwxs $TMP_BEACOND_DIR;
+    set_permissions $TMP_BEACOND_DIR
     cp templates/beacond/* $TMP_BEACOND_DIR/config-cl-rpc$i/config;
     cp -f $TMP_BEACOND_DIR/config-cl-val0/config/app.toml $TMP_BEACOND_DIR/config-cl-rpc$i/config/app.toml;
     cp -f $TMP_BEACOND_DIR/config-cl-val0/config/config.toml $TMP_BEACOND_DIR/config-cl-rpc$i/config/config.toml;
@@ -260,20 +266,20 @@ echo "\n- Running Beacond...\n";
 for i in $(seq 0 $((NUM_VALIDATORS - 1))); do
   docker run -d --entrypoint /bin/bash -v $TMP_BEACOND_DIR/config-cl-val$i:/root/.beacond -v $TMP_BEACOND_DIR/config-cl-val$i/logs:/root/logs --name $CL_MONIKER-val-$i --network $NETWORK_NAME-val-$i $DOCKER_IMAGE_BEACOND \
     -c "CHAIN_SPEC=$CHAIN_SPEC ./beacond start";
-  sudo chown -R $USER:docker $TMP_BEACOND_DIR && sudo chmod -R g+rwxs $TMP_BEACOND_DIR;
+  set_permissions $TMP_BEACOND_DIR
 done
 
 if [ $NUM_RPC_NODES -gt 0 ]; then
   # Make first RPC has exposed ports
   docker run -d -p 26657:26657 -p 3500:3500 --entrypoint /bin/bash -v $TMP_BEACOND_DIR/config-cl-rpc0:/root/.beacond -v $TMP_BEACOND_DIR/config-cl-rpc0/logs:/root/logs --name $CL_MONIKER-rpc-0 --network $NETWORK_NAME-rpc-0 $DOCKER_IMAGE_BEACOND \
     -c "CHAIN_SPEC=$CHAIN_SPEC ./beacond start";
-  sudo chown -R $USER:docker $TMP_BEACOND_DIR && sudo chmod -R g+rwxs $TMP_BEACOND_DIR;
+  set_permissions $TMP_BEACOND_DIR
 
   if [ $NUM_RPC_NODES -gt 1 ]; then
     for i in $(seq 1 $((NUM_RPC_NODES - 1))); do
       docker run -d --entrypoint /bin/bash -v $TMP_BEACOND_DIR/config-cl-rpc$i:/root/.beacond -v $TMP_BEACOND_DIR/config-cl-rpc$i/logs:/root/logs --name $CL_MONIKER-rpc-$i --network $NETWORK_NAME-rpc-$i $DOCKER_IMAGE_BEACOND \
         -c "CHAIN_SPEC=$CHAIN_SPEC ./beacond start";
-      sudo chown -R $USER:docker $TMP_BEACOND_DIR && sudo chmod -R g+rwxs $TMP_BEACOND_DIR;
+      set_permissions $TMP_BEACOND_DIR
     done
   fi
 fi
