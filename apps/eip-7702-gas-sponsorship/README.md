@@ -120,18 +120,18 @@ source .env && forge script script/SimpleDelegatePart2.s.sol:SimpleDelegate2Scri
 
 #### Expected output
 
-* `burnNative()` successfully called:
+- `burnNative()` successfully called:
 
   ```bash
   emit Burned(from: EOA, amount: 1e16)
   ```
-* Sponsor reimbursed with:
+- Sponsor reimbursed with:
 
   ```bash
   emit Reimbursed(sponsor: SPONSOR, refund: 2.99e16)
   ```
-* Replay attack reverts with `NonceAlreadyUsed()`
-* Cross-chain replay reverts with `Invalid signer`
+- Replay attack reverts with `NonceAlreadyUsed()`
+- Cross-chain replay reverts with `Invalid signer`
 
 ---
 
