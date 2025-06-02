@@ -1,9 +1,29 @@
-# Compiler files
+# Dependencies
+node_modules/
+lib/
+
+# Build artifacts
 cache/
 out/
-
-lib/
 broadcast/
+
+# IDE
+.vscode/
+.idea/
+
+# Environment variables
+.env
+.env.local
+
+# Coverage
+coverage/
+coverage.json
+
+# Gas reporter
+gas-report.txt
+
+# Misc
+.DS_Store
 
 # Ignores development broadcast logs
 !/broadcast
@@ -12,6 +32,3 @@ broadcast/
 
 # Docs
 docs/
-
-# Dotenv file
-.env
