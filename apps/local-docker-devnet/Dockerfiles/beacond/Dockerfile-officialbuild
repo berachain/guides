@@ -1,10 +1,16 @@
 FROM ubuntu:24.04                       
 
 ARG CHAIN_SPEC
+ARG TARGETARCH
+ARG TARGETOS
+
 ENV CHAIN_SPEC=${CHAIN_SPEC}
 
 # Install dependencies
 RUN apt-get update && apt-get install -y curl wget;
+
+# Debug output
+RUN echo "TARGETARCH: $TARGETARCH" && echo "TARGETOS: $TARGETOS"
 
 # Download and install beacond
 RUN if [ "$TARGETARCH" = "arm64" ]; then \
@@ -12,23 +18,24 @@ RUN if [ "$TARGETARCH" = "arm64" ]; then \
     else \
         ARCH="amd64"; \
     fi && \
-    if [ "$TARGETOS" = "darwin" ]; then \
-        OS="darwin"; \
-    else \
-        OS="linux"; \
-    fi && \
+    OS="linux" && \
     echo "Using architecture: $ARCH, OS: $OS" && \
-    BEACOND_RELEASE_URL=$(curl -s https://api.github.com/repos/berachain/beacon-kit/releases/latest | \
-    grep '"browser_download_url":' | \
-    sed 's/.*"browser_download_url": "\(.*\)".*/\1/' | \
-    grep "beacond-.*-${OS}-${ARCH}.tar.gz" | \
-    grep -v "\.sig$"); \
-    echo "Downloading beacond from: $BEACOND_RELEASE_URL"; \
-    wget $BEACOND_RELEASE_URL; \
-    tar -xzf beacond-*.tar.gz; \
-    rm beacond-v*.tar.gz; \
-    mv ./beacond-v* ./beacond; \
-    chmod +x ./beacond; \
+    echo "Fetching latest release info..." && \
+    curl -s https://api.github.com/repos/berachain/beacon-kit/releases/latest > release_info.json && \
+    echo "Available binaries:" && \
+    grep '"browser_download_url":' release_info.json | \
+        sed 's/.*"browser_download_url": "\(.*\)".*/\1/' | \
+        grep "beacond-.*-${OS}-${ARCH}.tar.gz" | \
+        grep -v "\.sig$" > selected_binary.txt && \
+    echo "Selected binary:" && \
+    cat selected_binary.txt && \
+    BEACOND_RELEASE_URL=$(cat selected_binary.txt) && \
+    echo "Downloading beacond from: $BEACOND_RELEASE_URL" && \
+    wget $BEACOND_RELEASE_URL && \
+    tar -xzf beacond-*.tar.gz && \
+    rm beacond-v*.tar.gz && \
+    mv ./beacond-v* ./beacond && \
+    chmod +x ./beacond && \
     ./beacond version
 
 

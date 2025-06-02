@@ -7,14 +7,17 @@ source env.sh;
 ARCH=$(uname -m)
 OS=$(uname -s | tr '[:upper:]' '[:lower:]')
 
+echo "Debug: Initial architecture detection:"
+echo "Debug: uname -m output: $(uname -m)"
+echo "Debug: ARCH variable: $ARCH"
+echo "Debug: OS variable: $OS"
+
 if [ "$ARCH" = "arm64" ] || [ "$ARCH" = "aarch64" ]; then
     DOCKER_PLATFORM="linux/arm64"
 else
     DOCKER_PLATFORM="linux/amd64"
 fi
 
-echo "Debug: Architecture: $ARCH"
-echo "Debug: OS: $OS"
 echo "Debug: Docker Platform: $DOCKER_PLATFORM"
 echo "Debug: DOCKER_IMAGE_RETH: $DOCKER_IMAGE_RETH"
 echo "Debug: DOCKER_IMAGE_BEACOND: $DOCKER_IMAGE_BEACOND"
@@ -25,13 +28,17 @@ echo "Debug: CUSTOM_BIN_BEACOND: $CUSTOM_BIN_BEACOND"
 echo "Building for platform: $DOCKER_PLATFORM, OS: $OS"
 
 echo "*** Building reth";
+echo "Debug: Building reth with TARGETARCH=$ARCH and TARGETOS=$OS"
 docker build --progress=plain  --platform $DOCKER_PLATFORM -t $DOCKER_IMAGE_RETH \
     -f ./Dockerfiles/reth/Dockerfile \
     --build-arg TARGETOS=$OS \
+    --build-arg TARGETARCH=$ARCH \
     . || { echo "Failed to build reth"; exit 1; }
 
 # do custom build if CUSTOM_BIN_BEACOND is set and not empty
 if [ -f "$CUSTOM_BIN_BEACOND" ]; then
+    echo "Debug: Building beacond with custom binary"
+    echo "Debug: TARGETARCH=$ARCH, TARGETOS=$OS, DOCKER_PLATFORM=$DOCKER_PLATFORM"
     docker build --progress=plain  --platform $DOCKER_PLATFORM -t $DOCKER_IMAGE_BEACOND \
         -f ./Dockerfiles/beacond/Dockerfile-custombuild \
         --build-arg CHAIN_SPEC=$CHAIN_SPEC \
@@ -40,6 +47,8 @@ if [ -f "$CUSTOM_BIN_BEACOND" ]; then
         --build-arg TARGETARCH=$ARCH \
         .
 else
+    echo "Debug: Building beacond with official binary"
+    echo "Debug: TARGETARCH=$ARCH, TARGETOS=$OS, DOCKER_PLATFORM=$DOCKER_PLATFORM"
     docker build --progress=plain  --platform $DOCKER_PLATFORM -t $DOCKER_IMAGE_BEACOND \
         -f ./Dockerfiles/beacond/Dockerfile-officialbuild \
         --build-arg CHAIN_SPEC=$CHAIN_SPEC \
