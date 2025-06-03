@@ -44,7 +44,7 @@ Welcome to the Batch Transactions project! This repository demonstrates how to d
 
 ```bash
 # FROM: ./apps/batch-transactions
-npm install
+pnpm install
 ```
 
 ### 2. Set Up Environment
@@ -56,7 +56,7 @@ Create `.env` file with the following content:
 PRIVATE_KEY=your_private_key_here
 
 # Berachain Bepolia RPC URL
-RPC_URL=https://artio.rpc.berachain.com
+RPC_URL=https://bepolia.rpc.berachain.com
 
 # Chain configuration
 CHAIN_ID=80085
@@ -70,14 +70,14 @@ CHAIN_NATIVE_CURRENCY_DECIMALS=18
 
 ```bash
 # FROM: ./apps/batch-transactions
-npm run compile
+pnpm compile
 ```
 
 ### 4. Deploy & Execute Batch
 
 ```bash
 # FROM: ./apps/batch-transactions
-npm run dev
+pnpm dev
 ```
 
 Expected output:
