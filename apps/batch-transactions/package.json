@@ -13,7 +13,8 @@
     "lint:fix": "pnpm prettier --write . && pnpm eslint . --fix",
     "test": "forge test -vvv",
     "compile": "node scripts/compile.js",
-    "deploy": "node scripts/deploy-and-execute.js"
+    "dev": "node scripts/deploy-and-execute.js",
+    "clean": "rm -rf cache; rm -rf node_modules; rm -rf out; rm -rf scripts/deployed-addresses.json"
   },
   "keywords": [
     "ethereum",
