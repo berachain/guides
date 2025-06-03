@@ -1,19 +1,22 @@
+// Imports
+// ========================================================
 const {
   createPublicClient,
   createWalletClient,
   http,
   encodeFunctionData,
   getAddress,
+  defineChain,
 } = require("viem");
 const { privateKeyToAccount } = require("viem/accounts");
 const { berachainBepolia } = require("viem/chains");
-const { readContract } = require("viem/actions");
 const artifacts = require("./artifacts");
 const fs = require("fs");
 const path = require("path");
 require("dotenv").config();
 
 // Constants
+// ========================================================
 const BOARD_MEMBER_SHARE = 50_000n * 10n ** 18n; // 50,000 tokens
 const LOCK_DURATION = 365n * 24n * 60n * 60n; // 1 year in seconds
 const TOTAL_SUPPLY = 1_000_000n * 10n ** 18n; // 1M tokens
@@ -28,6 +31,24 @@ const BOARD_MEMBERS = [
 // File to store deployed addresses
 const DEPLOYED_ADDRESSES_FILE = path.join(__dirname, "deployed-addresses.json");
 
+// Handle if custom chain was defined in .env
+const CHAIN = process.env.RPC_URL && process.env.RPC_URL.startsWith("http") ? defineChain({
+  id: parseInt(process.env.CHAIN_ID ?? ''),
+  name: process.env.CHAIN_NAME ?? '',
+  rpcUrls: {
+    default: {
+      http: [process.env.RPC_URL],
+    },
+  },
+  nativeCurrency: {
+    name: process.env.CHAIN_NATIVE_CURRENCY_NAME,
+    symbol: process.env.CHAIN_NATIVE_CURRENCY_SYMBOL,
+    decimals: parseInt(process.env.CHAIN_NATIVE_CURRENCY_DECIMALS ?? '18'),
+  },
+}) : berachainBepolia;
+
+// Functions
+// ========================================================
 // Load deployed addresses if they exist
 function loadDeployedAddresses() {
   try {
@@ -45,17 +66,18 @@ function saveDeployedAddresses(addresses) {
   fs.writeFileSync(DEPLOYED_ADDRESSES_FILE, JSON.stringify(addresses, null, 2));
 }
 
+
 async function main() {
   // Setup clients
   const publicClient = createPublicClient({
-    chain: berachainBepolia,
+    chain: CHAIN,
     transport: http(),
   });
 
   const account = privateKeyToAccount(process.env.PRIVATE_KEY);
   const walletClient = createWalletClient({
     account,
-    chain: berachainBepolia,
+    chain: CHAIN,
     transport: http(),
   });
 
@@ -193,6 +215,8 @@ async function main() {
   console.log("Lock duration:", LOCK_DURATION.toString());
 }
 
+// Init
+// ========================================================
 main().catch((error) => {
   console.error(error);
   process.exit(1);
