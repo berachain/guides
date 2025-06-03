@@ -203,7 +203,7 @@ async function main() {
     address: account.address, // EOA address, not contract address!
     abi: artifacts.BatchTransaction.abi,
     functionName: "execute",
-    args: [transactions],
+    args: [transactions, 0n],
     authorizationList: [authorization],
   });
 
