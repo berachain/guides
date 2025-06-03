@@ -8,25 +8,25 @@ Welcome to the Batch Transactions project! This repository demonstrates how to d
 
 - **Batch Transaction Example:** [View on Berascan](https://testnet.berascan.com/tx/0x87bab52cb9f14304e2ec0de0973bb46bcd2c2ddab37818fe4c3bf5c394f3560f)
 - **Contracts Deployed:**
-  - BatchTransaction: `0xcc97617ae52535e68c535a43f466a03ae1fac8b3`
-  - UrsaToken: `0x10e5524bc00869f05ec6e636aba7dcf5881a590a`
-  - VestingContract: `0x27180feeb0ce7e497be8af44b3fdb4cfdbdc11cb`
+  - BatchTransaction: [`0xcc97617ae52535e68c535a43f466a03ae1fac8b3`](https://testnet.berascan.com/address/0xcc97617ae52535e68c535a43f466a03ae1fac8b3)
+  - UrsaToken: [`0x10e5524bc00869f05ec6e636aba7dcf5881a590a`](https://testnet.berascan.com/address/0x10e5524bc00869f05ec6e636aba7dcf5881a590a)
+  - VestingContract: [`0x27180feeb0ce7e497be8af44b3fdb4cfdbdc11cb`](https://testnet.berascan.com/address/0x27180feeb0ce7e497be8af44b3fdb4cfdbdc11cb)
 
 ---
 
 ## 🗂️ Repository Layout
 
-```
+```bash
 .
 ├── src/
-│   ├── BatchTransaction.sol      # Batch transaction contract
+│   ├── BatchTransaction.sol     # Batch transaction contract
 │   ├── UrsaToken.sol            # ERC20 token contract
 │   └── VestingContract.sol      # Vesting contract
 │
 ├── test/
 │   └── BatchTransaction.t.sol   # Foundry tests for batch logic
 │
-├── script/
+├── scripts/
 │   ├── deploy-and-execute.js    # Node.js script for deployment & batch execution (EIP-7702)
 │   └── artifacts.js             # Compiled contract ABIs/bytecode (auto-generated)
 │
@@ -42,34 +42,52 @@ Welcome to the Batch Transactions project! This repository demonstrates how to d
 ### 1. Install Dependencies
 
 ```bash
-npm install
+# FROM: ./apps/batch-transactions
+
+pnpm install;
 ```
 
 ### 2. Set Up Environment
 
-Create a `.env` file:
+Create `.env` file from `.env.example`:
 
+```bash
+# FROM: ./apps/batch-transactions
+
+cp .env.example .env;
 ```
-PRIVATE_KEY=your_private_key_here
+
+Add the following information:
+
+**File:** `.env`
+
+```bash
+PRIVATE_KEY=<YOUR_WALLET_PRIVATE_KEY>
 RPC_URL=https://bepolia.rpc.berachain.com
 ```
 
 ### 3. Compile Contracts
 
 ```bash
-forge build
+# FROM: ./apps/batch-transactions
+
+forge build;
 ```
 
 ### 4. Generate Artifacts (if needed)
 
 ```bash
-node script/compile.js
+# FROM: ./apps/batch-transactions
+
+pnpm compile;
 ```
 
 ### 5. Deploy & Execute Batch
 
 ```bash
-node script/deploy-and-execute.js
+# FROM: ./apps/batch-transactions
+
+pnpnm deploy;
 ```
 
 - The script will deploy contracts if not already deployed, or use existing ones.
@@ -81,9 +99,12 @@ node script/deploy-and-execute.js
 
 - All core logic is covered by Foundry tests in `test/BatchTransaction.t.sol`.
 - Run tests with:
-  ```bash
-  forge test -vvv
-  ```
+
+```bash
+# FROM: ./apps/batch-transactions
+
+forge test -vvv;
+```
 
 ---
 
