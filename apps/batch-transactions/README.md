@@ -87,7 +87,14 @@ pnpm compile;
 ```bash
 # FROM: ./apps/batch-transactions
 
-pnpnm deploy;
+pnpm dev;
+
+# [Expected Similar Output]:
+# ...
+#   contractAddress: '0x10e5524bc00869f05ec6e636aba7dcf5881a590a',
+#   formattedArgs: undefined,
+#   functionName: 'mint',
+#   sender: '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266'
 ```
 
 - The script will deploy contracts if not already deployed, or use existing ones.
