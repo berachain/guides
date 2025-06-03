@@ -22,12 +22,6 @@
 [submodule "app/batch-transactions/lib/openzeppelin-contracts"]
 	path = app/batch-transactions/lib/openzeppelin-contracts
 	url = https://github.com/OpenZeppelin/openzeppelin-contracts
-[submodule "apps/batch-transactions/lib/openzeppelin-contracts"]
-	path = apps/batch-transactions/lib/openzeppelin-contracts
-	url = https://github.com/OpenZeppelin/openzeppelin-contracts
 [submodule "apps/batch-transactions/lib/solmate"]
 	path = apps/batch-transactions/lib/solmate
 	url = https://github.com/transmissions11/solmate
-[submodule "apps/batch-transactions/lib/forge-std"]
-	path = apps/batch-transactions/lib/forge-std
-	url = https://github.com/foundry-rs/forge-std
