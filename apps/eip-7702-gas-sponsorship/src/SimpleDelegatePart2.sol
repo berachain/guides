@@ -24,12 +24,7 @@ contract SimpleDelegatePart2 {
     event Reimbursed(address indexed sponsor, uint256 refund);
     event Burned(address indexed from, uint256 amount);
 
-    function execute(
-        Call memory userCall,
-        address sponsor,
-        uint256 nonce,
-        bytes calldata signature
-    ) external payable {
+    function execute(Call memory userCall, address sponsor, uint256 nonce, bytes calldata signature) external payable {
         uint256 startGas = gasleft();
 
         bytes32 digest = keccak256(
@@ -41,7 +36,7 @@ contract SimpleDelegatePart2 {
         if (nonceUsed[nonce]) revert NonceAlreadyUsed();
         nonceUsed[nonce] = true;
 
-        (bool success, ) = userCall.to.call{value: userCall.value}(userCall.data);
+        (bool success,) = userCall.to.call{value: userCall.value}(userCall.data);
         if (!success) revert ExternalCallFailed();
 
         uint256 gasUsed = startGas - gasleft();
@@ -49,7 +44,7 @@ contract SimpleDelegatePart2 {
         uint256 refund = msg.value > gasCost ? msg.value - gasCost : 0;
 
         if (refund > 0) {
-            (bool refunded, ) = sponsor.call{value: refund}("");
+            (bool refunded,) = sponsor.call{value: refund}("");
             require(refunded, ReimbursementFailed());
             emit Reimbursed(sponsor, refund);
         }
@@ -59,7 +54,7 @@ contract SimpleDelegatePart2 {
 
     function burnNative() external payable {
         address burnAddr = 0x000000000000000000000000000000000000dEaD;
-        (bool sent, ) = burnAddr.call{value: msg.value}("");
+        (bool sent,) = burnAddr.call{value: msg.value}("");
         require(sent, "Burn failed");
         emit Burned(msg.sender, msg.value);
     }
