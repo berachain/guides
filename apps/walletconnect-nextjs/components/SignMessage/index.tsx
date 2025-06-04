@@ -39,7 +39,7 @@ export default function SignMessage() {
       });
       setSignature(signature);
       setResult(signature);
-      verification.refetch();
+      await verification.refetch();
     } catch (error: any) {
       console.error(error?.reason);
       console.error(error);
