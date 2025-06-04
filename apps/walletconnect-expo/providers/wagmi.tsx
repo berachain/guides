@@ -39,7 +39,7 @@ const chainConfiguration = defineChain({
   network: `${process.env.EXPO_PUBLIC_CHAIN_NETWORK}`,
   nativeCurrency: {
     decimals: parseInt(
-      `${process.env.EXPO_PUBLIC_CHAIN_NATIVECURRENCY_DECIMALS}`
+      `${process.env.EXPO_PUBLIC_CHAIN_NATIVECURRENCY_DECIMALS}`,
     ),
     name: `${process.env.EXPO_PUBLIC_CHAIN_NATIVECURRENCY_NAME}`,
     symbol: `${process.env.EXPO_PUBLIC_CHAIN_NATIVECURRENCY_SYMBOL}`,

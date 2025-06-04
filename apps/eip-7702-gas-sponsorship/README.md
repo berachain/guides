@@ -13,7 +13,7 @@ head:
 
 # Quickstart: EIP-7702 Gas Sponsorship with Anvil
 
-This quickstart gives you everything you need to simulate gas sponsorship on an Anvil fork using EIP-7702. A comprehensive guide with context on EIP-7702 and gas sponsorship can be found within our [docs](https://docs.berachain.com/developers/). 
+This quickstart gives you everything you need to simulate gas sponsorship on an Anvil fork using EIP-7702. A comprehensive guide with context on EIP-7702 and gas sponsorship can be found within our [docs](https://docs.berachain.com/developers/).
 
 There are two parts to this guide:
 
@@ -27,13 +27,13 @@ There are two parts to this guide:
 EIP-7702 enables an EOA to act like a smart contract for a single tx. Here we use `cast` to demonstrate a sponsor broadcasting a signed EOA transaction.
 
 #### Prerequisites
+
 Make sure you have the Foundry toolchain installed.
 
 ```bash
 curl -L https://foundry.paradigm.xyz | bash
 foundryup  # Ensures you have the latest version (with solc auto-install support)
 ```
-
 
 If you've already installed Foundry, just run:
 
@@ -43,10 +43,9 @@ foundryup
 
 > This guide requires Solidity ^0.8.29. `forge build` will automatically download the right version if you're using a modern `forge` via `foundryup`.
 
-
 Go through the following steps:
 
-#### Step 1 -  Install Deps
+#### Step 1 - Install Deps
 
 ```bash
 cd apps/eip-7702-gas-sponsorship
@@ -63,8 +62,8 @@ pnpm install && cp .env.example .env
 forge install && forge build
 ```
 
-
 #### Step 2 - Start Anvil Fork
+
 ```bash
 # From apps/eip-7702-gas-sponsorship
 anvil --hardfork prague --chain-id 80069 --port 8545
@@ -149,47 +148,60 @@ echo "✅ If sponsor delta roughly equals gasUsed * effectiveGasPrice → gas wa
 ```
 
 ## Step 5 - Assessing the Results
+
 The output from running the last command will provide two `cast` commands to assess the results. If you prefer, just run the following commands though and copy and paste the transaction hash in accordingly.
+
 1. To see the Authorization List and other details signifying that the EIP-7702 transaction was successful, run:
+
 ```bash
 source .env && cast tx $TX_HASH --rpc-url $TEST_RPC_URL
 ```
+
 Here you'll see the following:
 _Using our example contract address to illustrate, you'll have a different one. Our contract address as seen in the previous screenshot is: 0x0DCd1Bf9A1b36cE34237eEaFef220932846BCD82_
 Under authorization list, you should see the contract address:
+
 ```bash
 authorizationList    [{"chainId":"0x138c5","address":"0x0dcd1bf9a1b36ce34237eeafef220932846bcd82","nonce":"0x18","yParity":"0x1","r":"0x5b9ac56625105f2b627f344470290bfa3e5c5b19075ee741f5eedeb3e7288db2","s":"0xaa0bf8139cd82e5de12d33b13c1199444c9bca7f60fa7d577fafc7ddd455511"}]
 ```
+
 and the `to` specified should be the EOA address, and the `from` address should be the SPONSOR address. These will be the same for you too assuming you followed the guide and are using the anvil test wallets 1 and 2:
+
 ```bash
 to                   0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266
 from                 0x70997970C51812dc3A010C7d01b50e0d17dc79C8
 ```
+
 2. To see the transaction receipt, run:
+
 ```bash
 source .env && cast receipt $TX_HASH --rpc-url $TEST_RPC_URL
 ```
-Here you can see the gasUsed, as well as that the transaction has successfully passed. 
+
+Here you can see the gasUsed, as well as that the transaction has successfully passed.
+
 ```bash
 blockHash            0x4c20dd22bfec22f1a1e7e647a38d2af17087e8a02b39adcd4f77ab96cb985558
 blockNumber          2
-contractAddress      
+contractAddress
 cumulativeGasUsed    47476
 effectiveGasPrice    878700701
 from                 0x70997970C51812dc3A010C7d01b50e0d17dc79C8
 gasUsed              47476
 logs                 []
 logsBloom            0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-root                 
+root
 status               1 (success)
 transactionHash      0xd8c7c699172330bc68cceff113a188dd146a1460a59aad50ff85dfbd52f91e41
 transactionIndex     0
 type                 4
 blobGasPrice         1
-blobGasUsed          
+blobGasUsed
 to                   0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266
 ```
+
 Regarding the gas, we can do a check on how much gas was taken from the Sponsor, and how much was reimbursed. We do just that with the previous command you sent where gas logs were output, but of course take what we need and carry out comparisons.
+
 ```bash
 SPONSOR." sponsor delta roughly equals gasUsed * effectiveGasPrice → gas was paid b
 💰 EOA Balance Before:     9999999555915999555916 wei
@@ -197,7 +209,7 @@ SPONSOR." sponsor delta roughly equals gasUsed * effectiveGasPrice → gas was p
 �� Transaction Hash: 0xd8c7c699172330bc68cceff113a188dd146a1460a59aad50ff85dfbd52f91e41
 🔍 To view the auth list, run:
 source .env && cast tx 0xd8c7c699172330bc68cceff113a188dd146a1460a59aad50ff85dfbd52f91e41 --rpc-url http://localhost:8545
-To view the receipt and ensure that the transaction was successful or not, run: 
+To view the receipt and ensure that the transaction was successful or not, run:
 source .env && cast receipt 0xd8c7c699172330bc68cceff113a188dd146a1460a59aad50ff85dfbd52f91e41 --rpc-url http://localhost:8545
 📜 Gas Used: 47476 gas units
 💸 Gas Cost: 41717194480676 wei (~41717.194480676 gwei)
@@ -217,9 +229,10 @@ That's it! Congrats you've walked through a high level example of gas sponsorshi
 
 ### Part B — Full Sponsorship Flow with Solidity Script
 
-You have to update your `.env` so you can broadcast properly to Bepolia. You will need to have $tBERA within your wallets that you are using for both the EOA and the SPONSOR. 
+You have to update your `.env` so you can broadcast properly to Bepolia. You will need to have $tBERA within your wallets that you are using for both the EOA and the SPONSOR.
 
 > If you need $tBERA, you can get some from our [faucet](#step-5---understanding-and-running-the-solidity-script), or contact us directly.
+
 ```
 # YOUR OWN WALLET DETAILS FOR DEPLOYING TO ACTUAL NETWORKS
 EOA_WALLET1_ADDRESS=
@@ -244,7 +257,7 @@ Now we can start a new `anvil` fork with Bepolia at "hardfork prague."
 
 ```bash
 source .env && anvil --fork-url $BEPOLIA_RPC_URL --chain-id 80069 --hardfork prague --port 8545
-``` 
+```
 
 Instead of piecing things together with `cast`, we use a full Foundry Solidity script to handle everything: deployment, delegation, authorization, broadcasting, and even checking for replay and signature mismatches. This is a great way to simulate what a service or wallet might actually do when working with EIP-7702.
 
@@ -301,39 +314,39 @@ Below you can see the `to` address is the EOA, the `from` address is the SPONSOR
 
 ```json
 {
-      "hash": "0x131051742f94c2fb10422d53d134a78deb41404dd5b47e99cff721dc4eb70b02",
-      "transactionType": "CALL",
-      "contractName": null,
-      "contractAddress": "0x63e6ab65010c695805a3049546ef71e4a242eb6c",
-      "function": "execute((bytes,address,uint256),address,uint256,bytes)",
-      "arguments": [
-        "(0xfbc7c433, 0x63E6ab65010C695805a3049546EF71e4A242EB6C, 10000000000000000)",
-        "0x00195EFB66D39809EcE9AaBDa38172A5e603C0dE",
-        "17",
-        "0xbb7f5ba622d818bb258263974aaa2131dd1dda771c78f88b89152d6b432cfbfe3d02237565c005bb0e6811de03311210e04ec7224d262b2bf7c764b66ce4aff41b"
-      ],
-      "transaction": {
-        "from": "0x00195efb66d39809ece9aabda38172a5e603c0de",
-        "to": "0x63e6ab65010c695805a3049546ef71e4a242eb6c",
-        "gas": "0x2a7d1",
-        "value": "0x6a94d74f430000",
-        "input": "0xd65fcb6c000000000000000000000000000000000000000000000000000000000000008000000000000000000000000000195efb66d39809ece9aabda38172a5e603c0de00000000000000000000000000000000000000000000000000000000000000110000000000000000000000000000000000000000000000000000000000000120000000000000000000000000000000000000000000000000000000000000006000000000000000000000000063e6ab65010c695805a3049546ef71e4a242eb6c000000000000000000000000000000000000000000000000002386f26fc100000000000000000000000000000000000000000000000000000000000000000004fbc7c433000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000041bb7f5ba622d818bb258263974aaa2131dd1dda771c78f88b89152d6b432cfbfe3d02237565c005bb0e6811de03311210e04ec7224d262b2bf7c764b66ce4aff41b00000000000000000000000000000000000000000000000000000000000000",
-        "nonce": "0x2",
+  "hash": "0x131051742f94c2fb10422d53d134a78deb41404dd5b47e99cff721dc4eb70b02",
+  "transactionType": "CALL",
+  "contractName": null,
+  "contractAddress": "0x63e6ab65010c695805a3049546ef71e4a242eb6c",
+  "function": "execute((bytes,address,uint256),address,uint256,bytes)",
+  "arguments": [
+    "(0xfbc7c433, 0x63E6ab65010C695805a3049546EF71e4A242EB6C, 10000000000000000)",
+    "0x00195EFB66D39809EcE9AaBDa38172A5e603C0dE",
+    "17",
+    "0xbb7f5ba622d818bb258263974aaa2131dd1dda771c78f88b89152d6b432cfbfe3d02237565c005bb0e6811de03311210e04ec7224d262b2bf7c764b66ce4aff41b"
+  ],
+  "transaction": {
+    "from": "0x00195efb66d39809ece9aabda38172a5e603c0de",
+    "to": "0x63e6ab65010c695805a3049546ef71e4a242eb6c",
+    "gas": "0x2a7d1",
+    "value": "0x6a94d74f430000",
+    "input": "0xd65fcb6c000000000000000000000000000000000000000000000000000000000000008000000000000000000000000000195efb66d39809ece9aabda38172a5e603c0de00000000000000000000000000000000000000000000000000000000000000110000000000000000000000000000000000000000000000000000000000000120000000000000000000000000000000000000000000000000000000000000006000000000000000000000000063e6ab65010c695805a3049546ef71e4a242eb6c000000000000000000000000000000000000000000000000002386f26fc100000000000000000000000000000000000000000000000000000000000000000004fbc7c433000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000041bb7f5ba622d818bb258263974aaa2131dd1dda771c78f88b89152d6b432cfbfe3d02237565c005bb0e6811de03311210e04ec7224d262b2bf7c764b66ce4aff41b00000000000000000000000000000000000000000000000000000000000000",
+    "nonce": "0x2",
+    "chainId": "0x138c5",
+    "authorizationList": [
+      {
         "chainId": "0x138c5",
-        "authorizationList": [
-          {
-            "chainId": "0x138c5",
-            "address": "0xddb11edb9498e778d783e1514519631db978cefe",
-            "nonce": "0x7",
-            "yParity": "0x1",
-            "r": "0xd304ce7ae24007d5f367dd397030c92686c7a10180c8094825736854a96be633",
-            "s": "0x1c304881690f634b1a2f9192137097d0e7e37d27538353f26446368925e0c2e5"
-          }
-        ]
-      },
-      "additionalContracts": [],
-      "isFixedGasLimit": false
-    }
+        "address": "0xddb11edb9498e778d783e1514519631db978cefe",
+        "nonce": "0x7",
+        "yParity": "0x1",
+        "r": "0xd304ce7ae24007d5f367dd397030c92686c7a10180c8094825736854a96be633",
+        "s": "0x1c304881690f634b1a2f9192137097d0e7e37d27538353f26446368925e0c2e5"
+      }
+    ]
+  },
+  "additionalContracts": [],
+  "isFixedGasLimit": false
+}
 ```
 
 The output will showcase a successful transaction and a reversion for both `NonceAlreadyUsed()` and `Invalid Signer`.
@@ -385,4 +398,4 @@ The below snippit from the output shows chat the EOA successfully burns a small 
 
 ```
 
-Finally, we have walked through the second part of gas sponsorship. Congrats! In the next gas-sponsorship guide expansion, we will walk through support for ERC20 payment flows. 
+Finally, we have walked through the second part of gas sponsorship. Congrats! In the next gas-sponsorship guide expansion, we will walk through support for ERC20 payment flows.
