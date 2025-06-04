@@ -1,0 +1,28 @@
+{
+  "name": "batch-transactions",
+  "version": "1.0.0",
+  "description": "Batch transaction contract with EIP-7702 delegation support",
+  "main": "index.js",
+  "directories": {
+    "lib": "lib",
+    "test": "test"
+  },
+  "scripts": {
+    "compile": "node scripts/compile.js",
+    "deploy": "node scripts/deploy.js",
+    "test": "forge test"
+  },
+  "keywords": [
+    "ethereum",
+    "smart-contracts",
+    "batch-transactions",
+    "eip-7702"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "chalk": "^4.1.2",
+    "dotenv": "^16.5.0",
+    "viem": "^2.30.5"
+  }
+}
