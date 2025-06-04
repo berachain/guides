@@ -81,6 +81,7 @@ pnpm dev
 ```
 
 Expected output:
+
 ```
 Using existing deployed contracts:
 BatchTransaction: 0x23ac058ef2dbcaeb0860f8667fda977bcf26e580
@@ -100,18 +101,21 @@ Lock duration: 31536000
 ## 📝 How It Works
 
 ### Batch Transaction Contract
+
 - Allows atomic execution of multiple contract calls
 - Supports EIP-7702 authorization for self-executing contract writes
 - Includes nonce-based replay protection
 - Maximum batch size of 100 transactions
 
 ### Token and Vesting
+
 - **UrsaToken**: ERC20 token with minting capabilities
 - **VestingContract**: Manages token vesting schedules
 - Each board member receives 50,000 tokens
 - Tokens are locked for 1 year (31,536,000 seconds)
 
 ### EIP-7702 Integration
+
 - Uses [viem](https://viem.sh/docs/eip7702/contract-writes) for authorization
 - Enables EOA to execute contract calls in a single transaction
 - Supports batch operations for gas efficiency
@@ -128,6 +132,7 @@ forge test -vvv
 ```
 
 The test suite covers:
+
 - Batch approvals and locks
 - Nonce management
 - Transaction failure handling
@@ -138,6 +143,7 @@ The test suite covers:
 ## 🔄 Reusing Deployed Contracts
 
 The script saves deployed contract addresses in `deployed-addresses.json`. To:
+
 - Use existing contracts: Keep the file
 - Deploy new contracts: Delete the file
 - Update nonce: Modify the nonce value in `deploy-and-execute.js`
