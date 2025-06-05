@@ -2,49 +2,39 @@
 pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
-import {BlockhashConsumer, MockBlockhashHistory} from "../src/Eip2935GasComparison.sol";
+import {BlockhashConsumer} from "../src/Eip2935GasComparison.sol";
+import {console2} from "forge-std/Script.sol";
 
 contract GasComparisonTest is Test {
-    MockBlockhashHistory public history;
     BlockhashConsumer public consumer;
-
+    bytes32 public expectedHash;
+    bytes32 public blockHash;
     uint256 public testBlock;
 
     function setUp() public {
-        history = new MockBlockhashHistory();
-        consumer = new BlockhashConsumer(address(history));
-
+        consumer = new BlockhashConsumer();
+        vm.roll(8900);
         testBlock = block.number - 1;
-        bytes32 hash = blockhash(testBlock);
-        history.set(testBlock, hash);
-        consumer.submitOracleBlockhash(testBlock, hash);
+        expectedHash = blockhash(testBlock);
+        consumer.submitOracleBlockhash(testBlock, expectedHash);
+        console2.log("Current testBlock: %s", testBlock);
     }
 
-    function testGas_StoreWithSSTORE() public {
+    function testGas_ReadWithSLOAD() public {
         consumer.storeWithSSTORE(testBlock);
+        blockHash = consumer.readWithSLOAD(testBlock);
+        assertEq(expectedHash, blockHash);
     }
 
-    function testGas_ReadWithSLOAD() public view returns (bytes32) {
-        return consumer.readWithSLOAD(testBlock);
+    // NOTE: the EIP-2935 method of getting the blockhash will fail within foundry tests because even though we have rolled the chain to a workable blocknumber, the system contract does not exist on the Foundry test VM, so the staticcall doesn't revert, but it doesn't return any meanigful data, thus triggering data.length reversion found in `eip2935GasComparison.readWithGet()` function
+    function testGas_ReadWithGet() public {
+        vm.expectRevert("Input too short");
+        blockHash = consumer.readWithGet(testBlock); // cold access
     }
-
-    function testGas_ReadWithGetCold() public view returns (bytes32) {
-        return consumer.readWithGet(testBlock); // cold access
-    }
-
-    // // Warm read: access twice, count the second
-    // function testGas_ReadWithGet_Warm() public view returns (bytes32) {
-    //     // warm-up access
-    //     consumer.readWithGet(testBlock);
-    //     // measure this access — gas report will include both
-    //     return consumer.readWithGet(testBlock);
-    // }
 
     function testGas_OracleSubmission() public {
         consumer.submitOracleBlockhash(testBlock, blockhash(testBlock));
-    }
-
-    function testGas_ReadFromOracle() public view returns (bytes32) {
-        return consumer.readFromOracle(testBlock);
+        blockHash = consumer.readFromOracle(testBlock);
+        assertEq(expectedHash, blockHash);
     }
 }

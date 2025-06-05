@@ -1,38 +1,20 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-/// @notice Interface for EIP-2935-style blockhash history system contract
-interface IBlockhashHistory {
-    function get(uint256 blockNumber) external view returns (bytes32);
-}
-
-/// @notice Mock contract simulating the EIP-2935 system contract
-contract MockBlockhashHistory {
-    mapping(uint256 => bytes32) private hashes;
-
-    function set(uint256 blockNumber, bytes32 hash) external {
-        hashes[blockNumber] = hash;
-    }
-
-    function get(uint256 blockNumber) external view returns (bytes32) {
-        require(block.number > blockNumber, "future block");
-        require(block.number - blockNumber <= 8191, "out of range");
-        return hashes[blockNumber];
-    }
-}
-
+/// @title BlockhashConsumer EIP2935 Educational Contract
 /// @notice Consumer contract demonstrating pre-EIP-2935, post-EIP-2935, and oracle-based patterns
+/// @dev This educational example contract, as is, showcases methods to obtain, store, and read blockhashes. It primarily is made to showcase how to carry out these various methods, and more-so to be used with `DeployGasComparison.s.sol` and `run_gas_comparison.sh` to showcase the gas savings offered by EIP-2935
 contract BlockhashConsumer {
     mapping(uint256 => bytes32) public stored;
     mapping(uint256 => bytes32) public oracleHashes;
 
     address public immutable historyAddress;
+    address public constant systemContract = 0x0000F90827F1C53a10cb7A02335B175320002935;
 
-    constructor(address _historyAddress) {
-        historyAddress = _historyAddress;
-    }
+    error blockNumberTooOld();
 
-    // Pre-EIP-2935 pattern: manually store blockhash for future use
+    /// Pre-EIP-2935 pattern: manually store blockhash for future use
+
     function storeWithSSTORE(uint256 blockNumber) external {
         stored[blockNumber] = blockhash(blockNumber);
     }
@@ -41,12 +23,26 @@ contract BlockhashConsumer {
         return stored[blockNumber];
     }
 
-    // Post-EIP-2935 pattern: read from protocol-managed contract
-    function readWithGet(uint256 blockNumber) external view returns (bytes32) {
-        return IBlockhashHistory(historyAddress).get(blockNumber);
+    /// Post-EIP-2935 pattern: read from protocol-managed contract
+
+    function readWithGet(uint256 blockNumber) external view returns (bytes32 result) {
+        if (blockNumber < (block.number - 8192)) revert blockNumberTooOld();
+        require(block.number > blockNumber, "future block");
+
+        bytes32 blockNumberBigEndian = bytes32(uint256(blockNumber));
+        bytes memory rawCallData = abi.encodePacked(blockNumberBigEndian);
+        (bool ok, bytes memory data) = systemContract.staticcall(rawCallData);
+        require(ok, "EIP-2935 system contract call failed");
+        require(data.length >= 32, "Input too short");
+        assembly {
+            result := mload(add(data, 32)) // skip length prefix
+        }
+
+        return result;
     }
 
-    // Oracle-based pattern: simulate offchain submission
+    /// Oracle-based pattern: simulate offchain submission
+
     function submitOracleBlockhash(uint256 blockNumber, bytes32 hash) external {
         oracleHashes[blockNumber] = hash;
     }
