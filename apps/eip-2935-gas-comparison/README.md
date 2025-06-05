@@ -53,19 +53,20 @@ pnpm install && cp .env.example .env
 forge install && forge build
 ```
 
-### Step 2 - Update Your `.env` and Start Your Anvil Fork
+### Step 2 - Start Your Anvil Fork
 
-Update your `.env` with your `EOA_PRIVATE_KEY` and `BEPOLIA_RPC_URL`
+Run the following command to deploy a local anvil fork via your terminal. You need to specify the block number shown below to ensure that the EIP2935 system contract will function properly to reflect being activated after Bectra upgrades on Bepolia.
 
 ```bash
 # From apps/eip-2935-gas-comparison
-source .env && anvil --fork-url $BEPOLIA_RPC_URL --chain-id 80069 --hardfork prague --port 8545
-source .env && anvil --fork-url $BEPOLIA_RPC_URL --chain-id 80069 --port 8545 # TODO - remove: try this to see if it does it at current block and thus has Bectra in play
+source .env && anvil --fork-url $BEPOLIA_RPC_URL --fork-block-number 4867668 --chain-id 80069 --port 8545
 ```
 
-### Step 3 - Deploy `eip2935GasComparison.sol` Implementation
+### Step 3 - Update Your `.env` and Deploy `eip2935GasComparison.sol` Implementation
 
-This script works on a local Bepolia Anvil fork. Make sure your `.env` has the right test keys and enough $tBERA.
+This script works on a local Bepolia Anvil fork. 
+
+Update your `.env` with your `EOA_PRIVATE_KEY` and make sure it has enough $tBERA for deployment. A single $tBERA should be more than enough.
 
 ```bash
 # From apps/eip-2935-gas-comparison

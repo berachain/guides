@@ -7,12 +7,12 @@ LOG_FILE="script_output.log"
 OUTPUT_FILE="gas_comparison.md"
 
 echo "🔧 Running DeployGasComparison script..."
-exec > >(tee "$LOG_FILE") 2>&1
 
+# Run script and save logs
 forge script ./script/DeployGasComparison.s.sol:DeployGasComparison \
   --rpc-url "$TEST_RPC_URL" \
   --private-key "$EOA_PRIVATE_KEY" \
-  --broadcast -vvvv
+  --broadcast -vvvv | tee "$LOG_FILE"
 
 echo "✅ Script execution complete. Parsing gas usage..."
 
