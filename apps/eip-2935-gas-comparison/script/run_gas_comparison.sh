@@ -1,53 +1,75 @@
 #!/bin/bash
 
-# Exit on any error, undefined var, or pipefail
 set -euo pipefail
+source .env
 
-# Load environment variables
-source ../.env
-
-# Output log
 LOG_FILE="script_output.log"
 OUTPUT_FILE="gas_comparison.md"
 
-# Step 1: Run script
-cd ..
 echo "🔧 Running DeployGasComparison script..."
-forge script script/DeployGasComparison.s.sol:DeployGasComparison \
+exec > >(tee "$LOG_FILE") 2>&1
+
+forge script ./script/DeployGasComparison.s.sol:DeployGasComparison \
   --rpc-url "$TEST_RPC_URL" \
-  --private-key "$PK_1" \
-  --broadcast -vvvv > "$LOG_FILE" 2>&1
+  --private-key "$EOA_PRIVATE_KEY" \
+  --broadcast -vvvv
 
 echo "✅ Script execution complete. Parsing gas usage..."
 
-# Step 2: Header for table
 {
-echo ""
-echo "# EIP-2935 Gas Comparison"
-echo ""
-echo "| Pattern                   | Method                         | Approx. Gas |"
-echo "|---------------------------|---------------------------------|-------------|"
+  echo ""
+  echo "# EIP-2935 Gas Comparison"
+  echo ""
+  echo "| Pattern                             | Methods Involved                         | Total Gas |"
+  echo "|-------------------------------------|------------------------------------------|-----------|"
 } > "$OUTPUT_FILE"
 
-# Step 3: Parse log and append to table
-grep -E 'BlockhashConsumer::|MockBlockhashHistory::' "$LOG_FILE" | \
-grep -o '\[[0-9]\{3,\}\]' | tr -d '[]' > /tmp/gas_vals.txt
+# Match lines like: [22677] BlockhashConsumer::storeWithSSTORE(...) [ or staticcall
+grep -Eo '\[[0-9]+\] BlockhashConsumer::[a-zA-Z_]+\(' "$LOG_FILE" | \
+  sed -E 's/\[([0-9]+)\] BlockhashConsumer::([a-zA-Z_]+)\(.*/\2 \1/' > /tmp/gas_data.txt
 
-grep -E 'BlockhashConsumer::|MockBlockhashHistory::' "$LOG_FILE" | \
-grep -o '::[a-zA-Z_]\+' | tr -d ':' > /tmp/func_names.txt
+# Group + aggregate
+patterns=()
+methods=()
+totals=()
 
-paste /tmp/gas_vals.txt /tmp/func_names.txt | sort -k2 | uniq | while read -r gas func; do
-  case "$func" in
-    set) pattern="Before EIP-2935: SSTORE storage" ;;
-    submitOracleBlockhash) pattern="Before EIP-2935: Oracle submission" ;;
-    stored) pattern="Before EIP-2935: SLOAD readback" ;;
-    readWithGet) pattern="After EIP-2935: .get() access" ;;
-    readFromOracle) pattern="Before EIP-2935: Oracle read" ;;
-    get) pattern="After EIP-2935: .get() (internal)" ;;
-    *) pattern="Other" ;;
-  esac
-  printf "| %-25s | %-31s | %11s |\n" "$pattern" "$func(...)" "$gas" | tee -a "$OUTPUT_FILE"
+while read -r func gas; do
+  if [[ "$func" == "storeWithSSTORE" || "$func" == "readWithSLOAD" ]]; then
+    key="Before EIP-2935: SSTORE pattern"
+  elif [[ "$func" == "submitOracleBlockhash" || "$func" == "readFromOracle" ]]; then
+    key="Before EIP-2935: Oracle pattern"
+  elif [[ "$func" == "readWithGet" ]]; then
+    key="After EIP-2935: .get() access"
+  else
+    key="Other"
+  fi
+
+  found=false
+  for i in "${!patterns[@]}"; do
+    if [[ "${patterns[$i]}" == "$key" ]]; then
+      totals[$i]=$(( ${totals[$i]} + gas ))
+      if [[ "${methods[$i]}" != *"$func(...)"* ]]; then
+        methods[$i]="${methods[$i]}, $func(...)"
+      fi
+      found=true
+      break
+    fi
+  done
+
+  if [[ "$found" = false ]]; then
+    patterns+=("$key")
+    methods+=("$func(...)")
+    totals+=("$gas")
+  fi
+done < /tmp/gas_data.txt
+
+# Output table rows
+for i in "${!patterns[@]}"; do
+  printf "| %-35s | %-40s | %9s |\n" \
+    "${patterns[$i]}" "${methods[$i]}" "${totals[$i]}" >> "$OUTPUT_FILE"
 done
 
 echo ""
 echo "📄 Table saved to gas_comparison.md"
+echo ""
+cat "$OUTPUT_FILE"
