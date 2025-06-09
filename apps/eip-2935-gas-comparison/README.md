@@ -76,7 +76,7 @@ Update your `.env` with your `EOA_PRIVATE_KEY` and make sure it has enough $tBER
 
 The bash script, `run_gas_comparison.sh` deploys the `eip2935GasComparison.sol` contract on the locally ran anvil fork of Bepolia. It then goes through the results and tabulates the total gas expenses for each blockhashing method, including storing the blockhash or replicating the usage of an oracle.
 
-#### Step 6 - Highlevel Review of the Solidity File
+#### Step 5 - Highlevel Review of the Solidity File
 
 This project demonstrates and benchmarks different blockhash access patterns:
 
@@ -88,7 +88,7 @@ You can see the details of the code in `eip2935GasComparison.sol`.
 
 > It is very important to note that the system contract only receives the `calldata`, and there is no specification of the function signature or anything. See the explaination below. You can see this more within the `eip2935GasComparison.sol` `readWithGet()` function.
 
-## Step 7 - Assessing the Results
+## Step 6 - Assessing the Results
 
 The table is output in `gas_comparison.md` at the root of this subdirectory, where we can see the gas savings when comparing one method to the next.
 

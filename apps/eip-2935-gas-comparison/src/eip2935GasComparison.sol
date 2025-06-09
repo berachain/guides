@@ -11,7 +11,10 @@ contract BlockhashConsumer {
     address public immutable historyAddress;
     address public constant systemContract = 0x0000F90827F1C53a10cb7A02335B175320002935;
 
-    error blockNumberTooOld();
+    uint256 constant HISTORIC_SERVE_WINDOW = 8192; // # of blocks that EIP2935 stores historic block hashes
+
+    error PAST_HISTORY_SERVE_WINDOW();
+    error BEYOND_HISTORY_SERVE_WINDOW();
 
     /// Pre-EIP-2935 pattern: manually store blockhash for future use
 
@@ -26,8 +29,8 @@ contract BlockhashConsumer {
     /// Post-EIP-2935 pattern: read from protocol-managed contract
 
     function readWithGet(uint256 blockNumber) external view returns (bytes32 result) {
-        if (blockNumber < (block.number - 8192)) revert blockNumberTooOld();
-        require(block.number > blockNumber, "future block");
+        if (blockNumber < (block.number - HISTORIC_SERVE_WINDOW)) revert PAST_HISTORY_SERVE_WINDOW();
+        if ((blockNumber) > block.number) revert BEYOND_HISTORY_SERVE_WINDOW();
 
         bytes32 blockNumberBigEndian = bytes32(uint256(blockNumber));
         bytes memory rawCallData = abi.encodePacked(blockNumberBigEndian);
