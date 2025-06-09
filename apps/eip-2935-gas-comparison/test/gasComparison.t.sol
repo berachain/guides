@@ -5,6 +5,7 @@ import "forge-std/Test.sol";
 import {BlockhashConsumer} from "../src/Eip2935GasComparison.sol";
 import {console2} from "forge-std/Script.sol";
 
+/// Run tests by running: `source .env && forge test --fork-url $BEPOLIA_RPC_URL --fork-block-number 5045482 -vvv`
 contract GasComparisonTest is Test {
     BlockhashConsumer public consumer;
     bytes32 public expectedHash;
@@ -13,7 +14,7 @@ contract GasComparisonTest is Test {
 
     function setUp() public {
         consumer = new BlockhashConsumer();
-        vm.roll(8900);
+        vm.roll(5045482 - 8190); // Just within the HISTORY_SERVE_WINDOW (8191 blocks from current blockNumber)
         testBlock = block.number - 1;
         expectedHash = blockhash(testBlock);
         consumer.submitOracleBlockhash(testBlock, expectedHash);
@@ -26,10 +27,10 @@ contract GasComparisonTest is Test {
         assertEq(expectedHash, blockHash);
     }
 
-    // NOTE: the EIP-2935 method of getting the blockhash will fail within foundry tests because even though we have rolled the chain to a workable blocknumber, the system contract does not exist on the Foundry test VM, so the staticcall doesn't revert, but it doesn't return any meanigful data, thus triggering data.length reversion found in `eip2935GasComparison.readWithGet()` function
+    // NOTE: this test fails if you do not run against a fork-url because even though we have rolled the chain to a workable blocknumber, the system contract does not exist on the Foundry test VM, so the staticcall doesn't revert, but it doesn't return any meanigful data, thus triggering data.length reversion found in `eip2935GasComparison.readWithGet()` function
     function testGas_ReadWithGet() public {
-        vm.expectRevert("Input too short");
-        blockHash = consumer.readWithGet(testBlock); // cold access
+        blockHash = consumer.readWithGet(testBlock);
+        assertEq(expectedHash, blockHash);
     }
 
     function testGas_OracleSubmission() public {
