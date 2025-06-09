@@ -6,10 +6,10 @@ source .env
 LOG_FILE="script_output.log"
 OUTPUT_FILE="gas_comparison.md"
 
-echo "🔧 Running DeployGasComparison script..."
+echo "🔧 Running eip2935GasComparison.s script..."
 
 # Run script and save logs
-forge script ./script/DeployGasComparison.s.sol:DeployGasComparison \
+forge script ./script/eip2935GasComparison.s.sol:eip2935GasComparison.s \
   --rpc-url "$TEST_RPC_URL" \
   --private-key "$EOA_PRIVATE_KEY" \
   --broadcast -vvvv | tee "$LOG_FILE"

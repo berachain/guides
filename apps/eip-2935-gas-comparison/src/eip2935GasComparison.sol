@@ -3,7 +3,7 @@ pragma solidity ^0.8.20;
 
 /// @title BlockhashConsumer EIP2935 Educational Contract
 /// @notice Consumer contract demonstrating pre-EIP-2935, post-EIP-2935, and oracle-based patterns
-/// @dev This educational example contract, as is, showcases methods to obtain, store, and read blockhashes. It primarily is made to showcase how to carry out these various methods, and more-so to be used with `DeployGasComparison.s.sol` and `run_gas_comparison.sh` to showcase the gas savings offered by EIP-2935
+/// @dev This educational example contract, as is, showcases methods to obtain, store, and read blockhashes. It primarily is made to showcase how to carry out these various methods, and more-so to be used with `eip2935GasComparison.s.sol` and `run_gas_comparison.sh` to showcase the gas savings offered by EIP-2935
 contract BlockhashConsumer {
     mapping(uint256 => bytes32) public stored;
     mapping(uint256 => bytes32) public oracleHashes;

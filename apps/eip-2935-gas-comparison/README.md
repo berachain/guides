@@ -13,8 +13,8 @@ This guide specifically shows obtaining a historic blockhash using the power of 
 This guide primarily revolves around the following files:
 
 - `eip2935GasComparison.sol` - A simple implementation showcasing the methods for obtaining a blockhash, including storing them pre-EIP-2935.
-- `gasComparison.t.sol` - A simple test suite to showcase unit testing with the `eip2935GasComparison.sol` contract.
-- `DeployGasComparison.s.sol` - A solidity script used to deploy the `eip2935GasComparison.sol` and make calls to it to simulate different blockhash reading methods.
+- `eip2935GasComparison.t.sol` - A simple test suite to showcase unit testing with the `eip2935GasComparison.sol` contract.
+- `eip2935GasComparison.s.sol` - A solidity script used to deploy the `eip2935GasComparison.sol` and make calls to it to simulate different blockhash reading methods.
 - `run_gas_comparison.sh` - A bash script created to deploy `eip2935GasComparison.sol` and tabulate the gas expenditure results.
 
 ### Prerequisites
@@ -55,7 +55,7 @@ forge install && forge build
 
 ### Step 2 - Run Forge Tests
 
-The majority of this guide will go through running tests against an anvil fork. Of course, running unit tests is important for the development cycle in the beginning. We have provided quick foundry tests to showcase checks that the example implementation contract, `eip2935GasComparison.sol` is functioning properly before testing against anvil forks or on actual networks. 
+The majority of this guide will go through running tests against an anvil fork. Of course, running unit tests is important for the development cycle in the beginning. We have provided quick foundry tests to showcase checks that the example implementation contract, `eip2935GasComparison.sol`, is functioning properly before testing against anvil forks or on actual networks. 
 
 > NOTE: The tests in this guide are setup to test against a Bepolia fork-url because the typical foundry EVM environment does not reflect EIP-2935 (and the needed system contract), and the other Bectra upgrades.
 
@@ -73,7 +73,7 @@ You should see an ouput showcasing the tests passing:
 [⠒] Solc 0.8.29 finished in 426.77ms
 Compiler run successful!
 
-Ran 4 tests for test/gasComparison.t.sol:GasComparisonTest
+Ran 4 tests for test/eip2935GasComparison.t.sol:GasComparisonTest
 [PASS] testBlock() (gas: 2515)
 [PASS] testGas_OracleSubmission() (gas: 39693)
 [PASS] testGas_ReadWithGet() (gas: 41618)
