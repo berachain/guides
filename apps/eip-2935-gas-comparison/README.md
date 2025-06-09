@@ -53,7 +53,45 @@ pnpm install && cp .env.example .env
 forge install && forge build
 ```
 
-### Step 2 - Start Your Anvil Fork
+### Step 2 - Run Forge Tests
+
+The majority of this guide will go through running tests against an anvil fork. Of course, running unit tests is important for the development cycle in the beginning. We have provided quick foundry tests to showcase checks that the example implementation contract, `eip2935GasComparison.sol` is functioning properly before testing against anvil forks or on actual networks. 
+
+> NOTE: The tests in this guide are setup to test against a Bepolia fork-url because the typical foundry EVM environment does not reflect EIP-2935 (and the needed system contract), and the other Bectra upgrades.
+
+Run tests by running: 
+
+```bash
+source .env && forge test --fork-url $BEPOLIA_RPC_URL --fork-block-number 5045482
+```
+
+You should see an ouput showcasing the tests passing:
+
+```bash
+[⠊] Compiling...
+[⠔] Compiling 1 files with Solc 0.8.29
+[⠒] Solc 0.8.29 finished in 426.77ms
+Compiler run successful!
+
+Ran 4 tests for test/gasComparison.t.sol:GasComparisonTest
+[PASS] testBlock() (gas: 2515)
+[PASS] testGas_OracleSubmission() (gas: 39693)
+[PASS] testGas_ReadWithGet() (gas: 41618)
+[PASS] testGas_ReadWithSLOAD() (gas: 59398)
+Suite result: ok. 4 passed; 0 failed; 0 skipped; finished in 1.05ms (679.63µs CPU time)
+
+Ran 1 test suite in 278.65ms (1.05ms CPU time): 4 tests passed, 0 failed, 0 skipped (4 total tests)
+```
+
+The pertinent tests to ensure that `eip2935GasComparison.sol` implementation is functioning properly includes: 
+
+- `testGas_OracleSubmission()`: Checking that the oracle-based pattern methods for obtaining blockhash history and inherent historic data functions
+- `testGas_ReadWithGet()`: Checking the usage of the system contract as per EIP2935 for obtaining historic blockhashes
+- `testGas_ReadWithSLOAD()`: Checking that the SSTORE and SLOAD pattern methods for storing and obtaining blockhash history, respectively, functions properly
+
+Now we can move onto testing with an actual script either against an anvil network or an actual network.
+
+### Step 3 - Start Your Anvil Fork
 
 Run the following command to deploy a local anvil fork via your terminal. You need to specify the block number shown below to ensure that the EIP2935 system contract will function properly to reflect being activated after Bectra upgrades on Bepolia.
 
@@ -62,7 +100,7 @@ Run the following command to deploy a local anvil fork via your terminal. You ne
 source .env && anvil --fork-url $BEPOLIA_RPC_URL --fork-block-number 4867668 --chain-id 80069 --port 8545
 ```
 
-### Step 3 - Update Your `.env` and Deploy `eip2935GasComparison.sol` Implementation
+### Step 4 - Update Your `.env` and Deploy `eip2935GasComparison.sol` Implementation
 
 This script works on a local Bepolia Anvil fork. 
 
@@ -72,11 +110,11 @@ Update your `.env` with your `EOA_PRIVATE_KEY` and make sure it has enough $tBER
 # From apps/eip-2935-gas-comparison
 ./script/run_gas-comparison.sh
 ```
-### Step 4 - Understanding What the Script Does
+### Step 5 - Understanding What the Script Does
 
 The bash script, `run_gas_comparison.sh` deploys the `eip2935GasComparison.sol` contract on the locally ran anvil fork of Bepolia. It then goes through the results and tabulates the total gas expenses for each blockhashing method, including storing the blockhash or replicating the usage of an oracle.
 
-#### Step 5 - Highlevel Review of the Solidity File
+#### Step 6 - Highlevel Review of the Solidity File
 
 This project demonstrates and benchmarks different blockhash access patterns:
 
@@ -88,7 +126,7 @@ You can see the details of the code in `eip2935GasComparison.sol`.
 
 > It is very important to note that the system contract only receives the `calldata`, and there is no specification of the function signature or anything. See the explaination below. You can see this more within the `eip2935GasComparison.sol` `readWithGet()` function.
 
-## Step 6 - Assessing the Results
+## Step 7 - Assessing the Results
 
 The table is output in `gas_comparison.md` at the root of this subdirectory, where we can see the gas savings when comparing one method to the next.
 
