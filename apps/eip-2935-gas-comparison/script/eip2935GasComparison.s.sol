@@ -21,6 +21,7 @@ contract eip2935GasComparison is Script {
         consumer.storeWithSSTORE(testBlock);
 
         // Use system contract as per EIP-2935
+        consumer.readWithGet(testBlock);
 
         // Simulate Pre-EIP-2935 pattern using oracles
         consumer.submitOracleBlockhash(testBlock, hash);

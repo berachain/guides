@@ -55,11 +55,11 @@ forge install && forge build
 
 ### Step 2 - Run Forge Tests
 
-The majority of this guide will go through running tests against an anvil fork. Of course, running unit tests is important for the development cycle in the beginning. We have provided quick foundry tests to showcase checks that the example implementation contract, `eip2935GasComparison.sol`, is functioning properly before testing against anvil forks or on actual networks. 
+The majority of this guide will go through running tests against an anvil fork. Of course, running unit tests is important for the development cycle in the beginning. We have provided quick foundry tests to showcase checks that the example implementation contract, `eip2935GasComparison.sol`, is functioning properly before testing against anvil forks or on actual networks.
 
 > NOTE: The tests in this guide are setup to test against a Bepolia fork-url because the typical foundry EVM environment does not reflect EIP-2935 (and the needed system contract), and the other Bectra upgrades.
 
-Run tests by running: 
+Run tests by running:
 
 ```bash
 source .env && forge test --fork-url $BEPOLIA_RPC_URL --fork-block-number 5045482
@@ -83,7 +83,7 @@ Suite result: ok. 4 passed; 0 failed; 0 skipped; finished in 1.05ms (679.63µs C
 Ran 1 test suite in 278.65ms (1.05ms CPU time): 4 tests passed, 0 failed, 0 skipped (4 total tests)
 ```
 
-The pertinent tests to ensure that `eip2935GasComparison.sol` implementation is functioning properly includes: 
+The pertinent tests to ensure that `eip2935GasComparison.sol` implementation is functioning properly includes:
 
 - `testGas_OracleSubmission()`: Checking that the oracle-based pattern methods for obtaining blockhash history and inherent historic data functions
 - `testGas_ReadWithGet()`: Checking the usage of the system contract as per EIP2935 for obtaining historic blockhashes
@@ -102,14 +102,15 @@ source .env && anvil --fork-url $BEPOLIA_RPC_URL --fork-block-number 4867668 --c
 
 ### Step 4 - Update Your `.env` and Deploy `eip2935GasComparison.sol` Implementation
 
-This script works on a local Bepolia Anvil fork. 
+Now that you have an Anvil fork running, open up another terminal window and continue. Next you'll run a script on the local bepolia Anvil fork.
 
 Update your `.env` with your `EOA_PRIVATE_KEY` and make sure it has enough $tBERA for deployment. A single $tBERA should be more than enough.
 
 ```bash
 # From apps/eip-2935-gas-comparison
-./script/run_gas-comparison.sh
+./script/run_gas_comparison.sh
 ```
+
 ### Step 5 - Understanding What the Script Does
 
 The bash script, `run_gas_comparison.sh` deploys the `eip2935GasComparison.sol` contract on the locally ran anvil fork of Bepolia. It then goes through the results and tabulates the total gas expenses for each blockhashing method, including storing the blockhash or replicating the usage of an oracle.
@@ -132,20 +133,20 @@ The table is output in `gas_comparison.md` at the root of this subdirectory, whe
 
 Below is an example output that you ought to see when running the bash script:
 
-| Pattern                             | Methods Involved                         | Total Gas |
-|-------------------------------------|------------------------------------------|-----------|
-| Before EIP-2935: SSTORE pattern     | storeWithSSTORE(...), readWithSLOAD(...) |     46210 |
-| After EIP-2935: .get() access       | readWithGet(...)                         |      6494 |
-| Before EIP-2935: Oracle pattern     | submitOracleBlockhash(...), readFromOracle(...) |     46338 |
+| Pattern                         | Methods Involved                                | Total Gas |
+| ------------------------------- | ----------------------------------------------- | --------- |
+| Before EIP-2935: SSTORE pattern | storeWithSSTORE(...), readWithSLOAD(...)        | 46210     |
+| After EIP-2935: .get() access   | readWithGet(...)                                | 6494      |
+| Before EIP-2935: Oracle pattern | submitOracleBlockhash(...), readFromOracle(...) | 46338     |
 
 Simply reading the blockhash from the system contract resulted in significantly less gas expenditure compared to the other methods typically used before EIP-2935. A table showcasing the savings can be seen below when comparing against the new method of just reading from the system contract.
 
 | Pattern                         | Total Gas | Savings vs. `.get()` | % Saved Compared to `.get()` |
-|---------------------------------|-----------|------------------------|------------------------------|
-| Before EIP-2935: SSTORE pattern | 46,210    | 39,716                 | 85.95%                       |
-| Before EIP-2935: Oracle pattern | 46,338    | 39,844                 | 86.00%                       |
-| After EIP-2935: .get() access   | 6,494     | —                      | —                            |
+| ------------------------------- | --------- | -------------------- | ---------------------------- |
+| Before EIP-2935: SSTORE pattern | 46,210    | 39,716               | 85.95%                       |
+| Before EIP-2935: Oracle pattern | 46,338    | 39,844               | 86.00%                       |
+| After EIP-2935: .get() access   | 6,494     | —                    | —                            |
 
 > It should be noted that if carrying out any of these calls cold results in the gas expenditures above, and warm calls will be less. The comparative analysis still stands even with this in mind.
 
-🐻🎉 Congrats! You have finished the guide and have now seen the gas savings that come about with EIP-2935 when accessing historical blockhashes. 
+🐻🎉 Congrats! You have finished the guide and have now seen the gas savings that come about with EIP-2935 when accessing historical blockhashes.
