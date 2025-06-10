@@ -21,7 +21,7 @@ const CONTRACT_NAME = "HelloWorld";
 // ========================================================
 (async () => {
   console.group(
-    "Deploy Script\n========================================================"
+    "Deploy Script\n========================================================",
   );
   try {
     // The initial value that will be deployed with the contract
@@ -31,7 +31,7 @@ const CONTRACT_NAME = "HelloWorld";
     const baseContractPath = path.join(
       __dirname,
       `../contracts/`,
-      `${CONTRACT_NAME}.sol`
+      `${CONTRACT_NAME}.sol`,
     );
     const content = await fs.readFileSync(baseContractPath).toString();
 
@@ -61,7 +61,7 @@ const CONTRACT_NAME = "HelloWorld";
     // 2 - Setup Provider
     const provider = new ethers.JsonRpcProvider(
       `${process.env.RPC_URL}`,
-      parseInt(`${process.env.CHAIN_ID}`)
+      parseInt(`${process.env.CHAIN_ID}`),
     );
 
     // 3 - (Optional) Get gas price costs
@@ -75,7 +75,7 @@ const CONTRACT_NAME = "HelloWorld";
     // 4 - Setup Signer
     const signer = new Wallet(
       `${process.env.WALLET_PRIVATE_KEY}` as `0x${string}`,
-      provider
+      provider,
     );
 
     // 5 - (Optional) Estimate gas

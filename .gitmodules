@@ -10,9 +10,21 @@
 [submodule "apps/openzeppelin-upgrades/lib/openzeppelin-foundry-upgrades"]
 	path = apps/openzeppelin-upgrades/lib/openzeppelin-foundry-upgrades
 	url = https://github.com/OpenZeppelin/openzeppelin-foundry-upgrades
-[submodule "apps/eip-2935-gas-comparison/hello_foundry/lib/forge-std"]
-	path = apps/eip-2935-gas-comparison/hello_foundry/lib/forge-std
-	url = https://github.com/foundry-rs/forge-std
 [submodule "apps/eip-2935-gas-comparison/lib/forge-std"]
 	path = apps/eip-2935-gas-comparison/lib/forge-std
 	url = https://github.com/foundry-rs/forge-std
+[submodule "apps/eip-7702-gas-sponsorship/lib/forge-std"]
+	path = apps/eip-7702-gas-sponsorship/lib/forge-std
+	url = https://github.com/foundry-rs/forge-std
+[submodule "apps/eip-7702-gas-sponsorship/lib/openzeppelin-contracts"]
+	path = apps/eip-7702-gas-sponsorship/lib/openzeppelin-contracts
+	url = https://github.com/OpenZeppelin/openzeppelin-contracts
+[submodule "app/batch-transactions/lib/forge-std"]
+	path = app/batch-transactions/lib/forge-std
+	url = https://github.com/foundry-rs/forge-std
+[submodule "app/batch-transactions/lib/openzeppelin-contracts"]
+	path = app/batch-transactions/lib/openzeppelin-contracts
+	url = https://github.com/OpenZeppelin/openzeppelin-contracts
+[submodule "apps/batch-transactions/lib/solmate"]
+	path = apps/batch-transactions/lib/solmate
+	url = https://github.com/transmissions11/solmate

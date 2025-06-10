@@ -65,7 +65,7 @@ export function fetchAccount(address: string): Account | null {
 export function updateTokenBalance(
   token: Token,
   account: Account,
-  amount: bigint
+  amount: bigint,
 ): void {
   // Don't update zero address
   if (ZERO_ADDRESS == account.id) return;
@@ -81,7 +81,7 @@ export function updateTokenBalance(
 
 function getOrCreateAccountBalance(
   account: Account,
-  token: Token
+  token: Token,
 ): TokenBalance {
   const id = token.id + "-" + account.id;
   let tokenBalance = TokenBalance.load(id);
@@ -104,6 +104,6 @@ function bigIntToBigDecimal(quantity: bigint, decimals: i32 = 18): BigDecimal {
   return quantity.toBigDecimal().div(
     BigInt.fromI32(10)
       .pow(decimals as u8)
-      .toBigDecimal()
+      .toBigDecimal(),
   );
 }
