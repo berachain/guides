@@ -1,0 +1,40 @@
+{
+  "name": "batch-transactions",
+  "version": "1.0.0",
+  "description": "Batch transaction contract with EIP-7702 delegation support",
+  "main": "index.js",
+  "directories": {
+    "lib": "lib",
+    "test": "test"
+  },
+  "scripts": {
+    "build": "forge build",
+    "lint": "pnpm prettier --check . && pnpm eslint .",
+    "lint:fix": "pnpm prettier --write . && pnpm eslint . --fix",
+    "test": "forge test -vvv",
+    "compile": "node scripts/compile.js",
+    "dev": "node scripts/deploy-and-execute.js",
+    "clean": "rm -rf cache; rm -rf node_modules; rm -rf out; rm -rf scripts/deployed-addresses.json"
+  },
+  "keywords": [
+    "ethereum",
+    "smart-contracts",
+    "batch-transactions",
+    "eip-7702"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "axios": "^1.9.0",
+    "chalk": "^4.1.2",
+    "dotenv": "^16.5.0",
+    "viem": "^2.30.5"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "devDependencies": {
+    "eslint": "^9.27.0",
+    "prettier": "^3.5.3"
+  }
+}

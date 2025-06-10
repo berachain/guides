@@ -1,14 +1,6 @@
 # Load env from env.sh - Modify this as needed
 set -e;
-umask 002
-set -x;
 source env.sh;
-
-if [[ "$OSTYPE" == "darwin"* ]]; then
-    export SED_OPT="-i ''"
-else
-    export SED_OPT='-i' 
-fi
 
 
 
@@ -20,16 +12,12 @@ echo "0 - Creating config folders...\n";
 # Create config folders - ex `config0, config1, config2, config3`
 for i in $(seq 0 $((NUM_VALIDATORS - 1))); do
   mkdir -p $TMP_BEACOND_DIR/config-cl-val$i;
-  mkdir -p $TMP_BEACOND_DIR/config-cl-val$i/logs;
-  chmod 755 $TMP_BEACOND_DIR/config-cl-val$i/logs;
   cp templates/beacond/* $TMP_BEACOND_DIR/config-cl-val$i;
 done
 
 if [ $NUM_RPC_NODES -gt 0 ]; then
   for i in $(seq 0 $((NUM_RPC_NODES - 1))); do
     mkdir -p $TMP_BEACOND_DIR/config-cl-rpc$i;
-    mkdir -p $TMP_BEACOND_DIR/config-cl-rpc$i/logs;
-    chmod 755 $TMP_BEACOND_DIR/config-cl-rpc$i/logs;
     cp templates/beacond/* $TMP_BEACOND_DIR/config-cl-rpc$i;
   done
 fi
@@ -46,26 +34,29 @@ else
   CHAIN_SPEC_OPTS="--beacon-kit.chain-spec $CHAIN_SPEC"
 fi
 
-docker run --rm --entrypoint /bin/bash -v $TMP_BEACOND_DIR/config-cl-val0:/root/.beacond -v $TMP_BEACOND_DIR/config-cl-val0/logs:/root/logs $DOCKER_IMAGE_BEACOND \
-  -c "./beacond init $BEACOND_MONIKER $CHAIN_SPEC_OPTS; echo $JWT_TOKEN > /root/.beacond/config/jwt.hex; ./beacond genesis add-premined-deposit $GENESIS_DEPOSIT_AMOUNT $WITHDRAW_ADDRESS;";
-sudo chown -R $USER:docker $TMP_BEACOND_DIR && sudo chmod -R g+rwxs $TMP_BEACOND_DIR;
-
+docker run --rm -v $TMP_BEACOND_DIR/config-cl-val0:/root/.beacond $DOCKER_IMAGE_BEACOND /bin/bash \
+  -c "./beacond init $BEACOND_MONIKER $CHAIN_SPEC_OPTS; echo $JWT_TOKEN > /root/.beacond/config/jwt.hex; chmod 600 /root/.beacond/config/jwt.hex; ./beacond genesis add-premined-deposit $GENESIS_DEPOSIT_AMOUNT $WITHDRAW_ADDRESS;";
 cp -r $TMP_BEACOND_DIR/config-cl-val0/ $TMP_BEACOND_DIR/config-genesis;
 
 # - Validators 1 to NUM_VALIDATORS - 1
 if [ $NUM_VALIDATORS -gt 1 ]; then
   for i in $(seq 1 $((NUM_VALIDATORS - 1))); do
     BEACOND_MONIKER=$CL_MONIKER-$i;
-    docker run --rm --entrypoint /bin/bash -v $TMP_BEACOND_DIR/config-cl-val$i:/root/.beacond -v $TMP_BEACOND_DIR/config-cl-val$i/logs:/root/logs $DOCKER_IMAGE_BEACOND \
-    -c "./beacond init $BEACOND_MONIKER $CHAIN_SPEC_OPTS; echo $JWT_TOKEN > /root/.beacond/config/jwt.hex; ./beacond genesis add-premined-deposit $GENESIS_DEPOSIT_AMOUNT $WITHDRAW_ADDRESS;";
-    sudo chown -R $USER:docker $TMP_BEACOND_DIR && sudo chmod -R g+rwxs $TMP_BEACOND_DIR;
+    docker run --rm -v $TMP_BEACOND_DIR/config-cl-val$i:/root/.beacond $DOCKER_IMAGE_BEACOND /bin/bash \
+    -c "./beacond init $BEACOND_MONIKER $CHAIN_SPEC_OPTS; echo $JWT_TOKEN > /root/.beacond/config/jwt.hex; chmod 600 /root/.beacond/config/jwt.hex; ./beacond genesis add-premined-deposit $GENESIS_DEPOSIT_AMOUNT $WITHDRAW_ADDRESS;";
+  done
+fi
+
+# - Copy premined json files from each validator config
+if [ $NUM_VALIDATORS -gt 1 ]; then
+  for i in $(seq 1 $((NUM_VALIDATORS - 1))); do
+    cp $TMP_BEACOND_DIR/config-cl-val$i/config/premined-deposits/premined-deposit-*.json $TMP_BEACOND_DIR/config-genesis/config/premined-deposits/;
   done
 fi
 
 # - Collected premined deposits
-docker run --rm --entrypoint /bin/bash -v $TMP_BEACOND_DIR/config-genesis:/root/.beacond -v $TMP_BEACOND_DIR/config-genesis/logs:/root/logs $DOCKER_IMAGE_BEACOND \
+docker run --rm -v $TMP_BEACOND_DIR/config-genesis:/root/.beacond $DOCKER_IMAGE_BEACOND /bin/bash \
   -c "./beacond genesis collect-premined-deposits;";
-sudo chown -R $USER:docker $TMP_BEACOND_DIR && sudo chmod -R g+rwxs $TMP_BEACOND_DIR;
 
 # Step 2 - Create Eth Genesis File
 # ===========================================================
@@ -81,18 +72,17 @@ jq --arg genesisDepositsRoot "0x000000000000000000000000000000000000000000000000
 # Step 3 - Modify Genesis With Deposits
 # ===========================================================
 echo "3 - Modifying genesis with deposits...\n";
-docker run --rm --entrypoint /bin/bash -v $TMP_BEACOND_DIR/config-genesis:/root/.beacond -v $TMP_BEACOND_DIR/config-genesis/logs:/root/logs $DOCKER_IMAGE_BEACOND \
+docker run --rm -v $TMP_BEACOND_DIR/config-genesis:/root/.beacond $DOCKER_IMAGE_BEACOND /bin/bash \
   -c "./beacond genesis set-deposit-storage /root/.beacond/eth-genesis.json";
-sudo chown -R $USER:docker $TMP_BEACOND_DIR && sudo chmod -R g+rwxs $TMP_BEACOND_DIR;
 
-docker run --rm --entrypoint /bin/bash -v $TMP_BEACOND_DIR/config-genesis:/root/.beacond -v $TMP_BEACOND_DIR/config-genesis/logs:/root/logs $DOCKER_IMAGE_BEACOND \
+docker run --rm -v $TMP_BEACOND_DIR/config-genesis:/root/.beacond $DOCKER_IMAGE_BEACOND /bin/bash \
   -c "./beacond genesis execution-payload /root/.beacond/eth-genesis.json";
-sudo chown -R $USER:docker $TMP_BEACOND_DIR && sudo chmod -R g+rwxs $TMP_BEACOND_DIR;
 
 # Step 4 - Add Configurations Files
 # ===========================================================
 echo "4 - Adding configurations files...\n";
 # - Add KZG File
+
 cp templates/beacond/* $TMP_BEACOND_DIR/config-genesis/config;
 cp templates/beacond/* $TMP_BEACOND_DIR/config-cl-val0/config;
 if [ $NUM_VALIDATORS -gt 1 ]; then
@@ -109,12 +99,12 @@ fi
 # - address = "0.0.0.0:3500"
 if [ $NUM_VALIDATORS -gt 0 ]; then
   for i in $(seq 0 $((NUM_VALIDATORS - 1))); do
-    sed $SED_OPT 's|jwt-secret-path = ".*"|jwt-secret-path = "/root/.beacond/config/jwt.hex"|' $TMP_BEACOND_DIR/config-cl-val$i/config/app.toml;
-    sed $SED_OPT "s|suggested-fee-recipient = \".*\"|suggested-fee-recipient = \"$SUGGESTED_FEE_RECIPIENT\"|" $TMP_BEACOND_DIR/config-cl-val$i/config/app.toml;
-    sed $SED_OPT 's|trusted-setup-path = ".*"|trusted-setup-path = "/root/.beacond/config/kzg-trusted-setup.json"|' $TMP_BEACOND_DIR/config-cl-val$i/config/app.toml;
-    sed $SED_OPT "s|rpc-dial-url = \".*\"|rpc-dial-url = \"http://$EL_MONIKER-val-$i:8551\"|" $TMP_BEACOND_DIR/config-cl-val$i/config/app.toml;
-    sed $SED_OPT '170,190s/enabled = "false"/enabled = "true"/' $TMP_BEACOND_DIR/config-cl-val$i/config/app.toml;
-    sed $SED_OPT "s|address = \".*\"|address = \"0.0.0.0:3500\"|" $TMP_BEACOND_DIR/config-cl-val$i/config/app.toml;
+    sed -i '' 's|jwt-secret-path = ".*"|jwt-secret-path = "/root/.beacond/config/jwt.hex"|' $TMP_BEACOND_DIR/config-cl-val$i/config/app.toml;
+    sed -i '' "s|suggested-fee-recipient = \".*\"|suggested-fee-recipient = \"$SUGGESTED_FEE_RECIPIENT\"|" $TMP_BEACOND_DIR/config-cl-val$i/config/app.toml;
+    sed -i '' 's|trusted-setup-path = ".*"|trusted-setup-path = "/root/.beacond/config/kzg-trusted-setup.json"|' $TMP_BEACOND_DIR/config-cl-val$i/config/app.toml;
+    sed -i '' "s|rpc-dial-url = \".*\"|rpc-dial-url = \"http://$EL_MONIKER-val-$i:8551\"|" $TMP_BEACOND_DIR/config-cl-val$i/config/app.toml;
+    sed -i '' '170,190s/enabled = "false"/enabled = "true"/' $TMP_BEACOND_DIR/config-cl-val$i/config/app.toml;
+    sed -i '' "s|address = \".*\"|address = \"0.0.0.0:3500\"|" $TMP_BEACOND_DIR/config-cl-val$i/config/app.toml;
   done
 fi
 
@@ -124,10 +114,10 @@ fi
 # - indexer = "kv"
 if [ $NUM_VALIDATORS -gt 0 ]; then
   for i in $(seq 0 $((NUM_VALIDATORS - 1))); do
-    sed $SED_OPT "s|laddr = \"tcp://127.0.0.1:26657\"|laddr = \"tcp://0.0.0.0:26657\"|" $TMP_BEACOND_DIR/config-cl-val$i/config/config.toml;
-    sed $SED_OPT "s|cors_allowed_origins = \[\]|cors_allowed_origins = \[\"*\"\]|" $TMP_BEACOND_DIR/config-cl-val$i/config/config.toml;
-    sed $SED_OPT '108s/unsafe = "false"/unsafe = "true"/' $TMP_BEACOND_DIR/config-cl-val$i/config/config.toml;
-    sed $SED_OPT 's|indexer = "null"|indexer = "kv"|' $TMP_BEACOND_DIR/config-cl-val$i/config/config.toml;
+    sed -i '' "s|laddr = \"tcp://127.0.0.1:26657\"|laddr = \"tcp://0.0.0.0:26657\"|" $TMP_BEACOND_DIR/config-cl-val$i/config/config.toml;
+    sed -i '' "s|cors_allowed_origins = \[\]|cors_allowed_origins = \[\"*\"\]|" $TMP_BEACOND_DIR/config-cl-val$i/config/config.toml;
+    sed -i '' '108s/unsafe = "false"/unsafe = "true"/' $TMP_BEACOND_DIR/config-cl-val$i/config/config.toml;
+    sed -i '' 's|indexer = "null"|indexer = "kv"|' $TMP_BEACOND_DIR/config-cl-val$i/config/config.toml;
   done
 fi
 
@@ -139,12 +129,12 @@ done
 # - seeds - only one node is a seed
 SEEDS="";
 if [ $NUM_VALIDATORS -gt 1 ]; then
-  NODE_ID=$(docker run --rm --entrypoint /bin/bash -v $TMP_BEACOND_DIR/config-cl-val0:/root/.beacond --name $CL_MONIKER-val-0 $DOCKER_IMAGE_BEACOND \
-      -c "umask 002; CHAIN_SPEC=$CHAIN_SPEC ./beacond tendermint show-node-id");
+  NODE_ID=$(docker run --rm -v $TMP_BEACOND_DIR/config-cl-val0:/root/.beacond --name $CL_MONIKER-val-0 $DOCKER_IMAGE_BEACOND /bin/bash \
+      -c "CHAIN_SPEC=$CHAIN_SPEC ./beacond tendermint show-node-id");
   SEEDS="$NODE_ID@$CL_MONIKER-val-0:26656";
 
   for i in $(seq 1 $((NUM_VALIDATORS - 1))); do
-    sed $SED_OPT "s|seeds = \".*\"|seeds = \"$SEEDS\"|" $TMP_BEACOND_DIR/config-cl-val$i/config/config.toml;
+    sed -i '' "s|seeds = \".*\"|seeds = \"$SEEDS\"|" $TMP_BEACOND_DIR/config-cl-val$i/config/config.toml;
   done
 fi
 
@@ -153,8 +143,8 @@ ALL_PERSISTENT_PEERS="";
 if [ $NUM_VALIDATORS -gt 1 ]; then
   for i in $(seq 0 $((NUM_VALIDATORS - 1))); do
     # First collect all node IDs and addresses
-    NODE_ID=$(docker run --rm --entrypoint /bin/bash -v $TMP_BEACOND_DIR/config-cl-val$i:/root/.beacond --name $CL_MONIKER-$i $DOCKER_IMAGE_BEACOND \
-        -c "umask 002; CHAIN_SPEC=$CHAIN_SPEC ./beacond tendermint show-node-id");
+    NODE_ID=$(docker run --rm -v $TMP_BEACOND_DIR/config-cl-val$i:/root/.beacond --name $CL_MONIKER-$i $DOCKER_IMAGE_BEACOND /bin/bash \
+        -c "CHAIN_SPEC=$CHAIN_SPEC ./beacond tendermint show-node-id");
     PEERS[$i]="$NODE_ID@$CL_MONIKER-val-$i:26656";
     ALL_PERSISTENT_PEERS+="${PEERS[$i]},";
   done
@@ -171,7 +161,7 @@ if [ $NUM_VALIDATORS -gt 1 ]; then
       fi
     done
     PERSISTENT_PEERS=${PERSISTENT_PEERS%,};
-    sed $SED_OPT "s|persistent_peers = \".*\"|persistent_peers = \"$PERSISTENT_PEERS\"|" $TMP_BEACOND_DIR/config-cl-val$i/config/config.toml;
+    sed -i '' "s|persistent_peers = \".*\"|persistent_peers = \"$PERSISTENT_PEERS\"|" $TMP_BEACOND_DIR/config-cl-val$i/config/config.toml;
   done
 fi
 
@@ -180,19 +170,18 @@ fi
 echo "5 - Creating rpc cl nodes...\n";
 if [ $NUM_RPC_NODES -gt 0 ]; then
   for i in $(seq 0 $((NUM_RPC_NODES - 1))); do
-    docker run --rm --entrypoint /bin/bash -v $TMP_BEACOND_DIR/config-cl-rpc$i:/root/.beacond -v $TMP_BEACOND_DIR/config-cl-rpc$i/logs:/root/logs $DOCKER_IMAGE_BEACOND \
-    -c "./beacond init $CL_MONIKER-rpc$i $CHAIN_SPEC_OPTS; echo $JWT_TOKEN > /root/.beacond/config/jwt.hex; ./beacond genesis add-premined-deposit $GENESIS_DEPOSIT_AMOUNT $WITHDRAW_ADDRESS;";
-    sudo chown -R $USER:docker $TMP_BEACOND_DIR && sudo chmod -R g+rwxs $TMP_BEACOND_DIR;
+    docker run --rm -v $TMP_BEACOND_DIR/config-cl-rpc$i:/root/.beacond $DOCKER_IMAGE_BEACOND /bin/bash \
+    -c "./beacond init $CL_MONIKER-rpc$i $CHAIN_SPEC_OPTS; echo $JWT_TOKEN > /root/.beacond/config/jwt.hex; chmod 600 /root/.beacond/config/jwt.hex; ./beacond genesis add-premined-deposit $GENESIS_DEPOSIT_AMOUNT $WITHDRAW_ADDRESS;";
     cp templates/beacond/* $TMP_BEACOND_DIR/config-cl-rpc$i/config;
     cp -f $TMP_BEACOND_DIR/config-cl-val0/config/app.toml $TMP_BEACOND_DIR/config-cl-rpc$i/config/app.toml;
     cp -f $TMP_BEACOND_DIR/config-cl-val0/config/config.toml $TMP_BEACOND_DIR/config-cl-rpc$i/config/config.toml;
     cp -f $TMP_BEACOND_DIR/config-genesis/config/genesis.json $TMP_BEACOND_DIR/config-cl-rpc$i/config/genesis.json;
-    sed $SED_OPT "s|persistent_peers = \".*\"|persistent_peers = \"$ALL_PERSISTENT_PEERS\"|" $TMP_BEACOND_DIR/config-cl-rpc$i/config/config.toml;
-    sed $SED_OPT "s|seeds = \".*\"|seeds = \"$SEEDS\"|" $TMP_BEACOND_DIR/config-cl-rpc$i/config/config.toml;
-    sed $SED_OPT "s|rpc-dial-url = \".*\"|rpc-dial-url = \"http://$EL_MONIKER-rpc-$i:8551\"|" $TMP_BEACOND_DIR/config-cl-rpc$i/config/app.toml;
-    sed $SED_OPT "s|laddr = \"tcp://127.0.0.1:26657\"|laddr = \"tcp://0.0.0.0:26657\"|" $TMP_BEACOND_DIR/config-cl-val$i/config/config.toml;
-    sed $SED_OPT "s|cors_allowed_origins = \[\]|cors_allowed_origins = \[\"*\"\]|" $TMP_BEACOND_DIR/config-cl-rpc$i/config/config.toml;
-    sed $SED_OPT '108s/unsafe = "false"/unsafe = "true"/' $TMP_BEACOND_DIR/config-cl-rpc$i/config/config.toml;
+    sed -i '' "s|persistent_peers = \".*\"|persistent_peers = \"$ALL_PERSISTENT_PEERS\"|" $TMP_BEACOND_DIR/config-cl-rpc$i/config/config.toml;
+    sed -i '' "s|seeds = \".*\"|seeds = \"$SEEDS\"|" $TMP_BEACOND_DIR/config-cl-rpc$i/config/config.toml;
+    sed -i '' "s|rpc-dial-url = \".*\"|rpc-dial-url = \"http://$EL_MONIKER-rpc-$i:8551\"|" $TMP_BEACOND_DIR/config-cl-rpc$i/config/app.toml;
+        sed -i '' "s|laddr = \"tcp://127.0.0.1:26657\"|laddr = \"tcp://0.0.0.0:26657\"|" $TMP_BEACOND_DIR/config-cl-val$i/config/config.toml;
+    sed -i '' "s|cors_allowed_origins = \[\]|cors_allowed_origins = \[\"*\"\]|" $TMP_BEACOND_DIR/config-cl-rpc$i/config/config.toml;
+    sed -i '' '108s/unsafe = "false"/unsafe = "true"/' $TMP_BEACOND_DIR/config-cl-rpc$i/config/config.toml;
   done
 fi
 
@@ -222,7 +211,7 @@ fi
 # - Initialize Reth
 # -- Validator Configurations
 for i in $(seq 0 $((NUM_VALIDATORS - 1))); do
-  docker run --rm --entrypoint /bin/bash -v $TMP_RETH_DIR/config-el-val$i/.reth:/root/.reth $DOCKER_IMAGE_RETH \
+  docker run --rm -v $TMP_RETH_DIR/config-el-val$i/.reth:/root/.reth $DOCKER_IMAGE_RETH /bin/bash \
     -c "./reth init --chain \
       /root/.reth/eth-genesis.json \
       --datadir /root/.reth;";
@@ -231,7 +220,7 @@ done
 # -- RPC Configurations
 if [ $NUM_RPC_NODES -gt 0 ]; then
   for i in $(seq 0 $((NUM_RPC_NODES - 1))); do
-    docker run --rm --entrypoint /bin/bash -v $TMP_RETH_DIR/config-el-rpc$i/.reth:/root/.reth $DOCKER_IMAGE_RETH \
+    docker run --rm -v $TMP_RETH_DIR/config-el-rpc$i/.reth:/root/.reth $DOCKER_IMAGE_RETH /bin/bash \
       -c "./reth init --chain \
         /root/.reth/eth-genesis.json \
         --datadir /root/.reth;";
@@ -259,22 +248,19 @@ fi
 # - Run Beacond
 echo "\n- Running Beacond...\n";
 for i in $(seq 0 $((NUM_VALIDATORS - 1))); do
-  docker run -d --entrypoint /bin/bash -v $TMP_BEACOND_DIR/config-cl-val$i:/root/.beacond -v $TMP_BEACOND_DIR/config-cl-val$i/logs:/root/logs --name $CL_MONIKER-val-$i --network $NETWORK_NAME-val-$i $DOCKER_IMAGE_BEACOND \
+  docker run -d -v $TMP_BEACOND_DIR/config-cl-val$i:/root/.beacond --name $CL_MONIKER-val-$i --network $NETWORK_NAME-val-$i $DOCKER_IMAGE_BEACOND /bin/bash \
     -c "CHAIN_SPEC=$CHAIN_SPEC ./beacond start";
-  sudo chown -R $USER:docker $TMP_BEACOND_DIR && sudo chmod -R g+rwxs $TMP_BEACOND_DIR;
 done
 
 if [ $NUM_RPC_NODES -gt 0 ]; then
   # Make first RPC has exposed ports
-  docker run -d -p 26657:26657 -p 3500:3500 --entrypoint /bin/bash -v $TMP_BEACOND_DIR/config-cl-rpc0:/root/.beacond -v $TMP_BEACOND_DIR/config-cl-rpc0/logs:/root/logs --name $CL_MONIKER-rpc-0 --network $NETWORK_NAME-rpc-0 $DOCKER_IMAGE_BEACOND \
+  docker run -d -p 26657:26657 -p 3500:3500 -v $TMP_BEACOND_DIR/config-cl-rpc0:/root/.beacond --name $CL_MONIKER-rpc-0 --network $NETWORK_NAME-rpc-0 $DOCKER_IMAGE_BEACOND /bin/bash \
     -c "CHAIN_SPEC=$CHAIN_SPEC ./beacond start";
-  sudo chown -R $USER:docker $TMP_BEACOND_DIR && sudo chmod -R g+rwxs $TMP_BEACOND_DIR;
 
   if [ $NUM_RPC_NODES -gt 1 ]; then
     for i in $(seq 1 $((NUM_RPC_NODES - 1))); do
-      docker run -d --entrypoint /bin/bash -v $TMP_BEACOND_DIR/config-cl-rpc$i:/root/.beacond -v $TMP_BEACOND_DIR/config-cl-rpc$i/logs:/root/logs --name $CL_MONIKER-rpc-$i --network $NETWORK_NAME-rpc-$i $DOCKER_IMAGE_BEACOND \
+      docker run -d -v $TMP_BEACOND_DIR/config-cl-rpc$i:/root/.beacond --name $CL_MONIKER-rpc-$i --network $NETWORK_NAME-rpc-$i $DOCKER_IMAGE_BEACOND /bin/bash \
         -c "CHAIN_SPEC=$CHAIN_SPEC ./beacond start";
-      sudo chown -R $USER:docker $TMP_BEACOND_DIR && sudo chmod -R g+rwxs $TMP_BEACOND_DIR;
     done
   fi
 fi
@@ -286,11 +272,10 @@ echo "\n- Running Reth...\n";
 for i in $(seq 0 $((NUM_VALIDATORS - 1))); do
   docker run \
   -d \
-  --entrypoint /bin/bash \
   -v $TMP_RETH_DIR/config-el-val$i/.reth:/root/.reth \
   -v $TMP_RETH_DIR/config-el-val$i/logs:/root/logs \
   --name $EL_MONIKER-val-$i \
-  --network $NETWORK_NAME-val-$i $DOCKER_IMAGE_RETH \
+  --network $NETWORK_NAME-val-$i $DOCKER_IMAGE_RETH /bin/bash \
     -c "./reth node \
     --authrpc.jwtsecret=/root/.reth/jwt.hex \
     --chain=/root/.reth/eth-genesis.json \
@@ -315,14 +300,12 @@ done
 if [ $NUM_RPC_NODES -gt 0 ]; then
   # Make first RPC has exposed ports
   docker run \
-  -d \
-  --entrypoint /bin/bash \
-  -v $TMP_RETH_DIR/config-el-rpc0/.reth:/root/.reth \
+  -d -v $TMP_RETH_DIR/config-el-rpc0/.reth:/root/.reth \
   -p 8545:8545 \
   -p 8546:8546 \
   -v $TMP_RETH_DIR/config-el-rpc0/logs:/root/logs \
   --name $EL_MONIKER-rpc-0 \
-    --network $NETWORK_NAME-rpc-0 $DOCKER_IMAGE_RETH \
+    --network $NETWORK_NAME-rpc-0 $DOCKER_IMAGE_RETH /bin/bash \
     -c "./reth node \
       --authrpc.jwtsecret=/root/.reth/jwt.hex \
       --chain=/root/.reth/eth-genesis.json \
@@ -344,12 +327,10 @@ if [ $NUM_RPC_NODES -gt 0 ]; then
   if [ $NUM_RPC_NODES -gt 1 ]; then
     for i in $(seq 1 $((NUM_RPC_NODES - 1))); do
       docker run \
-      -d \
-      --entrypoint /bin/bash \
-      -v $TMP_RETH_DIR/config-el-rpc$i/.reth:/root/.reth \
+      -d -v $TMP_RETH_DIR/config-el-rpc$i/.reth:/root/.reth \
       -v $TMP_RETH_DIR/config-el-rpc$i/logs:/root/logs \
       --name $EL_MONIKER-rpc-$i \
-      --network $NETWORK_NAME-rpc-$i $DOCKER_IMAGE_RETH \
+      --network $NETWORK_NAME-rpc-$i $DOCKER_IMAGE_RETH /bin/bash \
         -c "./reth node \
         --authrpc.jwtsecret=/root/.reth/jwt.hex \
         --chain=/root/.reth/eth-genesis.json \
