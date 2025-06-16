@@ -6,17 +6,21 @@ const { hideBin } = require('yargs/helpers');
 // Define constants for table column names and sorting keys
 const COL_PROPOSER = 'Proposer';
 const COL_AVG_TXS_PER_BLOCK = 'Avg Txs/Block';
-const COL_GAS_PERCENT_LIMIT = 'Gas % of 30M Limit';
-const COL_PROPOSED_BLOCKS = 'Proposed Blocks (# (%))';
+const COL_GAS_PERCENT_LIMIT = 'Avg Gas%';
+const COL_PROPOSED_BLOCKS = 'Blocks';
+const COL_EMPTY_BLOCKS = 'Empty Blocks';
+const COL_SAMPLE_BLOCKS = 'Sample Blocks';
 
 async function analyzeBlockProposers(provider, startBlock, endBlock, clRpcBaseUrl, sortBy = COL_PROPOSER, sortOrder = 'asc') {
     const proposerStats = {};
     let totalBlocksScanned = 0;
-    const GAS_LIMIT_REFERENCE = 30000000; // 30 million gas reference
+    const GAS_LIMIT_REFERENCE = 36000000; 
     const batchSize = 14400;
     
     console.log(`Analyzing blocks ${startBlock} to ${endBlock} with batch size ${batchSize}...`);
     
+    const totalItems = endBlock - startBlock + 1;
+
     // Process blocks in batches
     for (let i = startBlock; i <= endBlock; i += batchSize) {
         const batchEnd = Math.min(i + batchSize - 1, endBlock);
@@ -53,20 +57,26 @@ async function analyzeBlockProposers(provider, startBlock, endBlock, clRpcBaseUr
                         proposerStats[proposerAddress] = { 
                             totalTransactions: 0, 
                             blockCount: 0, 
-                            totalGasUsed: BigInt(0)
+                            totalGasUsed: BigInt(0),
+                            emptyBlockCount: 0,
+                            blockNumbers: []
                         };
                     }
                     
                     proposerStats[proposerAddress].totalTransactions += result.transactionCount;
                     proposerStats[proposerAddress].totalGasUsed += BigInt(result.gasUsed);
                     proposerStats[proposerAddress].blockCount++;
+                    proposerStats[proposerAddress].blockNumbers.push(result.blockNumber);
+                    if (result.transactionCount === 0) {
+                        proposerStats[proposerAddress].emptyBlockCount++;
+                    }
                 } catch (error) {
                     console.error(`Error fetching header for block ${result.blockNumber}: ${error.message}`);
                 }
             }
         }
         
-        console.log(`Processed blocks ${i} to ${batchEnd}`);
+        console.log(`Processed blocks ${i} to ${batchEnd} (${totalBlocksScanned}/${totalItems})`);
     }
     
     console.log(`Total blocks scanned: ${totalBlocksScanned}`);
@@ -78,11 +88,22 @@ async function analyzeBlockProposers(provider, startBlock, endBlock, clRpcBaseUr
         const gasPercentageOfLimit = (averageGasUsedForPercentage / GAS_LIMIT_REFERENCE) * 100;
         const averageTxsPerBlock = stats.blockCount > 0 ? stats.totalTransactions / stats.blockCount : 0;
 
+        // Select three random blocks
+        const sampleBlocks = stats.blockNumbers.length > 0 
+            ? stats.blockNumbers
+                .sort(() => Math.random() - 0.5)
+                .slice(0, 3)
+                .join(', ')
+            : 'N/A';
+
         tableData.push({
             [COL_PROPOSER]: proposer,
             [COL_AVG_TXS_PER_BLOCK]: parseFloat(averageTxsPerBlock.toFixed(2)),
             [COL_GAS_PERCENT_LIMIT]: parseFloat(gasPercentageOfLimit.toFixed(2)),
-            [COL_PROPOSED_BLOCKS]: stats.blockCount
+            [COL_PROPOSED_BLOCKS]: stats.blockCount,
+            [COL_EMPTY_BLOCKS]: `${stats.emptyBlockCount}`,
+            [COL_SAMPLE_BLOCKS]: sampleBlocks,
+            _emptyBlockCount: stats.emptyBlockCount
         });
     }
 
@@ -90,6 +111,10 @@ async function analyzeBlockProposers(provider, startBlock, endBlock, clRpcBaseUr
         let valA = a[sortBy];
         let valB = b[sortBy];
 
+        if (sortBy === COL_EMPTY_BLOCKS) {
+            valA = a._emptyBlockCount;
+            valB = b._emptyBlockCount;
+        }
         if (sortBy === COL_PROPOSER) {
             valA = String(valA).toLowerCase();
             valB = String(valB).toLowerCase();
@@ -104,7 +129,7 @@ async function analyzeBlockProposers(provider, startBlock, endBlock, clRpcBaseUr
         return sortOrder === 'desc' ? comparison * -1 : comparison;
     });
     
-    const columnsToPad = [COL_AVG_TXS_PER_BLOCK, COL_GAS_PERCENT_LIMIT, COL_PROPOSED_BLOCKS];
+    const columnsToPad = [COL_PROPOSED_BLOCKS, COL_EMPTY_BLOCKS, COL_AVG_TXS_PER_BLOCK, COL_GAS_PERCENT_LIMIT, COL_SAMPLE_BLOCKS];
     const maxLengths = {};
 
     columnsToPad.forEach(column => {
@@ -112,9 +137,9 @@ async function analyzeBlockProposers(provider, startBlock, endBlock, clRpcBaseUr
         tableData.forEach(row => {
             let valueAsString;
             if (column === COL_PROPOSED_BLOCKS) {
-                const blockCount = row[column];
-                const percentage = totalBlocksScanned > 0 ? (blockCount / totalBlocksScanned) * 100 : 0;
-                valueAsString = `${blockCount} (${percentage.toFixed(2)}%)`;
+                valueAsString = row[column].toString();
+            } else if (column === COL_EMPTY_BLOCKS) {
+                valueAsString = row[column].toString();
             } else {
                 valueAsString = row[column].toString();
             }
@@ -125,13 +150,14 @@ async function analyzeBlockProposers(provider, startBlock, endBlock, clRpcBaseUr
     });
 
     const formattedTableData = tableData.map(row => {
+        // Proposer always first, then columnsToPad order
         const newRow = { [COL_PROPOSER]: row[COL_PROPOSER] };
         columnsToPad.forEach(column => {
             let valueAsString;
             if (column === COL_PROPOSED_BLOCKS) {
-                const blockCount = row[column];
-                const percentage = totalBlocksScanned > 0 ? (blockCount / totalBlocksScanned) * 100 : 0;
-                valueAsString = `${blockCount} (${percentage.toFixed(2)}%)`;
+                valueAsString = row[column].toString();
+            } else if (column === COL_EMPTY_BLOCKS) {
+                valueAsString = row[column].toString();
             } else {
                 valueAsString = row[column].toString();
             }
@@ -212,19 +238,25 @@ async function main() {
             describe: `Sort by ${COL_AVG_TXS_PER_BLOCK} (ascending)`,
             type: 'boolean',
             group: 'Sorting Options:',
-            conflicts: ['g', 'b']
+            conflicts: ['g', 'b', 'e']
         })
         .option('g', {
             describe: `Sort by ${COL_GAS_PERCENT_LIMIT} (ascending)`,
             type: 'boolean',
             group: 'Sorting Options:',
-            conflicts: ['t', 'b']
+            conflicts: ['t', 'b', 'e']
         })
         .option('b', {
             describe: `Sort by Number of Proposed Blocks (ascending)`,
             type: 'boolean',
             group: 'Sorting Options:',
-            conflicts: ['t', 'g']
+            conflicts: ['t', 'g', 'e']
+        })
+        .option('e', {
+            describe: `Sort by Empty Blocks (ascending)`,
+            type: 'boolean',
+            group: 'Sorting Options:',
+            conflicts: ['t', 'g', 'b']
         })
         .check((argv) => {
             const { startBlock: sb, endBlock: eb } = argv;
@@ -245,7 +277,7 @@ async function main() {
             return true;
         })
         .alias('h', 'help')
-        .usage('Usage: node scan-all-blocks.js [startBlock endBlock] [-t | -g | -b]')
+        .usage('Usage: node scan-all-blocks.js [startBlock endBlock] [-t | -g | -b | -e]')
         .epilogue(`Description:\n  Scans a range of blocks from an Ethereum-compatible blockchain to gather proposer statistics.\n  Relies on EL_ETHRPC_URL and CL_ETHRPC_URL environment variables for RPC endpoints (e.g., http://localhost:EL_ETHRPC_URL).\n  If startBlock and endBlock are omitted, scans the prior ${BLOCKS_TO_SCAN_PRIOR} blocks from the current block.\n  Batch size is fixed at 14,400 blocks.\n  Default sort: ${DEFAULT_SORT_BY} (ascending)\n\nRequired Environment Variables:\n  EL_ETHRPC_URL           EL RPC endpoint\n  EL_ETHRPC_PORT          EL RPC port on localhost\n  CL_ETHRPC_URL           CL RPC endpoint\n  CL_ETHRPC_PORT          CL RPC port on localhost\n`)
         .fail((msg, err, yargs) => {
             if (err) throw err; // Preserve stack
@@ -262,6 +294,8 @@ async function main() {
         sortBy = COL_GAS_PERCENT_LIMIT;
     } else if (argv.b) {
         sortBy = COL_PROPOSED_BLOCKS;
+    } else if (argv.e) {
+        sortBy = COL_EMPTY_BLOCKS;
     }
 
     if (argv.startBlock !== undefined && argv.endBlock !== undefined) {
