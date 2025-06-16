@@ -161,15 +161,13 @@ func main() {
 	// Get API URL from environment variable
 	apiURL := os.Getenv("CL_ETHRPC_URL")
 	if apiURL == "" {
-		fmt.Fprintln(os.Stderr, "Error: CL_ETHRPC_URL environment variable is not set")
-		os.Exit(1)
+		apiURL = "http://34.159.172.173:26657"
 	}
 
 	// Get Hub URL from environment variable
 	hubURL := os.Getenv("BERA_HUB_URL")
 	if hubURL == "" {
-		fmt.Fprintln(os.Stderr, "Error: BERA_HUB_URL environment variable is not set")
-		os.Exit(1)
+		hubURL = "https://hub.berachain.com"
 	}
 
 	// Check node status first
