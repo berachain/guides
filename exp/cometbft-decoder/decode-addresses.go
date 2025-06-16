@@ -92,14 +92,18 @@ func fetchValidatorTitle(compressedKey string, hubURL string) (string, error) {
 		return "", fmt.Errorf("title tag not found")
 	}
 
-	if title == "Validators" {
-		return "", nil
+	// Split by | and take the first part
+	parts := strings.Split(title, "|")
+	if len(parts) > 0 {
+		name := strings.TrimSpace(parts[0])
+		// If the name is just "Validators" or empty, return empty string
+		if name == "Validators" || name == "" {
+			return "", nil
+		}
+		return name, nil
 	}
 
-	if idx := strings.Index(title, "|"); idx != -1 {
-		return strings.TrimSpace(title[:idx]), nil
-	}
-	return title, nil
+	return "", nil
 }
 
 func fetchValidators(url string) (*Response, error) {
