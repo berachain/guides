@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"database/sql"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -12,6 +13,7 @@ import (
 	"time"
 
 	"github.com/PuerkitoBio/goquery"
+	_ "github.com/mattn/go-sqlite3"
 	blst "github.com/supranational/blst/bindings/go"
 )
 
@@ -174,6 +176,28 @@ func main() {
 		hubURL = "https://hub.berachain.com"
 	}
 
+	// Initialize SQLite database
+	db, err := sql.Open("sqlite3", "validators.db")
+	if err != nil {
+		fmt.Printf("Error opening database: %v\n", err)
+		return
+	}
+	defer db.Close()
+
+	// Create validators table if it doesn't exist
+	_, err = db.Exec(`
+		CREATE TABLE IF NOT EXISTS validators (
+			address TEXT PRIMARY KEY,
+			compressed_pubkey TEXT,
+			name TEXT,
+			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+		)
+	`)
+	if err != nil {
+		fmt.Printf("Error creating table: %v\n", err)
+		return
+	}
+
 	// Check node status first
 	if err := checkNodeStatus(apiURL); err != nil {
 		fmt.Printf("Error checking node status: %v\n", err)
@@ -211,6 +235,18 @@ func main() {
 		// Escape any commas in the title
 		title = strings.ReplaceAll(title, ",", ";")
 
+		// Print to console
 		fmt.Printf("%s,%s,%s\n", title, validator.Address, compressedKey)
+
+		// Insert into database
+		_, err = db.Exec(`
+			INSERT OR REPLACE INTO validators (address, compressed_pubkey, name)
+			VALUES (?, ?, ?)
+		`, validator.Address, compressedKey, title)
+		if err != nil {
+			fmt.Printf("Error inserting validator %s: %v\n", validator.Address, err)
+		}
 	}
+
+	fmt.Println("\nData has been saved to validators.db")
 }
