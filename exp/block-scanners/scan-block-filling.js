@@ -2,6 +2,8 @@ const { ethers } = require('ethers');
 const axios = require('axios');
 const yargs = require('yargs/yargs');
 const { hideBin } = require('yargs/helpers');
+const sqlite3 = require('sqlite3').verbose();
+const path = require('path');
 
 // Define constants for table column names and sorting keys
 const COL_PROPOSER = 'Proposer';
@@ -10,6 +12,30 @@ const COL_GAS_PERCENT_LIMIT = 'Avg Gas%';
 const COL_PROPOSED_BLOCKS = 'Blocks';
 const COL_EMPTY_BLOCKS = 'Empty Blocks';
 const COL_SAMPLE_BLOCKS = 'Sample Blocks';
+
+async function getProposerTitle(proposerAddress) {
+    return new Promise((resolve, reject) => {
+        const dbPath = path.join(__dirname, 'validators.db');
+        const db = new sqlite3.Database(dbPath, sqlite3.OPEN_READONLY, (err) => {
+            if (err) {
+                // If database doesn't exist or can't be opened, just return the address
+                resolve(proposerAddress);
+                return;
+            }
+
+            db.get('SELECT name FROM validators WHERE address = ?', [proposerAddress], (err, row) => {
+                db.close();
+                if (err) {
+                    resolve(proposerAddress);
+                } else if (row && row.name) {
+                    resolve(row.name);
+                } else {
+                    resolve(proposerAddress);
+                }
+            });
+        });
+    });
+}
 
 async function analyzeBlockProposers(provider, startBlock, endBlock, clRpcBaseUrl, sortBy = COL_PROPOSER, sortOrder = 'asc') {
     const proposerStats = {};
@@ -52,9 +78,10 @@ async function analyzeBlockProposers(provider, startBlock, endBlock, clRpcBaseUr
                 try {
                     const response = await axios.get(url);
                     const proposerAddress = response.data.result.header.proposer_address;
+                    const proposerTitle = await getProposerTitle(proposerAddress);
                     
-                    if (!proposerStats[proposerAddress]) {
-                        proposerStats[proposerAddress] = { 
+                    if (!proposerStats[proposerTitle]) {
+                        proposerStats[proposerTitle] = { 
                             totalTransactions: 0, 
                             blockCount: 0, 
                             totalGasUsed: BigInt(0),
@@ -63,12 +90,12 @@ async function analyzeBlockProposers(provider, startBlock, endBlock, clRpcBaseUr
                         };
                     }
                     
-                    proposerStats[proposerAddress].totalTransactions += result.transactionCount;
-                    proposerStats[proposerAddress].totalGasUsed += BigInt(result.gasUsed);
-                    proposerStats[proposerAddress].blockCount++;
-                    proposerStats[proposerAddress].blockNumbers.push(result.blockNumber);
+                    proposerStats[proposerTitle].totalTransactions += result.transactionCount;
+                    proposerStats[proposerTitle].totalGasUsed += BigInt(result.gasUsed);
+                    proposerStats[proposerTitle].blockCount++;
+                    proposerStats[proposerTitle].blockNumbers.push(result.blockNumber);
                     if (result.transactionCount === 0) {
-                        proposerStats[proposerAddress].emptyBlockCount++;
+                        proposerStats[proposerTitle].emptyBlockCount++;
                     }
                 } catch (error) {
                     console.error(`Error fetching header for block ${result.blockNumber}: ${error.message}`);
@@ -177,8 +204,8 @@ async function analyzeBlockProposers(provider, startBlock, endBlock, clRpcBaseUr
 // Example usage
 async function main() {
     const BLOCKS_TO_SCAN_PRIOR = 43200;
-    const DEFAULT_SORT_BY = COL_AVG_TXS_PER_BLOCK;
-    const FIXED_SORT_ORDER = 'asc';
+    const DEFAULT_SORT_BY = COL_EMPTY_BLOCKS;
+    const FIXED_SORT_ORDER = 'desc';
 
     const elRpcUrlEnv = process.env.EL_ETHRPC_URL;
     const elRpcPortEnv = process.env.EL_ETHRPC_PORT;
