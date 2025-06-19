@@ -5,7 +5,7 @@ const { hideBin } = require('yargs/helpers');
 
 // Configuration
 const BATCH_SIZE = 100; // Number of blocks to process in parallel
-const BLOCKS_TO_SCAN_PRIOR = 10000; // Default number of blocks to scan if no range provided
+const BLOCKS_TO_SCAN_PRIOR = 1000; // Default number of blocks to scan if no range provided
 
 // Verify required environment variables
 const requiredEnvVars = ['EL_ETHRPC_URL'];
@@ -89,7 +89,7 @@ async function countStateChanges(traceResult, transactions) {
 }
 
 async function scanStateChanges(provider, elRpcUrl, selector, startBlock, endBlock) {
-    const stateChangeCounts = new Map(); // Map to store histogram data
+    const stateChangeCounts = new Map(); // Map to store histogram data with sample transaction
     let totalTransactionsFound = 0;
     let totalTransactionsTraced = 0;
     let totalTransactionsFailed = 0;
@@ -178,8 +178,19 @@ async function scanStateChanges(provider, elRpcUrl, selector, startBlock, endBlo
                 }
                 
                 totalTransactionsTraced += matchingTransactions.length;
-                perTransactionStateChanges.forEach(count => {
-                    stateChangeCounts.set(count, (stateChangeCounts.get(count) || 0) + 1);
+                perTransactionStateChanges.forEach((count, index) => {
+                    if (stateChangeCounts.has(count)) {
+                        const existing = stateChangeCounts.get(count);
+                        stateChangeCounts.set(count, {
+                            count: existing.count + 1,
+                            sampleTx: matchingTransactions[index].hash // Use the most recent transaction
+                        });
+                    } else {
+                        stateChangeCounts.set(count, {
+                            count: 1,
+                            sampleTx: matchingTransactions[index].hash
+                        });
+                    }
                 });
             }
 
@@ -193,12 +204,12 @@ async function scanStateChanges(provider, elRpcUrl, selector, startBlock, endBlo
     console.log(`\n============================================================`);
     console.log(`STATE CHANGES HISTOGRAM`);
     console.log(`============================================================`);
-    console.log(`State Changes | Count`);
-    console.log(`-------------|------`);
+    console.log(`State Changes | Count | Sample Transaction`);
+    console.log(`-------------|-------|-------------------`);
     
     const sortedCounts = Array.from(stateChangeCounts.entries()).sort((a, b) => a[0] - b[0]);
-    for (const [count, frequency] of sortedCounts) {
-        console.log(`${count.toString().padStart(12)} | ${frequency}`);
+    for (const [count, data] of sortedCounts) {
+        console.log(`${count.toString().padStart(12)} | ${data.count.toString().padStart(5)} | ${data.sampleTx}`);
     }
 
     console.log(`\n============================================================`);
