@@ -5,7 +5,7 @@ const { hideBin } = require('yargs/helpers');
 
 // Configuration
 const BATCH_SIZE = 100; // Number of blocks to process in parallel
-const BLOCKS_TO_SCAN_PRIOR = 1000; // Default number of blocks to scan if no range provided
+const BLOCKS_TO_SCAN_PRIOR = 43200; // Default number of blocks to scan if no range provided
 
 // Verify required environment variables
 const requiredEnvVars = ['EL_ETHRPC_URL'];

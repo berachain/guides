@@ -12,6 +12,7 @@ const COL_GAS_PERCENT_LIMIT = 'Avg Gas%';
 const COL_PROPOSED_BLOCKS = 'Blocks';
 const COL_EMPTY_BLOCKS = 'Empty Blocks';
 const COL_SAMPLE_BLOCKS = 'Sample Blocks';
+const COL_CLIENT = 'Client';
 
 async function getProposerTitle(proposerAddress) {
     return new Promise((resolve, reject) => {
@@ -35,6 +36,149 @@ async function getProposerTitle(proposerAddress) {
             });
         });
     });
+}
+
+async function decodeExtraDataAsAscii(extraData) {
+    if (!extraData || extraData === '0x') {
+        return 'Reth?';
+    }
+    
+    try {
+        // Remove '0x' prefix if present
+        const hexString = extraData.startsWith('0x') ? extraData.slice(2) : extraData;
+        
+        // Convert hex to bytes
+        const bytes = [];
+        for (let i = 0; i < hexString.length; i += 2) {
+            bytes.push(parseInt(hexString.substr(i, 2), 16));
+        }
+        
+        // Try to decode as RLP first
+        const rlpDecoded = decodeRLP(bytes);
+        if (rlpDecoded && Array.isArray(rlpDecoded)) {
+            // Check if we have exactly 4 fields
+            if (rlpDecoded.length === 4) {
+                const firstField = rlpDecoded[0];
+                const secondField = rlpDecoded[1];
+                
+                // Check if first field has length 3 or 4 (likely a version number)
+                if (firstField && (firstField.length === 3 || firstField.length === 4)) {
+                    // First field is binary values with version number
+                    // Second field is client name as ASCII
+                    if (secondField && typeof secondField === 'string' && secondField.trim().length > 0) {
+                        const clientName = secondField.replace(/[\x00-\x1F\x7F]/g, '').trim();
+                        if (clientName.length > 0) {
+                            // Convert the raw bytes of firstField to version string
+                            const versionBytes = Array.from(firstField).map(char => char.charCodeAt(0));
+                            const versionString = versionBytes.join('.');
+                            return `${clientName} v${versionString}`;
+                        }
+                    }
+                }
+            }
+            
+            // Fallback to original logic for other cases
+            const cleanItems = rlpDecoded
+                .map(item => item.replace(/[\x00-\x1F\x7F]/g, '').trim())
+                .filter(item => item.length > 0);
+            
+            if (cleanItems.length >= 3) {
+                const client = cleanItems[0] || 'unknown';
+                
+                // Only return if we have meaningful data
+                if (client && client !== 'unknown') {
+                    return `${client}`;
+                }
+            }
+        }
+        
+        // Fallback: try direct ASCII conversion
+        const asciiString = String.fromCharCode(...bytes);
+        const isValidAscii = /^[\x20-\x7E]*$/.test(asciiString);
+        
+        if (isValidAscii && asciiString.trim().length > 0) {
+            return asciiString.trim();
+        } else {
+            return `Hex: ${extraData}`;
+        }
+    } catch (error) {
+        return `Error: ${error.message}`;
+    }
+}
+
+function decodeRLP(bytes) {
+    if (bytes.length === 0) return null;
+    
+    const firstByte = bytes[0];
+    
+    // Single byte
+    if (firstByte < 0x80) {
+        return String.fromCharCode(firstByte);
+    }
+    
+    // String with length < 56
+    if (firstByte < 0xb8) {
+        const length = firstByte - 0x80;
+        if (length === 0) return '';
+        const data = bytes.slice(1, 1 + length);
+        return data.map(b => String.fromCharCode(b)).join('');
+    }
+    
+    // String with length >= 56
+    if (firstByte < 0xc0) {
+        const lengthBytes = firstByte - 0xb7;
+        const length = parseInt(bytes.slice(1, 1 + lengthBytes).map(b => b.toString(16).padStart(2, '0')).join(''), 16);
+        const data = bytes.slice(1 + lengthBytes, 1 + lengthBytes + length);
+        return data.map(b => String.fromCharCode(b)).join('');
+    }
+    
+    // List with length < 56
+    if (firstByte < 0xf8) {
+        const length = firstByte - 0xc0;
+        const data = bytes.slice(1, 1 + length);
+        return decodeRLPList(data);
+    }
+    
+    // List with length >= 56
+    if (firstByte < 0x100) {
+        const lengthBytes = firstByte - 0xf7;
+        const length = parseInt(bytes.slice(1, 1 + lengthBytes).map(b => b.toString(16).padStart(2, '0')).join(''), 16);
+        const data = bytes.slice(1 + lengthBytes, 1 + lengthBytes + length);
+        return decodeRLPList(data);
+    }
+    
+    return null;
+}
+
+function decodeRLPList(bytes) {
+    const result = [];
+    let offset = 0;
+    
+    while (offset < bytes.length) {
+        const item = decodeRLP(bytes.slice(offset));
+        if (item === null) break;
+        
+        // Find the length of this item
+        const firstByte = bytes[offset];
+        let itemLength = 1;
+        
+        if (firstByte >= 0x80 && firstByte < 0xb8) {
+            itemLength = 1 + (firstByte - 0x80);
+        } else if (firstByte >= 0xb8 && firstByte < 0xc0) {
+            const lengthBytes = firstByte - 0xb7;
+            itemLength = 1 + lengthBytes + parseInt(bytes.slice(offset + 1, offset + 1 + lengthBytes).map(b => b.toString(16).padStart(2, '0')).join(''), 16);
+        } else if (firstByte >= 0xc0 && firstByte < 0xf8) {
+            itemLength = 1 + (firstByte - 0xc0);
+        } else if (firstByte >= 0xf8) {
+            const lengthBytes = firstByte - 0xf7;
+            itemLength = 1 + lengthBytes + parseInt(bytes.slice(offset + 1, offset + 1 + lengthBytes).map(b => b.toString(16).padStart(2, '0')).join(''), 16);
+        }
+        
+        result.push(item);
+        offset += itemLength;
+    }
+    
+    return result;
 }
 
 async function analyzeBlockProposers(provider, startBlock, endBlock, clRpcBaseUrl, sortBy = COL_PROPOSER, sortOrder = 'asc') {
@@ -123,7 +267,22 @@ async function analyzeBlockProposers(provider, startBlock, endBlock, clRpcBaseUr
                 .join(', ')
             : 'N/A';
 
+        // Get extraData from the first sample block
+        let extraDataDecoded = 'N/A';
+        if (stats.blockNumbers.length > 0) {
+            const firstSampleBlock = stats.blockNumbers[0];
+            try {
+                const block = await provider.getBlock(firstSampleBlock);
+                if (block && block.extraData) {
+                    extraDataDecoded = await decodeExtraDataAsAscii(block.extraData);
+                }
+            } catch (error) {
+                extraDataDecoded = `Error: ${error.message}`;
+            }
+        }
+
         tableData.push({
+            [COL_CLIENT]: extraDataDecoded,
             [COL_PROPOSER]: proposer,
             [COL_AVG_TXS_PER_BLOCK]: parseFloat(averageTxsPerBlock.toFixed(2)),
             [COL_GAS_PERCENT_LIMIT]: parseFloat(gasPercentageOfLimit.toFixed(2)),
@@ -177,8 +336,11 @@ async function analyzeBlockProposers(provider, startBlock, endBlock, clRpcBaseUr
     });
 
     const formattedTableData = tableData.map(row => {
-        // Proposer always first, then columnsToPad order
-        const newRow = { [COL_PROPOSER]: row[COL_PROPOSER] };
+        // Client first, then Proposer, then other columns
+        const newRow = { 
+            [COL_CLIENT]: row[COL_CLIENT],
+            [COL_PROPOSER]: row[COL_PROPOSER]
+        };
         columnsToPad.forEach(column => {
             let valueAsString;
             if (column === COL_PROPOSED_BLOCKS) {
@@ -203,8 +365,8 @@ async function analyzeBlockProposers(provider, startBlock, endBlock, clRpcBaseUr
 
 // Example usage
 async function main() {
-    const BLOCKS_TO_SCAN_PRIOR = 43200;
-    const DEFAULT_SORT_BY = COL_EMPTY_BLOCKS;
+    const BLOCKS_TO_SCAN_PRIOR = 30;
+    const DEFAULT_SORT_BY = COL_GAS_PERCENT_LIMIT;
     const FIXED_SORT_ORDER = 'desc';
 
     const elRpcUrlEnv = process.env.EL_ETHRPC_URL;
