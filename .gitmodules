@@ -25,3 +25,6 @@
 [submodule "apps/batch-transactions/lib/solmate"]
 	path = apps/batch-transactions/lib/solmate
 	url = https://github.com/transmissions11/solmate
+[submodule "exp/gas-burner/lib/forge-std"]
+	path = exp/gas-burner/lib/forge-std
+	url = https://github.com/foundry-rs/forge-std
