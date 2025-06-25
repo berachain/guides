@@ -154,6 +154,76 @@ importers:
         specifier: ^8.0.0
         version: 8.5.0(jiti@1.21.7)(postcss@8.5.3)(tsx@4.19.4)(typescript@5.8.3)(yaml@2.8.0)
 
+  apps/eip-5792:
+    dependencies:
+      '@rainbow-me/rainbowkit':
+        specifier: ^2.0.5
+        version: 2.2.5(@tanstack/react-query@5.76.1(react@18.2.0))(@types/react@18.2.79)(babel-plugin-macros@3.1.0)(react-dom@18.3.1(react@18.2.0))(react@18.2.0)(viem@2.30.6(bufferutil@4.0.9)(typescript@5.8.3)(utf-8-validate@5.0.10)(zod@3.24.4))(wagmi@2.15.4(@react-native-async-storage/async-storage@1.24.0(react-native@0.73.4(@babel/core@7.27.1)(@babel/preset-env@7.27.2(@babel/core@7.27.1))(bufferutil@4.0.9)(encoding@0.1.13)(react@18.2.0)(utf-8-validate@5.0.10)))(@tanstack/query-core@5.76.0)(@tanstack/react-query@5.76.1(react@18.2.0))(@types/react@18.2.79)(bufferutil@4.0.9)(encoding@0.1.13)(immer@10.0.2)(react@18.2.0)(typescript@5.8.3)(utf-8-validate@5.0.10)(viem@2.30.6(bufferutil@4.0.9)(typescript@5.8.3)(utf-8-validate@5.0.10)(zod@3.24.4))(zod@3.24.4))
+      '@wagmi/connectors':
+        specifier: ^5.8.5
+        version: 5.8.5(@react-native-async-storage/async-storage@1.24.0(react-native@0.73.4(@babel/core@7.27.1)(@babel/preset-env@7.27.2(@babel/core@7.27.1))(bufferutil@4.0.9)(encoding@0.1.13)(react@18.2.0)(utf-8-validate@5.0.10)))(@types/react@18.2.79)(@wagmi/core@2.17.2(@tanstack/query-core@5.76.0)(@types/react@18.2.79)(immer@10.0.2)(react@18.2.0)(typescript@5.8.3)(use-sync-external-store@1.4.0(react@18.2.0))(viem@2.30.6(bufferutil@4.0.9)(typescript@5.8.3)(utf-8-validate@5.0.10)(zod@3.24.4)))(bufferutil@4.0.9)(encoding@0.1.13)(react@18.2.0)(typescript@5.8.3)(utf-8-validate@5.0.10)(viem@2.30.6(bufferutil@4.0.9)(typescript@5.8.3)(utf-8-validate@5.0.10)(zod@3.24.4))(zod@3.24.4)
+      ethers:
+        specifier: ^6.12.0
+        version: 6.14.1(bufferutil@4.0.9)(utf-8-validate@5.0.10)
+      react:
+        specifier: ^18.2.0
+        version: 18.2.0
+      react-dom:
+        specifier: ^18.2.0
+        version: 18.3.1(react@18.2.0)
+      viem:
+        specifier: ^2.5.22
+        version: 2.30.6(bufferutil@4.0.9)(typescript@5.8.3)(utf-8-validate@5.0.10)(zod@3.24.4)
+      wagmi:
+        specifier: ^2.5.22
+        version: 2.15.4(@react-native-async-storage/async-storage@1.24.0(react-native@0.73.4(@babel/core@7.27.1)(@babel/preset-env@7.27.2(@babel/core@7.27.1))(bufferutil@4.0.9)(encoding@0.1.13)(react@18.2.0)(utf-8-validate@5.0.10)))(@tanstack/query-core@5.76.0)(@tanstack/react-query@5.76.1(react@18.2.0))(@types/react@18.2.79)(bufferutil@4.0.9)(encoding@0.1.13)(immer@10.0.2)(react@18.2.0)(typescript@5.8.3)(utf-8-validate@5.0.10)(viem@2.30.6(bufferutil@4.0.9)(typescript@5.8.3)(utf-8-validate@5.0.10)(zod@3.24.4))(zod@3.24.4)
+    devDependencies:
+      '@berachain/eslint-config':
+        specifier: workspace:*
+        version: link:../../packages/eslint-config
+      '@berachain/typescript-config':
+        specifier: workspace:*
+        version: link:../../packages/typescript-config
+      '@types/jest':
+        specifier: ^29.5.0
+        version: 29.5.14
+      '@types/node':
+        specifier: ^20.0.0
+        version: 20.8.8
+      '@types/react':
+        specifier: ^18.2.66
+        version: 18.2.79
+      '@types/react-dom':
+        specifier: ^18.2.22
+        version: 18.3.7(@types/react@18.2.79)
+      '@vitejs/plugin-react':
+        specifier: ^4.2.1
+        version: 4.4.1(vite@5.4.19(@types/node@20.8.8)(lightningcss@1.30.1)(terser@5.39.2))
+      eslint:
+        specifier: ^8.57.0
+        version: 8.57.1
+      eslint-plugin-react-hooks:
+        specifier: ^4.6.0
+        version: 4.6.2(eslint@8.57.1)
+      eslint-plugin-react-refresh:
+        specifier: ^0.4.6
+        version: 0.4.20(eslint@8.57.1)
+      jest:
+        specifier: ^29.5.0
+        version: 29.7.0(@types/node@20.8.8)(babel-plugin-macros@3.1.0)(ts-node@10.9.1(@types/node@20.8.8)(typescript@5.8.3))
+      prettier:
+        specifier: ^3.0.0
+        version: 3.5.3
+      tsup:
+        specifier: ^8.0.0
+        version: 8.5.0(jiti@1.21.7)(postcss@8.5.3)(tsx@4.19.4)(typescript@5.8.3)(yaml@2.8.0)
+      typescript:
+        specifier: ^5.2.2
+        version: 5.8.3
+      vite:
+        specifier: ^5.4.19
+        version: 5.4.19(@types/node@20.8.8)(lightningcss@1.30.1)(terser@5.39.2)
+
   apps/envio-indexer-erc20:
     dependencies:
       chai:
@@ -559,76 +629,6 @@ importers:
       typescript:
         specifier: ^5.0.0
         version: 5.8.3
-
-  apps/metamask-7702:
-    dependencies:
-      '@rainbow-me/rainbowkit':
-        specifier: ^2.0.5
-        version: 2.2.5(@tanstack/react-query@5.76.1(react@18.2.0))(@types/react@18.2.79)(babel-plugin-macros@3.1.0)(react-dom@18.3.1(react@18.2.0))(react@18.2.0)(viem@2.30.6(bufferutil@4.0.9)(typescript@5.8.3)(utf-8-validate@5.0.10)(zod@3.24.4))(wagmi@2.15.4(@react-native-async-storage/async-storage@1.24.0(react-native@0.73.4(@babel/core@7.27.1)(@babel/preset-env@7.27.2(@babel/core@7.27.1))(bufferutil@4.0.9)(encoding@0.1.13)(react@18.2.0)(utf-8-validate@5.0.10)))(@tanstack/query-core@5.76.0)(@tanstack/react-query@5.76.1(react@18.2.0))(@types/react@18.2.79)(bufferutil@4.0.9)(encoding@0.1.13)(immer@10.0.2)(react@18.2.0)(typescript@5.8.3)(utf-8-validate@5.0.10)(viem@2.30.6(bufferutil@4.0.9)(typescript@5.8.3)(utf-8-validate@5.0.10)(zod@3.24.4))(zod@3.24.4))
-      '@wagmi/connectors':
-        specifier: ^5.8.5
-        version: 5.8.5(@react-native-async-storage/async-storage@1.24.0(react-native@0.73.4(@babel/core@7.27.1)(@babel/preset-env@7.27.2(@babel/core@7.27.1))(bufferutil@4.0.9)(encoding@0.1.13)(react@18.2.0)(utf-8-validate@5.0.10)))(@types/react@18.2.79)(@wagmi/core@2.17.2(@tanstack/query-core@5.76.0)(@types/react@18.2.79)(immer@10.0.2)(react@18.2.0)(typescript@5.8.3)(use-sync-external-store@1.4.0(react@18.2.0))(viem@2.30.6(bufferutil@4.0.9)(typescript@5.8.3)(utf-8-validate@5.0.10)(zod@3.24.4)))(bufferutil@4.0.9)(encoding@0.1.13)(react@18.2.0)(typescript@5.8.3)(utf-8-validate@5.0.10)(viem@2.30.6(bufferutil@4.0.9)(typescript@5.8.3)(utf-8-validate@5.0.10)(zod@3.24.4))(zod@3.24.4)
-      ethers:
-        specifier: ^6.12.0
-        version: 6.14.1(bufferutil@4.0.9)(utf-8-validate@5.0.10)
-      react:
-        specifier: ^18.2.0
-        version: 18.2.0
-      react-dom:
-        specifier: ^18.2.0
-        version: 18.3.1(react@18.2.0)
-      viem:
-        specifier: ^2.5.22
-        version: 2.30.6(bufferutil@4.0.9)(typescript@5.8.3)(utf-8-validate@5.0.10)(zod@3.24.4)
-      wagmi:
-        specifier: ^2.5.22
-        version: 2.15.4(@react-native-async-storage/async-storage@1.24.0(react-native@0.73.4(@babel/core@7.27.1)(@babel/preset-env@7.27.2(@babel/core@7.27.1))(bufferutil@4.0.9)(encoding@0.1.13)(react@18.2.0)(utf-8-validate@5.0.10)))(@tanstack/query-core@5.76.0)(@tanstack/react-query@5.76.1(react@18.2.0))(@types/react@18.2.79)(bufferutil@4.0.9)(encoding@0.1.13)(immer@10.0.2)(react@18.2.0)(typescript@5.8.3)(utf-8-validate@5.0.10)(viem@2.30.6(bufferutil@4.0.9)(typescript@5.8.3)(utf-8-validate@5.0.10)(zod@3.24.4))(zod@3.24.4)
-    devDependencies:
-      '@berachain/eslint-config':
-        specifier: workspace:*
-        version: link:../../packages/eslint-config
-      '@berachain/typescript-config':
-        specifier: workspace:*
-        version: link:../../packages/typescript-config
-      '@types/jest':
-        specifier: ^29.5.0
-        version: 29.5.14
-      '@types/node':
-        specifier: ^20.0.0
-        version: 20.8.8
-      '@types/react':
-        specifier: ^18.2.66
-        version: 18.2.79
-      '@types/react-dom':
-        specifier: ^18.2.22
-        version: 18.3.7(@types/react@18.2.79)
-      '@vitejs/plugin-react':
-        specifier: ^4.2.1
-        version: 4.4.1(vite@5.4.19(@types/node@20.8.8)(lightningcss@1.30.1)(terser@5.39.2))
-      eslint:
-        specifier: ^8.57.0
-        version: 8.57.1
-      eslint-plugin-react-hooks:
-        specifier: ^4.6.0
-        version: 4.6.2(eslint@8.57.1)
-      eslint-plugin-react-refresh:
-        specifier: ^0.4.6
-        version: 0.4.20(eslint@8.57.1)
-      jest:
-        specifier: ^29.5.0
-        version: 29.7.0(@types/node@20.8.8)(babel-plugin-macros@3.1.0)(ts-node@10.9.1(@types/node@20.8.8)(typescript@5.8.3))
-      prettier:
-        specifier: ^3.0.0
-        version: 3.5.3
-      tsup:
-        specifier: ^8.0.0
-        version: 8.5.0(jiti@1.21.7)(postcss@8.5.3)(tsx@4.19.4)(typescript@5.8.3)(yaml@2.8.0)
-      typescript:
-        specifier: ^5.2.2
-        version: 5.8.3
-      vite:
-        specifier: ^5.4.19
-        version: 5.4.19(@types/node@20.8.8)(lightningcss@1.30.1)(terser@5.39.2)
 
   apps/particle-auth-core-vite:
     dependencies:
@@ -17660,7 +17660,7 @@ snapshots:
     dependencies:
       '@ethersproject/bytes': 5.7.0
       '@ethersproject/logger': 5.7.0
-      bn.js: 5.2.1
+      bn.js: 5.2.2
 
   '@ethersproject/bignumber@5.8.0':
     dependencies:
@@ -17925,7 +17925,7 @@ snapshots:
       '@ethersproject/bytes': 5.7.0
       '@ethersproject/logger': 5.7.0
       '@ethersproject/properties': 5.7.0
-      bn.js: 5.2.1
+      bn.js: 5.2.2
       elliptic: 6.5.4
       hash.js: 1.1.7
 
@@ -19817,7 +19817,7 @@ snapshots:
       chalk: 4.1.2
       clean-stack: 3.0.1
       cli-progress: 3.12.0
-      debug: 4.3.4(supports-color@8.1.1)
+      debug: 4.4.1(supports-color@8.1.1)
       ejs: 3.1.10
       fs-extra: 9.1.0
       get-package-type: 0.1.0
@@ -19849,7 +19849,7 @@ snapshots:
     dependencies:
       '@oclif/core': 2.16.0(@types/node@20.8.8)(typescript@5.8.3)
       chalk: 4.1.2
-      debug: 4.3.4(supports-color@8.1.1)
+      debug: 4.4.1(supports-color@8.1.1)
     transitivePeerDependencies:
       - '@swc/core'
       - '@swc/wasm'
@@ -21014,7 +21014,7 @@ snapshots:
       '@babel/template': 7.27.2
       '@react-native/babel-plugin-codegen': 0.73.4(@babel/preset-env@7.27.2(@babel/core@7.27.1))
       babel-plugin-transform-flow-enums: 0.0.2(@babel/core@7.27.1)
-      react-refresh: 0.14.0
+      react-refresh: 0.14.2
     transitivePeerDependencies:
       - '@babel/preset-env'
       - supports-color
@@ -29430,7 +29430,7 @@ snapshots:
 
   extension-port-stream@3.0.0:
     dependencies:
-      readable-stream: 3.6.2
+      readable-stream: 4.7.0
       webextension-polyfill: 0.10.0
 
   external-editor@3.1.0:
@@ -30612,7 +30612,7 @@ snapshots:
       '@ipld/dag-pb': 2.1.18
       abort-controller: 3.0.0
       any-signal: 2.1.2
-      debug: 4.3.4(supports-color@8.1.1)
+      debug: 4.4.1(supports-color@8.1.1)
       err-code: 3.0.1
       ipfs-core-types: 0.9.0(node-fetch@2.7.0(encoding@0.1.13))
       ipfs-core-utils: 0.13.0(encoding@0.1.13)(node-fetch@2.7.0(encoding@0.1.13))
