@@ -5,7 +5,7 @@ import ReactDOM from "react-dom/client";
 import App from "./App";
 import { WagmiProvider, createConfig, http } from "wagmi";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { metaMask } from "@wagmi/connectors";
+import { injected } from "wagmi/connectors";
 import { Chain } from "wagmi/chains";
 
 const berachainBepolia: Chain = {
@@ -24,7 +24,7 @@ const berachainBepolia: Chain = {
 };
 
 const config = createConfig({
-  connectors: [metaMask()],
+  connectors: [injected()],
   chains: [berachainBepolia],
   transports: {
     [berachainBepolia.id]: http("https://bepolia.rpc.berachain.com"),
@@ -40,5 +40,5 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
         <App />
       </QueryClientProvider>
     </WagmiProvider>
-  </React.StrictMode>
-); 
+  </React.StrictMode>,
+);
