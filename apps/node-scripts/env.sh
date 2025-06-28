@@ -11,21 +11,19 @@ export MY_IP=`curl -s ipv4.canhazip.com`
 ########
 # VALUES YOU MIGHT WANT TO CHANGE
 export LOG_DIR=$(pwd)/logs
-export BEACOND_BIN=$(command -v beacond || echo $(pwd)/beacond)
+export BEACOND_BIN=$(command -v bera-beacond || command -v beacond || echo $(pwd)/beacond)
 export BEACOND_DATA=$(pwd)/var/beacond
 export BEACOND_CONFIG=$BEACOND_DATA/config  # can't change this. sorry.
 export JWT_PATH=$BEACOND_CONFIG/jwt.hex
 
 # need at least one of these
-export RETH_BIN=$(command -v reth || echo $(pwd)/reth)
-export GETH_BIN=$(command -v geth || echo $(pwd)/geth)
-export NETHERMIND_BIN=$(command -v Nethermind.Runner || echo $(pwd)/Nethermind.Runner)
-export ERIGON_BIN=$(command -v erigon || echo $(pwd)/erigon)
+export RETH_BIN=$(command -v bera-reth || command -v reth || echo $(pwd)/reth)
+export GETH_BIN=$(command -v bera-geth || command -v geth || echo $(pwd)/geth)
 
 # Leave this blank to use the default ports for the various services.
 # Set this to a port number (for example, 30000) to 
 # have the services listen on sequential ports (30000, 30001, 30002, etc)
-export PORT_BASE=
+export PORT_BASE=50000
 if [[ -n "$PORT_BASE" ]]; then
     export CL_ETHRPC_PORT=$(($PORT_BASE+0))
     export CL_ETHP2P_PORT=$(($PORT_BASE+1))
@@ -83,19 +81,10 @@ if command >/dev/null -v $GETH_BIN; then
     export GETH_GENESIS_PATH=$GETH_DATA/genesis.json
 fi  
 
-if command >/dev/null -v $NETHERMIND_BIN; then
-    export NETHERMIND_CONFIG_DIR=$(pwd)/var/nethermind/config/
-    export NETHERMIND_DATA_DIR=$(pwd)/var/nethermind/data/
-    export NETHERMIND_GENESIS_PATH="${NETHERMIND_CONFIG_DIR}/eth-nether-genesis.json"
-fi  
+  
 
-if command >/dev/null -v $ERIGON_BIN; then
-    export ERIGON_DATA=$(pwd)/var/erigon
-    export ERIGON_GENESIS_PATH=$ERIGON_DATA/genesis.json
-fi  
-
-if ! command >/dev/null -v $RETH_BIN && ! command >/dev/null -v $GETH_BIN && ! command >/dev/null -v $NETHERMIND_BIN && ! command >/dev/null     -v $ERIGON_BIN ; then
+if ! command >/dev/null -v $RETH_BIN && ! command >/dev/null -v $GETH_BIN; then
     echo "Error: No execution client found in PATH"
-    echo "Please install either reth, geth, or Nethermind and ensure it is available in your PATH"
+    echo "Please install either reth or geth and ensure it is available in your PATH"
     exit 1
 fi
