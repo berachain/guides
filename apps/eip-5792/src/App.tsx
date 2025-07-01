@@ -349,7 +349,7 @@ export default function App() {
   return (
     <div className="container">
       <div className="header">
-        <h1 className="title">Berachain EIP-7702</h1>
+        <h1 className="title">Berachain EIP-5792</h1>
         <p className="subtitle">MetaMask Batch Token Approvals</p>
       </div>
 
