@@ -1,9 +1,9 @@
-// Demo script showing EIP-7702 batch transaction implementation
-// This is a conceptual example of how EIP-7702 batch transactions would work
+// Demo script showing EIP-5792 batch transaction implementation
+// This is a conceptual example of how EIP-5792 batch transactions would work
 
 import { ethers } from "ethers";
 
-// Example EIP-7702 batch transaction structure
+// Example EIP-5792 batch transaction structure
 interface BatchTransaction {
   to: string;
   value: string;
@@ -11,15 +11,15 @@ interface BatchTransaction {
   gasLimit?: string;
 }
 
-interface EIP7702Batch {
+interface EIP5792Batch {
   transactions: BatchTransaction[];
   gasLimit: string;
   maxFeePerGas: string;
   maxPriorityFeePerGas: string;
 }
 
-// Example implementation of EIP-7702 batch transaction
-export class EIP7702BatchProcessor {
+// Example implementation of EIP-5792 batch transaction
+export class EIP5792BatchProcessor {
   private provider: ethers.Provider;
   private signer: ethers.Signer;
 
@@ -29,7 +29,7 @@ export class EIP7702BatchProcessor {
   }
 
   // Create a batch transaction
-  async createBatch(transactions: BatchTransaction[]): Promise<EIP7702Batch> {
+  async createBatch(transactions: BatchTransaction[]): Promise<EIP5792Batch> {
     // Calculate total gas limit for the batch
     const totalGasLimit = await this.calculateBatchGasLimit(transactions);
 
@@ -45,9 +45,9 @@ export class EIP7702BatchProcessor {
   }
 
   // Execute the batch transaction
-  async executeBatch(batch: EIP7702Batch): Promise<string> {
+  async executeBatch(batch: EIP5792Batch): Promise<string> {
     try {
-      // In a real EIP-7702 implementation, this would use the batch transaction format
+      // In a real EIP-5792 implementation, this would use the batch transaction format
       // For now, we'll simulate by executing transactions sequentially
       console.log(
         "Executing batch transaction with",
@@ -127,9 +127,9 @@ export class EIP7702BatchProcessor {
 }
 
 // Example usage
-export async function demoEIP7702() {
+export async function demoEIP5792() {
   // This would be replaced with actual provider and signer setup
-  console.log("EIP-7702 Batch Transaction Demo");
+  console.log("EIP-5792 Batch Transaction Demo");
   console.log("================================");
 
   // Example transactions
@@ -157,9 +157,9 @@ export async function demoEIP7702() {
     "\nIn a real implementation, these would be executed as a single batch transaction",
   );
   console.log(
-    "using EIP-7702, reducing gas costs and improving transaction throughput.",
+    "using EIP-5792, reducing gas costs and improving transaction throughput.",
   );
 }
 
 // Export for use in the main application
-export type { BatchTransaction, EIP7702Batch };
+export type { BatchTransaction, EIP5792Batch };
