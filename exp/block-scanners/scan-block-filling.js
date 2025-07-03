@@ -365,7 +365,7 @@ async function analyzeBlockProposers(provider, startBlock, endBlock, clRpcBaseUr
 
 // Example usage
 async function main() {
-    const BLOCKS_TO_SCAN_PRIOR = 30;
+    const BLOCKS_TO_SCAN_PRIOR = 43200;
     const DEFAULT_SORT_BY = COL_GAS_PERCENT_LIMIT;
     const FIXED_SORT_ORDER = 'desc';
 
