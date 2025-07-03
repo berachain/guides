@@ -1,0 +1,23 @@
+{
+  "name": "berachain-erc20-scanner",
+  "version": "1.0.0",
+  "description": "ERC20 contract scanner for Berachain blockchain",
+  "main": "scan-erc20-contracts.js",
+  "scripts": {
+    "scan": "node scan-erc20-contracts.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "ethers": "^6.8.0",
+    "yargs": "^17.7.0"
+  },
+  "keywords": [
+    "berachain",
+    "blockchain",
+    "erc20",
+    "scanner",
+    "ethereum"
+  ],
+  "author": "Berachain Team",
+  "license": "MIT"
+} 
