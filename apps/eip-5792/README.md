@@ -2,7 +2,7 @@
 
 This guide demonstrates how to implement batch token approvals using MetaMask's EIP-5792 functionality on Berachain. The app allows users to approve or revoke multiple token allowances in a single transaction, improving gas efficiency and user experience.
 
-## Prerequisites
+## Requirements
 
 - Node.js 18+ installed
 - MetaMask browser extension installed
