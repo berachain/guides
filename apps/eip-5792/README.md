@@ -8,23 +8,32 @@ This guide demonstrates how to implement batch token approvals using MetaMask's 
 - MetaMask browser extension installed
 - Berachain testnet configured in MetaMask
 
+## Testnet Tokens
+
+To interact with this app, you'll need testnet tokens on Berachain Bepolia. You can get BERA from the official faucet:
+
+- [Berachain Bepolia Faucet](https://bepolia.faucet.berachain.com)
+
 ## Setup
 
-1. **Install Dependencies**
+### 1 - Install Dependencies
 
-   ```bash
-   cd apps/eip-5792
-   pnpm install
-   ```
+```bash
+# FROM: ./apps/eip-5792
+pnpm install;
+```
 
-2. **Start Development Server**
+2 - Start Development Server
 
-   ```bash
-   pnpm dev
-   ```
+```bash
+pnpm dev;
+```
 
-3. **Open in Browser**
-   Navigate to `http://localhost:5173`
+3 - Open Browser
+
+```bash
+open http://localhost:5173
+```
 
 ## MetaMask Configuration
 
