@@ -181,7 +181,7 @@ export default function App() {
         method: "wallet_addEthereumChain",
         params: [
           {
-            chainId: "0x13881", // 80085 in hex
+            chainId: BERA_CHAIN_ID_HEX, // 80069 in hex
             chainName: "Berachain Bepolia",
             nativeCurrency: {
               name: "Bera",
@@ -210,7 +210,7 @@ export default function App() {
       console.log("Switching to Berachain Bepolia network...");
       await window.ethereum.request({
         method: "wallet_switchEthereumChain",
-        params: [{ chainId: "0x13881" }], // 80085 in hex
+        params: [{ chainId: BERA_CHAIN_ID_HEX }], // 80069 in hex
       });
       console.log("Switched to Berachain Bepolia network successfully");
     } catch (error: any) {
