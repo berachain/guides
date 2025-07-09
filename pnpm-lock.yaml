@@ -28,13 +28,13 @@ importers:
         specifier: workspace:*
         version: link:packages/typescript-config
       '@biomejs/biome':
-        specifier: ^1.5.3
+        specifier: ^1.5.0
         version: 1.9.4
       '@typescript-eslint/eslint-plugin':
-        specifier: ^8.32.1
+        specifier: ^8.32.0
         version: 8.32.1(@typescript-eslint/parser@8.32.1(eslint@9.28.0(jiti@1.21.7))(typescript@5.8.3))(eslint@9.28.0(jiti@1.21.7))(typescript@5.8.3)
       '@typescript-eslint/parser':
-        specifier: ^8.32.1
+        specifier: ^8.32.0
         version: 8.32.1(eslint@9.28.0(jiti@1.21.7))(typescript@5.8.3)
       pino-pretty:
         specifier: ^13.0.0
@@ -43,7 +43,7 @@ importers:
         specifier: ^3.1.0
         version: 3.5.3
       prettier-plugin-solidity:
-        specifier: ^1.4.2
+        specifier: ^1.4.0
         version: 1.4.3(prettier@3.5.3)
       tsup:
         specifier: ^8.5.0
@@ -37475,7 +37475,7 @@ snapshots:
   web3-utils@1.10.4:
     dependencies:
       '@ethereumjs/util': 8.1.0
-      bn.js: 5.2.1
+      bn.js: 5.2.2
       ethereum-bloom-filters: 1.2.0
       ethereum-cryptography: 2.2.1
       ethjs-unit: 0.1.6

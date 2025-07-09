@@ -12,6 +12,7 @@ The `exp` directory is configured as a **pnpm workspace** where all experiments 
 - **Fast installation**: pnpm's efficient linking system
 
 ### Workspace Structure
+
 ```
 exp/
 ├── package.json              # Workspace root with shared dependencies
@@ -28,16 +29,19 @@ exp/
 ## Setup
 
 ### Prerequisites
+
 - Node.js 20+
 - pnpm (recommended) or npm
 
 ### Installation
+
 ```bash
 cd exp
 pnpm install
 ```
 
 ### Adding Dependencies
+
 ```bash
 cd exp
 pnpm add package-name
@@ -50,6 +54,7 @@ pnpm add package-name
 Unified tool for scanning blockchain blocks for contract creations and identifying ERC20 tokens with multiple output formats.
 
 **Usage:**
+
 ```bash
 # Basic scan with JSON output (default)
 pnpm scan
@@ -81,6 +86,7 @@ pnpm scan --rpc https://rpc.berachain.com --batch-size 50 --max-concurrent 10
 4. **Token List**: [Uniswap Token List](https://github.com/Uniswap/token-lists#authoring-token-lists) format for dApp integration
 
 **Options:**
+
 - `--rpc, -r`: RPC URL (default: your local mainnet RPC)
 - `--start, -s`: Starting block number
 - `--end, -e`: Ending block number
@@ -96,20 +102,24 @@ pnpm scan --rpc https://rpc.berachain.com --batch-size 50 --max-concurrent 10
 All experiments use a shared configuration file (`config.js`) with your preferred defaults:
 
 ### Default Configuration
+
 - `EL_ETHRPC_URL`: `http://10.147.18.191:40003` (your local mainnet RPC)
 - `CL_ETHRPC_URL`: `http://10.147.18.191:40000` (your local mainnet CL)
 - `ABIS_DIR`: `~/src/abis/` (your preferred ABI directory)
 
 ### Override with Environment Variables
+
 Set these environment variables to override the defaults:
 
 ### Required Variables
+
 - `EL_ETHRPC_URL`: Execution layer RPC URL
   - Mainnet: `https://rpc.berachain.com`
   - Bepolia: `https://bepolia.rpc.berachain.com`
   - Local: `http://10.147.18.191:40003` (mainnet) or `http://localhost:41003` (bepolia)
 
 ### Optional Variables
+
 - `CL_ETHRPC_URL`: Consensus layer RPC URL (for future use)
   - Mainnet: `http://10.147.18.191:40000`
   - Bepolia: `http://localhost:41000`
@@ -120,6 +130,7 @@ Set these environment variables to override the defaults:
 ### Usage Examples
 
 **Use defaults (recommended):**
+
 ```bash
 cd exp
 pnpm erc20-scan
@@ -127,17 +138,20 @@ pnpm token-find
 ```
 
 **Override with environment variables:**
+
 ```bash
 export EL_ETHRPC_URL=https://bepolia.rpc.berachain.com
 pnpm token-find
 ```
 
 **Override with command line:**
+
 ```bash
 pnpm token-find --rpc https://bepolia.rpc.berachain.com
 ```
 
 ### Environment Variable Priority
+
 1. **Command line arguments** (highest priority)
 2. **Environment variables** (set in shell)
 3. **Shared config defaults** (lowest priority)
@@ -145,12 +159,14 @@ pnpm token-find --rpc https://bepolia.rpc.berachain.com
 ## Network Configuration
 
 **Berachain Networks:**
+
 - **Mainnet**: Chain ID 80094, RPC: `https://rpc.berachain.com`
 - **Bepolia**: Chain ID 80064, RPC: `https://bepolia.rpc.berachain.com`
 
 ## Examples
 
 ### Quick Scan of Recent Blocks
+
 ```bash
 # Scan last 10,000 blocks on mainnet
 pnpm scan --rpc https://rpc.berachain.com --blocks 10000 --format csv
@@ -161,6 +177,7 @@ pnpm scan --blocks 10000 --format csv
 ```
 
 ### Generate Token List for dApp
+
 ```bash
 # Create Uniswap-compatible token list
 pnpm scan --format tokenlist --min-confidence 0.8 --output berachain-mainnet-tokens
@@ -172,6 +189,7 @@ pnpm scan --format tokenlist --min-confidence 0.8 --output berachain-mainnet-tok
 ```
 
 ### Batch Processing
+
 ```bash
 # Process specific block ranges
 pnpm scan --start 1000000 --end 1100000 --format table
@@ -180,25 +198,33 @@ pnpm scan --start 1000000 --end 1100000 --format table
 ## Output Files
 
 ### JSON Format
+
 Complete scan data including:
+
 - Scan metadata and statistics
 - Full contract details
 - Confidence scores
 - Block and transaction information
 
 ### CSV Format
+
 Spreadsheet-friendly with columns:
+
 - Address, Name, Symbol, Decimals, Total Supply
 - Block Number, Creator, Confidence, Timestamp
 
 ### Table Format
+
 Pretty-printed ASCII table showing:
+
 - Contract addresses
 - Token names and symbols
 - Key metadata in aligned columns
 
 ### Token List Format
+
 Uniswap-compatible JSON following the [Token Lists specification](https://github.com/Uniswap/token-lists#authoring-token-lists):
+
 - Standard token metadata
 - Chain ID and addresses
 - Confidence scores in extensions
@@ -216,20 +242,24 @@ Uniswap-compatible JSON following the [Token Lists specification](https://github
 ### Common Issues
 
 **RPC Timeouts:**
+
 - Reduce `--batch-size` and `--max-concurrent`
 - Use a more reliable RPC endpoint
 
 **Memory Issues:**
+
 - Process smaller block ranges
 - Use CSV or table output for large datasets
 
 **Low Token Detection:**
+
 - Lower `--min-confidence` threshold
 - Check RPC endpoint reliability
 
 ### Common Issues
 
 **Dependencies not found:**
+
 ```bash
 cd exp
 rm -rf node_modules
@@ -237,6 +267,7 @@ pnpm install
 ```
 
 **Version conflicts:**
+
 ```bash
 cd exp
 pnpm update
@@ -249,12 +280,14 @@ pnpm update
 To add a new experiment:
 
 1. **Create experiment directory**:
+
    ```bash
    mkdir exp/my-new-experiment
    cd exp/my-new-experiment
    ```
 
 2. **Create package.json**:
+
    ```json
    {
      "name": "berachain-my-experiment",
@@ -281,4 +314,4 @@ To add a new experiment:
 
 ## License
 
-MIT License - see individual package files for details. 
+MIT License - see individual package files for details.
