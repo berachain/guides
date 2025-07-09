@@ -18,4 +18,4 @@ cp "$SEED_DATA_DIR/eth-genesis.json" "$RETH_GENESIS_PATH"
 $RETH_BIN init --datadir "$RETH_DATA" --chain "$RETH_GENESIS_PATH" 
 
 echo
-echo "✓ Reth set up."
+echo "✓ bera-reth set up."

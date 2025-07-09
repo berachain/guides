@@ -19,5 +19,5 @@ ARCHIVE_OPTION=$([ "$EL_ARCHIVE_NODE" = true ] && echo "--state.scheme hash" || 
 $GETH_BIN init --datadir "$GETH_DATA" $ARCHIVE_OPTION "$GETH_GENESIS_PATH"
 
 echo
-echo "✓ Geth set up."
+echo "✓ bera-geth set up."
 
