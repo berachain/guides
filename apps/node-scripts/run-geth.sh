@@ -14,6 +14,7 @@ $GETH_BIN 					\
 	--datadir $GETH_DATA			\
 	--syncmode full				\
 	--ipcpath /tmp/geth.ipc.$EL_ETHRPC_PORT	\
+	--miner.gasprice 1			\
 	$BOOTNODES_OPTION			\
 	$ARCHIVE_OPTION				\
 	$IP_OPTION				\
