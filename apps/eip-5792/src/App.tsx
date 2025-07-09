@@ -1,5 +1,5 @@
 import { useState, useReducer } from "react";
-import { useAccount, useConnect, useDisconnect, useWriteContract } from "wagmi";
+import { useAccount, useConnect, useDisconnect } from "wagmi";
 import {
   parseEther,
   formatEther,
@@ -118,9 +118,8 @@ const reducer = (state: State, action: Actions): State => {
 
 export default function App() {
   const { address, isConnected } = useAccount();
-  const { connect, connectors, isPending, error: connectError } = useConnect();
+  const { connect, connectors, isPending } = useConnect();
   const { disconnect } = useDisconnect();
-  const { writeContractAsync } = useWriteContract();
 
   const [approvals, dispatch] = useReducer(reducer, [
     {
@@ -151,8 +150,6 @@ export default function App() {
   //   functionName: "allowance",
   //   args: address && spender ? [address, spender] : undefined,
   // });
-
-  const isSpenderValid = isAddress(spender);
 
   // Calculate which tokens need approval
   const needsApproval = approvals
