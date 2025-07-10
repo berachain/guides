@@ -181,73 +181,139 @@ function decodeRLPList(bytes) {
     return result;
 }
 
-async function analyzeBlockProposers(provider, startBlock, endBlock, clRpcBaseUrl, sortBy = COL_PROPOSER, sortOrder = 'asc') {
+// Simple progress bar implementation
+function createProgressBar(total, width = 40) {
+    let current = 0;
+    
+    const update = (value) => {
+        current = value;
+        const percent = Math.round((current / total) * 100);
+        const filled = Math.round((width * current) / total);
+        const bar = '█'.repeat(filled) + '░'.repeat(width - filled);
+        process.stderr.write(`\r    Progress: [${bar}] ${percent}% (${current}/${total})`);
+    };
+    
+    const finish = () => {
+        process.stderr.write('\n');
+    };
+    
+    return { update, finish };
+}
+
+// Function to get block data with proposer info
+async function getBlockDataWithProposer(provider, blockNumber, clRpcBaseUrl) {
+    try {
+        const [block, headerResponse] = await Promise.all([
+            provider.getBlock(blockNumber),
+            axios.get(`${clRpcBaseUrl}/header?height=${blockNumber}`)
+        ]);
+        
+        if (!block) {
+            throw new Error(`Block ${blockNumber} not found`);
+        }
+        
+        const proposerAddress = headerResponse.data.result.header.proposer_address;
+        const proposerTitle = await getProposerTitle(proposerAddress);
+        
+        return {
+            blockNumber: blockNumber,
+            transactionCount: block.transactions ? block.transactions.length : 0,
+            gasUsed: block.gasUsed,
+            proposerAddress: proposerAddress,
+            proposerTitle: proposerTitle,
+            extraData: block.extraData
+        };
+    } catch (error) {
+        return {
+            blockNumber: blockNumber,
+            error: error.message
+        };
+    }
+}
+
+// Function to process blocks in chunks with controlled concurrency
+async function processBlocksInChunks(provider, blockNumbers, clRpcBaseUrl, concurrency, batchSize) {
+    const results = [];
+    
+    // Split blocks into chunks of batchSize
+    const chunks = [];
+    for (let i = 0; i < blockNumbers.length; i += batchSize) {
+        chunks.push(blockNumbers.slice(i, i + batchSize));
+    }
+    
+    const progressBar = createProgressBar(blockNumbers.length);
+    let processedBlocks = 0;
+    
+    // Process chunks with controlled concurrency
+    for (let i = 0; i < chunks.length; i += concurrency) {
+        const chunkBatch = chunks.slice(i, i + concurrency);
+        const chunkPromises = chunkBatch.map(chunk => 
+            Promise.all(chunk.map(blockNum => getBlockDataWithProposer(provider, blockNum, clRpcBaseUrl)))
+        );
+        
+        const chunkResults = await Promise.all(chunkPromises);
+        
+        // Flatten and merge results
+        chunkResults.forEach(chunkResult => {
+            results.push(...chunkResult);
+        });
+        
+        // Update progress bar
+        processedBlocks += chunkBatch.reduce((sum, chunk) => sum + chunk.length, 0);
+        progressBar.update(Math.min(processedBlocks, blockNumbers.length));
+    }
+    
+    progressBar.finish();
+    return results;
+}
+
+async function analyzeBlockProposers(provider, startBlock, endBlock, clRpcBaseUrl, sortBy = COL_PROPOSER, sortOrder = 'asc', concurrency = 10, batchSize = 100) {
     const proposerStats = {};
     let totalBlocksScanned = 0;
     const GAS_LIMIT_REFERENCE = 36000000; 
-    const batchSize = 14400;
     
-    console.log(`Analyzing blocks ${startBlock} to ${endBlock} with batch size ${batchSize}...`);
+    const blockNumbers = [];
+    for (let i = startBlock; i <= endBlock; i++) {
+        blockNumbers.push(i);
+    }
     
-    const totalItems = endBlock - startBlock + 1;
-
-    // Process blocks in batches
-    for (let i = startBlock; i <= endBlock; i += batchSize) {
-        const batchEnd = Math.min(i + batchSize - 1, endBlock);
-        const promises = [];
-        
-        for (let blockNum = i; blockNum <= batchEnd; blockNum++) {
-            promises.push(
-                provider.getBlock(blockNum)
-                    .then(block => ({
-                        blockNumber: blockNum,
-                        transactionCount: block.transactions ? block.transactions.length : 0,
-                        gasUsed: block.gasUsed,
-                        nonce: block.nonce
-                    }))
-                    .catch(error => ({
-                        blockNumber: blockNum,
-                        error: error.message
-                    }))
-            );
-        }
-        
-        const results = await Promise.all(promises);
-        for (const result of results) {
-            totalBlocksScanned++;
-            if (result.error) {
-                console.error(`Error fetching block ${result.blockNumber}: ${result.error}`);
-            } else {
-                const url = `${clRpcBaseUrl}/header?height=${result.blockNumber}`;
-                try {
-                    const response = await axios.get(url);
-                    const proposerAddress = response.data.result.header.proposer_address;
-                    const proposerTitle = await getProposerTitle(proposerAddress);
-                    
-                    if (!proposerStats[proposerTitle]) {
-                        proposerStats[proposerTitle] = { 
-                            totalTransactions: 0, 
-                            blockCount: 0, 
-                            totalGasUsed: BigInt(0),
-                            emptyBlockCount: 0,
-                            blockNumbers: []
-                        };
-                    }
-                    
-                    proposerStats[proposerTitle].totalTransactions += result.transactionCount;
-                    proposerStats[proposerTitle].totalGasUsed += BigInt(result.gasUsed);
-                    proposerStats[proposerTitle].blockCount++;
-                    proposerStats[proposerTitle].blockNumbers.push(result.blockNumber);
-                    if (result.transactionCount === 0) {
-                        proposerStats[proposerTitle].emptyBlockCount++;
-                    }
-                } catch (error) {
-                    console.error(`Error fetching header for block ${result.blockNumber}: ${error.message}`);
-                }
+    console.log(`Analyzing blocks ${startBlock} to ${endBlock} with concurrency ${concurrency} and batch size ${batchSize}...`);
+    
+    // Process blocks in parallel chunks
+    const results = await processBlocksInChunks(provider, blockNumbers, clRpcBaseUrl, concurrency, batchSize);
+    
+    // Process results and build stats
+    for (const result of results) {
+        totalBlocksScanned++;
+        if (result.error) {
+            console.error(`Error processing block ${result.blockNumber}: ${result.error}`);
+        } else {
+            const proposerTitle = result.proposerTitle;
+            
+            if (!proposerStats[proposerTitle]) {
+                proposerStats[proposerTitle] = { 
+                    totalTransactions: 0, 
+                    blockCount: 0, 
+                    totalGasUsed: BigInt(0),
+                    emptyBlockCount: 0,
+                    blockNumbers: [],
+                    extraData: result.extraData
+                };
+            }
+            
+            proposerStats[proposerTitle].totalTransactions += result.transactionCount;
+            proposerStats[proposerTitle].totalGasUsed += BigInt(result.gasUsed);
+            proposerStats[proposerTitle].blockCount++;
+            proposerStats[proposerTitle].blockNumbers.push(result.blockNumber);
+            if (result.transactionCount === 0) {
+                proposerStats[proposerTitle].emptyBlockCount++;
+            }
+            
+            // Store extraData from first encountered block
+            if (!proposerStats[proposerTitle].extraData) {
+                proposerStats[proposerTitle].extraData = result.extraData;
             }
         }
-        
-        console.log(`Processed blocks ${i} to ${batchEnd} (${totalBlocksScanned}/${totalItems})`);
     }
     
     console.log(`Total blocks scanned: ${totalBlocksScanned}`);
@@ -267,18 +333,10 @@ async function analyzeBlockProposers(provider, startBlock, endBlock, clRpcBaseUr
                 .join(', ')
             : 'N/A';
 
-        // Get extraData from the first sample block
+        // Decode extraData
         let extraDataDecoded = 'N/A';
-        if (stats.blockNumbers.length > 0) {
-            const firstSampleBlock = stats.blockNumbers[0];
-            try {
-                const block = await provider.getBlock(firstSampleBlock);
-                if (block && block.extraData) {
-                    extraDataDecoded = await decodeExtraDataAsAscii(block.extraData);
-                }
-            } catch (error) {
-                extraDataDecoded = `Error: ${error.message}`;
-            }
+        if (stats.extraData) {
+            extraDataDecoded = await decodeExtraDataAsAscii(stats.extraData);
         }
 
         tableData.push({
@@ -368,48 +426,33 @@ async function main() {
     const BLOCKS_TO_SCAN_PRIOR = 43200;
     const DEFAULT_SORT_BY = COL_GAS_PERCENT_LIMIT;
     const FIXED_SORT_ORDER = 'desc';
+    const DEFAULT_CONCURRENCY = 10;
+    const DEFAULT_BATCH_SIZE = 100;
 
     const elRpcUrlEnv = process.env.EL_ETHRPC_URL;
-    const elRpcPortEnv = process.env.EL_ETHRPC_PORT;
     const clRpcUrlEnv = process.env.CL_ETHRPC_URL;
-    const clRpcPortEnv = process.env.CL_ETHRPC_PORT;
-    var totalNonceChanges = 0;
     
     let rpcUrl; // For EL
     let clRpcBaseUrl; // For CL
 
-    if (elRpcUrlEnv && elRpcUrlEnv.startsWith('http')) {
-        rpcUrl = elRpcUrlEnv;
-    } else if (elRpcPortEnv) {
-        const port = parseInt(elRpcPortEnv);
-        if (isNaN(port) || port <= 0 || port > 65535) {
-            console.error('Error: Environment variable EL_ETHRPC_PORT is invalid. Must be a valid port number (1-65535) if EL_ETHRPC_URL is not set.');
-            process.exit(1);
-        }
-        rpcUrl = `http://localhost:${port}`;
-    } else {
-        console.error('Error: Missing Execution Layer RPC configuration. Please set either EL_ETHRPC_URL or EL_ETHRPC_PORT environment variable.');
+    if (!elRpcUrlEnv || !elRpcUrlEnv.startsWith('http')) {
+        console.error('Error: Missing Execution Layer RPC configuration. Please set EL_ETHRPC_URL environment variable.');
         process.exit(1);
     }
+    rpcUrl = elRpcUrlEnv;
 
-    if (clRpcUrlEnv && clRpcUrlEnv.startsWith('http')) {
-        clRpcBaseUrl = clRpcUrlEnv;
-    } else if (clRpcPortEnv) {
-        const port = parseInt(clRpcPortEnv);
-        if (isNaN(port) || port <= 0 || port > 65535) {
-            console.error('Error: Environment variable CL_ETHRPC_PORT is invalid. Must be a valid port number (1-65535) if CL_ETHRPC_URL is not set.');
-            process.exit(1);
-        }
-        clRpcBaseUrl = `http://localhost:${port}`;
-    } else {
-        console.error('Error: Missing Consensus Layer RPC configuration. Please set either CL_ETHRPC_URL or CL_ETHRPC_PORT environment variable.');
+    if (!clRpcUrlEnv || !clRpcUrlEnv.startsWith('http')) {
+        console.error('Error: Missing Consensus Layer RPC configuration. Please set CL_ETHRPC_URL environment variable.');
         process.exit(1);
     }
+    clRpcBaseUrl = clRpcUrlEnv;
     
     let startBlock, endBlock;
     let useDefaultBlockRange = true;
     let sortBy = DEFAULT_SORT_BY;
     let sortOrder = FIXED_SORT_ORDER;
+    let concurrency = DEFAULT_CONCURRENCY;
+    let batchSize = DEFAULT_BATCH_SIZE;
 
     const argv = yargs(hideBin(process.argv))
         .command('$0 [startBlock] [endBlock]', 'Scan blocks for proposer statistics. If startBlock and endBlock are omitted, scans the prior 43,200 blocks.', (yargs) => {
@@ -422,6 +465,16 @@ async function main() {
                     describe: 'The last block in the range to scan',
                     type: 'number'
                 });
+        })
+        .option('concurrency', {
+            describe: 'Number of concurrent requests (default: 10)',
+            type: 'number',
+            default: DEFAULT_CONCURRENCY
+        })
+        .option('batch-size', {
+            describe: 'Number of blocks to process in each batch (default: 100)',
+            type: 'number',
+            default: DEFAULT_BATCH_SIZE
         })
         .option('t', {
             describe: `Sort by ${COL_AVG_TXS_PER_BLOCK} (ascending)`,
@@ -466,8 +519,8 @@ async function main() {
             return true;
         })
         .alias('h', 'help')
-        .usage('Usage: node scan-all-blocks.js [startBlock endBlock] [-t | -g | -b | -e]')
-        .epilogue(`Description:\n  Scans a range of blocks from an Ethereum-compatible blockchain to gather proposer statistics.\n  Relies on EL_ETHRPC_URL and CL_ETHRPC_URL environment variables for RPC endpoints (e.g., http://localhost:EL_ETHRPC_URL).\n  If startBlock and endBlock are omitted, scans the prior ${BLOCKS_TO_SCAN_PRIOR} blocks from the current block.\n  Batch size is fixed at 14,400 blocks.\n  Default sort: ${DEFAULT_SORT_BY} (ascending)\n\nRequired Environment Variables:\n  EL_ETHRPC_URL           EL RPC endpoint\n  EL_ETHRPC_PORT          EL RPC port on localhost\n  CL_ETHRPC_URL           CL RPC endpoint\n  CL_ETHRPC_PORT          CL RPC port on localhost\n`)
+        .usage('Usage: node scan-block-filling.js [startBlock endBlock] [--concurrency N] [--batch-size N] [-t | -g | -b | -e]')
+        .epilogue(`Description:\n  Scans a range of blocks from an Ethereum-compatible blockchain to gather proposer statistics.\n  Relies on EL_ETHRPC_URL and CL_ETHRPC_URL environment variables for RPC endpoints.\n  If startBlock and endBlock are omitted, scans the prior ${BLOCKS_TO_SCAN_PRIOR} blocks from the current block.\n  Default sort: ${DEFAULT_SORT_BY} (ascending)\n\nRequired Environment Variables:\n  EL_ETHRPC_URL           EL RPC endpoint\n  CL_ETHRPC_URL           CL RPC endpoint\n`)
         .fail((msg, err, yargs) => {
             if (err) throw err; // Preserve stack
             console.error('Error:', msg);
@@ -486,6 +539,9 @@ async function main() {
     } else if (argv.e) {
         sortBy = COL_EMPTY_BLOCKS;
     }
+
+    concurrency = argv.concurrency;
+    batchSize = argv['batch-size'];
 
     if (argv.startBlock !== undefined && argv.endBlock !== undefined) {
         startBlock = argv.startBlock;
@@ -514,7 +570,8 @@ async function main() {
     
     try {
         console.log(`Analyzing proposers. Sort: ${sortBy} (${sortOrder}). EL RPC: ${rpcUrl}, CL RPC: ${clRpcBaseUrl}`);
-        await analyzeBlockProposers(provider, startBlock, endBlock, clRpcBaseUrl, sortBy, sortOrder);
+        console.log(`Performance settings: concurrency=${concurrency}, batch-size=${batchSize}`);
+        await analyzeBlockProposers(provider, startBlock, endBlock, clRpcBaseUrl, sortBy, sortOrder, concurrency, batchSize);
     } catch (error) {
         console.error('Error during analysis execution:', error.message);
     }
