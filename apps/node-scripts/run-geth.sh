@@ -5,7 +5,7 @@ set -e
 
 ./setup-geth.sh  
 
-ARCHIVE_OPTION=$([ "$EL_ARCHIVE_NODE" = true ] && echo "--state.scheme hash --gcmode archive" || echo "--state.scheme hash")
+ARCHIVE_OPTION=$([ "$EL_ARCHIVE_NODE" = true ] && echo "--state.scheme path --gcmode archive" || echo "--state.scheme path")
 BOOTNODES_OPTION=$([ -n "$EL_BOOTNODES" ] && echo "--bootnodes $EL_BOOTNODES" || echo "")
 IP_OPTION=$([ -n "$MY_IP" ] && echo "--nat extip:$MY_IP" || echo "")
 PEERS_OPTION=$([ -n "$EL_PEERS_DNS" ] && echo "--discovery.dns $EL_PEERS_DNS" || echo "")
