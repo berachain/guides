@@ -57,7 +57,7 @@ const req = https.request({
 		
 		const dir_keys = {
 			beacon_key: `beacon_${el_node_type}/pruned`,
-			el_key: `${el_node_type}/pruned`
+			el_key: `bera-${el_node_type}/pruned`
 		};
 
 		// Download files sequentially
