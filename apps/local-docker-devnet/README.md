@@ -11,6 +11,15 @@ This is currently configured to run BeaconKit as a consensus client and Reth as 
 - MacOS
 - EVM Wallet (To import private key)
 
+## Custom Binaries
+
+This devnet supports using custom builds of BeaconKit and bera-reth instead of the latest releases:
+
+- **CUSTOM_BIN_BEACOND**: Set to path of custom beacond binary (default: `/tmp/beacond-built`)
+- **CUSTOM_BIN_RETH**: Set to path of custom reth binary (default: `/tmp/bera-reth-built`)
+
+The build script will automatically copy custom binaries from `/tmp/` to the local directory for Docker build context. To use latest releases instead of custom binaries, comment out these variables in `env.sh`.
+
 ## RPC Details
 
 | Name               | Value                                                            |
