@@ -136,15 +136,8 @@ When everything works, you'll see something like this:
 
 ## Common Issues and Solutions 🔧
 
-<<<<<<< HEAD
-
 1. **Compilation Errors**
 
-=======
-
-### Compilation Errors
-
-> > > > > > > chore/update-package-names
 
 - Check your Solidity code syntax
 - Verify compiler version compatibility
