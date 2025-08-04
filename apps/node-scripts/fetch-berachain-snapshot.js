@@ -1,8 +1,10 @@
 #!/opt/homebrew/bin/node
 
-const el_node_type = 'reth' || 'geth';
-const snapshot_type = "bera-testnet-snapshot" || "bera-snapshot";
+// first one in the list is used; edit to suit your needs
+const el_client = 'reth' || 'geth';
+const snapshot_chain = "bera-testnet-snapshot" || "bera-snapshot";
 const geography = "na" || 'eu' || 'as'; // North America, EU, Asia
+const snapshot_type = "pruned" || "archive";
 
 const https = require('https');
 const path = require('path');
@@ -25,7 +27,7 @@ function startDownload(mediaLink, fileName) {
 console.log('Fetching bucket contents...');
 const req = https.request({
 	hostname: 'storage.googleapis.com',
-	path: `/storage/v1/b/${snapshot_type}-${geography}/o`,
+	path: `/storage/v1/b/${snapshot_chain}-${geography}/o`,
 	method: 'GET',
 	headers: { 'Accept': 'application/json' }
 }, async (res) => {
@@ -56,8 +58,8 @@ const req = https.request({
 		});
 		
 		const dir_keys = {
-			beacon_key: `beacon_${el_node_type}/pruned`,
-			el_key: `bera-${el_node_type}/pruned`
+			beacon_key: `beacon_${el_client}/${snapshot_type}`,
+			el_key: `bera-${el_client}/${snapshot_type}`
 		};
 
 		// Download files sequentially
