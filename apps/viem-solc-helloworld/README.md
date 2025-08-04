@@ -12,8 +12,6 @@ Before you begin, make sure you have:
 
 ## Quick Start 🚀
 
-<<<<<<< HEAD
-
 1. **Clone and Install**
 
    ```bash
@@ -21,16 +19,6 @@ Before you begin, make sure you have:
    cd viem-solc-helloworld
    pnpm install
    ```
-
-   =======
-
-### Step 1 - Clone and Install
-
-````bash
-git clone <repository-url>
-cd viem-solc-helloworld
-pnpm install
->>>>>>> chore/update-package-names
 
 2. **Environment Setup**
 
