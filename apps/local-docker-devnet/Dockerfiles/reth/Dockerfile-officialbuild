@@ -10,8 +10,11 @@ RUN ARCH=$(uname -m) && \
 # Install dependencies
 RUN apt-get update && apt-get install -y curl wget;
 
-# Download and install beacon-kit
+# Download and install reth
 RUN RETH_RELEASE_URL=$(curl -s https://api.github.com/repos/paradigmxyz/reth/releases/latest | grep '"browser_download_url":' | sed 's/.*"browser_download_url": "\(.*\)".*/\1/' | grep "aarch64-unknown-linux-gnu.tar.gz" | grep -v "\.asc$" | grep -v "op-reth"); \
     wget $RETH_RELEASE_URL; \
     tar -xzvf reth-*.tar.gz; \
-    chmod +x reth;
+    mv reth /usr/local/bin/reth; \
+    chmod +x /usr/local/bin/reth; \
+    reth --version; \
+    sleep 3; 
