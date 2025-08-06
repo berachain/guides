@@ -6,13 +6,19 @@ source env.sh;
 # Copy custom binaries from /tmp/ to local directory for Docker build context
 if [ -f "$CUSTOM_BIN_BEACOND" ]; then
     echo "*** Copying custom beacond binary to local directory";
-    cp "$CUSTOM_BIN_BEACOND" ./beacond-custom;
+    # Only copy if source and destination are different
+    if [ "$CUSTOM_BIN_BEACOND" != "./beacond-custom" ]; then
+        cp "$CUSTOM_BIN_BEACOND" ./beacond-custom;
+    fi
     CUSTOM_BIN_BEACOND=./beacond-custom;
 fi
 
 if [ -f "$CUSTOM_BIN_RETH" ]; then
     echo "*** Copying custom reth binary to local directory";
-    cp "$CUSTOM_BIN_RETH" ./reth-custom;
+    # Only copy if source and destination are different
+    if [ "$CUSTOM_BIN_RETH" != "./reth-custom" ]; then
+        cp "$CUSTOM_BIN_RETH" ./reth-custom;
+    fi
     CUSTOM_BIN_RETH=./reth-custom;
 fi
 
