@@ -8,8 +8,10 @@ A collection of [Berachain](https://docs.berachain.com/learn/) EVM examples: cod
 
 This monorepo includes shared packages that power the examples:
 
-- **[`packages/config`](packages/config/README.md)** - Centralized configuration for URLs, constants, and settings across all apps
-- **`packages/ui`** - Shared UI components and styles for frontend applications 
+- **[`packages/rpc-config`](packages/rpc-config)** - Centralized configuration for Berachain networks, RPC URLs, and utility functions
+- **[`packages/eslint-config`](packages/eslint-config)** - Shared ESLint configuration for consistent code style
+- **[`packages/typescript-config`](packages/typescript-config)** - Shared TypeScript configuration for all apps
+- **[`packages/ui`](packages/ui)** - Shared UI components and styles for frontend applications 
 
 ## Quick Start
 
