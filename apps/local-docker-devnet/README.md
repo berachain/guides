@@ -24,17 +24,15 @@ To use latest releases instead of custom binaries, comment out these variables i
 ```bash
 # FROM: ./
 
-pushd /path/to/beacon-kit
+git clone https://github.com/berachain/beacon-kit && pushd beacon-kit
+# maybe: git checkout vx.y.z
 make build-docker
 
-# Extract the binary from the Docker image
 docker create --name temp-beacond beacond:$(git describe --tags --always --match "v*")
 docker cp temp-beacond:/usr/bin/beacond /tmp/beacond-custom
 docker rm temp-beacond
 
-# Update env.sh to use the custom binary
 popd
-# Set the path to the temporary file so build.sh can copy it to local directory
 sed -i '' 's|CUSTOM_BIN_BEACOND=.*|CUSTOM_BIN_BEACOND=/tmp/beacond-custom|' env.sh
 ```
 
@@ -43,7 +41,8 @@ sed -i '' 's|CUSTOM_BIN_BEACOND=.*|CUSTOM_BIN_BEACOND=/tmp/beacond-custom|' env.
 ```bash
 # FROM: ./
 
-pushd /path/to/bera-reth
+git clone https://github.com/berachain/bera-reth && pushd bera-reth
+# maybe: git checkout vx.y.z
 make docker-build-local
 
 docker create --name temp-reth bera-reth:local
@@ -51,7 +50,6 @@ docker cp temp-reth:/usr/local/bin/bera-reth /tmp/bera-reth-custom
 docker rm temp-reth
 
 popd
-# Set the path to the temporary file so build.sh can copy it to local directory
 sed -i '' 's|CUSTOM_BIN_RETH=.*|CUSTOM_BIN_RETH=/tmp/bera-reth-custom|' env.sh
 ```
 
