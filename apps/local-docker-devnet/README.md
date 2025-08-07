@@ -11,24 +11,15 @@ This is currently configured to run BeaconKit as a consensus client and Reth as 
 - MacOS
 - EVM Wallet (To import private key)
 
-## Custom Binaries
+## Custom Binaries or Release Builds?
 
-This devnet supports using custom builds of BeaconKit and bera-reth instead of the latest releases. This is useful for testing changes or using specific versions of the binaries.  If you want to use the docker images we release, skip the build step and don't set the `CUSTOM_BIN_` environment variables.
+This devnet supports using custom builds of BeaconKit and bera-reth instead of the latest releases. 
+To use latest releases instead of custom binaries, comment out these variables in `env.sh`.
 
-### Environment Variables
+- **CUSTOM_BIN_BEACOND**: Set to path of custom beacond binary 
+- **CUSTOM_BIN_RETH**: Set to path of custom reth binary
 
-- **CUSTOM_BIN_BEACOND**: Set to path of custom beacond binary (default: `./beacond-bectra`)
-- **CUSTOM_BIN_RETH**: Set to path of custom reth binary (default: not set)
-
-The build script will automatically copy custom binaries to the local directory for Docker build context. To use latest releases instead of custom binaries, comment out these variables in `env.sh`.
-
-### Building Custom Binaries in Docker Environment
-
-We build the binaries using the **recommended Makefile targets** provided by each repository, then extract the executables. This is the preferred approach over manual Docker commands.
-
-The build process extracts binaries to `/tmp/` and updates `env.sh` to point to these temporary locations. The `build.sh` script will then copy these binaries to the local directory for Docker build context.
-
-#### Building `beacond`
+### Building `beacond`
 
 ```bash
 # FROM: ./
@@ -47,7 +38,7 @@ popd
 sed -i '' 's|CUSTOM_BIN_BEACOND=.*|CUSTOM_BIN_BEACOND=/tmp/beacond-custom|' env.sh
 ```
 
-#### Building `bera-reth`
+### Building `bera-reth`
 
 ```bash
 # FROM: ./
