@@ -162,14 +162,27 @@ async function fetchValidators(clRpcUrl) {
     }
 }
 
-// Fetch block proposer address from consensus layer
-async function getBlockProposer(blockNumber, clRpcUrl) {
-    try {
-        const headerUrl = `${clRpcUrl}/header?height=${blockNumber}`;
-        const response = await axios.get(headerUrl);
-        return response.data.result.header.proposer_address;
-    } catch (error) {
-        throw new Error(`Failed to fetch block proposer for block ${blockNumber}: ${error.message}`);
+// Fetch block proposer address from consensus layer with retry logic
+async function getBlockProposer(blockNumber, clRpcUrl, retries = 3, delay = 1000) {
+    for (let attempt = 1; attempt <= retries; attempt++) {
+        try {
+            const headerUrl = `${clRpcUrl}/header?height=${blockNumber}`;
+            const response = await axios.get(headerUrl, {
+                timeout: 10000, // 10 second timeout
+                headers: {
+                    'Connection': 'keep-alive',
+                }
+            });
+            return response.data.result.header.proposer_address;
+        } catch (error) {
+            if (attempt === retries) {
+                throw new Error(`Failed to fetch block proposer for block ${blockNumber} after ${retries} attempts: ${error.message}`);
+            }
+            
+            console.warn(`Attempt ${attempt}/${retries} failed for block ${blockNumber}: ${error.message}. Retrying in ${delay}ms...`);
+            await new Promise(resolve => setTimeout(resolve, delay));
+            delay *= 2; // Exponential backoff
+        }
     }
 }
 
@@ -218,17 +231,17 @@ async function analyzeVotingPower(elProvider, clRpcUrl, maxBlocksToScan = 10000)
     
     for (let blockNum = currentBlock; blockNum > currentBlock - maxBlocksToScan && seenProposers.size < validators.length; blockNum--) {
         try {
-            // Get block from EL to extract extraData
-            const block = await elProvider.getBlock(blockNum);
-            if (!block) continue;
-            
-            // Get proposer address from CL
+            // Get proposer address from CL first (cheap)
             const proposerAddress = await getBlockProposer(blockNum, clRpcUrl);
             
             // Skip if we already know this proposer's client
             if (seenProposers.has(proposerAddress)) {
                 continue;
             }
+            
+            // Only now fetch block from EL to extract extraData
+            const block = await elProvider.getBlock(blockNum);
+            if (!block) continue;
             
             // Decode client from extraData
             const clientString = await decodeExtraDataAsAscii(block.extraData);
@@ -258,7 +271,7 @@ async function analyzeVotingPower(elProvider, clRpcUrl, maxBlocksToScan = 10000)
     
     console.log(`\nScanning complete. Scanned ${blocksScanned} blocks, identified ${seenProposers.size}/${validators.length} validators\n`);
     
-    // Step 4: Calculate voting power by client type
+    // Step 5: Calculate voting power by client type
     const clientVotingPower = new Map();
     const unknownValidators = [];
     
