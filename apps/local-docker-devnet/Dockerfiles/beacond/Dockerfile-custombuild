@@ -15,7 +15,7 @@ COPY ${CUSTOM_BIN_BEACOND} /tmp/beacond-custom
 RUN apt-get update && apt-get install -y curl wget;
 
 RUN echo "Using custom beacond binary ${CUSTOM_BIN_BEACOND}"; \
-    cp /tmp/beacond-custom ./beacond; \
-    chmod +x beacond;  \
-    ./beacond version; \
+    cp /tmp/beacond-custom /usr/local/bin/beacond; \
+    chmod +x /usr/local/bin/beacond;  \
+    beacond version; \
     sleep 3;

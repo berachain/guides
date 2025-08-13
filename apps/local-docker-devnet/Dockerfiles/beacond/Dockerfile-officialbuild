@@ -14,7 +14,7 @@ RUN apt-get update && apt-get install -y curl wget;
 RUN BEACOND_RELEASE_URL=$(curl -s https://api.github.com/repos/berachain/beacon-kit/releases/latest | grep '"browser_download_url":' | sed 's/.*"browser_download_url": "\(.*\)".*/\1/' | grep "linux-arm64" | grep -v "\.sig$"); \
     wget $BEACOND_RELEASE_URL; \
     tar -xzf beacond-*.tar.gz; \
-    mv beacond-v*-linux-*64 beacond; \
-    chmod +x beacond;  \
-    ./beacond version; \
+    mv beacond-v*-linux-*64 /usr/local/bin/beacond; \
+    chmod +x /usr/local/bin/beacond;  \
+    beacond version; \
     sleep 3;

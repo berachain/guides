@@ -11,6 +11,48 @@ This is currently configured to run BeaconKit as a consensus client and Reth as 
 - MacOS
 - EVM Wallet (To import private key)
 
+## Custom Binaries or Release Builds?
+
+This devnet supports using custom builds of BeaconKit and bera-reth instead of the latest releases. 
+To use latest releases instead of custom binaries, comment out these variables in `env.sh`.
+
+- **CUSTOM_BIN_BEACOND**: Set to path of custom beacond binary 
+- **CUSTOM_BIN_RETH**: Set to path of custom reth binary
+
+### Building `beacond`
+
+```bash
+# FROM: ./
+
+git clone https://github.com/berachain/beacon-kit && pushd beacon-kit
+# maybe: git checkout vx.y.z
+make build-docker
+
+docker create --name temp-beacond beacond:$(git describe --tags --always --match "v*")
+docker cp temp-beacond:/usr/bin/beacond /tmp/beacond-custom
+docker rm temp-beacond
+
+popd
+sed -i '' 's|CUSTOM_BIN_BEACOND=.*|CUSTOM_BIN_BEACOND=/tmp/beacond-custom|' env.sh
+```
+
+### Building `bera-reth`
+
+```bash
+# FROM: ./
+
+git clone https://github.com/berachain/bera-reth && pushd bera-reth
+# maybe: git checkout vx.y.z
+make docker-build-local
+
+docker create --name temp-reth bera-reth:local
+docker cp temp-reth:/usr/local/bin/bera-reth /tmp/bera-reth-custom
+docker rm temp-reth
+
+popd
+sed -i '' 's|CUSTOM_BIN_RETH=.*|CUSTOM_BIN_RETH=/tmp/bera-reth-custom|' env.sh
+```
+
 ## RPC Details
 
 | Name               | Value                                                            |
