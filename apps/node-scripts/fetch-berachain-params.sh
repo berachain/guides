@@ -9,7 +9,6 @@ export SEED_DATA_URL=https://raw.githubusercontent.com/berachain/beacon-kit/refs
 curl -s -o "$SEED_DATA_DIR/kzg-trusted-setup.json" $SEED_DATA_URL/kzg-trusted-setup.json
 curl -s -o "$SEED_DATA_DIR/genesis.json" $SEED_DATA_URL/genesis.json
 curl -s -o "$SEED_DATA_DIR/eth-genesis.json" $SEED_DATA_URL/eth-genesis.json
-curl -s -o "$SEED_DATA_DIR/eth-nether-genesis.json" $SEED_DATA_URL/eth-nether-genesis.json
 curl -s -o "$SEED_DATA_DIR/el-peers.txt" $SEED_DATA_URL/el-peers.txt
 curl -s -o "$SEED_DATA_DIR/el-bootnodes.txt" $SEED_DATA_URL/el-bootnodes.txt
 curl -s -o "$SEED_DATA_DIR/app.toml" $SEED_DATA_URL/app.toml
