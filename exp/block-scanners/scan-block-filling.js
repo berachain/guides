@@ -28,7 +28,7 @@ async function getProposerTitle(proposerAddress) {
                 db.close();
                 if (err) {
                     resolve(proposerAddress);
-                } else if (row && row.name) {
+                } else if (row && row.name && row.name !== 'N/A') {
                     resolve(row.name);
                 } else {
                     resolve(proposerAddress);
@@ -318,6 +318,21 @@ async function analyzeBlockProposers(provider, startBlock, endBlock, clRpcBaseUr
     
     console.log(`Total blocks scanned: ${totalBlocksScanned}`);
     
+    // Calculate overall averages
+    let totalTransactionsAcrossAll = 0;
+    let totalGasUsedAcrossAll = BigInt(0);
+    let totalBlocksAcrossAll = 0;
+    
+    for (const stats of Object.values(proposerStats)) {
+        totalTransactionsAcrossAll += stats.totalTransactions;
+        totalGasUsedAcrossAll += stats.totalGasUsed;
+        totalBlocksAcrossAll += stats.blockCount;
+    }
+    
+    const overallAvgTxsPerBlock = totalBlocksAcrossAll > 0 ? totalTransactionsAcrossAll / totalBlocksAcrossAll : 0;
+    const overallAvgGasUsed = totalBlocksAcrossAll > 0 ? Number(totalGasUsedAcrossAll) / totalBlocksAcrossAll : 0;
+    const overallAvgGasPercent = (overallAvgGasUsed / GAS_LIMIT_REFERENCE) * 100;
+    
     const tableData = [];
     for (const [proposer, stats] of Object.entries(proposerStats)) {
         const totalGasUsedNumber = Number(stats.totalGasUsed);
@@ -416,6 +431,12 @@ async function analyzeBlockProposers(provider, startBlock, endBlock, clRpcBaseUr
     if (formattedTableData.length > 0) {
         console.log("\nProposer Statistics Table:");
         console.table(formattedTableData);
+        
+        console.log("\n📊 Overall Sample Averages:");
+        console.log(`   Average Transactions per Block: ${overallAvgTxsPerBlock.toFixed(2)}`);
+        console.log(`   Average Gas Usage: ${overallAvgGasPercent.toFixed(2)}% of block limit`);
+        console.log(`   Total Blocks Analyzed: ${totalBlocksAcrossAll}`);
+        console.log(`   Total Transactions: ${totalTransactionsAcrossAll.toLocaleString()}`);
     } else {
         console.log("No proposer data collected to display in table.");
     }
