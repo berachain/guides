@@ -5,7 +5,7 @@ set -e
 
 ./setup-geth.sh  
 
-ARCHIVE_OPTION=$([ "$EL_ARCHIVE_NODE" = true ] && echo "--state.scheme hash --gcmode archive" || echo "--state.scheme hash")
+ARCHIVE_OPTION=$([ "$EL_ARCHIVE_NODE" = true ] && echo "--history.logs 0 --history.state 0 --history.transactions 0" || echo "")
 BOOTNODES_OPTION=$([ -n "$EL_BOOTNODES" ] && echo "--bootnodes $EL_BOOTNODES" || echo "")
 IP_OPTION=$([ -n "$MY_IP" ] && echo "--nat extip:$MY_IP" || echo "")
 PEERS_OPTION=$([ -n "$EL_PEERS_DNS" ] && echo "--discovery.dns $EL_PEERS_DNS" || echo "")
@@ -14,7 +14,6 @@ $GETH_BIN 					\
 	--datadir $GETH_DATA			\
 	--syncmode full				\
 	--ipcpath /tmp/geth.ipc.$EL_ETHRPC_PORT	\
-	--miner.gasprice 1			\
 	$BOOTNODES_OPTION			\
 	$ARCHIVE_OPTION				\
 	$IP_OPTION				\
