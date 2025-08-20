@@ -17,8 +17,8 @@ export BEACOND_CONFIG=$BEACOND_DATA/config  # can't change this. sorry.
 export JWT_PATH=$BEACOND_CONFIG/jwt.hex
 
 # need at least one of these
-export RETH_BIN=$(command -v bera-reth || command -v reth || echo $(pwd)/reth)
-export GETH_BIN=$(command -v bera-geth || command -v geth || echo $(pwd)/geth)
+export RETH_BIN=$(command -v bera-reth || echo $(pwd)/bera-reth)
+export GETH_BIN=$(command -v bera-geth || echo $(pwd)/bera-geth)
 
 # Leave this blank to use the default ports for the various services.
 # Set this to a port number (for example, 30000) to 
