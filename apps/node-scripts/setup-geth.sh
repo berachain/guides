@@ -15,8 +15,7 @@ echo "GETH_BIN: $GETH_BIN"
 echo "  Version: $($GETH_BIN version | grep Version)"
 
 cp "$SEED_DATA_DIR/eth-genesis.json" "$GETH_GENESIS_PATH"
-ARCHIVE_OPTION=$([ "$EL_ARCHIVE_NODE" = true ] && echo "--state.scheme hash" || echo "--state.scheme hash")
-$GETH_BIN init --datadir "$GETH_DATA" $ARCHIVE_OPTION "$GETH_GENESIS_PATH"
+$GETH_BIN init --datadir "$GETH_DATA" --state.scheme=path "$GETH_GENESIS_PATH"
 
 echo
 echo "✓ Geth set up."
