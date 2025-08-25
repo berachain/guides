@@ -46,32 +46,30 @@ function loadValidatorsFromCSV() {
 }
 
 // Function to make HTTP request to consensus RPC
-async function makeConsensusRequest(path) {
-    return new Promise((resolve, reject) => {
-        const url = `${CONSENSUS_RPC}${path}`;
-        const client = http;
-        
-        const req = client.get(url, (res) => {
-            let data = '';
-            res.on('data', (chunk) => {
-                data += chunk;
-            });
-            res.on('end', () => {
-                try {
-                    const response = JSON.parse(data);
-                    resolve(response);
-                } catch (error) {
-                    reject(error);
-                }
-            });
+function makeConsensusRequest(path, callback) {
+    const url = `${CONSENSUS_RPC}${path}`;
+    const client = http;
+    
+    const req = client.get(url, (res) => {
+        let data = '';
+        res.on('data', (chunk) => {
+            data += chunk;
         });
-
-        req.on('error', (error) => {
-            reject(error);
+        res.on('end', () => {
+            try {
+                const response = JSON.parse(data);
+                callback(null, response);
+            } catch (error) {
+                callback(error);
+            }
         });
-
-        req.end();
     });
+
+    req.on('error', (error) => {
+        callback(error);
+    });
+
+    req.end();
 }
 
 // Function to call a contract function using cast
@@ -95,7 +93,7 @@ async function callContractFunction(contractAddress, functionSignature, params, 
 }
 
 // Function to get block by number using cast
-async function getBlockByNumber(blockNumber, fullTransactions = false) {
+function getBlockByNumber(blockNumber, fullTransactions = false) {
     try {
         const hexBlockNumber = `0x${blockNumber.toString(16)}`;
         const cmd = `cast block ${hexBlockNumber} --rpc-url ${EXECUTION_RPC} --json`;
@@ -108,7 +106,7 @@ async function getBlockByNumber(blockNumber, fullTransactions = false) {
 }
 
 // Function to get the latest block number
-async function getLatestBlockNumber() {
+function getLatestBlockNumber() {
     try {
         const cmd = `cast block-number --rpc-url ${EXECUTION_RPC}`;
         const result = execSync(cmd, { encoding: 'utf8' }).trim();
@@ -155,31 +153,43 @@ function getMidnightTimestamp(date) {
 }
 
 // Function to find the boundary block for a given timestamp
-async function findBoundaryBlock(targetTimestamp, startBlock, endBlock) {
+function findBoundaryBlock(targetTimestamp, startBlock, endBlock, callback) {
     let left = startBlock;
     let right = endBlock;
     let result = null;
     let tries = 0;
     
-    while (left <= right) {
+    function searchBlock() {
+        if (left > right) {
+            console.error(`Found block after ${tries} tries`);
+            callback(result);
+            return;
+        }
+        
         tries++;
         const mid = Math.floor((left + right) / 2);
         
         try {
-            const block = await getBlockByNumber(mid, false);
+            const block = getBlockByNumber(mid, false);
             if (block && block.timestamp) {
                 const timestamp = parseInt(block.timestamp, 16);
                 
                 if (timestamp >= targetTimestamp) {
                     // Check if previous block is before target
                     if (mid > startBlock) {
-                        const prevBlock = await getBlockByNumber(mid - 1, false);
-                        if (prevBlock && prevBlock.timestamp) {
-                            const prevTimestamp = parseInt(prevBlock.timestamp, 16);
-                            if (prevTimestamp < targetTimestamp) {
-                                result = mid;
-                                break;
+                        try {
+                            const prevBlock = getBlockByNumber(mid - 1, false);
+                            if (prevBlock && prevBlock.timestamp) {
+                                const prevTimestamp = parseInt(prevBlock.timestamp, 16);
+                                if (prevTimestamp < targetTimestamp) {
+                                    result = mid;
+                                    console.error(`Found block after ${tries} tries`);
+                                    callback(result);
+                                    return;
+                                }
                             }
+                        } catch (prevError) {
+                            console.error(`Error getting previous block ${mid-1}:`, prevError.message);
                         }
                     }
                     right = mid - 1;
@@ -189,20 +199,29 @@ async function findBoundaryBlock(targetTimestamp, startBlock, endBlock) {
             } else {
                 right = mid - 1;
             }
+            
+            // Continue search in next tick to avoid stack overflow
+            process.nextTick(searchBlock);
         } catch (error) {
             console.error(`Error getting block ${mid}:`, error.message);
             right = mid - 1;
+            process.nextTick(searchBlock);
         }
     }
     
-    console.error(`Found block after ${tries} tries`);
-    return result;
+    // Start the search
+    searchBlock();
 }
 
 // Function to get validator voting power from consensus layer
-async function getValidatorVotingPower(blockHeight) {
-    try {
-        const response = await makeConsensusRequest(`/validators?height=${blockHeight}&per_page=99`);
+function getValidatorVotingPower(blockHeight, callback) {
+    makeConsensusRequest(`/validators?height=${blockHeight}&per_page=99`, (error, response) => {
+        if (error) {
+            console.error(`Error getting validator voting power for block ${blockHeight}:`, error.message);
+            callback(null);
+            return;
+        }
+        
         if (response.result && response.result.validators) {
             const validators = {};
             response.result.validators.forEach(validator => {
@@ -212,20 +231,18 @@ async function getValidatorVotingPower(blockHeight) {
                     pub_key: validator.pub_key.value
                 };
             });
-            return validators;
+            callback(validators);
+        } else {
+            callback(null);
         }
-        return null;
-    } catch (error) {
-        console.error(`Error getting validator voting power for block ${blockHeight}:`, error.message);
-        return null;
-    }
+    });
 }
 
 // Function to get boost amount for a validator from BGT contract using CometBFT public key with cast
-async function getValidatorBoost(validatorPubkey, blockNumber) {
+function getValidatorBoost(validatorPubkey, blockNumber) {
     try {
         // Call the boostees(bytes) function on the BGT contract
-        const result = await callContractFunction(
+        const result = callContractFunction(
             BGT_CONTRACT,
             "boostees(bytes)",
             [`0x${validatorPubkey}`],
@@ -262,84 +279,130 @@ function calculateBoostPerStake(boost, votingPower) {
 }
 
 // Main function to query one day
-async function queryOneDay(targetDate, validators, blockCache) {
+function queryOneDay(targetDate, validators, blockCache, callback) {
     const targetTimestamp = getMidnightTimestamp(targetDate);
     const dateStr = targetDate.toISOString().split('T')[0];
     
     // Get the latest block number to use as an upper bound
-    const latestBlock = await getLatestBlockNumber();
-    
-    // Determine start block - use cached block if available, otherwise start from 1
-    let startBlock = 1;
-    
-    // If we have a cache for a previous day, use that block as a starting point
-    // This helps narrow down the search range
-    const previousDay = new Date(targetDate);
-    previousDay.setDate(previousDay.getDate() - 1);
-    const prevDateStr = previousDay.toISOString().split('T')[0];
-    
-    if (blockCache.blocks[prevDateStr]) {
-        // Use the previous day's block as a starting point
-        startBlock = blockCache.blocks[prevDateStr];
-        console.error(`Using cached block ${startBlock} from ${prevDateStr} as starting point`);
+    let latestBlock;
+    try {
+        latestBlock = getLatestBlockNumber();
+        
+        // Determine start block - use cached block if available, otherwise start from 1
+        let startBlock = 1;
+        
+        // If we have a cache for a previous day, use that block as a starting point
+        // This helps narrow down the search range
+        const previousDay = new Date(targetDate);
+        previousDay.setDate(previousDay.getDate() - 1);
+        const prevDateStr = previousDay.toISOString().split('T')[0];
+        
+        if (blockCache.blocks[prevDateStr]) {
+            // Use the previous day's block as a starting point
+            startBlock = blockCache.blocks[prevDateStr];
+            console.error(`Using cached block ${startBlock} from ${prevDateStr} as starting point`);
+        }
+        
+        // Find the boundary block
+        findBoundaryBlock(targetTimestamp, startBlock, latestBlock, function(boundaryBlock) {
+            if (!boundaryBlock) {
+                console.error(`Could not find boundary block for ${dateStr}`);
+                callback(null);
+                return;
+            }
+            console.error(`Querying ${dateStr} @ block ${boundaryBlock}...`);
+            
+            // Save this block number in the cache for future use
+            blockCache.blocks[dateStr] = boundaryBlock;
+            saveBlockCache(blockCache);
+            
+            // Try to get validator voting power from consensus layer, retrying up to 5 times if needed
+            getVotingPowerWithRetry(boundaryBlock, 1, function(votingPowerData) {
+                if (!votingPowerData) {
+                    console.error(`Could not get voting power data for block ${boundaryBlock} after 5 attempts. Validator voting power is feeling a bit powerless.`);
+                    callback(null);
+                    return;
+                }
+                
+                // Process validators one by one
+                processValidators(validators, 0, [], votingPowerData, boundaryBlock, dateStr, callback);
+            });
+        });
+    } catch (error) {
+        console.error(`Error getting latest block number: ${error.message}`);
+        callback(null);
+    }
+}
+
+// Function to retry getting voting power data
+function getVotingPowerWithRetry(blockHeight, attempt, callback) {
+    if (attempt > 5) {
+        callback(null);
+        return;
     }
     
-    // Find the boundary block
-    const boundaryBlock = await findBoundaryBlock(targetTimestamp, startBlock, latestBlock);
-    if (!boundaryBlock) {
-        console.error(`Could not find boundary block for ${dateStr}`);
-        return null;
-    }
-    console.error(`Querying ${dateStr} @ block ${boundaryBlock}...`);
-    
-    // Save this block number in the cache for future use
-    blockCache.blocks[dateStr] = boundaryBlock;
-    saveBlockCache(blockCache);
-    
-    // Try to get validator voting power from consensus layer, retrying up to 5 times if needed
-    let votingPowerData = null;
-    for (let attempt = 1; attempt <= 5; attempt++) {
-        votingPowerData = await getValidatorVotingPower(boundaryBlock);
+    getValidatorVotingPower(blockHeight, function(votingPowerData) {
         if (votingPowerData) {
-            break;
+            callback(votingPowerData);
+        } else {
+            console.error(`Attempt ${attempt} to get voting power data for block ${blockHeight} failed.`);
+            if (attempt < 5) {
+                // Wait a bit before retrying (exponential backoff: 500ms, 1000ms, 1500ms, etc.)
+                setTimeout(function() {
+                    getVotingPowerWithRetry(blockHeight, attempt + 1, callback);
+                }, attempt * 500);
+            } else {
+                callback(null);
+            }
         }
-        console.error(`Attempt ${attempt} to get voting power data for block ${boundaryBlock} failed.`);
-        if (attempt < 5) {
-            // Wait a bit before retrying (exponential backoff: 500ms, 1000ms, 1500ms, etc.)
-            await new Promise(res => setTimeout(res, attempt * 500));
-        }
-    }
-    if (!votingPowerData) {
-        console.error(`Could not get voting power data for block ${boundaryBlock} after 5 attempts. Validator voting power is feeling a bit powerless.`);
-        return null;
+    });
+}
+
+// Process validators one by one to avoid overwhelming the RPC
+function processValidators(validators, index, results, votingPowerData, boundaryBlock, dateStr, callback) {
+    if (index >= validators.length) {
+        callback(results);
+        return;
     }
     
-    // Get boost amounts for each genesis validator in parallel
-    const boostPromises = validators.map(async (validator) => {
-        const validatorAddress = validator.proposer;
-        const rawVotingPower = votingPowerData[validatorAddress]?.voting_power || 0;
-        const rawBoostAmount = await getValidatorBoost(validator.pubkey, boundaryBlock);
+    const validator = validators[index];
+    const validatorAddress = validator.proposer;
+    const rawVotingPower = votingPowerData[validatorAddress]?.voting_power || 0;
+    
+    try {
+        const rawBoostAmount = getValidatorBoost(validator.pubkey, boundaryBlock);
         
         // Convert values to more readable units
         const votingPower = gweiToBillions(rawVotingPower);
         const boostAmount = weiToEther(rawBoostAmount);
         const boostPerStake = calculateBoostPerStake(boostAmount, votingPower);
         
-        return {
-            date: targetDate.toISOString().split('T')[0],
+        results.push({
+            date: dateStr,
             name: validator.name,
             validator_address: validatorAddress,
             operator_address: validator.operatorAddress,
             voting_power: votingPower,
             boost_amount: boostAmount,
             boost_per_stake: boostPerStake
-        };
-    });
+        });
+    } catch (error) {
+        console.error(`Error processing validator ${validator.name}: ${error.message}`);
+        results.push({
+            date: dateStr,
+            name: validator.name,
+            validator_address: validatorAddress,
+            operator_address: validator.operatorAddress,
+            voting_power: gweiToBillions(rawVotingPower),
+            boost_amount: 0,
+            boost_per_stake: 0
+        });
+    }
     
-    // Wait for all boost queries to complete
-    const results = await Promise.all(boostPromises);
-    
-    return results;
+    // Process next validator after a small delay
+    setTimeout(function() {
+        processValidators(validators, index + 1, results, votingPowerData, boundaryBlock, dateStr, callback);
+    }, 50); // 50ms delay between validators to avoid overwhelming the RPC
 }
 
 // Function to generate the report with data from multiple days
@@ -403,7 +466,7 @@ function generateReport(validatorData, dates) {
 }
 
 // Main execution
-async function main() {
+function main() {
     if (!EXECUTION_RPC || !BGT_CONTRACT) {
         console.error('Please set EXECUTION_RPC and BGT_CONTRACT before running');
         return;
@@ -432,32 +495,46 @@ async function main() {
     
     console.error(`Querying data for ${DAYS_TO_QUERY} days starting from ${dates[0].toISOString().split('T')[0]}`);
     
-    // Query data for each day
-    const allResults = [];
-    for (const date of dates) {
-        const results = await queryOneDay(date, GENESIS_VALIDATORS, blockCache);
+    // Process dates sequentially
+    processDateSequentially(dates, 0, [], GENESIS_VALIDATORS, blockCache);
+}
+
+// Process dates one by one
+function processDateSequentially(dates, index, allResults, validators, blockCache) {
+    if (index >= dates.length) {
+        // All dates processed, generate report
+        if (allResults.length > 0) {
+            // Generate the report
+            const report = generateReport(allResults, dates);
+            
+            // Write the report to a file
+            const reportFileName = `validator_boost_report_${new Date().toISOString().split('T')[0]}.csv`;
+            fs.writeFileSync(reportFileName, report);
+            console.error(`Report saved to ${reportFileName}`);
+            
+            // Also output to stdout
+            console.log(report);
+        } else {
+            console.error('No results to report.');
+        }
+        return;
+    }
+    
+    const date = dates[index];
+    console.error(`Processing date ${date.toISOString().split('T')[0]} (${index + 1}/${dates.length})...`);
+    
+    queryOneDay(date, validators, blockCache, function(results) {
         if (results) {
             allResults.push(results);
+            console.error(`Successfully processed ${date.toISOString().split('T')[0]}`);
         } else {
             console.error(`Failed to get results for ${date.toISOString().split('T')[0]}`);
         }
-    }
-    
-    if (allResults.length > 0) {
-        // Generate the report
-        const report = generateReport(allResults, dates);
         
-        // Write the report to a file
-        const reportFileName = `validator_boost_report_${new Date().toISOString().split('T')[0]}.csv`;
-        fs.writeFileSync(reportFileName, report);
-        console.error(`Report saved to ${reportFileName}`);
-        
-        // Also output to stdout
-        console.log(report);
-    } else {
-        console.error('No results to report.');
-    }
+        // Process next date
+        processDateSequentially(dates, index + 1, allResults, validators, blockCache);
+    });
 }
 
 // Run the script
-main().catch(console.error);
+main();
