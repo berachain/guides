@@ -7,6 +7,8 @@ const { execSync } = require('child_process');
 const CONSENSUS_RPC = 'http://37.27.231.195:59820';
 const EXECUTION_RPC = 'http://37.27.231.195:59830';
 const BGT_CONTRACT = '0x656b95E550C07a9ffe548bd4085c72418Ceb1dba';
+const BERACHEF_CONTRACT = '0x0000000000000000000000000000000000001002'; // BeraChef contract
+const QUEUE_REWARD_ALLOCATION_EVENT_TOPIC = '0x22fe555512d9a04d20e3735ac5fe7a73227c2c6398f1453a5d60ce7aaf5de2ae';
 const SECONDS_PER_DAY = 86400;
 const BLOCK_TIME = 2; // 2 seconds per block
 const BLOCK_CACHE_FILE = '.last_block_cache.json'; // File to store the last block number
@@ -238,6 +240,27 @@ function getValidatorVotingPower(blockHeight, callback) {
     });
 }
 
+// Function to get QueueRewardAllocation events for a validator within a block range
+function getQueueRewardAllocationEvents(validatorPubkey, fromBlock, toBlock) {
+    try {
+        // Format the validator pubkey for the filter
+        const pubkeyTopic = `0x${validatorPubkey.padStart(64, '0')}`;
+        
+        // Build the cast logs command
+        const cmd = `cast logs --from-block ${fromBlock} --to-block ${toBlock} --rpc-url ${EXECUTION_RPC} --address ${BERACHEF_CONTRACT} --topic0 ${QUEUE_REWARD_ALLOCATION_EVENT_TOPIC} --topic1 ${pubkeyTopic}`;
+        
+        // Execute the command
+        const result = execSync(cmd, { encoding: 'utf8' }).trim();
+        
+        // Parse the result - count the number of events
+        const events = result.split('\n').filter(line => line.trim().length > 0);
+        return events.length;
+    } catch (error) {
+        // If there's an error or no events, return 0
+        return 0;
+    }
+}
+
 // Function to get boost amount for a validator from BGT contract using CometBFT public key with cast
 function getValidatorBoost(validatorPubkey, blockNumber) {
     try {
@@ -278,43 +301,74 @@ function calculateBoostPerStake(boost, votingPower) {
     return boost / votingPower;
 }
 
-// Main function to query one day
-function queryOneDay(targetDate, validators, blockCache, callback) {
-    const targetTimestamp = getMidnightTimestamp(targetDate);
-    const dateStr = targetDate.toISOString().split('T')[0];
+// Function to find all day boundary blocks for the period
+function findAllDayBoundaries(dates, callback) {
+    const latestBlock = getLatestBlockNumber();
+    const boundaryBlocks = {};
+    let startBlock = 1;
+    let processedDates = 0;
     
-    // Get the latest block number to use as an upper bound
-    let latestBlock;
-    try {
-        latestBlock = getLatestBlockNumber();
+    // Process each date to find its boundary block
+    function processDates(index) {
+        if (index >= dates.length) {
+            console.error(`Found all ${processedDates} day boundary blocks`);
+            callback(boundaryBlocks);
+            return;
+        }
         
-        // Determine start block - use cached block if available, otherwise start from 1
-        let startBlock = 1;
+        const date = dates[index];
+        const dateStr = date.toISOString().split('T')[0];
+        const targetTimestamp = getMidnightTimestamp(date);
         
-        // If we have a cache for a previous day, use that block as a starting point
-        // This helps narrow down the search range
-        const previousDay = new Date(targetDate);
+        // Check if we have a cached block for the previous day
+        const previousDay = new Date(date);
         previousDay.setDate(previousDay.getDate() - 1);
         const prevDateStr = previousDay.toISOString().split('T')[0];
         
-        if (blockCache.blocks[prevDateStr]) {
+        if (boundaryBlocks[prevDateStr]) {
             // Use the previous day's block as a starting point
-            startBlock = blockCache.blocks[prevDateStr];
+            startBlock = boundaryBlocks[prevDateStr];
             console.error(`Using cached block ${startBlock} from ${prevDateStr} as starting point`);
         }
         
-        // Find the boundary block
         findBoundaryBlock(targetTimestamp, startBlock, latestBlock, function(boundaryBlock) {
-            if (!boundaryBlock) {
+            if (boundaryBlock) {
+                boundaryBlocks[dateStr] = boundaryBlock;
+                processedDates++;
+                console.error(`Found boundary block ${boundaryBlock} for ${dateStr} (${index + 1}/${dates.length})`);
+            } else {
                 console.error(`Could not find boundary block for ${dateStr}`);
-                callback(null);
-                return;
             }
-            console.error(`Querying ${dateStr} @ block ${boundaryBlock}...`);
             
-            // Save this block number in the cache for future use
-            blockCache.blocks[dateStr] = boundaryBlock;
-            saveBlockCache(blockCache);
+            // Process next date
+            process.nextTick(() => processDates(index + 1));
+        });
+    }
+    
+    // Start processing dates
+    processDates(0);
+}
+
+// Main function to query one day
+function queryOneDay(targetDate, validators, boundaryBlocks, callback) {
+    const dateStr = targetDate.toISOString().split('T')[0];
+    
+    // Get the boundary blocks for this day and the next day
+    const startBlock = boundaryBlocks[dateStr];
+    
+    // Get the next day's date
+    const nextDay = new Date(targetDate);
+    nextDay.setDate(nextDay.getDate() + 1);
+    const nextDateStr = nextDay.toISOString().split('T')[0];
+    const endBlock = boundaryBlocks[nextDateStr] ? boundaryBlocks[nextDateStr] - 1 : getLatestBlockNumber();
+    
+    if (!startBlock) {
+        console.error(`No boundary block found for ${dateStr}`);
+        callback(null);
+        return;
+    }
+    
+    console.error(`Querying ${dateStr} from block ${startBlock} to ${endBlock}...`);
             
             // Try to get validator voting power from consensus layer, retrying up to 5 times if needed
             getVotingPowerWithRetry(boundaryBlock, 1, function(votingPowerData) {
@@ -324,8 +378,22 @@ function queryOneDay(targetDate, validators, blockCache, callback) {
                     return;
                 }
                 
-                // Process validators one by one
-                processValidators(validators, 0, [], votingPowerData, boundaryBlock, dateStr, callback);
+                // Process validators to get boost data
+                processValidators(validators, 0, [], votingPowerData, startBlock, dateStr, function(boostResults) {
+                    // Now get reward allocation events for the day
+                    queryRewardAllocationsForDay(startBlock, endBlock, validators, function(eventResults) {
+                        // Merge boost results with event results
+                        const mergedResults = boostResults.map(boostData => {
+                            const eventData = eventResults.find(e => e.name === boostData.name);
+                            return {
+                                ...boostData,
+                                reward_allocation_events: eventData ? eventData.reward_allocation_events : 0
+                            };
+                        });
+                        
+                        callback(mergedResults);
+                    });
+                });
             });
         });
     } catch (error) {
@@ -356,6 +424,54 @@ function getVotingPowerWithRetry(blockHeight, attempt, callback) {
             }
         }
     });
+}
+
+// Function to query reward allocation events for one day
+function queryRewardAllocationsForDay(startBlock, endBlock, validators, callback) {
+    const results = [];
+    let processedValidators = 0;
+    
+    function processValidator(index) {
+        if (index >= validators.length) {
+            callback(results);
+            return;
+        }
+        
+        const validator = validators[index];
+        
+        try {
+            // Get QueueRewardAllocation events for this validator
+            const eventCount = getQueueRewardAllocationEvents(validator.pubkey, startBlock, endBlock);
+            
+            results.push({
+                name: validator.name,
+                validator_address: validator.proposer,
+                operator_address: validator.operatorAddress,
+                pubkey: validator.pubkey,
+                reward_allocation_events: eventCount
+            });
+            
+            processedValidators++;
+            if (processedValidators % 5 === 0) {
+                console.error(`Processed ${processedValidators}/${validators.length} validators`);
+            }
+        } catch (error) {
+            console.error(`Error processing validator ${validator.name}: ${error.message}`);
+            results.push({
+                name: validator.name,
+                validator_address: validator.proposer,
+                operator_address: validator.operatorAddress,
+                pubkey: validator.pubkey,
+                reward_allocation_events: 0
+            });
+        }
+        
+        // Process next validator after a small delay
+        setTimeout(() => processValidator(index + 1), 50);
+    }
+    
+    // Start processing validators
+    processValidator(0);
 }
 
 // Process validators one by one to avoid overwhelming the RPC
@@ -418,7 +534,10 @@ function generateReport(validatorData, dates) {
                     name: validator.name,
                     validator_address: validator.validator_address,
                     operator_address: validator.operator_address,
-                    days: {}
+                    days: {},
+                    total_reward_events: 0,
+                    avg_reward_events: 0,
+                    avg_boost_per_stake: 0
                 };
             }
             
@@ -426,9 +545,34 @@ function generateReport(validatorData, dates) {
             validatorMap[validator.name].days[validator.date] = {
                 voting_power: validator.voting_power,
                 boost_amount: validator.boost_amount,
-                boost_per_stake: validator.boost_per_stake
+                boost_per_stake: validator.boost_per_stake,
+                reward_allocation_events: validator.reward_allocation_events || 0
             };
+            
+            // Add to total events
+            validatorMap[validator.name].total_reward_events += validator.reward_allocation_events || 0;
         });
+    });
+    
+    // Calculate averages for each validator
+    Object.values(validatorMap).forEach(validator => {
+        const dayCount = Object.keys(validator.days).length;
+        if (dayCount > 0) {
+            validator.avg_reward_events = validator.total_reward_events / dayCount;
+            
+            // Calculate average boost per stake
+            let totalBoostPerStake = 0;
+            let daysWithData = 0;
+            
+            Object.values(validator.days).forEach(day => {
+                if (day.boost_per_stake > 0) {
+                    totalBoostPerStake += day.boost_per_stake;
+                    daysWithData++;
+                }
+            });
+            
+            validator.avg_boost_per_stake = daysWithData > 0 ? totalBoostPerStake / daysWithData : 0;
+        }
     });
     
     // Generate the CSV header
@@ -436,11 +580,12 @@ function generateReport(validatorData, dates) {
     dates.forEach(date => {
         const dateStr = date.toISOString().split('T')[0];
         if (SHOW_DETAILED_INFO) {
-            header += `,${dateStr} VP,${dateStr} Boost,${dateStr} Boost/Stake`;
+            header += `,${dateStr} VP,${dateStr} Boost,${dateStr} Boost/Stake,${dateStr} Reward Events`;
         } else {
-            header += `,${dateStr} Boost/Stake`;
+            header += `,${dateStr} Boost/Stake,${dateStr} Reward Events`;
         }
     });
+    header += ',Avg Reward Events,Avg Boost/Stake';
     
     // Generate the CSV rows
     const rows = [];
@@ -452,11 +597,14 @@ function generateReport(validatorData, dates) {
             const dayData = validator.days[dateStr] || { voting_power: 0, boost_amount: 0, boost_per_stake: 0 };
             
             if (SHOW_DETAILED_INFO) {
-                row += `,${dayData.voting_power.toFixed(2)},${dayData.boost_amount.toFixed(2)},${dayData.boost_per_stake.toFixed(4)}`;
+                row += `,${dayData.voting_power.toFixed(2)},${dayData.boost_amount.toFixed(2)},${dayData.boost_per_stake.toFixed(4)},${dayData.reward_allocation_events}`;
             } else {
-                row += `,${dayData.boost_per_stake.toFixed(4)}`;
+                row += `,${dayData.boost_per_stake.toFixed(4)},${dayData.reward_allocation_events}`;
             }
         });
+        
+        // Add average columns
+        row += `,${validator.avg_reward_events.toFixed(2)},${validator.avg_boost_per_stake.toFixed(4)}`;
         
         rows.push(row);
     });
@@ -467,8 +615,8 @@ function generateReport(validatorData, dates) {
 
 // Main execution
 function main() {
-    if (!EXECUTION_RPC || !BGT_CONTRACT) {
-        console.error('Please set EXECUTION_RPC and BGT_CONTRACT before running');
+    if (!EXECUTION_RPC || !BGT_CONTRACT || !BERACHEF_CONTRACT) {
+        console.error('Please set EXECUTION_RPC, BGT_CONTRACT, and BERACHEF_CONTRACT before running');
         return;
     }
     
@@ -495,8 +643,15 @@ function main() {
     
     console.error(`Querying data for ${DAYS_TO_QUERY} days starting from ${dates[0].toISOString().split('T')[0]}`);
     
-    // Process dates sequentially
-    processDateSequentially(dates, 0, [], GENESIS_VALIDATORS, blockCache);
+    // First, find all day boundary blocks
+    findAllDayBoundaries(dates, function(boundaryBlocks) {
+        // Save the boundary blocks to the cache
+        blockCache.blocks = { ...blockCache.blocks, ...boundaryBlocks };
+        saveBlockCache(blockCache);
+        
+        // Now process dates sequentially
+        processDateSequentially(dates, 0, [], GENESIS_VALIDATORS, boundaryBlocks);
+    });
 }
 
 // Process dates one by one
@@ -508,7 +663,7 @@ function processDateSequentially(dates, index, allResults, validators, blockCach
             const report = generateReport(allResults, dates);
             
             // Write the report to a file
-            const reportFileName = `validator_boost_report_${new Date().toISOString().split('T')[0]}.csv`;
+            const reportFileName = `validator_boost_reward_report_${new Date().toISOString().split('T')[0]}.csv`;
             fs.writeFileSync(reportFileName, report);
             console.error(`Report saved to ${reportFileName}`);
             
