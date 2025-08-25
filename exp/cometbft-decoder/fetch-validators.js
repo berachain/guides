@@ -203,6 +203,101 @@ fragment ApiVaultIncentive on GqlRewardVaultIncentive {
 }`
 };
 
+// Introspection query to explore the schema
+const introspectionQuery = {
+  "query": `query IntrospectionQuery {
+    __schema {
+      types {
+        name
+        description
+        fields {
+          name
+          description
+          type {
+            name
+            kind
+            ofType {
+              name
+              kind
+            }
+          }
+        }
+      }
+    }
+  }`
+};
+
+// Try to get more detailed validator info
+const detailedValidatorQuery = {
+  "operationName": "GetDetailedValidator",
+  "variables": {
+    "chain": "BERACHAIN",
+    "where": {},
+    "skip": 0,
+    "pageSize": 1
+  },
+  "query": `query GetDetailedValidator($where: GqlValidatorFilter, $chain: GqlChain, $pageSize: Int, $skip: Int) {
+    validators: polGetValidators(
+      where: $where
+      first: $pageSize
+      skip: $skip
+      chain: $chain
+    ) {
+      validators {
+        id
+        pubkey
+        operator
+        address
+        proposer_address
+        consensus_address
+        bech32_address
+        hex_address
+        metadata {
+          name
+          logoURI
+          website
+          description
+        }
+        dynamicData {
+          activeBoostAmount
+          stakedBeraAmount
+        }
+      }
+    }
+  }`
+};
+
+// Try to explore the valStats field
+const valStatsQuery = {
+  "operationName": "GetValidatorStats",
+  "variables": {
+    "chain": "BERACHAIN",
+    "where": {},
+    "skip": 0,
+    "pageSize": 1
+  },
+  "query": `query GetValidatorStats($where: GqlValidatorFilter, $chain: GqlChain, $pageSize: Int, $skip: Int) {
+    validators: polGetValidators(
+      where: $where
+      first: $pageSize
+      skip: $skip
+      chain: $chain
+    ) {
+      validators {
+        id
+        pubkey
+        operator
+        valStats {
+          __typename
+        }
+        metadata {
+          name
+        }
+      }
+    }
+  }`
+};
+
 // Request options matching the curl command
 const requestOptions = {
   hostname: 'api.berachain.com',
@@ -265,6 +360,134 @@ async function fetchAllValidators() {
   try {
     console.log('Fetching validators from Berachain GraphQL API...');
     
+    // First, let's try to introspect the schema to see what's available
+    console.log('\n--- Trying GraphQL Introspection ---');
+    try {
+      const introspectionOptions = { ...requestOptions };
+      const introspectionPostData = JSON.stringify(introspectionQuery);
+      introspectionOptions.headers['content-length'] = Buffer.byteLength(introspectionPostData);
+      
+      const introspectionResponse = await new Promise((resolve, reject) => {
+        const req = https.request(introspectionOptions, (res) => {
+          let data = '';
+          res.on('data', (chunk) => data += chunk);
+          res.on('end', () => {
+            if (res.statusCode >= 200 && res.statusCode < 300) {
+              try {
+                resolve(JSON.parse(data));
+              } catch (e) {
+                reject(new Error(`Failed to parse introspection JSON: ${e.message}`));
+              }
+            } else {
+              reject(new Error(`Introspection HTTP ${res.statusCode}: ${data}`));
+            }
+          });
+        });
+        req.on('error', reject);
+        req.write(introspectionPostData);
+        req.end();
+      });
+      
+      console.log('Introspection response received');
+      if (introspectionResponse.data && introspectionResponse.data.__schema) {
+        const validatorType = introspectionResponse.data.__schema.types.find(t => t.name === 'GqlValidator');
+        if (validatorType) {
+          console.log('\nAvailable fields for GqlValidator:');
+          validatorType.fields.forEach(field => {
+            console.log(`  - ${field.name}: ${field.type.name || field.type.kind}`);
+          });
+        }
+      }
+    } catch (introspectionError) {
+      console.log('Introspection failed (this is normal for production APIs):', introspectionError.message);
+    }
+    
+    // Now try the detailed validator query
+    console.log('\n--- Trying Detailed Validator Query ---');
+    try {
+      const detailedOptions = { ...requestOptions };
+      const detailedPostData = JSON.stringify(detailedValidatorQuery);
+      detailedOptions.headers['content-length'] = Buffer.byteLength(detailedPostData);
+      
+      const detailedResponse = await new Promise((resolve, reject) => {
+        const req = https.request(detailedOptions, (res) => {
+          let data = '';
+          res.on('data', (chunk) => data += chunk);
+          res.on('end', () => {
+            if (res.statusCode >= 200 && res.statusCode < 300) {
+              try {
+                resolve(JSON.parse(data));
+              } catch (e) {
+                reject(new Error(`Failed to parse detailed JSON: ${e.message}`));
+              }
+            } else {
+              reject(new Error(`Detailed query HTTP ${res.statusCode}: ${data}`));
+            }
+          });
+        });
+        req.on('error', reject);
+        req.write(detailedPostData);
+        req.end();
+      });
+      
+      console.log('Detailed validator response received');
+      if (detailedResponse.data && detailedResponse.data.validators && detailedResponse.data.validators.validators) {
+        const firstValidator = detailedResponse.data.validators.validators[0];
+        console.log('\nDetailed validator fields available:');
+        console.log(Object.keys(firstValidator));
+        console.log('\nFirst validator data:');
+        console.log(JSON.stringify(firstValidator, null, 2));
+      }
+    } catch (detailedError) {
+      console.log('Detailed query failed:', detailedError.message);
+    }
+    
+    // Now try the valStats query
+    console.log('\n--- Trying ValStats Query ---');
+    try {
+      const valStatsOptions = { ...requestOptions };
+      const valStatsPostData = JSON.stringify(valStatsQuery);
+      valStatsOptions.headers['content-length'] = Buffer.byteLength(valStatsPostData);
+      
+      const valStatsResponse = await new Promise((resolve, reject) => {
+        const req = https.request(valStatsOptions, (res) => {
+          let data = '';
+          res.on('data', (chunk) => data += chunk);
+          res.on('end', () => {
+            if (res.statusCode >= 200 && res.statusCode < 300) {
+              try {
+                resolve(JSON.parse(data));
+              } catch (e) {
+                reject(new Error(`Failed to parse valStats JSON: ${e.message}`));
+              }
+            } else {
+              reject(new Error(`ValStats query HTTP ${res.statusCode}: ${data}`));
+            }
+          });
+        });
+        req.on('error', reject);
+        req.write(valStatsPostData);
+        req.end();
+      });
+      
+      console.log('ValStats response received');
+      if (valStatsResponse.data && valStatsResponse.data.validators && valStatsResponse.data.validators.validators) {
+        const firstValidator = valStatsResponse.data.validators.validators[0];
+        console.log('\nValStats validator fields available:');
+        console.log(Object.keys(firstValidator));
+        if (firstValidator.valStats) {
+          console.log('\nValStats fields available:');
+          console.log(Object.keys(firstValidator.valStats));
+          console.log('\nValStats data:');
+          console.log(JSON.stringify(firstValidator.valStats, null, 2));
+        }
+      }
+    } catch (valStatsError) {
+      console.log('ValStats query failed:', valStatsError.message);
+    }
+    
+    // Now proceed with the original query
+    console.log('\n--- Fetching Validators with Original Query ---');
     const response = await makeRequest();
     
     if (!response.data || !response.data.validators) {
@@ -332,35 +555,42 @@ async function fetchAllValidators() {
         address TEXT PRIMARY KEY,
         compressed_pubkey TEXT,
         name TEXT,
+        proposer_address TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
 
     // Process and output the data
     console.log('\n--- CSV Output ---');
-    console.log('name,address,compressed_pubkey,operator');
+    console.log('name,address,cometbft_pubkey,operator,proposer_address');
+    console.log('Note: proposer_address is not available from GraphQL API - would need consensus layer RPC queries');
+    console.log('Note: cometbft_pubkey contains the raw CometBFT public key (not compressed)');
     
-    let csvData = 'name,address,compressed_pubkey,operator\n';
+    let csvData = 'name,address,cometbft_pubkey,operator,proposer_address\n';
     
     for (const validator of allValidators) {
       const name = validator.metadata?.name || 'N/A';
       const address = validator.id || 'N/A'; // Using id as address to match Go structure
-      const compressed_pubkey = validator.pubkey || 'N/A';
+      const cometbft_pubkey = validator.pubkey || 'N/A';
       const operator = validator.operator || 'N/A';
+      // Note: proposer_address is not available from the GraphQL API
+      // To get proposer information, we would need to query the consensus layer RPC
+      // for recent blocks and extract proposer_address from block headers
+      const proposer_address = 'N/A'; // Not available from GraphQL API
       
       // Escape commas in name
       const escapedName = name.replace(/,/g, ';');
       
-      const csvLine = `${escapedName},${address},${compressed_pubkey},${operator}`;
+      const csvLine = `${escapedName},${address},${cometbft_pubkey},${operator},${proposer_address}`;
       console.log(csvLine);
       csvData += csvLine + '\n';
       
       // Insert into database (matching Go code structure)
       try {
         await db.run(`
-          INSERT OR REPLACE INTO validators (address, compressed_pubkey, name)
-          VALUES (?, ?, ?)
-        `, [address, compressed_pubkey, escapedName]);
+          INSERT OR REPLACE INTO validators (address, compressed_pubkey, name, proposer_address)
+          VALUES (?, ?, ?, ?)
+        `, [address, cometbft_pubkey, escapedName, proposer_address]);
       } catch (err) {
         console.error(`Error inserting validator ${address}: ${err.message}`);
       }
