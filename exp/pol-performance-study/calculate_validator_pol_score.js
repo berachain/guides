@@ -395,10 +395,7 @@ function queryOneDay(targetDate, validators, boundaryBlocks, callback) {
                     });
                 });
             });
-        });
-    } catch (error) {
-        console.error(`Error getting latest block number: ${error.message}`);
-        callback(null);
+        }
     }
 }
 
