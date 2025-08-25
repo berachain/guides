@@ -1,5 +1,0 @@
-packages:
-  - 'erc20-scanner'
-  - 'gas-burner'
-  - 'block-scanners'
-  - 'cometbft-decoder' 
