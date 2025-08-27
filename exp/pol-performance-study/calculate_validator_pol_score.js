@@ -2,6 +2,7 @@ const https = require('https');
 const http = require('http');
 const fs = require('fs');
 const { execSync } = require('child_process');
+const crypto = require('crypto');
 
 // Configuration
 const CONSENSUS_RPC = 'http://37.27.231.195:59820';
@@ -75,7 +76,7 @@ function makeConsensusRequest(path, callback) {
 }
 
 // Function to call a contract function using cast
-async function callContractFunction(contractAddress, functionSignature, params, blockNumber = 'latest') {
+function callContractFunction(contractAddress, functionSignature, params, blockNumber = 'latest') {
     try {
         // Format parameters for cast call
         const formattedParams = params.map(p => `"${p}"`).join(' ');
@@ -85,7 +86,10 @@ async function callContractFunction(contractAddress, functionSignature, params, 
         const cmd = `cast call ${blockParam} --rpc-url ${EXECUTION_RPC} ${contractAddress} "${functionSignature}" ${formattedParams}`;
         
         // Execute the command
-        const result = execSync(cmd, { encoding: 'utf8' }).trim();
+        const result = execSync(cmd, { 
+            encoding: 'utf8',
+            maxBuffer: 1024 * 1024 * 10 // 10MB buffer
+        }).trim();
         
         return result;
     } catch (error) {
@@ -111,7 +115,10 @@ function getBlockByNumber(blockNumber, fullTransactions = false) {
 function getLatestBlockNumber() {
     try {
         const cmd = `cast block-number --rpc-url ${EXECUTION_RPC}`;
-        const result = execSync(cmd, { encoding: 'utf8' }).trim();
+        const result = execSync(cmd, { 
+            encoding: 'utf8',
+            maxBuffer: 1024 * 1024 * 10 // 10MB buffer
+        }).trim();
         return parseInt(result);
     } catch (error) {
         console.error(`Error getting latest block number: ${error.message}`);
@@ -240,24 +247,74 @@ function getValidatorVotingPower(blockHeight, callback) {
     });
 }
 
-// Function to get QueueRewardAllocation events for a validator within a block range
-function getQueueRewardAllocationEvents(validatorPubkey, fromBlock, toBlock) {
+// Function to get QueueRewardAllocation events for all validators within a block range
+function getQueueRewardAllocationEventsForAllValidators(fromBlock, toBlock, genesisValidators) {
     try {
-        // Format the validator pubkey for the filter
-        const pubkeyTopic = `0x${validatorPubkey.padStart(64, '0')}`;
+        const MAX_BLOCK_RANGE = 99999; // Stay under the 100000 limit
+        let allResults = '';
         
-        // Build the cast logs command
-        const cmd = `cast logs --from-block ${fromBlock} --to-block ${toBlock} --rpc-url ${EXECUTION_RPC} --address ${BERACHEF_CONTRACT} --topic0 ${QUEUE_REWARD_ALLOCATION_EVENT_TOPIC} --topic1 ${pubkeyTopic}`;
+        // Process in chunks if the range is too large
+        for (let currentBlock = fromBlock; currentBlock <= toBlock; currentBlock += MAX_BLOCK_RANGE) {
+            const endBlock = Math.min(currentBlock + MAX_BLOCK_RANGE - 1, toBlock);
+            const cmd = `cast logs --from-block ${currentBlock} --to-block ${endBlock} --rpc-url ${EXECUTION_RPC} ${QUEUE_REWARD_ALLOCATION_EVENT_TOPIC}`;
+            
+            // Log the command being executed
+            console.error('Executing command:', cmd);
+            
+            // Execute the command and append results
+            const chunkResult = execSync(cmd, { 
+                encoding: 'utf8',
+                maxBuffer: 1024 * 1024 * 10 // 10MB buffer
+            }).trim();
+            if (chunkResult) {
+                allResults += chunkResult + '\n';
+            }
+        }
         
-        // Execute the command
-        const result = execSync(cmd, { encoding: 'utf8' }).trim();
+        // Use the combined results
         
-        // Parse the result - count the number of events
-        const events = result.split('\n').filter(line => line.trim().length > 0);
-        return events.length;
+        // Parse the result - split by lines and filter empty lines
+        const eventLines = allResults.split('\n').filter(line => line.trim().length > 0);
+        
+        // Create a map to count events per validator
+        const validatorEventCounts = {};
+        
+        // Initialize all genesis validators with 0 events
+        genesisValidators.forEach(validator => {
+            validatorEventCounts[validator.operatorAddress.toLowerCase()] = 0;
+        });
+        
+        // Parse each event line to extract the originating address
+        eventLines.forEach(line => {
+            try {
+                // Parse the YAML-like output from cast logs
+                const lines = line.split('\n');
+                let address = null;
+                
+                lines.forEach(l => {
+                    if (l.trim().startsWith('address:')) {
+                        address = l.split(':')[1].trim();
+                    }
+                });
+                
+                if (address && validatorEventCounts.hasOwnProperty(address.toLowerCase())) {
+                    validatorEventCounts[address.toLowerCase()]++;
+                }
+            } catch (parseError) {
+                // Skip malformed lines
+                console.error(`Error parsing event line: ${parseError.message}`);
+            }
+        });
+        
+        return validatorEventCounts;
     } catch (error) {
-        // If there's an error or no events, return 0
-        return 0;
+        console.error(`Error getting reward allocation events: ${error.message}`);
+        // Return empty counts for all validators
+        const validatorEventCounts = {};
+        genesisValidators.forEach(validator => {
+            validatorEventCounts[validator.operatorAddress.toLowerCase()] = 0;
+        });
+        return validatorEventCounts;
     }
 }
 
@@ -369,34 +426,32 @@ function queryOneDay(targetDate, validators, boundaryBlocks, callback) {
     }
     
     console.error(`Querying ${dateStr} from block ${startBlock} to ${endBlock}...`);
-            
-            // Try to get validator voting power from consensus layer, retrying up to 5 times if needed
-            getVotingPowerWithRetry(boundaryBlock, 1, function(votingPowerData) {
-                if (!votingPowerData) {
-                    console.error(`Could not get voting power data for block ${boundaryBlock} after 5 attempts. Validator voting power is feeling a bit powerless.`);
-                    callback(null);
-                    return;
-                }
-                
-                // Process validators to get boost data
-                processValidators(validators, 0, [], votingPowerData, startBlock, dateStr, function(boostResults) {
-                    // Now get reward allocation events for the day
-                    queryRewardAllocationsForDay(startBlock, endBlock, validators, function(eventResults) {
-                        // Merge boost results with event results
-                        const mergedResults = boostResults.map(boostData => {
-                            const eventData = eventResults.find(e => e.name === boostData.name);
-                            return {
-                                ...boostData,
-                                reward_allocation_events: eventData ? eventData.reward_allocation_events : 0
-                            };
-                        });
-                        
-                        callback(mergedResults);
-                    });
-                });
-            });
+    
+    // Try to get validator voting power from consensus layer, retrying up to 5 times if needed
+    getVotingPowerWithRetry(startBlock, 1, function(votingPowerData) {
+        if (!votingPowerData) {
+            console.error(`Could not get voting power data for block ${startBlock} after 5 attempts. Validator voting power is feeling a bit powerless.`);
+            callback(null);
+            return;
         }
-    }
+        
+        // Process validators to get boost data
+        processValidators(validators, 0, [], votingPowerData, startBlock, dateStr, function(boostResults) {
+            // Now get reward allocation events for the day
+            queryRewardAllocationsForDay(startBlock, endBlock, validators, function(eventResults) {
+                // Merge boost results with event results
+                const mergedResults = boostResults.map(boostData => {
+                    const eventData = eventResults.find(e => e.name === boostData.name);
+                    return {
+                        ...boostData,
+                        reward_allocation_events: eventData ? eventData.reward_allocation_events : 0
+                    };
+                });
+                
+                callback(mergedResults);
+            });
+        });
+    });
 }
 
 // Function to retry getting voting power data
@@ -425,50 +480,36 @@ function getVotingPowerWithRetry(blockHeight, attempt, callback) {
 
 // Function to query reward allocation events for one day
 function queryRewardAllocationsForDay(startBlock, endBlock, validators, callback) {
-    const results = [];
-    let processedValidators = 0;
-    
-    function processValidator(index) {
-        if (index >= validators.length) {
-            callback(results);
-            return;
-        }
+    try {
+        // Get all QueueRewardAllocation events for the day
+        const validatorEventCounts = getQueueRewardAllocationEventsForAllValidators(startBlock, endBlock, validators);
         
-        const validator = validators[index];
-        
-        try {
-            // Get QueueRewardAllocation events for this validator
-            const eventCount = getQueueRewardAllocationEvents(validator.pubkey, startBlock, endBlock);
+        // Create results array with event counts for each validator
+        const results = validators.map(validator => {
+            const eventCount = validatorEventCounts[validator.operatorAddress.toLowerCase()] || 0;
             
-            results.push({
+            return {
                 name: validator.name,
                 validator_address: validator.proposer,
                 operator_address: validator.operatorAddress,
                 pubkey: validator.pubkey,
                 reward_allocation_events: eventCount
-            });
-            
-            processedValidators++;
-            if (processedValidators % 5 === 0) {
-                console.error(`Processed ${processedValidators}/${validators.length} validators`);
-            }
-        } catch (error) {
-            console.error(`Error processing validator ${validator.name}: ${error.message}`);
-            results.push({
-                name: validator.name,
-                validator_address: validator.proposer,
-                operator_address: validator.operatorAddress,
-                pubkey: validator.pubkey,
-                reward_allocation_events: 0
-            });
-        }
+            };
+        });
         
-        // Process next validator after a small delay
-        setTimeout(() => processValidator(index + 1), 50);
+        callback(results);
+    } catch (error) {
+        console.error(`Error processing reward allocations for day: ${error.message}`);
+        // Return results with 0 events for all validators
+        const results = validators.map(validator => ({
+            name: validator.name,
+            validator_address: validator.proposer,
+            operator_address: validator.operatorAddress,
+            pubkey: validator.pubkey,
+            reward_allocation_events: 0
+        }));
+        callback(results);
     }
-    
-    // Start processing validators
-    processValidator(0);
 }
 
 // Process validators one by one to avoid overwhelming the RPC
@@ -572,8 +613,26 @@ function generateReport(validatorData, dates) {
         }
     });
     
+    // Find maximum values for scaling
+    const maxBoostPerStake = Math.max(...Object.values(validatorMap).map(v => v.avg_boost_per_stake));
+    const maxRewardEvents = Math.max(...Object.values(validatorMap).map(v => v.avg_reward_events));
+
+    // Calculate scores for each validator
+    Object.values(validatorMap).forEach(validator => {
+        // POL Score (0-100)
+        validator.pol_score = validator.avg_boost_per_stake === 0 ? 0 :
+            (validator.avg_boost_per_stake / maxBoostPerStake) * 100;
+
+        // Updates Score (0-100)
+        validator.updates_score = validator.avg_reward_events === 0 ? 0 :
+            (validator.avg_reward_events / maxRewardEvents) * 100;
+
+        // Total Score (weighted 2/3 POL, 1/3 Updates)
+        validator.total_score = (2/3 * validator.pol_score) + (1/3 * validator.updates_score);
+    });
+
     // Generate the CSV header
-    let header = 'Validator Name,Validator Address,Operator Address';
+    let header = 'Validator Name,POL Score,Updates Score,Total Score,Validator Address,Operator Address';
     dates.forEach(date => {
         const dateStr = date.toISOString().split('T')[0];
         if (SHOW_DETAILED_INFO) {
@@ -586,8 +645,10 @@ function generateReport(validatorData, dates) {
     
     // Generate the CSV rows
     const rows = [];
-    Object.values(validatorMap).forEach(validator => {
-        let row = `${validator.name},${validator.validator_address},${validator.operator_address}`;
+    // Sort validators by total score descending
+    const sortedValidators = Object.values(validatorMap).sort((a, b) => b.total_score - a.total_score);
+    sortedValidators.forEach(validator => {
+        let row = `${validator.name},${validator.pol_score.toFixed(2)},${validator.updates_score.toFixed(2)},${validator.total_score.toFixed(2)},${validator.validator_address},${validator.operator_address}`;
         
         dates.forEach(date => {
             const dateStr = date.toISOString().split('T')[0];
