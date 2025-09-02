@@ -647,7 +647,8 @@ function generateReport(statistics, validators, dayBoundaries) {
             uptimeScores.reduce((sum, score) => sum + score, 0) / uptimeScores.length : 0;
         const avgPolScore = polScores.length > 0 ? 
             polScores.reduce((sum, score) => sum + score, 0) / polScores.length : 0;
-        const totalScore = (avgUptimeScore + avgPolScore) / 2;
+        // const totalScore = (avgUptimeScore + avgPolScore) / 2;
+        const totalScore = (avgUptimeScore*2/3 + avgPolScore*1/3);
         
         // Get most recent stake from the last analyzed date (not the boundary date)
         const lastAnalyzedDate = sortedDates[sortedDates.length - 2]; // -2 because -1 is the boundary date
