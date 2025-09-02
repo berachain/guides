@@ -1,3 +1,18 @@
+/**
+ * Find Monday Blocks - Weekly Boundary Detector
+ * 
+ * This script identifies block boundaries that correspond to Monday midnight UTC timestamps.
+ * It's useful for weekly reporting and analysis by finding the exact blocks where weeks
+ * begin, enabling time-based blockchain analysis and reporting.
+ * 
+ * Features:
+ * - Calculates Monday midnight UTC block boundaries
+ * - Uses 2-second block time assumptions for estimation
+ * - Provides precise block number identification
+ * - Supports custom RPC endpoints
+ * - Useful for weekly blockchain analytics and reporting
+ */
+
 const https = require('https');
 const http = require('http');
 
