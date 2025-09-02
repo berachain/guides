@@ -1,3 +1,19 @@
+/**
+ * Scan Deposits - Beacon Chain Deposit Validator
+ * 
+ * This script scans the BeaconDeposit contract for deposit events and validates
+ * them using the beacon CLI tool. It helps ensure the integrity of validator
+ * deposits and provides insights into staking activity.
+ * 
+ * Features:
+ * - Scans for Deposit events from genesis to latest block
+ * - Validates deposit signatures using beacon CLI
+ * - Tracks deposit events by public key
+ * - Provides progress tracking and detailed reporting
+ * - Requires ABI_DIR and EL_ETHRPC_URL environment variables
+ * - Supports custom block ranges and chunk processing
+ */
+
 const { ethers } = require('ethers');
 const BeaconDepositABI = require(process.env.ABI_DIR + '/core/BeaconDeposit.json');
 const cliProgress = require('cli-progress');

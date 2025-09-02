@@ -1,3 +1,19 @@
+/**
+ * Scan State Changes - Transaction Impact Analyzer
+ * 
+ * This script analyzes the impact of transactions by tracing their execution and
+ * counting state changes. It provides insights into how transactions affect the
+ * blockchain state and helps identify high-impact operations.
+ * 
+ * Features:
+ * - Uses debug_traceTransaction to analyze transaction execution
+ * - Counts state changes per transaction
+ * - Provides histogram analysis of state change patterns
+ * - Supports custom block ranges and batch processing
+ * - Requires EL_ETHRPC_URL environment variable
+ * - Useful for understanding transaction complexity and impact
+ */
+
 const { ethers } = require('ethers');
 const axios = require('axios');
 const yargs = require('yargs/yargs');
