@@ -1,3 +1,20 @@
+/**
+ * Scan Transactions by Client - Client Usage Analyzer
+ * 
+ * This script analyzes transaction patterns by execution client by examining
+ * block extraData and transaction data. It provides insights into which
+ * clients are being used by validators and how they perform.
+ * 
+ * Features:
+ * - Decodes extraData to identify execution client types and versions
+ * - Analyzes transaction patterns per client
+ * - Tracks method call frequencies and gas usage
+ * - Provides detailed client performance metrics
+ * - Supports custom block ranges and batch processing
+ * - Requires EL_ETHRPC_URL environment variable
+ * - Useful for client diversity analysis and performance monitoring
+ */
+
 const { ethers } = require('ethers');
 const axios = require('axios');
 const yargs = require('yargs/yargs');

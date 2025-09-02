@@ -1,3 +1,18 @@
+/**
+ * Empty Blocks Scanner - Block Production Analyzer
+ * 
+ * This script scans blockchain blocks to identify and analyze empty blocks (blocks with
+ * no transactions). It helps monitor validator performance and network health by tracking
+ * block production patterns and identifying periods of low activity.
+ * 
+ * Features:
+ * - Scans blocks for empty block detection
+ * - Configurable date ranges and batch processing
+ * - Concurrent processing for improved performance
+ * - Detailed reporting on empty block patterns
+ * - Supports custom RPC endpoints and configuration
+ */
+
 const https = require('https');
 const http = require('http');
 const Table = require('cli-table3');
