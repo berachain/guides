@@ -1,3 +1,17 @@
+/**
+ * Scan Distributions - Block Reward Event Scanner
+ * 
+ * This script scans blockchain blocks for BlockRewardProcessed events from the BlockRewardController
+ * contract and attributes them to block proposers. It analyzes block reward distributions across
+ * validators and provides insights into reward allocation patterns.
+ * 
+ * Features:
+ * - Scans specified block ranges or defaults to last 43,200 blocks (~24 hours)
+ * - Tracks reward events by block proposer
+ * - Provides progress tracking and detailed reporting
+ * - Requires ABI_DIR, EL_ETHRPC_URL, and CL_ETHRPC_URL environment variables
+ */
+
 const { ethers } = require('ethers');
 const axios = require('axios');
 const yargs = require('yargs/yargs');
