@@ -1,3 +1,18 @@
+/**
+ * Voting Power Analysis - Validator Performance Analyzer
+ * 
+ * This script analyzes validator performance by examining block proposals, client types,
+ * and voting patterns. It decodes extraData from blocks to identify execution clients
+ * and provides comprehensive statistics on validator behavior and block production.
+ * 
+ * Features:
+ * - Decodes RLP-encoded extraData to identify client types and versions
+ * - Analyzes validator block proposal patterns
+ * - Tracks client distribution across validators
+ * - Provides detailed performance metrics and statistics
+ * - Supports custom block range analysis
+ */
+
 const { ethers } = require('ethers');
 const axios = require('axios');
 const yargs = require('yargs/yargs');
@@ -190,8 +205,12 @@ async function getBlockProposer(blockNumber, clRpcUrl, retries = 3, delay = 1000
 function classifyClient(clientString) {
     const lower = clientString.toLowerCase();
     
-    if (lower.includes('geth')) {
+    if (lower.includes('bera-geth')) {
+        return 'bera-geth';
+    } else if (lower.includes('geth')) {
         return 'geth';
+    } else if (lower.includes('bera-reth')) {
+        return 'bera-reth';
     } else if (lower.includes('reth')) {
         return 'reth';
     } else if (lower.includes('besu')) {
@@ -205,7 +224,23 @@ function classifyClient(clientString) {
     }
 }
 
-async function analyzeVotingPower(elProvider, clRpcUrl, maxBlocksToScan = 10000) {
+// Extract client version from client string
+function extractClientVersion(clientString) {
+    const versionMatch = clientString.match(/v?(\d+\.\d+\.\d+)/);
+    if (versionMatch) {
+        return versionMatch[1];
+    }
+    
+    // Try to extract just major version if full version not found
+    const majorMatch = clientString.match(/v?(\d+)/);
+    if (majorMatch) {
+        return `${majorMatch[1]}.x.x`;
+    }
+    
+    return 'unknown';
+}
+
+async function analyzeVotingPower(elProvider, clRpcUrl, maxBlocksToScan = 10000, detailedMode = false) {
     console.log('Fetching validators and their voting power...');
     
     // Step 1: Get all validators and their voting power
@@ -246,17 +281,19 @@ async function analyzeVotingPower(elProvider, clRpcUrl, maxBlocksToScan = 10000)
             // Decode client from extraData
             const clientString = await decodeExtraDataAsAscii(block.extraData);
             const clientType = classifyClient(clientString);
+            const clientVersion = extractClientVersion(clientString);
             
             proposerClients.set(proposerAddress, {
                 clientType,
                 clientString,
+                clientVersion,
                 sampleBlock: blockNum,
                 extraData: block.extraData
             });
             
             seenProposers.add(proposerAddress);
             
-            console.log(`Block ${blockNum}: Proposer ${proposerAddress} -> ${clientString} (${clientType})`);
+            // console.log(`Block ${blockNum}: Proposer ${proposerAddress} -> ${clientString} (${clientType})`);
             
         } catch (error) {
             console.error(`Error processing block ${blockNum}: ${error.message}`);
@@ -264,9 +301,9 @@ async function analyzeVotingPower(elProvider, clRpcUrl, maxBlocksToScan = 10000)
         
         blocksScanned++;
         
-        if (blocksScanned % 100 === 0) {
-            console.log(`Scanned ${blocksScanned} blocks, identified ${seenProposers.size}/${validators.length} validators`);
-        }
+        // if (blocksScanned % 100 === 0) {
+        //     console.log(`Scanned ${blocksScanned} blocks, identified ${seenProposers.size}/${validators.length} validators`);
+        // }
     }
     
     console.log(`\nScanning complete. Scanned ${blocksScanned} blocks, identified ${seenProposers.size}/${validators.length} validators\n`);
@@ -306,7 +343,55 @@ async function analyzeVotingPower(elProvider, clRpcUrl, maxBlocksToScan = 10000)
         console.log(`UNKNOWN: ${percentage}% (${unknownValidators.length} validators not seen in recent blocks)`);
     }
     
-    console.log('\n=== DETAILED BREAKDOWN ===\n');
+    if (detailedMode) {
+        console.log('\n=== VOTING POWER BY CLIENT VERSION ===\n');
+        
+        // Group by client type and version
+        const clientVersionVotingPower = new Map();
+        for (const [proposerAddress, clientInfo] of proposerClients.entries()) {
+            const votingPower = validatorMap.get(proposerAddress);
+            const key = `${clientInfo.clientType}:${clientInfo.clientVersion}`;
+            
+            if (!clientVersionVotingPower.has(key)) {
+                clientVersionVotingPower.set(key, {
+                    clientType: clientInfo.clientType,
+                    version: clientInfo.clientVersion,
+                    votingPower: BigInt(0),
+                    validatorCount: 0,
+                    validators: []
+                });
+            }
+            
+            const entry = clientVersionVotingPower.get(key);
+            entry.votingPower += votingPower;
+            entry.validatorCount++;
+            entry.validators.push({
+                address: proposerAddress,
+                votingPower,
+                clientString: clientInfo.clientString,
+                sampleBlock: clientInfo.sampleBlock
+            });
+        }
+        
+        // Sort by voting power (descending)
+        const sortedVersions = Array.from(clientVersionVotingPower.values())
+            .sort((a, b) => b.votingPower > a.votingPower ? 1 : -1);
+        
+        for (const entry of sortedVersions) {
+            const percentage = (Number(entry.votingPower * BigInt(10000) / totalVotingPower) / 100).toFixed(2);
+            console.log(`${entry.clientType.toUpperCase()} ${entry.version}: ${percentage}% (${entry.votingPower.toString()} / ${totalVotingPower.toString()}) - ${entry.validatorCount} validators`);
+            
+            if (detailedMode) {
+                entry.validators.forEach(validator => {
+                    const validatorPercentage = (Number(validator.votingPower * BigInt(10000) / totalVotingPower) / 100).toFixed(2);
+                    console.log(`  ${validator.address}: ${validatorPercentage}% (${validator.votingPower.toString()}) - ${validator.clientString} (block ${validator.sampleBlock})`);
+                });
+                console.log();
+            }
+        }
+    }
+    
+    console.log('\n=== VALIDATOR SUMMARY ===\n');
     
     // Group by client type and show details
     const clientDetails = new Map();
@@ -321,6 +406,7 @@ async function analyzeVotingPower(elProvider, clRpcUrl, maxBlocksToScan = 10000)
             address: proposerAddress,
             votingPower,
             clientString: clientInfo.clientString,
+            clientVersion: clientInfo.clientVersion,
             sampleBlock: clientInfo.sampleBlock
         });
     }
@@ -328,7 +414,8 @@ async function analyzeVotingPower(elProvider, clRpcUrl, maxBlocksToScan = 10000)
     for (const [clientType, validators] of clientDetails.entries()) {
         console.log(`${clientType.toUpperCase()} (${validators.length} validators):`);
         validators.forEach(validator => {
-            console.log(`  ${validator.address}: ${validator.clientString} (block ${validator.sampleBlock})`);
+            const validatorPercentage = (Number(validator.votingPower * BigInt(10000) / totalVotingPower) / 100).toFixed(2);
+            console.log(`  ${validator.address}: ${validatorPercentage}% (${validator.votingPower.toString()}) - ${validator.clientString} (block ${validator.sampleBlock})`);
         });
         console.log();
     }
@@ -348,13 +435,19 @@ async function main() {
             default: 10000,
             description: 'Maximum number of blocks to scan backwards'
         })
+        .option('detailed', {
+            alias: 'd',
+            type: 'boolean',
+            default: false,
+            description: 'Enable detailed mode showing voting power breakdown by client version'
+        })
         .help()
         .argv;
     
     const elProvider = new ethers.JsonRpcProvider(elRpcUrl);
     
     try {
-        await analyzeVotingPower(elProvider, clRpcUrl, argv.maxBlocks);
+        await analyzeVotingPower(elProvider, clRpcUrl, argv.maxBlocks, argv.detailed);
     } catch (error) {
         console.error('Error during analysis:', error.message);
         process.exit(1);

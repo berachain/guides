@@ -1,3 +1,19 @@
+/**
+ * Scan Block Filling - Block Utilization Analyzer
+ * 
+ * This script analyzes how well validators are utilizing block space by examining
+ * transaction counts, gas usage, and block filling patterns. It provides insights
+ * into validator performance and network efficiency.
+ * 
+ * Features:
+ * - Analyzes block utilization and transaction density
+ * - Identifies client types from extraData decoding
+ * - Tracks validator performance metrics
+ * - Provides detailed block filling statistics
+ * - Integrates with validator database for naming
+ * - Supports custom block range analysis
+ */
+
 const { ethers } = require('ethers');
 const axios = require('axios');
 const yargs = require('yargs/yargs');
