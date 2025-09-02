@@ -17,6 +17,79 @@ const { ethers } = require('ethers');
 const axios = require('axios');
 const yargs = require('yargs/yargs');
 const { hideBin } = require('yargs/helpers');
+const { spawn } = require('child_process');
+const Table = require('cli-table3');
+
+// Simple SQLite wrapper to look up validator names
+class ValidatorNameDB {
+  constructor(dbPath) {
+    this.dbPath = dbPath;
+  }
+
+  async query(sql, params = []) {
+    return new Promise((resolve, reject) => {
+      // Escape parameters and build SQL
+      let finalSql = sql;
+      if (params.length > 0) {
+        for (let i = 0; i < params.length; i++) {
+          const param = params[i].toString().replace(/'/g, "''");
+          finalSql = finalSql.replace('?', `'${param}'`);
+        }
+      }
+
+      const sqlite = spawn('sqlite3', [this.dbPath, finalSql, '-json']);
+      let output = '';
+      let error = '';
+
+      sqlite.stdout.on('data', (data) => {
+        output += data.toString();
+      });
+
+      sqlite.stderr.on('data', (data) => {
+        error += data.toString();
+      });
+
+      sqlite.on('close', (code) => {
+        if (code === 0) {
+          try {
+            const result = output.trim() ? JSON.parse(output.trim()) : [];
+            resolve(result);
+          } catch (e) {
+            resolve([]);
+          }
+        } else {
+          reject(new Error(`SQLite error: ${error}`));
+        }
+      });
+    });
+  }
+
+  async getValidatorName(address) {
+    try {
+      // Try with the address as-is first
+      let result = await this.query('SELECT name FROM validators WHERE proposer_address = ?', [address]);
+      
+      // If no result and address doesn't start with 0x, try adding it
+      if ((!result || result.length === 0) && !address.startsWith('0x')) {
+        const addressWithPrefix = `0x${address}`;
+        result = await this.query('SELECT name FROM validators WHERE proposer_address = ?', [addressWithPrefix]);
+      }
+      
+      // If still no result and address starts with 0x, try removing it
+      if ((!result || result.length === 0) && address.startsWith('0x')) {
+        const addressWithoutPrefix = address.slice(2);
+        result = await this.query('SELECT name FROM validators WHERE proposer_address = ?', [addressWithoutPrefix]);
+      }
+      
+      if (result && result.length > 0 && result[0].name && result[0].name !== 'N/A') {
+        return result[0].name;
+      }
+      return null;
+    } catch (error) {
+      return null;
+    }
+  }
+}
 
 // Function to decode extraData to identify client type (copied from scan-block-filling-crazy.js)
 async function decodeExtraDataAsAscii(extraData) {
@@ -243,6 +316,10 @@ function extractClientVersion(clientString) {
 async function analyzeVotingPower(elProvider, clRpcUrl, maxBlocksToScan = 10000, detailedMode = false) {
     console.log('Fetching validators and their voting power...');
     
+    // Initialize validator name database
+    const dbPath = '../cometbft-decoder/validators_correlated.db';
+    const validatorDB = new ValidatorNameDB(dbPath);
+    
     // Step 1: Get all validators and their voting power
     const validators = await fetchValidators(clRpcUrl);
     console.log(`Found ${validators.length} validators`);
@@ -332,93 +409,132 @@ async function analyzeVotingPower(elProvider, clRpcUrl, maxBlocksToScan = 10000,
     // Display results
     console.log('=== VOTING POWER BY CLIENT TYPE ===\n');
     
+    // Create table using cli-table3
+    const clientTypeTable = new Table({
+        head: ['Client Type', 'Voting Power (BERA)', 'Percentage', 'Count'],
+        colWidths: [20, 25, 15, 10],
+        colAligns: ['left', 'right', 'right', 'right']
+    });
+    
     for (const [clientType, votingPower] of clientVotingPower.entries()) {
         const percentage = (Number(votingPower * BigInt(10000) / totalVotingPower) / 100).toFixed(2);
-        console.log(`${clientType.toUpperCase()}: ${percentage}% (${votingPower.toString()} / ${totalVotingPower.toString()})`);
+        const votingPowerBERA = Number(votingPower / BigInt(10**9));
+        const formattedVotingPower = votingPowerBERA.toLocaleString();
+        const validatorCount = Array.from(proposerClients.entries()).filter(([_, info]) => info.clientType === clientType).length;
+        clientTypeTable.push([
+            clientType.toUpperCase(),
+            formattedVotingPower,
+            percentage + '%',
+            validatorCount.toString()
+        ]);
     }
     
     if (unknownValidators.length > 0) {
         const unknownVotingPower = unknownValidators.reduce((sum, address) => sum + validatorMap.get(address), BigInt(0));
         const percentage = (Number(unknownVotingPower * BigInt(10000) / totalVotingPower) / 100).toFixed(2);
-        console.log(`UNKNOWN: ${percentage}% (${unknownValidators.length} validators not seen in recent blocks)`);
+        const unknownVotingPowerBERA = Number(unknownVotingPower / BigInt(10**9));
+        const formattedUnknownVotingPower = unknownVotingPowerBERA.toLocaleString();
+        clientTypeTable.push([
+            'UNKNOWN',
+            formattedUnknownVotingPower,
+            percentage + '%',
+            unknownValidators.length.toString()
+        ]);
     }
     
-    if (detailedMode) {
-        console.log('\n=== VOTING POWER BY CLIENT VERSION ===\n');
+    console.log(clientTypeTable.toString());
+    
+    // Always show client version summary table
+    console.log('\n=== VOTING POWER BY CLIENT VERSION ===\n');
+    
+    // Group by client type and version
+    const clientVersionVotingPower = new Map();
+    for (const [proposerAddress, clientInfo] of proposerClients.entries()) {
+        const votingPower = validatorMap.get(proposerAddress);
+        const key = `${clientInfo.clientType}:${clientInfo.clientVersion}`;
         
-        // Group by client type and version
-        const clientVersionVotingPower = new Map();
-        for (const [proposerAddress, clientInfo] of proposerClients.entries()) {
-            const votingPower = validatorMap.get(proposerAddress);
-            const key = `${clientInfo.clientType}:${clientInfo.clientVersion}`;
-            
-            if (!clientVersionVotingPower.has(key)) {
-                clientVersionVotingPower.set(key, {
-                    clientType: clientInfo.clientType,
-                    version: clientInfo.clientVersion,
-                    votingPower: BigInt(0),
-                    validatorCount: 0,
-                    validators: []
-                });
-            }
-            
-            const entry = clientVersionVotingPower.get(key);
-            entry.votingPower += votingPower;
-            entry.validatorCount++;
-            entry.validators.push({
-                address: proposerAddress,
-                votingPower,
-                clientString: clientInfo.clientString,
-                sampleBlock: clientInfo.sampleBlock
+        if (!clientVersionVotingPower.has(key)) {
+            clientVersionVotingPower.set(key, {
+                clientType: clientInfo.clientType,
+                version: clientInfo.clientVersion,
+                votingPower: BigInt(0),
+                validatorCount: 0,
+                validators: []
             });
         }
         
-        // Sort by voting power (descending)
-        const sortedVersions = Array.from(clientVersionVotingPower.values())
-            .sort((a, b) => b.votingPower > a.votingPower ? 1 : -1);
-        
-        for (const entry of sortedVersions) {
-            const percentage = (Number(entry.votingPower * BigInt(10000) / totalVotingPower) / 100).toFixed(2);
-            console.log(`${entry.clientType.toUpperCase()} ${entry.version}: ${percentage}% (${entry.votingPower.toString()} / ${totalVotingPower.toString()}) - ${entry.validatorCount} validators`);
-            
-            if (detailedMode) {
-                entry.validators.forEach(validator => {
-                    const validatorPercentage = (Number(validator.votingPower * BigInt(10000) / totalVotingPower) / 100).toFixed(2);
-                    console.log(`  ${validator.address}: ${validatorPercentage}% (${validator.votingPower.toString()}) - ${validator.clientString} (block ${validator.sampleBlock})`);
-                });
-                console.log();
-            }
-        }
-    }
-    
-    console.log('\n=== VALIDATOR SUMMARY ===\n');
-    
-    // Group by client type and show details
-    const clientDetails = new Map();
-    for (const [proposerAddress, clientInfo] of proposerClients.entries()) {
-        const clientType = clientInfo.clientType;
-        if (!clientDetails.has(clientType)) {
-            clientDetails.set(clientType, []);
-        }
-        
-        const votingPower = validatorMap.get(proposerAddress);
-        clientDetails.get(clientType).push({
+        const entry = clientVersionVotingPower.get(key);
+        entry.votingPower += votingPower;
+        entry.validatorCount++;
+        entry.validators.push({
             address: proposerAddress,
             votingPower,
             clientString: clientInfo.clientString,
-            clientVersion: clientInfo.clientVersion,
             sampleBlock: clientInfo.sampleBlock
         });
     }
     
-    for (const [clientType, validators] of clientDetails.entries()) {
-        console.log(`${clientType.toUpperCase()} (${validators.length} validators):`);
-        validators.forEach(validator => {
-            const validatorPercentage = (Number(validator.votingPower * BigInt(10000) / totalVotingPower) / 100).toFixed(2);
-            console.log(`  ${validator.address}: ${validatorPercentage}% (${validator.votingPower.toString()}) - ${validator.clientString} (block ${validator.sampleBlock})`);
-        });
-        console.log();
+    // Sort by voting power (descending)
+    const sortedVersions = Array.from(clientVersionVotingPower.values())
+        .sort((a, b) => b.votingPower > a.votingPower ? 1 : -1);
+    
+    // Create table using cli-table3
+    const clientVersionTable = new Table({
+        head: ['Client & Version', 'Voting Power (BERA)', 'Percentage', 'Count'],
+        colWidths: [35, 25, 15, 10],
+        colAligns: ['left', 'right', 'right', 'right']
+    });
+    
+    for (const entry of sortedVersions) {
+        const percentage = (Number(entry.votingPower * BigInt(10000) / totalVotingPower) / 100).toFixed(2);
+        const votingPowerBERA = Number(entry.votingPower / BigInt(10**9));
+        const formattedVotingPower = votingPowerBERA.toLocaleString();
+        clientVersionTable.push([
+            `${entry.clientType.toUpperCase()} ${entry.version}`,
+            formattedVotingPower,
+            percentage + '%',
+            entry.validatorCount.toString()
+        ]);
     }
+    
+    console.log(clientVersionTable.toString());
+    
+    if (detailedMode) {
+        console.log('\n=== DETAILED VALIDATOR BREAKDOWN ===\n');
+        
+        // Show detailed validator lists for each version
+        for (const entry of sortedVersions) {
+            console.log(`${entry.clientType.toUpperCase()} ${entry.version} (${entry.validatorCount} validators):`);
+            
+            // Create table for this version
+            const validatorTable = new Table({
+                head: ['Validator', 'Voting Power (BERA)', 'Percentage', 'Client Info'],
+                colWidths: [50, 25, 15, 30],
+                colAligns: ['left', 'right', 'right', 'left']
+            });
+            
+            for (const validator of entry.validators) {
+                const validatorPercentage = (Number(validator.votingPower * BigInt(10000) / totalVotingPower) / 100).toFixed(2);
+                const validatorName = await validatorDB.getValidatorName(validator.address);
+                const displayName = validatorName ? `${validatorName} (${validator.address})` : validator.address;
+                const validatorVotingPowerBERA = Number(validator.votingPower / BigInt(10**9));
+                const formattedValidatorVotingPower = validatorVotingPowerBERA.toLocaleString();
+                const clientInfo = `${validator.clientString} (block ${validator.sampleBlock})`;
+                
+                validatorTable.push([
+                    displayName,
+                    formattedValidatorVotingPower,
+                    validatorPercentage + '%',
+                    clientInfo
+                ]);
+            }
+            
+            console.log(validatorTable.toString());
+            console.log();
+        }
+    }
+    
+
 }
 
 async function main() {
