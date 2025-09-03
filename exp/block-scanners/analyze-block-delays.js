@@ -5,7 +5,7 @@
  * 
  * This script analyzes how each validator's block proposals affect the timing
  * and participation in subsequent blocks. It measures delays and signature counts
- * in blocks that follow each proposer's blocks. No more table-eliding around here!
+ * in blocks that follow each proposer's blocks.
  * 
  * Key Features:
  * - Efficient single-pass block fetching (no re-querying)
@@ -14,185 +14,86 @@
  * - Statistical analysis: min, max, average, median for both timing and signatures
  * - Validator name lookup via database
  * 
- * Usage: node analyze-proposer-impact.js
- * 
- * Configuration:
- * - BLOCK_COUNT: Number of blocks to analyze (default: 1000)
- * - BASE_URL: Berachain node endpoint
+ * Usage: node analyze-block-delays.js [--blocks N] [--network mainnet|bepolia]
  */
 
-const axios = require('axios');
-const { spawn } = require('child_process');
+const { ValidatorNameDB, BlockFetcher, StatUtils, ProgressReporter, ConfigHelper } = require('./lib/shared-utils');
 const Table = require('cli-table3');
 
-const BASE_URL = 'http://37.27.231.195:59820';
-const BLOCK_COUNT = 1000; // Analyze 1,000 blocks
-
-// Simple SQLite wrapper to look up validator names
-class ValidatorNameDB {
-  constructor(dbPath) {
-    this.dbPath = dbPath;
-  }
-
-  async query(sql, params = []) {
-    return new Promise((resolve, reject) => {
-      // Escape parameters and build SQL
-      let finalSql = sql;
-      if (params.length > 0) {
-        for (let i = 0; i < params.length; i++) {
-          const param = params[i].toString().replace(/'/g, "''");
-          finalSql = finalSql.replace('?', `'${param}'`);
-        }
-      }
-
-      const sqlite = spawn('sqlite3', [this.dbPath, finalSql, '-json']);
-      let output = '';
-      let error = '';
-
-      sqlite.stdout.on('data', (data) => {
-        output += data.toString();
-      });
-
-      sqlite.stderr.on('data', (data) => {
-        error += data.toString();
-      });
-
-      sqlite.on('close', (code) => {
-        if (code === 0) {
-          try {
-            const result = output.trim() ? JSON.parse(output.trim()) : [];
-            resolve(result);
-          } catch (e) {
-            resolve([]);
-          }
-        } else {
-          reject(new Error(`SQLite error: ${error}`));
-        }
-      });
-    });
-  }
-
-  async getValidatorName(address) {
-    try {
-      // Try with the address as-is first
-      let result = await this.query('SELECT name FROM validators WHERE proposer_address = ?', [address]);
-      
-      // If no result and address doesn't start with 0x, try adding it
-      if ((!result || result.length === 0) && !address.startsWith('0x')) {
-        const addressWithPrefix = `0x${address}`;
-        result = await this.query('SELECT name FROM validators WHERE proposer_address = ?', [addressWithPrefix]);
-      }
-      
-      // If still no result and address starts with 0x, try removing it
-      if ((!result || result.length === 0) && address.startsWith('0x')) {
-        const addressWithoutPrefix = address.slice(2);
-        result = await this.query('SELECT name FROM validators WHERE proposer_address = ?', [addressWithoutPrefix]);
-      }
-      
-      if (result && result.length > 0 && result[0].name && result[0].name !== 'N/A') {
-        return result[0].name;
-      }
-      return null;
-    } catch (error) {
-      return null;
+// Strict missing count from raw signatures: BlockIDFlagAbsent (=1)
+function computeMissingFromSignatures(signatures) {
+    if (!Array.isArray(signatures)) {
+        return { missingCount: 0, totalCount: 0, flagCounts: new Map() };
     }
-  }
+    const flagCounts = new Map();
+    let missingCount = 0;
+    for (const sig of signatures) {
+        const flag = sig?.block_id_flag;
+        flagCounts.set(flag, (flagCounts.get(flag) || 0) + 1);
+        if (flag === 1) missingCount += 1;
+    }
+    return { missingCount, totalCount: signatures.length, flagCounts };
 }
 
-async function getCurrentBlock() {
-    try {
-        const response = await axios.get(`${BASE_URL}/status`);
-        return response.data.result.sync_info.latest_block_height;
-    } catch (error) {
-        console.error('Error fetching current block height:', error.message);
+function pearsonCorrelation(x, y) {
+    if (!Array.isArray(x) || !Array.isArray(y) || x.length !== y.length || x.length === 0) {
         return null;
     }
-}
-
-async function getBlock(blockHeight) {
-    try {
-        const response = await axios.get(`${BASE_URL}/block?height=${blockHeight}`);
-        return response.data;
-    } catch (error) {
-        console.error(`Error fetching block ${blockHeight}:`, error.message);
-        return null;
+    const n = x.length;
+    const meanX = x.reduce((a, b) => a + b, 0) / n;
+    const meanY = y.reduce((a, b) => a + b, 0) / n;
+    let num = 0;
+    let denX = 0;
+    let denY = 0;
+    for (let i = 0; i < n; i++) {
+        const dx = x[i] - meanX;
+        const dy = y[i] - meanY;
+        num += dx * dy;
+        denX += dx * dx;
+        denY += dy * dy;
     }
+    const den = Math.sqrt(denX * denY);
+    return den === 0 ? 0 : num / den;
 }
 
-function calculateStats(values) {
-    if (values.length === 0) return null;
+async function analyzeBlockDelays(blockCount = ConfigHelper.getDefaultBlockCount(), chainName = 'mainnet') {
+    // Initialize components with consolidated config
+    const blockFetcher = new BlockFetcher(ConfigHelper.getBlockScannerUrl(chainName));
+    const validatorDB = new ValidatorNameDB();
     
-    const sorted = [...values].sort((a, b) => a - b);
-    const sum = values.reduce((a, b) => a + b, 0);
-    
-    return {
-        count: values.length,
-        min: sorted[0],
-        max: sorted[sorted.length - 1],
-        avg: sum / values.length,
-        median: sorted.length % 2 === 0 
-            ? (sorted[sorted.length / 2 - 1] + sorted[sorted.length / 2]) / 2
-            : sorted[Math.floor(sorted.length / 2)]
-    };
-}
-
-async function analyzeBlockDelays() {
-    // Initialize validator name database
-    const validatorDbPath = '../cometbft-decoder/validators_correlated.db';
-    const validatorDB = new ValidatorNameDB(validatorDbPath);
-    
-    console.log('🔍 Fetching current block height...');
-    const currentBlock = await getCurrentBlock();
+    ProgressReporter.logStep('Fetching current block height');
+    const currentBlock = await blockFetcher.getCurrentBlock();
     if (!currentBlock) {
-        console.error('❌ Failed to get current block height');
+        ProgressReporter.logError('Failed to get current block height');
         process.exit(1);
     }
     
-    const startBlock = parseInt(currentBlock);
-    const endBlock = startBlock - BLOCK_COUNT + 1;
+    const startBlock = currentBlock;
+    const endBlock = startBlock - blockCount + 1;
     
-    console.log(`📊 Current block: ${startBlock}`);
-    console.log(`📊 Analyzing ${BLOCK_COUNT.toLocaleString()} blocks backwards from ${startBlock} to ${endBlock}`);
+    console.log(`📊 Current block: ${startBlock.toLocaleString()}`);
+    console.log(`📊 Analyzing ${blockCount.toLocaleString()} blocks backwards from ${startBlock.toLocaleString()} to ${endBlock.toLocaleString()}`);
     console.log('=' .repeat(80));
     
-    // Storage for all block data (to avoid re-querying)
-    const blocks = [];
+    // Fetch all blocks efficiently
+    ProgressReporter.logStep('Fetching blocks');
+    const blocks = await blockFetcher.fetchBlockRange(startBlock, blockCount, (current, total, blockHeight) => {
+        ProgressReporter.showProgress(current, total, blockHeight);
+    });
     
-    // Fetch all blocks in one pass
-    for (let i = 0; i < BLOCK_COUNT; i++) {
-        const blockHeight = startBlock - i;
-        process.stdout.write(`\rFetching block ${blockHeight.toLocaleString()}... (${(i + 1).toLocaleString()}/${BLOCK_COUNT.toLocaleString()})`);
-        
-        const blockData = await getBlock(blockHeight);
-        if (!blockData || !blockData.result || !blockData.result.block) {
-            console.error(`\nFailed to get block ${blockHeight}`);
-            continue;
-        }
-        
-        const block = blockData.result.block;
-        const signatures = block.last_commit?.signatures || [];
-        const proposer = block.header?.proposer_address;
-        const timestamp = block.header?.time;
-        
-        blocks.push({
-            height: blockHeight,
-            proposer: proposer || 'unknown',
-            timestamp: timestamp,
-            signatureCount: signatures.length,
-            timestampMs: timestamp ? new Date(timestamp).getTime() : null
-        });
-        
-        // Small delay to be respectful to the API
-        await new Promise(resolve => setTimeout(resolve, 25));
-    }
+    ProgressReporter.clearProgress();
+    ProgressReporter.logSuccess(`Fetched ${blocks.length.toLocaleString()} blocks`);
     
-    console.log('\n\n📊 Analyzing proposer impact on subsequent blocks...');
+    ProgressReporter.logStep('Analyzing proposer impact on subsequent blocks');
     
     // Map to store impact data for each proposer
     const proposerImpacts = new Map();
     
     // Analyze consecutive block pairs
     // Note: blocks are in reverse chronological order, so block[i+1] comes before block[i] chronologically
+    const delaySamples = [];
+    const missingSamples = [];
+    const globalFlagCounts = new Map();
     for (let i = 0; i < blocks.length - 1; i++) {
         const nextBlock = blocks[i];      // This block comes after chronologically  
         const currentBlock = blocks[i + 1]; // This block comes before chronologically
@@ -203,120 +104,262 @@ async function analyzeBlockDelays() {
         
         // Calculate delay between current block and next block
         const delayMs = nextBlock.timestampMs - currentBlock.timestampMs;
+        const signatures = nextBlock?.raw?.last_commit?.signatures || [];
+        const { missingCount, totalCount, flagCounts } = computeMissingFromSignatures(signatures);
+        delaySamples.push(delayMs);
+        missingSamples.push(missingCount);
+        // accumulate global flag counts
+        for (const [flag, cnt] of flagCounts.entries()) {
+            globalFlagCounts.set(flag, (globalFlagCounts.get(flag) || 0) + cnt);
+        }
         
         // Initialize proposer stats if not exists
         if (!proposerImpacts.has(currentBlock.proposer)) {
             proposerImpacts.set(currentBlock.proposer, {
                 nextBlockDelays: [],
-                nextBlockSignatures: []
+                nextBlockMissing: [],
+                delayDetails: [], // Store delay with block number for min/max tracking
+                missingDetails: []
             });
         }
         
         const stats = proposerImpacts.get(currentBlock.proposer);
         stats.nextBlockDelays.push(delayMs);
-        stats.nextBlockSignatures.push(nextBlock.signatureCount);
+        stats.nextBlockMissing.push(missingCount);
+        // Label delays by the source block (the proposer block), not the following block
+        stats.delayDetails.push({ delay: delayMs, blockNumber: currentBlock.height });
+        stats.missingDetails.push({
+            missing: missingCount,
+            total: totalCount,
+            sourceBlock: currentBlock.height,
+            nextBlock: nextBlock.height,
+            delayMs
+        });
     }
     
     console.log('\n' + '=' .repeat(80));
     console.log('🎯 PROPOSER IMPACT ANALYSIS COMPLETE');
     console.log('=' .repeat(80));
     
+    // Correlate delay vs missing across all blocks
+    const corr = pearsonCorrelation(delaySamples, missingSamples);
+    // Build delay buckets (ms)
+    const buckets = [
+        { name: '<=1500ms', min: -Infinity, max: 1500, count: 0, sumDelay: 0, sumPart: 0 },
+        { name: '1500-2000ms', min: 1500, max: 2000, count: 0, sumDelay: 0, sumPart: 0 },
+        { name: '2000-2500ms', min: 2000, max: 2500, count: 0, sumDelay: 0, sumPart: 0 },
+        { name: '>2500ms', min: 2500, max: Infinity, count: 0, sumDelay: 0, sumPart: 0 },
+    ];
+    for (let i = 0; i < delaySamples.length; i++) {
+        const d = delaySamples[i];
+        const m = missingSamples[i];
+        const b = buckets.find(b => d > b.min && d <= b.max);
+        if (b) { b.count++; b.sumDelay += d; b.sumPart += m; }
+    }
+    console.log('\n📉 DELAY VS MISSING (next block):');
+    console.log(`Samples: ${delaySamples.length.toLocaleString()}`);
+    if (corr !== null) {
+        console.log(`Pearson correlation (delay, missing): ${corr.toFixed(3)} (positive ⇒ longer delays with more missing)`);
+    }
+    console.log('Bucket                  | Samples | Avg Delay | Avg Missing');
+    console.log('------------------------|---------|-----------|-------------------');
+    for (const b of buckets) {
+        if (b.count === 0) continue;
+        const avgD = Math.round(b.sumDelay / b.count);
+        const avgP = (b.sumPart / b.count).toFixed(1);
+        console.log(
+            `${b.name.padEnd(24)} | ` +
+            `${b.count.toString().padStart(7)} | ` +
+            `${avgD.toString().padStart(9)} | ` +
+            `${avgP.toString().padStart(19)}`
+        );
+    }
+
+    // Show observed flag distribution for transparency
+    if (globalFlagCounts.size > 0) {
+        console.log('\n🔎 Observed block_id_flag distribution in next blocks:');
+        const flags = Array.from(globalFlagCounts.entries()).sort((a, b) => a[0] - b[0]);
+        for (const [flag, cnt] of flags) {
+            console.log(`  flag ${flag}: ${cnt.toLocaleString()}`);
+        }
+    }
+
     // Calculate statistics for each proposer
     const proposerAnalysis = [];
     for (const [proposer, data] of proposerImpacts.entries()) {
-        const delayStats = calculateStats(data.nextBlockDelays);
-        const signatureStats = calculateStats(data.nextBlockSignatures);
+        const delayStats = StatUtils.calculateStats(data.nextBlockDelays);
+        const missingStats = StatUtils.calculateStats(data.nextBlockMissing);
         
-        if (delayStats && signatureStats && delayStats.count >= 3) { // Minimum 3 samples for meaningful stats
+        if (delayStats && missingStats && delayStats.count >= 3) { // Minimum 3 samples for meaningful stats
+            // Find min/max delay details
+            const minDelayDetail = data.delayDetails.reduce((min, curr) => curr.delay < min.delay ? curr : min);
+            const maxDelayDetail = data.delayDetails.reduce((max, curr) => curr.delay > max.delay ? curr : max);
+            
+            // Find min/max missing details
+            const minMissingDetail = data.missingDetails.reduce((min, curr) => curr.missing < min.missing ? curr : min);
+            const maxMissingDetail = data.missingDetails.reduce((max, curr) => curr.missing > max.missing ? curr : max);
+            
             proposerAnalysis.push({
                 proposer,
                 sampleCount: delayStats.count,
                 delayStats,
-                signatureStats
+                missingStats,
+                minDelayDetail,
+                maxDelayDetail,
+                minMissingDetail,
+                maxMissingDetail
             });
         }
     }
     
-    // Sort by average delay (descending)
-    proposerAnalysis.sort((a, b) => b.delayStats.avg - a.delayStats.avg);
-    
-    // Display results
-    console.log(`\n📈 BLOCK DELAY ANALYSIS - Impact on Subsequent Blocks:`);
-    console.log(`Found ${proposerAnalysis.length} proposers with sufficient data (3+ blocks)\n`);
-    
-    // Create combined table with both timing and signature analysis
-    const analysisTable = new Table({
-        head: ['Validator Name', 'Proposer Address', 'Samples', 'Avg Delay (ms)', 'Med Delay (ms)', 'Min/Max Delay', 'Avg Sigs', 'Sig Range'],
-        colWidths: [25, 45, 10, 15, 15, 15, 12, 12]
+    // Merge timing and missing into one table, sorted by median delay ascending
+    proposerAnalysis.sort((a, b) => (a.delayStats?.median ?? Infinity) - (b.delayStats?.median ?? Infinity));
+    console.log('\n📈 PROPOSER DELAY AND MISSING-VOTE ANALYSIS (complete dataset):');
+    const table = new Table({
+        head: ['Proposer', 'Samples', 'Med Missing', 'Med Delay (ms)', 'StdDev Delay', 'Min Delay (Block#)', 'Max Delay (Block#)', 'Max Missing (src→next, delay)'],
+        colWidths: [32, 8, 12, 16, 14, 23, 23, 34],
+        wordWrap: true
     });
-    
     for (const analysis of proposerAnalysis) {
-        // Get proposer name from database - show full name without eliding
         const proposerName = await validatorDB.getValidatorName(analysis.proposer);
-        const validatorDisplay = proposerName || 'Unknown Validator';
-        
-        const delayRange = `${analysis.delayStats.min}-${analysis.delayStats.max}`;
-        const sigRange = `${analysis.signatureStats.min}-${analysis.signatureStats.max}`;
-        
-        analysisTable.push([
-            validatorDisplay,
-            analysis.proposer,
-            analysis.sampleCount.toString(),
-            Math.round(analysis.delayStats.avg).toString(),
-            Math.round(analysis.delayStats.median).toString(),
-            delayRange,
-            analysis.signatureStats.avg.toFixed(1),
-            sigRange
+        const proposerDisplay = proposerName || analysis.proposer;
+        const minDelayDisplay = `${analysis.minDelayDetail.delay} (#${analysis.minDelayDetail.blockNumber})`;
+        const maxDelayDisplay = `${analysis.maxDelayDetail.delay} (#${analysis.maxDelayDetail.blockNumber})`;
+        // Find the max missing sample for this proposer and show source→next (delay)
+        let maxMissRow = null;
+        const data = proposerImpacts.get(analysis.proposer);
+        if (data && Array.isArray(data.missingDetails) && data.missingDetails.length > 0) {
+            maxMissRow = data.missingDetails.reduce((max, curr) => (curr.missing > (max?.missing ?? -1) ? curr : max), null);
+        }
+        const maxMissingDisplay = maxMissRow
+            ? `${maxMissRow.missing} (${maxMissRow.sourceBlock}→${maxMissRow.nextBlock}, ${maxMissRow.delayMs}ms)`
+            : 'n/a';
+        const medMissing = Number(analysis.missingStats.median || 0);
+        const medDelayMs = Math.round(analysis.delayStats.median || 0);
+        table.push([
+            proposerDisplay,
+            analysis.sampleCount,
+            medMissing,
+            medDelayMs,
+            Math.round(analysis.delayStats.stddev || 0),
+            minDelayDisplay,
+            maxDelayDisplay,
+            maxMissingDisplay
         ]);
     }
-    
-    console.log(analysisTable.toString());
+    console.log(table.toString());
+
+    // Histogram of missing validators across all next blocks (bucket size = 1)
+    console.log('\n📊 HISTOGRAM: Missing Validators per Next Block (bucket size = 1)');
+    const hist = new Map();
+    let maxMissingVal = 0;
+    let maxFreq = 0;
+    for (const m of missingSamples) {
+        const v = Number.isFinite(m) ? m : 0;
+        maxMissingVal = Math.max(maxMissingVal, v);
+        const f = (hist.get(v) || 0) + 1;
+        hist.set(v, f);
+        if (f > maxFreq) maxFreq = f;
+    }
+    const barMax = 40;
+    const histTable = new Table({
+        head: ['Missing', 'Frequency', 'Bar'],
+        colWidths: [10, 12, 50],
+        wordWrap: true
+    });
+    for (let v = 0; v <= maxMissingVal; v++) {
+        const f = hist.get(v) || 0;
+        const barLen = maxFreq > 0 ? Math.max(1, Math.round((f / maxFreq) * barMax)) : 0;
+        const bar = f > 0 ? '█'.repeat(barLen) : '';
+        histTable.push([v, f, bar]);
+    }
+    console.log(histTable.toString());
     
     // Overall statistics
     const allDelays = [];
-    const allSignatures = [];
+    const allMissing = [];
     for (const [_, data] of proposerImpacts.entries()) {
         allDelays.push(...data.nextBlockDelays);
-        allSignatures.push(...data.nextBlockSignatures);
+        allMissing.push(...data.nextBlockMissing);
     }
     
-    const overallDelayStats = calculateStats(allDelays);
-    const overallSignatureStats = calculateStats(allSignatures);
+    const overallDelayStats = StatUtils.calculateStats(allDelays);
+    const overallMissingStats = StatUtils.calculateStats(allMissing);
     
     console.log(`\n📊 OVERALL STATISTICS:`);
     console.log(`Total block pairs analyzed: ${allDelays.length.toLocaleString()}`);
     console.log(`Total proposers with data: ${proposerImpacts.size.toLocaleString()}`);
     console.log(`\nBlock Timing:`);
-    console.log(`  Average delay: ${Math.round(overallDelayStats.avg).toLocaleString()} ms (${(overallDelayStats.avg / 1000).toFixed(2)} seconds)`);
+    console.log(`  Average delay: ${StatUtils.formatNumber(overallDelayStats.avg)} ms (${StatUtils.formatDuration(overallDelayStats.avg)})`);
     console.log(`  Median delay: ${overallDelayStats.median.toLocaleString()} ms`);
     console.log(`  Range: ${overallDelayStats.min.toLocaleString()} - ${overallDelayStats.max.toLocaleString()} ms`);
-    console.log(`\nSignature Counts:`);
-    console.log(`  Average signatures: ${overallSignatureStats.avg.toFixed(1)}`);
-    console.log(`  Median signatures: ${overallSignatureStats.median}`);
-    console.log(`  Range: ${overallSignatureStats.min} - ${overallSignatureStats.max} signatures`);
+    console.log(`\nMissing Votes (flag=1):`);
+    console.log(`  Average missing: ${StatUtils.formatNumber(overallMissingStats.avg, 1)}`);
+    console.log(`  Median missing: ${overallMissingStats.median}`);
+    console.log(`  Range: ${overallMissingStats.min} - ${overallMissingStats.max} validators`);
     
-    console.log(`\n✅ Block delay analysis completed successfully!`);
+    ProgressReporter.logSuccess('Block delay analysis completed successfully!');
     
-    // Return data for potential further analysis
     return {
         proposerAnalysis,
         overallStats: {
             delays: overallDelayStats,
-            signatures: overallSignatureStats
+            missing: overallMissingStats
         },
         totalPairs: allDelays.length,
         totalProposers: proposerImpacts.size
     };
 }
 
-// Run the analysis
+function showHelp() {
+    console.log(`
+Berachain Block Delay Analysis Script
+
+This script analyzes how each validator's block proposals affect the timing
+and participation in subsequent blocks. It measures delays and signature counts
+in blocks that follow each proposer's blocks.
+
+Key Features:
+- Efficient single-pass block fetching (no re-querying)
+- Millisecond-accurate timing analysis between consecutive blocks
+- Signature count analysis for blocks following each proposer
+- Statistical analysis: min, max, average, median for both timing and signatures
+- Validator name lookup via database
+
+Usage: node analyze-block-delays.js [options]
+
+Options:
+  --blocks=N         Number of blocks to analyze (default: ${ConfigHelper.getDefaultBlockCount()})
+  -c, --chain=NAME   Chain to use: mainnet|bepolia (default: mainnet)
+  -h, --help         Show this help message
+
+Examples:
+  node analyze-block-delays.js                    # Use defaults
+  node analyze-block-delays.js --blocks=2000      # Analyze 2000 blocks
+  node analyze-block-delays.js --chain=bepolia    # Use testnet
+    `);
+}
+
+// CLI handling
 if (require.main === module) {
-    analyzeBlockDelays()
+    const args = process.argv.slice(2);
+    const blockCountArg = args.find(arg => arg.startsWith('--blocks='));
+    const networkArg = args.find(arg => arg.startsWith('--network='));
+    
+    const blockCount = blockCountArg ? parseInt(blockCountArg.split('=')[1]) : ConfigHelper.getDefaultBlockCount();
+    const network = networkArg ? networkArg.split('=')[1] : 'mainnet';
+    
+    if (args.includes('--help') || args.includes('-h')) {
+        showHelp();
+        process.exit(0);
+    }
+    
+    analyzeBlockDelays(blockCount, network)
         .then(results => {
             process.exit(0);
         })
         .catch(error => {
-            console.error(`\n❌ Script failed:`, error);
+            ProgressReporter.logError(`Script failed: ${error.message}`);
             process.exit(1);
         });
 }
