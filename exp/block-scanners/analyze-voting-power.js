@@ -1,3 +1,5 @@
+#!/usr/bin/env node
+
 /**
  * Voting Power Analysis - Validator Performance Analyzer
  * 
@@ -11,91 +13,37 @@
  * - Tracks client distribution across validators
  * - Provides detailed performance metrics and statistics
  * - Supports custom block range analysis
+ * - Client upgrade tracking across time
+ * 
+ * Usage: node analyze-voting-power.js [--blocks N] [--detailed] [--upgrade] [--network mainnet|bepolia]
  */
 
 const { ethers } = require('ethers');
 const axios = require('axios');
 const yargs = require('yargs/yargs');
 const { hideBin } = require('yargs/helpers');
-const { spawn } = require('child_process');
 const Table = require('cli-table3');
 const moment = require('moment');
 
-// Simple SQLite wrapper to look up validator names
-class ValidatorNameDB {
-  constructor(dbPath) {
-    this.dbPath = dbPath;
-  }
+const { ValidatorNameDB, BlockFetcher, StatUtils, ProgressReporter, ConfigHelper, config } = require('./lib/shared-utils');
 
-  async query(sql, params = []) {
-    return new Promise((resolve, reject) => {
-      // Escape parameters and build SQL
-      let finalSql = sql;
-      if (params.length > 0) {
-        for (let i = 0; i < params.length; i++) {
-          const param = params[i].toString().replace(/'/g, "''");
-          finalSql = finalSql.replace('?', `'${param}'`);
-        }
-      }
-
-      const sqlite = spawn('sqlite3', [this.dbPath, finalSql, '-json']);
-      let output = '';
-      let error = '';
-
-      sqlite.stdout.on('data', (data) => {
-        output += data.toString();
-      });
-
-      sqlite.stderr.on('data', (data) => {
-        error += data.toString();
-      });
-
-      sqlite.on('close', (code) => {
-        if (code === 0) {
-          try {
-            const result = output.trim() ? JSON.parse(output.trim()) : [];
-            resolve(result);
-          } catch (e) {
-            resolve([]);
-          }
-        } else {
-          reject(new Error(`SQLite error: ${error}`));
-        }
-      });
-    });
-  }
-
-  async getValidatorName(address) {
-    try {
-      // Try with the address as-is first
-      let result = await this.query('SELECT name FROM validators WHERE proposer_address = ?', [address]);
-      
-      // If no result and address doesn't start with 0x, try adding it
-      if ((!result || result.length === 0) && !address.startsWith('0x')) {
-        const addressWithPrefix = `0x${address}`;
-        result = await this.query('SELECT name FROM validators WHERE proposer_address = ?', [addressWithPrefix]);
-      }
-      
-      // If still no result and address starts with 0x, try removing it
-      if ((!result || result.length === 0) && address.startsWith('0x')) {
-        const addressWithoutPrefix = address.slice(2);
-        result = await this.query('SELECT name FROM validators WHERE proposer_address = ?', [addressWithoutPrefix]);
-      }
-      
-      if (result && result.length > 0 && result[0].name && result[0].name !== 'N/A') {
-        return result[0].name;
-      }
-      return null;
-    } catch (error) {
-      return null;
-    }
-  }
+// Client classification
+function classifyClient(clientString) {
+    const lower = clientString.toLowerCase();
+    
+    if (lower.includes('besu')) return 'Besu';
+    if (lower.includes('geth')) return 'Geth';
+    if (lower.includes('nethermind')) return 'Nethermind';
+    if (lower.includes('erigon')) return 'Erigon';
+    if (lower.includes('reth')) return 'Reth';
+    
+    return 'Unknown';
 }
 
-// Function to decode extraData to identify client type (copied from scan-block-filling-crazy.js)
+// Enhanced extraData decoder with RLP support
 async function decodeExtraDataAsAscii(extraData) {
-    if (!extraData || extraData === '0x') {
-        return 'Reth?';
+    if (!extraData || extraData === '0x' || extraData.length <= 2) {
+        return 'Empty';
     }
     
     try {
@@ -210,92 +158,31 @@ function decodeRLPList(bytes) {
     let offset = 0;
     
     while (offset < bytes.length) {
-        const item = decodeRLP(bytes.slice(offset));
-        if (item === null) break;
+        const decoded = decodeRLP(bytes.slice(offset));
+        if (decoded === null) break;
         
-        // Find the length of this item
+        result.push(decoded);
+        
+        // Calculate the number of bytes consumed
         const firstByte = bytes[offset];
-        let itemLength = 1;
-        
-        if (firstByte >= 0x80 && firstByte < 0xb8) {
-            itemLength = 1 + (firstByte - 0x80);
-        } else if (firstByte >= 0xb8 && firstByte < 0xc0) {
+        if (firstByte < 0x80) {
+            offset += 1;
+        } else if (firstByte < 0xb8) {
+            offset += 1 + (firstByte - 0x80);
+        } else if (firstByte < 0xc0) {
             const lengthBytes = firstByte - 0xb7;
-            itemLength = 1 + lengthBytes + parseInt(bytes.slice(offset + 1, offset + 1 + lengthBytes).map(b => b.toString(16).padStart(2, '0')).join(''), 16);
-        } else if (firstByte >= 0xc0 && firstByte < 0xf8) {
-            itemLength = 1 + (firstByte - 0xc0);
-        } else if (firstByte >= 0xf8) {
+            const length = parseInt(bytes.slice(offset + 1, offset + 1 + lengthBytes).map(b => b.toString(16).padStart(2, '0')).join(''), 16);
+            offset += 1 + lengthBytes + length;
+        } else if (firstByte < 0xf8) {
+            offset += 1 + (firstByte - 0xc0);
+        } else {
             const lengthBytes = firstByte - 0xf7;
-            itemLength = 1 + lengthBytes + parseInt(bytes.slice(offset + 1, offset + 1 + lengthBytes).map(b => b.toString(16).padStart(2, '0')).join(''), 16);
+            const length = parseInt(bytes.slice(offset + 1, offset + 1 + lengthBytes).map(b => b.toString(16).padStart(2, '0')).join(''), 16);
+            offset += 1 + lengthBytes + length;
         }
-        
-        result.push(item);
-        offset += itemLength;
     }
     
     return result;
-}
-
-// Fetch all validators and their voting power
-async function fetchValidators(clRpcUrl) {
-    try {
-        const validatorsUrl = `${clRpcUrl}/validators?per_page=100`;
-        const response = await axios.get(validatorsUrl);
-        
-        return response.data.result.validators.map(validator => ({
-            address: validator.address,
-            votingPower: BigInt(validator.voting_power)
-        }));
-    } catch (error) {
-        throw new Error(`Failed to fetch validators: ${error.message}`);
-    }
-}
-
-// Fetch block proposer address from consensus layer with retry logic
-async function getBlockProposer(blockNumber, clRpcUrl, retries = 3, delay = 1000) {
-    for (let attempt = 1; attempt <= retries; attempt++) {
-        try {
-            const headerUrl = `${clRpcUrl}/header?height=${blockNumber}`;
-            const response = await axios.get(headerUrl, {
-                timeout: 10000, // 10 second timeout
-                headers: {
-                    'Connection': 'keep-alive',
-                }
-            });
-            return response.data.result.header.proposer_address;
-        } catch (error) {
-            if (attempt === retries) {
-                throw new Error(`Failed to fetch block proposer for block ${blockNumber} after ${retries} attempts: ${error.message}`);
-            }
-            
-            console.warn(`Attempt ${attempt}/${retries} failed for block ${blockNumber}: ${error.message}. Retrying in ${delay}ms...`);
-            await new Promise(resolve => setTimeout(resolve, delay));
-            delay *= 2; // Exponential backoff
-        }
-    }
-}
-
-// Classify client type based on decoded extraData
-function classifyClient(clientString) {
-    const lower = clientString.toLowerCase();
-    
-    if (lower.includes('bera-geth')) {
-        return 'bera-geth';
-    } else if (lower.includes('geth')) {
-        return 'geth';
-    } else if (lower.includes('bera-reth')) {
-        return 'bera-reth';
-    } else if (lower.includes('reth')) {
-        return 'reth';
-    } else if (lower.includes('besu')) {
-        return 'besu';
-    } else if (lower.includes('nethermind')) {
-        return 'nethermind';
-    } else if (lower.includes('erigon')) {
-        return 'erigon';
-    } else {
-        return 'unknown';
-    }
 }
 
 // Extract client version from client string
@@ -314,13 +201,49 @@ function extractClientVersion(clientString) {
     return 'unknown';
 }
 
-async function analyzeVotingPower(elProvider, clRpcUrl, maxBlocksToScan = 10000, detailedMode = false, upgradeMode = false) {
-    // Initialize validator name database
-    const dbPath = '../cometbft-decoder/validators_correlated.db';
-    const validatorDB = new ValidatorNameDB(dbPath);
+// Fetch validators from consensus layer
+async function fetchValidators(clRpcUrl) {
+    try {
+        const response = await axios.get(`${clRpcUrl}/validators`);
+        return response.data.result.validators.map(validator => ({
+            address: validator.address,
+            votingPower: parseInt(validator.voting_power),
+            pubKey: validator.pub_key
+        }));
+    } catch (error) {
+        console.error('Error fetching validators:', error.message);
+        return [];
+    }
+}
+
+// Get block proposer from consensus layer
+async function getBlockProposer(blockHeight, clRpcUrl) {
+    try {
+        const response = await axios.get(`${clRpcUrl}/block?height=${blockHeight}`);
+        return response.data.result.block.header.proposer_address;
+    } catch (error) {
+        return null;
+    }
+}
+
+async function analyzeVotingPower(networkName = 'mainnet', maxBlocksToScan = 10000, detailedMode = false, upgradeMode = false) {
+    // Get network configuration
+    const networkConfig = ConfigHelper.getNetworkConfig(networkName);
+    const elProvider = new ethers.JsonRpcProvider(networkConfig.el);
+    const clRpcUrl = networkConfig.blockScanner;
     
-    // Step 1: Get all validators and their voting power
+    // Initialize validator name database
+    const validatorDB = new ValidatorNameDB();
+    
+    ProgressReporter.logStep('Fetching validators from consensus layer');
     const validators = await fetchValidators(clRpcUrl);
+    
+    if (validators.length === 0) {
+        ProgressReporter.logError('No validators found');
+        return;
+    }
+    
+    ProgressReporter.logSuccess(`Found ${validators.length} validators`);
     
     // Create map for quick lookup
     const validatorMap = new Map();
@@ -328,32 +251,40 @@ async function analyzeVotingPower(elProvider, clRpcUrl, maxBlocksToScan = 10000,
         validatorMap.set(validator.address, validator.votingPower);
     });
     
-    // Step 2: Get current block number
+    // Get current block number
+    ProgressReporter.logStep('Getting current block number');
     const currentBlock = await elProvider.getBlockNumber();
+    ProgressReporter.logSuccess(`Current block: ${currentBlock.toLocaleString()}`);
     
-    // Step 3: Scan blocks backwards to identify client for each validator
-    const proposerClients = new Map(); // proposer_address -> client_type
+    // Scan blocks backwards to identify client for each validator
+    const proposerClients = new Map(); // proposer_address -> client_info
     const seenProposers = new Set();
     let blocksScanned = 0;
     
     // For upgrade tracking mode
     const validatorUpgrades = new Map(); // proposer_address -> {firstSeen: {...}, upgrades: [...]}
     const validatorsWithUpgrades = new Set(); // Track which validators have at least one upgrade
-    const maxBlocksForUpgrade = maxBlocksToScan;
     
-    for (let blockNum = currentBlock; blockNum > currentBlock - maxBlocksForUpgrade; blockNum--) {
-        // Progress reporting every 10,000 blocks
+    ProgressReporter.logStep(`Scanning ${maxBlocksToScan.toLocaleString()} blocks backwards from ${currentBlock.toLocaleString()}`);
+    
+    for (let blockNum = currentBlock; blockNum > currentBlock - maxBlocksToScan; blockNum--) {
+        // Progress reporting every 1000 blocks
         if (blocksScanned % 1000 === 0) {
             if (upgradeMode) {
-                console.log(`Progress: ${blocksScanned.toLocaleString()} blocks scanned, ${seenProposers.size}/${validators.length} validators seen, ${validatorsWithUpgrades.size} validators with upgrades found`);
+                ProgressReporter.showProgress(blocksScanned, maxBlocksToScan);
+                console.log(` - ${seenProposers.size}/${validators.length} validators seen, ${validatorsWithUpgrades.size} with upgrades`);
             } else {
-                console.log(`Progress: ${blocksScanned.toLocaleString()} blocks scanned, ${seenProposers.size}/${validators.length} validators identified`);
+                ProgressReporter.showProgress(blocksScanned, maxBlocksToScan);
+                console.log(` - ${seenProposers.size}/${validators.length} validators identified`);
             }
         }
+        
         try {
             blocksScanned++;
+            
             // Get proposer address from CL first (cheap)
             const proposerAddress = await getBlockProposer(blockNum, clRpcUrl);
+            if (!proposerAddress) continue;
             
             // In normal mode, skip if we already know this proposer's client
             if (!upgradeMode && seenProposers.has(proposerAddress)) {
@@ -401,345 +332,235 @@ async function analyzeVotingPower(elProvider, clRpcUrl, maxBlocksToScan = 10000,
                         upgrades: []
                     });
                 } else {
-                    // We've seen this validator before - check if client has changed
-                    const validatorInfo = validatorUpgrades.get(proposerAddress);
-                    const firstSeen = validatorInfo.firstSeen;
+                    // Check if this is an upgrade (different client or version)
+                    const history = validatorUpgrades.get(proposerAddress);
+                    const lastKnown = history.upgrades.length > 0 ? history.upgrades[history.upgrades.length - 1] : history.firstSeen;
                     
-                    // If this is a different client than what we first saw, it's an upgrade
-                    if (firstSeen.clientString !== clientString) {
-                        validatorInfo.upgrades.push({
+                    if (lastKnown.clientString !== clientString || lastKnown.clientVersion !== clientVersion) {
+                        history.upgrades.push({
                             block: blockNum,
                             timestamp: block.timestamp,
                             clientString,
                             clientType,
                             clientVersion,
-                            fromClient: firstSeen.clientString,
-                            fromClientType: firstSeen.clientType,
-                            fromVersion: firstSeen.clientVersion
+                            previousClientString: lastKnown.clientString,
+                            previousClientType: lastKnown.clientType,
+                            previousClientVersion: lastKnown.clientVersion
                         });
-                        
-                        // Mark this validator as having an upgrade
                         validatorsWithUpgrades.add(proposerAddress);
                     }
                 }
             }
             
-            // console.log(`Block ${blockNum}: Proposer ${proposerAddress} -> ${clientString} (${clientType})`);
-            
         } catch (error) {
-            console.error(`Error processing block ${blockNum}: ${error.message}`);
-        }
-        
-        
-        // In upgrade mode, check if we can stop early
-        if (upgradeMode && seenProposers.size >= validators.length) {
-            // Either we found upgrades for all validators, OR we've seen all validators and need to keep looking for upgrades
-            if (validatorsWithUpgrades.size >= seenProposers.size) {
-                console.log(`\nEarly exit: Found upgrades for all ${seenProposers.size} validators after ${blocksScanned.toLocaleString()} blocks`);
-                break;
-            }
-            // If we've seen all validators but haven't found upgrades for all, continue but give status
-            if (blocksScanned % 50000 === 0) {
-                console.log(`\nStatus: Seen all ${seenProposers.size} validators, but only ${validatorsWithUpgrades.size} have upgrades. Continuing search...`);
-            }
-        }
-        
-        // In normal mode, stop when we've seen all validators
-        if (!upgradeMode && seenProposers.size >= validators.length) {
-            break;
+            console.error(`Error processing block ${blockNum}:`, error.message);
         }
     }
     
-    console.log(`\nScanning complete. Scanned ${blocksScanned} blocks, identified ${seenProposers.size}/${validators.length} validators\n`);
+    ProgressReporter.clearProgress();
+    ProgressReporter.logSuccess(`Scanned ${blocksScanned.toLocaleString()} blocks, identified ${seenProposers.size}/${validators.length} validators`);
     
-    // Step 5: Calculate voting power by client type
-    const clientVotingPower = new Map();
-    const unknownValidators = [];
-    
-    for (const validator of validators) {
-        const clientInfo = proposerClients.get(validator.address);
-        
-        if (clientInfo) {
-            const clientType = clientInfo.clientType;
-            if (!clientVotingPower.has(clientType)) {
-                clientVotingPower.set(clientType, BigInt(0));
-            }
-            clientVotingPower.set(clientType, clientVotingPower.get(clientType) + validator.votingPower);
-        } else {
-            unknownValidators.push(validator.address);
-        }
-    }
+    // Analyze results
+    const clientStats = new Map();
+    const versionStats = new Map();
+    let totalVotingPower = 0;
+    let analyzedVotingPower = 0;
     
     // Calculate total voting power
-    const totalVotingPower = validators.reduce((sum, validator) => sum + validator.votingPower, BigInt(0));
+    validators.forEach(validator => {
+        totalVotingPower += validator.votingPower;
+    });
+    
+    // Analyze identified validators
+    for (const [proposerAddress, clientInfo] of proposerClients.entries()) {
+        const votingPower = validatorMap.get(proposerAddress) || 0;
+        analyzedVotingPower += votingPower;
+        
+        // Client type stats
+        if (!clientStats.has(clientInfo.clientType)) {
+            clientStats.set(clientInfo.clientType, { count: 0, votingPower: 0 });
+        }
+        const clientStat = clientStats.get(clientInfo.clientType);
+        clientStat.count++;
+        clientStat.votingPower += votingPower;
+        
+        // Version stats
+        const versionKey = `${clientInfo.clientType} ${clientInfo.clientVersion}`;
+        if (!versionStats.has(versionKey)) {
+            versionStats.set(versionKey, { count: 0, votingPower: 0 });
+        }
+        const versionStat = versionStats.get(versionKey);
+        versionStat.count++;
+        versionStat.votingPower += votingPower;
+    }
     
     // Display results
-    console.log('=== VOTING POWER BY CLIENT TYPE ===\n');
+    console.log('\n' + '=' .repeat(80));
+    console.log('📊 VOTING POWER ANALYSIS RESULTS');
+    console.log('=' .repeat(80));
     
-    // Create table using cli-table3
-    const clientTypeTable = new Table({
-        head: ['Client Type', 'Voting Power (BERA)', 'Percentage', 'Count'],
-        colWidths: [20, 25, 15, 10],
-        colAligns: ['left', 'right', 'right', 'right']
+    console.log(`\nTotal validators: ${validators.length.toLocaleString()}`);
+    console.log(`Identified validators: ${seenProposers.size.toLocaleString()} (${((seenProposers.size / validators.length) * 100).toFixed(1)}%)`);
+    console.log(`Total voting power: ${totalVotingPower.toLocaleString()}`);
+    console.log(`Analyzed voting power: ${analyzedVotingPower.toLocaleString()} (${((analyzedVotingPower / totalVotingPower) * 100).toFixed(1)}%)`);
+    
+    // Client distribution table
+    console.log('\n📈 CLIENT DISTRIBUTION:');
+    const clientTable = new Table({
+        head: ['Client', 'Validators', 'Voting Power', '% by Count', '% by Power'],
+        colWidths: [15, 12, 15, 12, 12]
     });
     
-    for (const [clientType, votingPower] of clientVotingPower.entries()) {
-        const percentage = (Number(votingPower * BigInt(10000) / totalVotingPower) / 100).toFixed(2);
-        const votingPowerBERA = Number(votingPower / BigInt(10**9));
-        const formattedVotingPower = votingPowerBERA.toLocaleString();
-        const validatorCount = Array.from(proposerClients.entries()).filter(([_, info]) => info.clientType === clientType).length;
-        clientTypeTable.push([
-            clientType.toUpperCase(),
-            formattedVotingPower,
-            percentage + '%',
-            validatorCount.toString()
+    const sortedClients = Array.from(clientStats.entries()).sort((a, b) => b[1].votingPower - a[1].votingPower);
+    
+    for (const [clientType, stats] of sortedClients) {
+        clientTable.push([
+            clientType,
+            stats.count.toLocaleString(),
+            stats.votingPower.toLocaleString(),
+            `${((stats.count / seenProposers.size) * 100).toFixed(1)}%`,
+            `${((stats.votingPower / analyzedVotingPower) * 100).toFixed(1)}%`
         ]);
     }
     
-    if (unknownValidators.length > 0) {
-        const unknownVotingPower = unknownValidators.reduce((sum, address) => sum + validatorMap.get(address), BigInt(0));
-        const percentage = (Number(unknownVotingPower * BigInt(10000) / totalVotingPower) / 100).toFixed(2);
-        const unknownVotingPowerBERA = Number(unknownVotingPower / BigInt(10**9));
-        const formattedUnknownVotingPower = unknownVotingPowerBERA.toLocaleString();
-        clientTypeTable.push([
-            'UNKNOWN',
-            formattedUnknownVotingPower,
-            percentage + '%',
-            unknownValidators.length.toString()
-        ]);
-    }
-    
-    console.log(clientTypeTable.toString());
-    
-    // Always show client version summary table
-    console.log('\n=== VOTING POWER BY CLIENT VERSION ===\n');
-    
-    // Group by client type and version
-    const clientVersionVotingPower = new Map();
-    for (const [proposerAddress, clientInfo] of proposerClients.entries()) {
-        const votingPower = validatorMap.get(proposerAddress);
-        const key = `${clientInfo.clientType}:${clientInfo.clientVersion}`;
-        
-        if (!clientVersionVotingPower.has(key)) {
-            clientVersionVotingPower.set(key, {
-                clientType: clientInfo.clientType,
-                version: clientInfo.clientVersion,
-                votingPower: BigInt(0),
-                validatorCount: 0,
-                validators: []
-            });
-        }
-        
-        const entry = clientVersionVotingPower.get(key);
-        entry.votingPower += votingPower;
-        entry.validatorCount++;
-        entry.validators.push({
-            address: proposerAddress,
-            votingPower,
-            clientString: clientInfo.clientString,
-            sampleBlock: clientInfo.sampleBlock
-        });
-    }
-    
-    // Sort by voting power (descending)
-    const sortedVersions = Array.from(clientVersionVotingPower.values())
-        .sort((a, b) => b.votingPower > a.votingPower ? 1 : -1);
-    
-    // Create table using cli-table3
-    const clientVersionTable = new Table({
-        head: ['Client & Version', 'Voting Power (BERA)', 'Percentage', 'Count'],
-        colWidths: [35, 25, 15, 10],
-        colAligns: ['left', 'right', 'right', 'right']
-    });
-    
-    for (const entry of sortedVersions) {
-        const percentage = (Number(entry.votingPower * BigInt(10000) / totalVotingPower) / 100).toFixed(2);
-        const votingPowerBERA = Number(entry.votingPower / BigInt(10**9));
-        const formattedVotingPower = votingPowerBERA.toLocaleString();
-        clientVersionTable.push([
-            `${entry.clientType.toUpperCase()} ${entry.version}`,
-            formattedVotingPower,
-            percentage + '%',
-            entry.validatorCount.toString()
-        ]);
-    }
-    
-    console.log(clientVersionTable.toString());
+    console.log(clientTable.toString());
     
     if (detailedMode) {
-        console.log('\n=== DETAILED VALIDATOR BREAKDOWN ===\n');
+        // Version distribution table
+        console.log('\n📋 VERSION DISTRIBUTION:');
+        const versionTable = new Table({
+            head: ['Client Version', 'Validators', 'Voting Power', '% by Count', '% by Power'],
+            colWidths: [25, 12, 15, 12, 12]
+        });
         
-        // Show detailed validator lists for each version
-        for (const entry of sortedVersions) {
-            console.log(`${entry.clientType.toUpperCase()} ${entry.version} (${entry.validatorCount} validators):`);
+        const sortedVersions = Array.from(versionStats.entries()).sort((a, b) => b[1].votingPower - a[1].votingPower);
+        
+        for (const [version, stats] of sortedVersions) {
+            versionTable.push([
+                version,
+                stats.count.toLocaleString(),
+                stats.votingPower.toLocaleString(),
+                `${((stats.count / seenProposers.size) * 100).toFixed(1)}%`,
+                `${((stats.votingPower / analyzedVotingPower) * 100).toFixed(1)}%`
+            ]);
+        }
+        
+        console.log(versionTable.toString());
+    }
+    
+    if (upgradeMode && validatorsWithUpgrades.size > 0) {
+        console.log('\n🔄 CLIENT UPGRADES DETECTED:');
+        console.log(`Found ${validatorsWithUpgrades.size} validators with client upgrades\n`);
+        
+        for (const [proposerAddress, upgradeHistory] of validatorUpgrades.entries()) {
+            if (upgradeHistory.upgrades.length === 0) continue;
             
-            // Create table for this version
-            const validatorTable = new Table({
-                head: ['Validator', 'Voting Power (BERA)', 'Percentage', 'Block Found', 'Client Info'],
-                colWidths: [40, 20, 12, 15, 25],
-                colAligns: ['left', 'right', 'right', 'right', 'left']
-            });
+            const validatorName = await validatorDB.getValidatorName(proposerAddress);
+            const displayName = validatorName || proposerAddress.substring(0, 12) + '...';
             
-            for (const validator of entry.validators) {
-                const validatorPercentage = (Number(validator.votingPower * BigInt(10000) / totalVotingPower) / 100).toFixed(2);
-                const validatorName = await validatorDB.getValidatorName(validator.address);
-                const displayName = validatorName ? `${validatorName} (${validator.address})` : validator.address;
-                const validatorVotingPowerBERA = Number(validator.votingPower / BigInt(10**9));
-                const formattedValidatorVotingPower = validatorVotingPowerBERA.toLocaleString();
-                const clientInfo = validator.clientString;
-                const blockFound = validator.sampleBlock.toLocaleString();
-                
-                validatorTable.push([
-                    displayName,
-                    formattedValidatorVotingPower,
-                    validatorPercentage + '%',
-                    blockFound,
-                    clientInfo
-                ]);
+            console.log(`Validator: ${displayName}`);
+            console.log(`  First seen: ${upgradeHistory.firstSeen.clientString} (block ${upgradeHistory.firstSeen.block})`);
+            
+            for (const upgrade of upgradeHistory.upgrades) {
+                const upgradeDate = moment.unix(upgrade.timestamp).format('YYYY-MM-DD HH:mm:ss');
+                console.log(`  Upgrade: ${upgrade.previousClientString} → ${upgrade.clientString} (block ${upgrade.block}, ${upgradeDate})`);
             }
-            
-            console.log(validatorTable.toString());
-            console.log();
+            console.log('');
         }
     }
     
-    // Show upgrade tracking results
-    if (upgradeMode) {
-        console.log('\n=== CLIENT UPGRADE HISTORY ===\n');
-        
-        // Create upgrade summary table
-        const upgradeData = [];
-        const now = moment();
-        
-        for (const [proposerAddress, validatorInfo] of validatorUpgrades.entries()) {
-            if (validatorInfo.upgrades.length > 0) {
-                const validatorName = await validatorDB.getValidatorName(proposerAddress);
-                const displayName = validatorName ? `${validatorName} (${proposerAddress})` : proposerAddress;
-                
-                // Process each upgrade for this validator
-                for (const upgrade of validatorInfo.upgrades) {
-                    const upgradeTime = moment.unix(upgrade.timestamp);
-                    const relativeTime = upgradeTime.fromNow();
-                    
-                    upgradeData.push({
-                        validator: displayName,
-                        fromClient: upgrade.fromClient,
-                        toClient: upgrade.clientString,
-                        block: upgrade.block,
-                        relativeTime: relativeTime,
-                        timestamp: upgradeTime.format('YYYY-MM-DD HH:mm:ss')
-                    });
-                }
-            }
-        }
-        
-        if (upgradeData.length > 0) {
-            // Sort by most recent first
-            upgradeData.sort((a, b) => b.block - a.block);
-            
-            const upgradeTable = new Table({
-                head: ['Validator', 'First Seen', 'Upgraded To', 'When', 'Block'],
-                colWidths: [40, 30, 30, 20, 15],
-                colAligns: ['left', 'left', 'left', 'left', 'right']
-            });
-            
-            for (const upgrade of upgradeData) {
-                upgradeTable.push([
-                    upgrade.validator,
-                    upgrade.fromClient,
-                    upgrade.toClient,
-                    upgrade.relativeTime,
-                    upgrade.block.toString()
-                ]);
-            }
-            
-            console.log(upgradeTable.toString());
-            console.log(`\nFound ${upgradeData.length} client upgrades across ${validatorsWithUpgrades.size} validators`);
-            console.log(`Scanned ${blocksScanned.toLocaleString()} blocks`);
-            
-            // Show validators that haven't upgraded (still using first-seen client)
-            const nonUpgradedValidators = [];
-            for (const [proposerAddress, validatorInfo] of validatorUpgrades.entries()) {
-                if (validatorInfo.upgrades.length === 0) {
-                    const validatorName = await validatorDB.getValidatorName(proposerAddress);
-                    const displayName = validatorName ? `${validatorName} (${proposerAddress})` : proposerAddress;
-                    nonUpgradedValidators.push({
-                        validator: displayName,
-                        firstSeenClient: validatorInfo.firstSeen.clientString,
-                        firstSeenBlock: validatorInfo.firstSeen.block
-                    });
-                }
-            }
-            
-            if (nonUpgradedValidators.length > 0) {
-                console.log(`\n=== VALIDATORS WITHOUT UPGRADES (${nonUpgradedValidators.length}) ===`);
-                console.log('These validators are still using their first-seen client:');
-                
-                const nonUpgradeTable = new Table({
-                    head: ['Validator', 'First Seen Client', 'First Seen Block'],
-                    colWidths: [50, 40, 20],
-                    colAligns: ['left', 'left', 'right']
-                });
-                
-                for (const validator of nonUpgradedValidators) {
-                    nonUpgradeTable.push([
-                        validator.validator,
-                        validator.firstSeenClient,
-                        validator.firstSeenBlock.toString()
-                    ]);
-                }
-                
-                console.log(nonUpgradeTable.toString());
-            }
-        } else {
-            console.log('No client upgrades found in the scanned period.');
-            if (validatorsWithUpgrades.size < seenProposers.size) {
-                console.log(`Scanned ${blocksScanned.toLocaleString()} blocks but could not find upgrades for all ${seenProposers.size} validators`);
-                console.log(`Found upgrades for ${validatorsWithUpgrades.size} validators`);
-            } else {
-                console.log(`Scanned ${blocksScanned.toLocaleString()} blocks across ${validatorUpgrades.size} validators`);
-            }
-        }
-    }
+    ProgressReporter.logSuccess('Voting power analysis completed successfully!');
+    
+    return {
+        totalValidators: validators.length,
+        identifiedValidators: seenProposers.size,
+        clientStats: Object.fromEntries(clientStats),
+        versionStats: Object.fromEntries(versionStats),
+        totalVotingPower,
+        analyzedVotingPower,
+        upgradeHistory: upgradeMode ? Object.fromEntries(validatorUpgrades) : null
+    };
 }
 
-async function main() {
-    const elRpcUrl = process.env.EL_ETHRPC_URL || 'http://10.147.18.191:40003';
-    const clRpcUrl = process.env.CL_ETHRPC_URL || 'http://10.147.18.191:40000';
-    
-    console.log(`EL RPC: ${elRpcUrl}`);
-    console.log(`CL RPC: ${clRpcUrl}`);
-    
+// CLI handling
+if (require.main === module) {
     const argv = yargs(hideBin(process.argv))
-        .option('max-blocks', {
-            alias: 'm',
+        .option('blocks', {
+            alias: 'b',
             type: 'number',
             default: 10000,
-            description: 'Maximum number of blocks to scan backwards'
+            description: 'Number of blocks to scan backwards'
         })
         .option('detailed', {
             alias: 'd',
             type: 'boolean',
             default: false,
-            description: 'Enable detailed mode showing voting power breakdown by client version'
+            description: 'Show detailed version breakdown'
         })
         .option('upgrade', {
             alias: 'u',
             type: 'boolean',
             default: false,
-            description: 'Track client upgrades by scanning backwards from tip and detecting when validators change from their first-seen client'
+            description: 'Track client upgrades over time'
+        })
+        .option('network', {
+            alias: 'n',
+            type: 'string',
+            default: 'mainnet',
+            choices: ['mainnet', 'bepolia'],
+            description: 'Network to analyze'
+        })
+        .option('help', {
+            alias: 'h',
+            type: 'boolean',
+            description: 'Show help message'
         })
         .help()
         .argv;
     
-    const elProvider = new ethers.JsonRpcProvider(elRpcUrl);
-    
-    try {
-        await analyzeVotingPower(elProvider, clRpcUrl, argv.maxBlocks, argv.detailed, argv.upgrade);
-    } catch (error) {
-        console.error('Error during analysis:', error.message);
-        process.exit(1);
+    if (argv.help) {
+        console.log(`
+Voting Power Analysis - Validator Performance Analyzer
+
+This script analyzes validator performance by examining block proposals, client types,
+and voting patterns. It decodes extraData from blocks to identify execution clients
+and provides comprehensive statistics on validator behavior and block production.
+
+Features:
+- Decodes RLP-encoded extraData to identify client types and versions
+- Analyzes validator block proposal patterns
+- Tracks client distribution across validators
+- Provides detailed performance metrics and statistics
+- Supports custom block range analysis
+- Client upgrade tracking across time
+
+Usage: node analyze-voting-power.js [options]
+
+Options:
+  -b, --blocks N         Number of blocks to scan backwards (default: 10000)
+  -d, --detailed         Show detailed version breakdown
+  -u, --upgrade          Track client upgrades over time
+  -n, --network NAME     Network to analyze: mainnet|bepolia (default: mainnet)
+  -h, --help             Show this help message
+
+Examples:
+  node analyze-voting-power.js                     # Use defaults
+  node analyze-voting-power.js --blocks=5000       # Scan 5000 blocks
+  node analyze-voting-power.js --detailed          # Show version details
+  node analyze-voting-power.js --upgrade           # Track upgrades
+  node analyze-voting-power.js --network=bepolia   # Use testnet
+        `);
+        process.exit(0);
     }
+    
+    analyzeVotingPower(argv.network, argv.blocks, argv.detailed, argv.upgrade)
+        .then(results => {
+            process.exit(0);
+        })
+        .catch(error => {
+            ProgressReporter.logError(`Script failed: ${error.message}`);
+            process.exit(1);
+        });
 }
 
-main(); 
+module.exports = { analyzeVotingPower };
