@@ -81,12 +81,12 @@ func fetchGraphQLValidators() (*GraphQLResponse, error) {
 	query := GraphQLQuery{
 		OperationName: "GetValidators",
 		Variables: map[string]interface{}{
-			"sortBy":     "lastDayDistributedBGTAmount",
-			"sortOrder":  "desc",
-			"chain":      "BERACHAIN",
-			"where":      map[string]interface{}{},
-			"skip":       0,
-			"pageSize":   1000,
+			"sortBy":    "lastDayDistributedBGTAmount",
+			"sortOrder": "desc",
+			"chain":     "BERACHAIN",
+			"where":     map[string]interface{}{},
+			"skip":      0,
+			"pageSize":  1000,
 		},
 		Query: `query GetValidators($where: GqlValidatorFilter, $sortBy: GqlValidatorOrderBy = lastDayDistributedBGTAmount, $sortOrder: GqlValidatorOrderDirection = desc, $pageSize: Int, $skip: Int, $search: String, $chain: GqlChain) {
   validators: polGetValidators(
@@ -176,7 +176,7 @@ func main() {
 	}
 
 	// Initialize SQLite database
-	db, err := sql.Open("sqlite3", "validators_correlated.db")
+	db, err := sql.Open("sqlite3", "validators.db")
 	if err != nil {
 		fmt.Printf("Error opening database: %v\n", err)
 		return
@@ -246,7 +246,7 @@ func main() {
 	// Print CSV header
 	fmt.Println("proposer_address,name,address,pubkey,voting_power,operator,status")
 
-	correlatedCount := 0
+	matchedCount := 0
 
 	// Process each validator
 	for _, validator := range response.Result.Validators {
@@ -262,7 +262,7 @@ func main() {
 			name = graphqlData.Name
 			address = graphqlData.Address
 			operator = graphqlData.Operator
-			correlatedCount++
+			matchedCount++
 		} else {
 			name = "N/A"
 			address = "N/A"
@@ -273,7 +273,7 @@ func main() {
 		name = strings.ReplaceAll(name, ",", ";")
 
 		// Print to console
-		fmt.Printf("%s,%s,%s,%s,%s,%s,active_ongoing\n", 
+		fmt.Printf("%s,%s,%s,%s,%s,%s,active_ongoing\n",
 			validator.Address, name, address, compressedKey, validator.VotingPower, operator)
 
 		// Insert into database
@@ -286,7 +286,7 @@ func main() {
 		}
 	}
 
-	fmt.Printf("\nSuccessfully correlated: %d out of %d validators\n", correlatedCount, len(response.Result.Validators))
-	fmt.Printf("Correlation rate: %.1f%%\n", float64(correlatedCount)/float64(len(response.Result.Validators))*100)
-	fmt.Println("Data has been saved to validators_correlated.db")
+	fmt.Printf("\nSuccessfully matched: %d out of %d validators\n", matchedCount, len(response.Result.Validators))
+	fmt.Printf("Match rate: %.1f%%\n", float64(matchedCount)/float64(len(response.Result.Validators))*100)
+	fmt.Println("Data has been saved to validators.db")
 }
