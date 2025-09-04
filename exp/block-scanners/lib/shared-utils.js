@@ -257,31 +257,7 @@ class ProgressReporter {
   }
 }
 
-/**
- * Configuration helpers
- */
-class ConfigHelper {
-  static getChainConfig(chainName = 'mainnet') {
-    return config.ConfigHelper.getChainConfig(chainName);
-  }
-
-  static getBlockScannerUrl(chainName = 'mainnet') {
-    return config.ConfigHelper.getBlockScannerUrl(chainName);
-  }
-
-  static getValidatorDbPath() {
-    return config.ConfigHelper.getValidatorDbPath();
-  }
-
-  static getDefaultBlockCount() {
-    return config.ConfigHelper.getDefaultBlockCount();
-  }
-  
-  // Backward compatibility (deprecated - use getChainConfig)
-  static getNetworkConfig(networkName = 'mainnet') {
-    return config.getNetwork(networkName);
-  }
-}
+// ConfigHelper is re-exported from config.js
 
 module.exports = {
   ValidatorNameDB,

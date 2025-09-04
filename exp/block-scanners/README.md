@@ -1,29 +1,72 @@
 # Block Scanners
 
-This directory contains utilities for analyzing blockchain blocks and their patterns.
-
-## Scripts
-
-Each script includes inline help and detailed comments explaining usage, configuration, and functionality. Just browse the source code or run the scripts to see what they do.
-
-### Available Scripts
-
-- `analyze-block-delays.js` - Analyzes how each validator's block proposals affect subsequent block timing and participation
-- `analyze-validator-voting.js` - Scans validator voting patterns and missed blocks over time  
-- `analyze-voting-power.js` - Voting power analysis and validator performance metrics
-- `proposer-delay-analysis.js` - Analyzes average delays between consecutive blocks by proposer
-- `find_monday_blocks.js` - Finds blocks at Monday midnight UTC timestamps
-- `scan-block-filling.js` - Scans block gas usage and transaction patterns
-- `scan-deposits.js` - Analyzes deposit transactions and patterns
-- `scan-distributions.js` - Tracks reward distribution events
-- `scan-state-changes.js` - Monitors blockchain state changes
-- `scan-transactions-by-client.js` - Groups transactions by client software
+This directory contains utilities for analyzing blockchain blocks and their patterns on Berachain networks.
 
 ## Configuration
 
-Scripts use:
-- RPC URL: `http://37.27.231.195:59820` (configurable in each script)
-- Validator database: `../cometbft-decoder/validators_correlated.db` (for name lookups)
-- Most scripts scan backwards from current block height
+All scripts use the consolidated configuration from `../config.js` which supports:
+- Environment variable overrides
+- Network-specific settings (mainnet/bepolia)  
+- Validator database integration
+- Configurable RPC endpoints
 
-Run any script without arguments to see its specific usage and configuration options.
+## Available Scripts
+
+### `analyze-block-delays.js`
+Analyzes how each validator's block proposals affect the timing and participation in subsequent blocks.
+
+**Features:**
+- Efficient single-pass block fetching
+- Millisecond-accurate timing analysis between consecutive blocks
+- Signature count analysis for blocks following each proposer
+- Statistical analysis with min/max values and block numbers
+- Validator name lookup via database
+
+**Usage:** `node analyze-block-delays.js [--blocks N] [--network NAME] [-h]`
+
+### `analyze-voting-power.js`
+Comprehensive validator performance analyzer examining block proposals, client types, and voting patterns.
+
+**Features:**
+- Decodes RLP-encoded extraData to identify client types and versions
+- Analyzes validator block proposal patterns
+- Tracks client distribution across validators
+- Client upgrade tracking across time
+- Detailed performance metrics and statistics
+
+**Usage:** `node analyze-voting-power.js [-b N] [-d] [-u] [-n NAME] [-h]`
+
+### `analyze-block-filling.js`
+Block utilization analyzer examining transaction counts, gas usage, and block filling patterns.
+
+**Features:**
+- Analyzes block utilization and transaction density
+- Identifies client types from extraData decoding
+- Tracks validator performance metrics
+- Detailed block filling statistics
+- Sortable results by various metrics
+
+**Usage:** `node analyze-block-filling.js [-b N] [-n NAME] [-s COLUMN] [-h]`
+
+### Other Scripts
+
+- `find_monday_blocks.js` - Finds blocks at Monday midnight UTC timestamps
+- `scan-deposits.js` - Analyzes deposit transactions and patterns  
+- `scan-state-changes.js` - Monitors blockchain state changes
+
+## Common Options
+
+All major scripts support:
+- `-h, --help` - Show detailed help and usage information
+- `--network NAME` - Specify network (mainnet/bepolia)
+- `--blocks N` - Number of blocks to analyze
+
+## Dependencies
+
+Scripts require:
+- Node.js with axios, ethers, yargs
+- SQLite3 for validator name lookups
+- Access to `validators_correlated.db` database
+- Berachain RPC endpoints (configurable via config.js)
+
+Run any script with `-h` for detailed usage instructions and examples.
