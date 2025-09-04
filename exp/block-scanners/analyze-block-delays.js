@@ -247,8 +247,8 @@ async function analyzeBlockDelays(blockCount = ConfigHelper.getDefaultBlockCount
          console.log('\n📈 PROPOSER BLOCK DELAY ANALYSIS' + 
          (filterProposer ? ` (filtered to: ${filterProposer})` : ' (complete dataset)') + ':');
      const table = new Table({
-         head: ['Proposer', 'Blocks', 'Most Common Predecessor', '%', 'Median (ms)', 'P75', 'P99', 'Min/Max Delay'],
-         colWidths: [28, 8, 28, 6, 12, 8, 8, 18],
+         head: ['Proposer', 'Blocks', 'Most Common Predecessor', '%', 'Median (ms)', 'P75', 'P99', 'StdDev', 'Min/Max Delay'],
+         colWidths: [30, 8, 30, 6, 10, 7, 7, 8, 18],
          wordWrap: true
      });
      
@@ -261,7 +261,7 @@ async function analyzeBlockDelays(blockCount = ConfigHelper.getDefaultBlockCount
              await validatorDB.getValidatorName(analysis.mostCommonPredecessor) : null;
          const predecessorDisplay = showAddresses ? 
              (analysis.mostCommonPredecessor || 'N/A') : 
-             (predecessorName || 'Unknown');
+             (predecessorName || analysis.mostCommonPredecessor || 'N/A');
          
          const delayRange = `${analysis.minDelayDetail.delay}-${analysis.maxDelayDetail.delay}ms`;
          
@@ -273,6 +273,7 @@ async function analyzeBlockDelays(blockCount = ConfigHelper.getDefaultBlockCount
              Math.round(analysis.delayStats.median || 0),
              Math.round(analysis.percentiles.p75 || 0),
              Math.round(analysis.percentiles.p99 || 0),
+             Math.round(analysis.delayStats.stddev || 0),
              delayRange
          ]);
      }
