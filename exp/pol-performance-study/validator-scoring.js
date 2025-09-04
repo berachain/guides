@@ -715,7 +715,7 @@ function generateReport(statistics, validators, dayBoundaries) {
     
     const csvContent = [csvHeader, ...csvRows].join('\n');
     const reportFile = `validator_stats_${new Date().toISOString().split('T')[0]}.csv`;
-    fs.writeFileSync(reportFile, '\ufeff' + csvContent); // UTF-8 BOM
+    fs.writeFileSync(reportFile, csvContent); 
     log(`\nDetailed report saved to ${reportFile}`);
     
     return rankings;
