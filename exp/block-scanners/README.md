@@ -13,16 +13,16 @@ All scripts use the consolidated configuration from `../config.js` which support
 ## Available Scripts
 
 ### `analyze-block-delays.js`
-Analyzes how each validator's block proposals affect the timing and participation in subsequent blocks.
+Analyzes block delays between consecutive blocks with percentile analysis per proposer.
 
 **Features:**
 - Efficient single-pass block fetching
 - Millisecond-accurate timing analysis between consecutive blocks
-- Signature count analysis for blocks following each proposer
+- Percentile analysis (P25, P50/median, P75, P90, P99) for block delays
 - Statistical analysis with min/max values and block numbers
-- Validator name lookup via database
+- Detailed histograms when filtering by proposer
 
-**Usage:** `node analyze-block-delays.js [--blocks N] [--network NAME] [-h]`
+**Usage:** `node analyze-block-delays.js [--blocks N] [--chain NAME] [-a] [-p PROPOSER] [-h]`
 
 ### `analyze-voting-power.js`
 Comprehensive validator performance analyzer examining block proposals, client types, and voting patterns.
@@ -48,6 +48,18 @@ Block utilization analyzer examining transaction counts, gas usage, and block fi
 
 **Usage:** `node analyze-block-filling.js [-b N] [-n NAME] [-s COLUMN] [-h]`
 
+### `analyze-missing-validators.js`
+Analyzes missing validators (block_id_flag = 1) per proposer with detailed histograms.
+
+**Features:**
+- Efficient single-pass block fetching
+- Per-proposer histogram of missing validator counts
+- Overall distribution analysis
+- Statistical analysis with percentiles
+- Validator name lookup via database
+
+**Usage:** `node analyze-missing-validators.js [--blocks N] [--chain NAME] [-a] [-p PROPOSER] [-h]`
+
 ### Other Scripts
 
 - `find_monday_blocks.js` - Finds blocks at Monday midnight UTC timestamps
@@ -58,8 +70,10 @@ Block utilization analyzer examining transaction counts, gas usage, and block fi
 
 All major scripts support:
 - `-h, --help` - Show detailed help and usage information
-- `--network NAME` - Specify network (mainnet/bepolia)
+- `-c, --chain NAME` - Specify network (mainnet/bepolia)
 - `--blocks N` - Number of blocks to analyze
+- `-a, --addresses` - Show validator addresses instead of names
+- `-p, --proposer X` - Filter analysis to a specific proposer
 
 ## Dependencies
 
