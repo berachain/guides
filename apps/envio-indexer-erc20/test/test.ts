@@ -20,7 +20,7 @@ describe("Transfers", () => {
 
     //Set an initial state for the user
     //Note: set and delete functions do not mutate the mockDb, they return a new
-    //mockDb with with modified state
+    //mockDb with modified state
     const mockDb = mockDbEmpty.entities.Account.set(mockAccountEntity);
 
     //Create a mock Transfer event from userAddress1 to userAddress2
@@ -32,7 +32,7 @@ describe("Transfers", () => {
 
     //Process the mockEvent
     //Note: processEvent functions do not mutate the mockDb, they return a new
-    //mockDb with with modified state
+    //mockDb with modified state
     const mockDbAfterTransfer = ERC20.Transfer.processEvent({
       event: mockTransfer,
       mockDb,
