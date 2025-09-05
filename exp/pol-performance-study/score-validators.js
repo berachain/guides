@@ -714,7 +714,7 @@ function generateReport(statistics, validators, dayBoundaries) {
     });
     
     const csvContent = [csvHeader, ...csvRows].join('\n');
-    const reportFile = `validator_stats_${new Date().toISOString().split('T')[0]}.csv`;
+    const reportFile = `validator_stats.csv`;
     fs.writeFileSync(reportFile, csvContent); 
     log(`\nDetailed report saved to ${reportFile}`);
     
