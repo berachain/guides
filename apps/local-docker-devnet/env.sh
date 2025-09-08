@@ -11,7 +11,7 @@ CHAIN_SPEC=file;  # mainnet or testnet or file. if file, uses above chain_id: se
 BEACOND_CHAIN_ID=$CHAIN_SPEC-beacon-$CHAIN_ID;
 CUSTOM_BIN_BEACOND= # set this if you don't want to use the latest beacond from github
 
-# version specifications (leave empty for latest)
+# version specifications 
 BEACOND_VERSION=v1.3.1 # set to specific version tag (e.g., "v1.2.0") or leave empty for latest
 RETH_VERSION=v1.0.1 # set to specific version tag (e.g., "v0.2.0") or leave empty for latest
 
