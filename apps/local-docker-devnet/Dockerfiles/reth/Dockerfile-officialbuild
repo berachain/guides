@@ -1,5 +1,8 @@
 FROM ubuntu:24.04
 
+ARG RETH_VERSION
+ENV RETH_VERSION=${RETH_VERSION}
+
 # Check if the architecture is supported
 RUN ARCH=$(uname -m) && \
     if [ "$ARCH" != "aarch64" ]; then \
@@ -11,10 +14,33 @@ RUN ARCH=$(uname -m) && \
 RUN apt-get update && apt-get install -y curl wget;
 
 # Download and install reth
-RUN RETH_RELEASE_URL=$(curl -s https://api.github.com/repos/paradigmxyz/reth/releases/latest | grep '"browser_download_url":' | sed 's/.*"browser_download_url": "\(.*\)".*/\1/' | grep "aarch64-unknown-linux-gnu.tar.gz" | grep -v "\.asc$" | grep -v "op-reth"); \
+RUN if [ -n "$RETH_VERSION" ]; then \
+        echo "Downloading bera-reth version: $RETH_VERSION"; \
+        RETH_RELEASE_URL=$(curl -s https://api.github.com/repos/berachain/bera-reth/releases/tags/$RETH_VERSION | grep '"browser_download_url":' | sed 's/.*"browser_download_url": "\(.*\)".*/\1/' | grep "aarch64-unknown-linux-gnu.tar.gz" | grep -v "\.asc$" | grep -v "op-reth"); \
+    else \
+        echo "Downloading latest bera-reth release"; \
+        RETH_RELEASE_URL=$(curl -s https://api.github.com/repos/berachain/bera-reth/releases/latest | grep '"browser_download_url":' | sed 's/.*"browser_download_url": "\(.*\)".*/\1/' | grep "aarch64-unknown-linux-gnu.tar.gz" | grep -v "\.asc$" | grep -v "op-reth"); \
+    fi && \
+    echo "Download URL: $RETH_RELEASE_URL"; \
     wget $RETH_RELEASE_URL; \
-    tar -xzvf reth-*.tar.gz; \
-    mv reth /usr/local/bin/reth; \
+    echo "Extracting archive..."; \
+    tar -xzvf *.tar.gz; \
+    echo "Contents of extracted archive:"; \
+    ls -la; \
+    echo "Looking for reth binary..."; \
+    if [ -f "reth" ]; then \
+        echo "Found 'reth' binary"; \
+        mv reth /usr/local/bin/reth; \
+    elif [ -f "bera-reth" ]; then \
+        echo "Found 'bera-reth' binary"; \
+        mv bera-reth /usr/local/bin/reth; \
+    else \
+        echo "ERROR: No reth binary found in archive!"; \
+        echo "Available files:"; \
+        find . -type f -executable; \
+        exit 1; \
+    fi && \
     chmod +x /usr/local/bin/reth; \
+    echo "Testing reth installation..."; \
     reth --version; \
     sleep 3; 
