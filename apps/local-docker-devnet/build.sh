@@ -27,8 +27,8 @@ if [ -f "$CUSTOM_BIN_BEACOND" ]; then
     echo "*** Building beacond w/custom build";
     docker build --quiet -t $DOCKER_IMAGE_BEACOND -f ./Dockerfiles/beacond/Dockerfile-custombuild --build-arg CHAIN_SPEC=$CHAIN_SPEC --build-arg CUSTOM_BIN_BEACOND=$CUSTOM_BIN_BEACOND .;
 else
-    echo "*** Building beacond w/official build";
-    docker build --quiet -t $DOCKER_IMAGE_BEACOND -f ./Dockerfiles/beacond/Dockerfile-officialbuild --build-arg CHAIN_SPEC=$CHAIN_SPEC .;
+    echo "*** Building beacond w/official build${BEACOND_VERSION:+ (version: $BEACOND_VERSION)}";
+    docker build --quiet -t $DOCKER_IMAGE_BEACOND -f ./Dockerfiles/beacond/Dockerfile-officialbuild --build-arg CHAIN_SPEC=$CHAIN_SPEC --build-arg BEACOND_VERSION="$BEACOND_VERSION" .;
 fi
 
 # do custom build if CUSTOM_BIN_RETH is set and not empty
@@ -36,8 +36,8 @@ if [ -f "$CUSTOM_BIN_RETH" ]; then
     echo "*** Building reth w/custom build";
     docker build --quiet -t $DOCKER_IMAGE_RETH -f ./Dockerfiles/reth/Dockerfile-custombuild --build-arg CUSTOM_BIN_RETH=$CUSTOM_BIN_RETH .;
 else
-    echo "*** Building reth w/official build";
-    docker build --quiet -t $DOCKER_IMAGE_RETH -f ./Dockerfiles/reth/Dockerfile-officialbuild .;
+    echo "*** Building reth w/official build${RETH_VERSION:+ (version: $RETH_VERSION)}";
+    docker build --quiet -t $DOCKER_IMAGE_RETH -f ./Dockerfiles/reth/Dockerfile-officialbuild --build-arg RETH_VERSION="$RETH_VERSION" .;
 fi
 
 echo "*** Building curl";
