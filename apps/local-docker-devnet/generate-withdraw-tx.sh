@@ -4,7 +4,7 @@ source env.sh;
 set -e;
 
 
-COMETBFT_PUB_KEY=$(docker exec $CL_MONIKER-rpc-0 ./beacond deposit validator-keys|tail -1);
+COMETBFT_PUB_KEY=$(docker exec $CL_MONIKER-rpc-0 beacond deposit validator-keys|tail -1);
 echo "RPC validator pubkey is $COMETBFT_PUB_KEY"
 
 WITHDRAW_FEE_HEX=$(cast call -r $RPC_URL $WITHDRAW_CONTRACT_ADDRESS)
