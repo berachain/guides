@@ -14,21 +14,21 @@ fi
 
 # Step 0 - Retrieve Validator Pubkey
 
-COMETBFT_PUB_KEY=$(docker exec $CL_MONIKER-rpc-0 ./beacond deposit validator-keys|tail -1);
+COMETBFT_PUB_KEY=$(docker exec $CL_MONIKER-rpc-0 beacond deposit validator-keys|tail -1);
 echo "Obtained validator pubkey: $COMETBFT_PUB_KEY";
 
-GENESIS_ROOT=$(docker exec $CL_MONIKER-rpc-0 ./beacond genesis validator-root /root/.beacond/config/genesis.json);
+GENESIS_ROOT=$(docker exec $CL_MONIKER-rpc-0 beacond genesis validator-root /root/.beacond/config/genesis.json);
 echo "Obtained genesis root: $GENESIS_ROOT";
 
-docker >/dev/null exec $CL_MONIKER-rpc-0 ./beacond genesis validator-root /root/.beacond/config/genesis.json;
-docker >/dev/null exec $CL_MONIKER-val-1 ./beacond genesis validator-root /root/.beacond/config/genesis.json;
+docker >/dev/null exec $CL_MONIKER-rpc-0 beacond genesis validator-root /root/.beacond/config/genesis.json;
+docker >/dev/null exec $CL_MONIKER-val-1 beacond genesis validator-root /root/.beacond/config/genesis.json;
 
 # Step 1 - Generate Deposit Signature
 echo -e "\nGenerating Signature for Parameters: \n\tpubkey = $COMETBFT_PUB_KEY \n\tamount = $STAKE_AMOUNT_GWEI \n\tgenesis_root = $GENESIS_ROOT \n\twithdraw_address = $WITHDRAW_ADDRESS";
 
-WITHDRAW_CREDENTIAL=$(docker exec $CL_MONIKER-rpc-0 ./beacond deposit create-validator $WITHDRAW_ADDRESS $STAKE_AMOUNT_GWEI -g $GENESIS_ROOT | sed -n 's/credentials: //p');
-DEPOSIT_SIGNATURE=$(docker exec $CL_MONIKER-rpc-0 ./beacond deposit create-validator $WITHDRAW_ADDRESS $STAKE_AMOUNT_GWEI -g $GENESIS_ROOT | sed -n 's/signature: //p');
-DEPOSIT_TX_VALID=$(docker exec $CL_MONIKER-rpc-0 ./beacond deposit validate $COMETBFT_PUB_KEY $WITHDRAW_CREDENTIAL $STAKE_AMOUNT_GWEI $DEPOSIT_SIGNATURE -g $GENESIS_ROOT);
+WITHDRAW_CREDENTIAL=$(docker exec $CL_MONIKER-rpc-0 beacond deposit create-validator $WITHDRAW_ADDRESS $STAKE_AMOUNT_GWEI -g $GENESIS_ROOT | sed -n 's/credentials: //p');
+DEPOSIT_SIGNATURE=$(docker exec $CL_MONIKER-rpc-0 beacond deposit create-validator $WITHDRAW_ADDRESS $STAKE_AMOUNT_GWEI -g $GENESIS_ROOT | sed -n 's/signature: //p');
+DEPOSIT_TX_VALID=$(docker exec $CL_MONIKER-rpc-0 beacond deposit validate $COMETBFT_PUB_KEY $WITHDRAW_CREDENTIAL $STAKE_AMOUNT_GWEI $DEPOSIT_SIGNATURE -g $GENESIS_ROOT);
 
 if [ "✅ Deposit message is valid!" != "$DEPOSIT_TX_VALID" ]; then
   echo -e "Deposit signature is invalid! Exiting...";
