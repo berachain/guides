@@ -1,7 +1,9 @@
 FROM ubuntu:24.04                       
 
 ARG CHAIN_SPEC
+ARG BEACOND_VERSION
 ENV CHAIN_SPEC=${CHAIN_SPEC}
+ENV BEACOND_VERSION=${BEACOND_VERSION}
 
 RUN ARCH=$(uname -m) && \
     if [ "$ARCH" != "aarch64" ]; then \
@@ -11,7 +13,11 @@ RUN ARCH=$(uname -m) && \
 
 RUN apt-get update && apt-get install -y curl wget;
 
-RUN BEACOND_RELEASE_URL=$(curl -s https://api.github.com/repos/berachain/beacon-kit/releases/latest | grep '"browser_download_url":' | sed 's/.*"browser_download_url": "\(.*\)".*/\1/' | grep "linux-arm64" | grep -v "\.sig$"); \
+RUN if [ -n "$BEACOND_VERSION" ]; then \
+        BEACOND_RELEASE_URL=$(curl -s https://api.github.com/repos/berachain/beacon-kit/releases/tags/$BEACOND_VERSION | grep '"browser_download_url":' | sed 's/.*"browser_download_url": "\(.*\)".*/\1/' | grep "linux-arm64" | grep -v "\.sig$"); \
+    else \
+        BEACOND_RELEASE_URL=$(curl -s https://api.github.com/repos/berachain/beacon-kit/releases/latest | grep '"browser_download_url":' | sed 's/.*"browser_download_url": "\(.*\)".*/\1/' | grep "linux-arm64" | grep -v "\.sig$"); \
+    fi && \
     wget $BEACOND_RELEASE_URL; \
     tar -xzf beacond-*.tar.gz; \
     mv beacond-v*-linux-*64 /usr/local/bin/beacond; \
