@@ -11,13 +11,19 @@ This is currently configured to run BeaconKit as a consensus client and Reth as 
 - MacOS
 - EVM Wallet (To import private key)
 
-## Custom Binaries or Release Builds?
+## Custom Binaries, Specific Versions, or Latest Releases?
 
-This devnet supports using custom builds of BeaconKit and bera-reth instead of the latest releases. 
-To use latest releases instead of custom binaries, comment out these variables in `env.sh`.
+This devnet supports three ways to specify which versions of BeaconKit and bera-reth to use:
 
-- **CUSTOM_BIN_BEACOND**: Set to path of custom beacond binary 
+### Option 1: Custom Binaries (Local Builds)
+Set these variables in `env.sh` to use your own compiled binaries. See below for details about how to build these binaries.
+- **CUSTOM_BIN_BEACOND**: Set to path of custom beacond binary
 - **CUSTOM_BIN_RETH**: Set to path of custom reth binary
+
+### Option 2: Specific Release Versions
+Set these variables in `env.sh` to use specific GitHub release versions:
+- **BEACOND_VERSION**: Set to specific version tag (e.g., "v1.2.0") 
+- **RETH_VERSION**: Set to specific version tag (e.g., "v0.2.0" 
 
 ### Building `beacond`
 
@@ -52,6 +58,24 @@ docker rm temp-reth
 popd
 sed -i '' 's|CUSTOM_BIN_RETH=.*|CUSTOM_BIN_RETH=/tmp/bera-reth-custom|' env.sh
 ```
+
+### Using Specific Release Versions
+
+To use specific release versions instead of latest, set the version variables in `env.sh`:
+
+```bash
+# FROM: ./
+
+# Set specific versions (examples)
+sed -i '' 's|BEACOND_VERSION=.*|BEACOND_VERSION=v1.2.0|' env.sh
+sed -i '' 's|RETH_VERSION=.*|RETH_VERSION=v0.2.0|' env.sh
+
+# Or edit env.sh directly:
+# BEACOND_VERSION=v1.2.0
+# RETH_VERSION=v0.2.0
+```
+
+The system will automatically download the specified versions from GitHub releases using the [GitHub API](https://docs.github.com/en/rest/releases/releases?apiVersion=2022-11-28#get-a-release-by-tag-name).
 
 ## RPC Details
 
