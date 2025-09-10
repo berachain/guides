@@ -134,8 +134,7 @@ function trackValidatorAbsences(signatures, votingPowerData, validatorAbsenceDat
             validatorAbsenceData.set(validatorAddress, {
                 totalOpportunities: 0,
                 absences: 0,
-                votingPower: votingPowerData.votingPowerByAddress.get(validatorAddress) || 0,
-                absenceBlocks: []
+                votingPower: votingPowerData.votingPowerByAddress.get(validatorAddress) || 0
             });
         }
         
@@ -144,10 +143,6 @@ function trackValidatorAbsences(signatures, votingPowerData, validatorAbsenceDat
         
         if (sig?.block_id_flag === 1) { // Missing validator
             data.absences++;
-            data.absenceBlocks.push({
-                blockHeight: votingPowerData.blockHeight,
-                votingPower: data.votingPower
-            });
         }
         
         // Update voting power (may change over time)
@@ -163,7 +158,9 @@ async function analyzeMissingValidators(blockCount = ConfigHelper.getDefaultBloc
         filterProposer = null,
         analyzeValidators = true,
         analyzeProposers = true,
-        minValidatorOpportunities = 10 // Minimum opportunities for meaningful validator stats
+        minValidatorOpportunities = 10, // Minimum opportunities for meaningful validator stats
+        startHeight = null,
+        endHeight = null
     } = options;
     
     // Initialize components with consolidated config
@@ -171,23 +168,37 @@ async function analyzeMissingValidators(blockCount = ConfigHelper.getDefaultBloc
     const blockFetcher = new BlockFetcher(baseUrl);
     const validatorDB = new ValidatorNameDB();
     
-    ProgressReporter.logStep('Fetching current block height');
-    const currentBlock = await blockFetcher.getCurrentBlock();
-    if (!currentBlock) {
-        ProgressReporter.logError('Failed to get current block height');
-        process.exit(1);
+    let startBlock;
+    let endBlock;
+    let effectiveBlockCount;
+
+    if (Number.isFinite(startHeight) && Number.isFinite(endHeight)) {
+        startBlock = startHeight;
+        endBlock = endHeight;
+        if (startBlock < endBlock) {
+            ProgressReporter.logError('Invalid range: --start must be >= --end');
+            process.exit(1);
+        }
+        effectiveBlockCount = (startBlock - endBlock + 1);
+    } else {
+        ProgressReporter.logStep('Fetching current block height');
+        const currentBlock = await blockFetcher.getCurrentBlock();
+        if (!currentBlock) {
+            ProgressReporter.logError('Failed to get current block height');
+            process.exit(1);
+        }
+        startBlock = currentBlock;
+        endBlock = startBlock - blockCount + 1;
+        effectiveBlockCount = blockCount;
     }
     
-    const startBlock = currentBlock;
-    const endBlock = startBlock - blockCount + 1;
-    
     console.log(`📊 Current block: ${startBlock.toLocaleString()}`);
-    console.log(`📊 Analyzing ${blockCount.toLocaleString()} blocks backwards from ${startBlock.toLocaleString()} to ${endBlock.toLocaleString()}`);
+    console.log(`📊 Analyzing ${effectiveBlockCount.toLocaleString()} blocks backwards from ${startBlock.toLocaleString()} to ${endBlock.toLocaleString()}`);
     console.log('=' .repeat(80));
     
     // Fetch all blocks efficiently
     ProgressReporter.logStep('Fetching blocks');
-    const blocks = await blockFetcher.fetchBlockRange(startBlock, blockCount, (current, total, blockHeight) => {
+    const blocks = await blockFetcher.fetchBlockRange(startBlock, effectiveBlockCount, (current, total, blockHeight) => {
         ProgressReporter.showProgress(current, total, blockHeight);
     });
     
@@ -216,6 +227,8 @@ async function analyzeMissingValidators(blockCount = ConfigHelper.getDefaultBloc
     const globalMissingVotingPowerSamples = [];
     const globalMissingPercentageSamples = [];
     const globalFlagCounts = new Map();
+    const globalRounds = [];
+    const roundCounts = new Map();
     
     console.log('\n📊 Processing blocks (voting power updates every 500 blocks)...');
     
@@ -242,6 +255,13 @@ async function analyzeMissingValidators(blockCount = ConfigHelper.getDefaultBloc
             const previousBlock = blocks[i + 1]; // Previous chronologically
             const signatures = block?.raw?.last_commit?.signatures || [];
             const analysis = computeMissingVotingPower(signatures, currentVotingPowerData);
+            // Track consensus round from last_commit (applies to previous block)
+            const roundValueRaw = block?.raw?.last_commit?.round;
+            const roundValue = typeof roundValueRaw === 'string' ? parseInt(roundValueRaw, 10) : (typeof roundValueRaw === 'number' ? roundValueRaw : NaN);
+            if (!Number.isNaN(roundValue)) {
+                globalRounds.push(roundValue);
+                roundCounts.set(roundValue, (roundCounts.get(roundValue) || 0) + 1);
+            }
             
             // Track validator absences for frequently absent validator analysis
             if (analyzeValidators) {
@@ -298,6 +318,19 @@ async function analyzeMissingValidators(blockCount = ConfigHelper.getDefaultBloc
             console.log(`  flag ${flag}: ${cnt.toLocaleString()}`);
         }
     }
+
+    // Show observed consensus rounds as textual histogram
+    if (globalRounds.length > 0) {
+        console.log('\n🔁 Consensus rounds (last_commit.round):');
+        const rounds = Array.from(roundCounts.entries()).sort((a, b) => a[0] - b[0]);
+        const maxCount = rounds.reduce((m, [, c]) => Math.max(m, c), 0);
+        const barMaxWidth = 40;
+        for (const [round, count] of rounds) {
+            const barLength = maxCount > 0 ? Math.max(1, Math.round((count / maxCount) * barMaxWidth)) : 0;
+            const bar = '#'.repeat(barLength);
+            console.log(`  ${round.toString().padStart(2, ' ')} | ${bar} (${count.toLocaleString()})`);
+        }
+    }
     
     // Calculate statistics for each proposer (unlucky proposers analysis)
     const proposerAnalysis = [];
@@ -346,8 +379,7 @@ async function analyzeMissingValidators(blockCount = ConfigHelper.getDefaultBloc
                     absences: data.absences,
                     absenceRate,
                     votingPower: data.votingPower,
-                    missedVotingPower,
-                    absenceBlocks: data.absenceBlocks
+                    missedVotingPower
                 });
             }
         }
@@ -409,8 +441,8 @@ async function analyzeMissingValidators(blockCount = ConfigHelper.getDefaultBloc
         console.log('\n🚨 FREQUENTLY ABSENT VALIDATORS - Chronically Missing from Consensus:');
         
         const validatorTable = new Table({
-            head: ['Validator', 'Opportunities', 'Absences', 'Absence Rate %', 'Voting Power', 'Total Missed Power', 'Recent Absences'],
-            colWidths: [30, 12, 10, 12, 12, 15, 15],
+            head: ['Validator', 'Opportunities', 'Absences', 'Absence Rate %', 'Voting Power', 'Total Missed Power'],
+            colWidths: [30, 12, 10, 12, 12, 15],
             wordWrap: true
         });
         
@@ -421,18 +453,13 @@ async function analyzeMissingValidators(blockCount = ConfigHelper.getDefaultBloc
             const validatorName = await validatorDB.getValidatorName(analysis.validatorAddress);
             const validatorDisplay = showAddresses ? analysis.validatorAddress : (validatorName || analysis.validatorAddress);
             
-            // Show count of recent absences (last 5 recorded)
-            const recentAbsences = analysis.absenceBlocks.slice(-5).length;
-            const recentDisplay = recentAbsences > 0 ? `${recentAbsences} recent` : 'none recent';
-            
             validatorTable.push([
                 validatorDisplay,
                 analysis.totalOpportunities,
                 analysis.absences,
                 analysis.absenceRate.toFixed(2),
                 (analysis.votingPower / 1e9).toFixed(2) + ' BERA',
-                (analysis.missedVotingPower / 1e9).toFixed(2) + ' BERA',
-                recentDisplay
+                (analysis.missedVotingPower / 1e9).toFixed(2) + ' BERA'
             ]);
         }
         
@@ -512,6 +539,8 @@ Usage: node analyze-missing-validators.js [options]
 
 Options:
   --blocks=N             Number of blocks to analyze (default: ${ConfigHelper.getDefaultBlockCount()})
+  --start=N              Start block height (analyze from this block downward)
+  --end=N                End block height (inclusive). Requires --start. start >= end.
   -c, --chain=NAME       Chain to use: mainnet|bepolia (default: mainnet)
   -a, --addresses        Show validator addresses instead of names
   -p, --proposer=X       Filter analysis to a specific proposer (address or name substring)
@@ -523,6 +552,7 @@ Options:
 Examples:
   node analyze-missing-validators.js                         # Analyze both validators and proposers
   node analyze-missing-validators.js --blocks=2000           # Analyze 2000 blocks
+  node analyze-missing-validators.js --start=10100000 --end=10095000  # Explicit range
   node analyze-missing-validators.js --chain=bepolia         # Use testnet
   node analyze-missing-validators.js --validators-only       # Only show frequently absent validators
   node analyze-missing-validators.js --proposers-only        # Only show unlucky proposers
@@ -536,6 +566,8 @@ Examples:
 if (require.main === module) {
     const args = process.argv.slice(2);
     const blockCountArg = args.find(arg => arg.startsWith('--blocks='));
+    const startArg = args.find(arg => arg.startsWith('--start='));
+    const endArg = args.find(arg => arg.startsWith('--end='));
     const networkArg = args.find(arg => arg.startsWith('--network=')) || 
                       args.find(arg => arg.startsWith('--chain=')) || 
                       args.find(arg => arg === '-c' && args[args.indexOf(arg) + 1]);
@@ -544,6 +576,8 @@ if (require.main === module) {
     const minOpportunitiesArg = args.find(arg => arg.startsWith('--min-opportunities='));
     
     const blockCount = blockCountArg ? parseInt(blockCountArg.split('=')[1]) : ConfigHelper.getDefaultBlockCount();
+    const startHeight = startArg ? parseInt(startArg.split('=')[1]) : null;
+    const endHeight = endArg ? parseInt(endArg.split('=')[1]) : null;
     const network = networkArg ? 
         (networkArg.includes('=') ? networkArg.split('=')[1] : args[args.indexOf(networkArg) + 1]) : 
         'mainnet';
@@ -571,7 +605,9 @@ if (require.main === module) {
         filterProposer,
         analyzeValidators,
         analyzeProposers,
-        minValidatorOpportunities
+        minValidatorOpportunities,
+        startHeight,
+        endHeight
     };
     
     analyzeMissingValidators(blockCount, network, options)
