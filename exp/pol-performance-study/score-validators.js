@@ -256,7 +256,7 @@ async function findDayBoundaries(dates) {
         midnight.setUTCHours(0, 0, 0, 0);
         const targetTimestamp = Math.floor(midnight.getTime() / 1000);
         
-        // Use iterative approach like find_monday_blocks.js
+        // Use iterative approach like find_day_boundaries.js
         let estimatedBlock;
         if (i === 0) {
             // For the first date, calculate from genesis using block time
