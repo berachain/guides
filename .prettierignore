@@ -1,0 +1,28 @@
+# Dependencies
+node_modules/
+**/lib/
+**/node_modules/
+
+# Build outputs
+dist/
+build/
+out/
+.next/
+.turbo/
+
+# Generated files
+*.generated.*
+typechain-types/
+
+# Third-party contracts
+apps/*/lib/
+packages/*/lib/
+
+# Foundry artifacts
+cache/
+artifacts/
+broadcast/
+
+# Other
+coverage/
+*.log
