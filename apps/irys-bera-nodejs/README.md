@@ -16,7 +16,7 @@ An example uploading images to a decentralized storage network using Berachain `
 ```bash
 # FROM: ./irys-bera-nodejs
 
-pnpm install;
+npm install;
 ```
 
 ### Step 2 - Set Environment Variables
@@ -41,7 +41,7 @@ WALLET_PRIVATE_KEY="<YOUR_WALLET_PRIVATE_KEY>"
 ```bash
 # FROM: ./irys-bera-nodejs
 
-pnpm dev;
+npm run dev;
 
 # [Expected Output]:
 # main()

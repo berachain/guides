@@ -11,14 +11,14 @@ This monorepo includes shared packages that power the examples:
 - **[`packages/rpc-config`](packages/rpc-config)** - Centralized configuration for Berachain networks, RPC URLs, and utility functions
 - **[`packages/eslint-config`](packages/eslint-config)** - Shared ESLint configuration for consistent code style
 - **[`packages/typescript-config`](packages/typescript-config)** - Shared TypeScript configuration for all apps
-- **[`packages/ui`](packages/ui)** - Shared UI components and styles for frontend applications 
+- **[`packages/ui`](packages/ui)** - Shared UI components and styles for frontend applications
 
 ## Quick Start
 
 1. Install dependencies:
 
    ```bash
-   pnpm install
+   npm install
    ```
 
 2. Set up environment variables:
@@ -30,7 +30,7 @@ This monorepo includes shared packages that power the examples:
 3. Deploy a contract:
    ```bash
    # Deploy ERC20 contract
-   pnpm deploy:berachain --filter foundry-erc20 --no-cache
+   npm run deploy:berachain --filter foundry-erc20 --no-cache
    ```
 
 ## Getting Started
@@ -38,6 +38,7 @@ This monorepo includes shared packages that power the examples:
 Choose your development path by exploring the apps organized by category:
 
 ### 🔗 **Wallet Integration & Authentication**
+
 - **[WalletConnect + Next.js](apps/walletconnect-nextjs)** - Complete wallet connection with transaction signing
 - **[WalletConnect + Expo](apps/walletconnect-expo)** - Mobile wallet integration for React Native
 - **[RainbowKit + Vite](apps/rainbowkit-vite)** - Modern wallet connector with Rainbow theming
@@ -45,6 +46,7 @@ Choose your development path by exploring the apps organized by category:
 - **[ThirdWeb Connect](apps/thirdweb-connectwallet-nextjs)** - Simplified wallet connection with ThirdWeb SDK
 
 ### 🏗️ **Smart Contract Development**
+
 - **[Foundry ERC20](apps/foundry-erc20)** - Basic token contract deployment with Foundry
 - **[Hardhat + Ethers v6](apps/hardhat-ethers6-erc1155)** - NFT contract with modern Hardhat setup
 - **[Viem + Solidity](apps/viem-solc-helloworld)** - Lightweight contract interaction with Viem
@@ -53,11 +55,13 @@ Choose your development path by exploring the apps organized by category:
 - **[Contract Verification](apps/hardhat-contract-verification)** - Verify contracts on Berachain explorers
 
 ### 🔍 **Data Indexing & Oracles**
+
 - **[Goldsky Subgraph](apps/goldsky-subgraph)** - Index ERC20 balances with GraphQL queries
 - **[Envio Indexer](apps/envio-indexer-erc20)** - Real-time blockchain data indexing
 - **[Pyth Oracle](apps/pyth-oracle)** - Integrate real-time price feeds
 
 ### 🎲 **DeFi & Automation**
+
 - **[Gelato VRF](apps/gelato-vrf)** - Verifiable random functions for gaming/DeFi
 - **[Pyth Entropy](apps/pyth-entropy)** - Random number generation with Pyth Network
 - **[Batch Transactions](apps/batch-transactions)** - Efficient multi-call patterns
@@ -66,9 +70,11 @@ Choose your development path by exploring the apps organized by category:
 - **[LayerZero OFT](apps/layerzero-oft)** - Bridge ERC20 tokens using LayerZero V2
 
 ### 🏛️ **Governance**
+
 - **[Governance Proposals](apps/berachain-governance-proposal)** - Create and manage on-chain governance proposals
 
 ### 🛠️ **Development Tools**
+
 - **[Local Docker Devnet](apps/local-docker-devnet)** - Complete local Berachain environment with your own validators
 - **[Node Scripts](apps/node-scripts)** - Utility scripts for launching Berachain nodes
 - **[Monitoring](apps/monitoring)** - Prometheus and Grafana setup for node monitoring

@@ -5,6 +5,7 @@ A smart contract and testing framework designed to burn a specified amount of ga
 ## Overview
 
 This project includes:
+
 - **Smart Contract**: `GasBurner.sol` with multiple methods to burn gas
 - **Testing Scripts**: Automated scripts for single and batch gas burning
 - **Load Testing**: Tools to stress test blockchain clients with high gas transactions
@@ -28,17 +29,20 @@ This project includes:
 ## Prerequisites
 
 1. Install Foundry:
+
 ```bash
 curl -L https://foundry.paradigm.xyz | bash
 foundryup
 ```
 
 2. Install dependencies:
+
 ```bash
 forge install foundry-rs/forge-std --no-commit
 ```
 
 3. Install `jq` for JSON parsing (used in scripts):
+
 ```bash
 # macOS
 brew install jq
@@ -66,11 +70,13 @@ forge test --match-test testBurn8MillionGas -vvv
 ## Deployment
 
 1. Set your private key as an environment variable:
+
 ```bash
 export PRIVATE_KEY=your_private_key_here
 ```
 
 2. Deploy to a network:
+
 ```bash
 # Deploy to local Anvil
 anvil
@@ -234,6 +240,7 @@ spam-results-20241201-143022/
 ### Transaction Log Format
 
 The `transactions.log` file contains CSV data:
+
 ```
 timestamp,transaction_number,status,nonce_or_hash
 1701445822,1,SENT,123
@@ -304,4 +311,4 @@ cast send $GAS_BURNER_ADDRESS "burnGas(uint256)" 8000000 --private-key YOUR_PRIV
 - Different burning methods may have different efficiency
 - The scripts use nonce management to prevent "already known" errors
 - Results are saved in timestamped directories for analysis
-- Use `EL_ETHRPC_URL` environment variable to easily switch between RPC endpoints 
+- Use `EL_ETHRPC_URL` environment variable to easily switch between RPC endpoints

@@ -8,7 +8,7 @@ An example using the [Goldsky](https://goldsky.com/) SDK to index Berachain bloc
 ## Requirements
 
 - Nodejs `v20.11.0` or greater
-- pnpm (or another preferred package manager)
+- npm
 
 ## Quick Setup
 
@@ -17,7 +17,7 @@ An example using the [Goldsky](https://goldsky.com/) SDK to index Berachain bloc
 ```bash
 # FROM: ./goldsky-subgraph
 
-pnpm install;
+npm install;
 ```
 
 ### Step 2 - Set up Goldsky
@@ -41,8 +41,8 @@ goldsky login
 ```bash
 # FROM: ./goldsky-subgraph;
 
-pnpm codegen;
-pnpm build;
+npm run codegen;
+npm run build;
 ```
 
 ### Step 4 - Deploy Subgraph

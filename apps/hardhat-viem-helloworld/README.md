@@ -6,7 +6,7 @@ This Berachain guided repository will show you the configurations needed to set 
 
 - NVM or Node `v18.18.2+`
 - MetaMask Wallet With `BERA` tokens
-- pnpm (recommended)
+- npm
 
 ## Quick Setup
 
@@ -15,7 +15,7 @@ Install dependencies:
 ```bash
 # FROM ./create-helloworld-contract-using-hardhat
 
-pnpm install; # or npm install or yarn install
+npm install;
 ```
 
 Configure environment variables.
@@ -42,12 +42,12 @@ When your `WALLET_PRIVATE_KEY` is set up correctly, run the following to compile
 ```bash
 # FROM ./create-helloworld-contract-using-hardhat
 
-pnpm run compile; # npx hardhat compile;
+npm run compile; # npx hardhat compile;
 
 # [Expected Output]:
 # Compiled 1 Solidity file successfully (evm target: paris).
 
-pnpm run deploy:berachain; # npx hardhat run scripts/deploy.ts --network berachainTestnet;
+npm run deploy:berachain; # npx hardhat run scripts/deploy.ts --network berachainTestnet;
 
 # [Expected Equivalent Output]:
 # {
@@ -64,7 +64,7 @@ In order to verify your contract, take note of the deployed contract `address` a
 # FROM ./create-helloworld-contract-using-hardhat
 
 # npx hardhat verify --network berachainTestnet 0x38f8423cc4390938c01616d7a9f761972e7f116a "Hello From Deployed Contract";
-pnpm run verify 0x38f8423cc4390938c01616d7a9f761972e7f116a "Hello From Deployed Contract";
+npm run verify 0x38f8423cc4390938c01616d7a9f761972e7f116a "Hello From Deployed Contract";
 
 # [Expected Output]:
 # Successfully submitted source code for contract
@@ -84,7 +84,7 @@ If you'd like to run the contract locally with Hardhat, run the following comman
 ```bash
 # FROM ./create-helloworld-contract-using-hardhat
 
-pnpm run node; # npx hardhat node;
+npm run node; # npx hardhat node;
 
 # [Expected Output]:
 # Started HTTP and WebSocket JSON-RPC server at http://127.0.0.1:8545/
@@ -102,7 +102,7 @@ pnpm run node; # npx hardhat node;
 ```bash
 # FROM ./create-helloworld-contract-using-hardhat
 
-pnpm run deploy:localhost; # npx hardhat run scripts/deploy.ts --network localhost;
+npm run deploy:localhost; # npx hardhat run scripts/deploy.ts --network localhost;
 
 # [Expected Output]:
 # HelloWorld deployed to 0x5fbdb2315678afecb367f032d93f642f64180aa3
@@ -115,7 +115,7 @@ To run tests defined in `./test/HelloWorld.test.ts`, run the following:
 ```bash
 # FROM ./create-helloworld-contract-using-hardhat
 
-pnpm run test; # npx hardhat test;
+npm run test; # npx hardhat test;
 
 # [Expected Output]:
 #  HelloWorld

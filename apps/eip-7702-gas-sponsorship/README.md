@@ -53,7 +53,7 @@ cd apps/eip-7702-gas-sponsorship
 
 ```bash
 # From apps/eip-7702-gas-sponsorship
-pnpm install && cp .env.example .env
+npm install && cp .env.example .env
 ```
 
 ℹ️ forge install pulls in required dependencies like forge-std and openzeppelin-contracts. Don’t skip it.

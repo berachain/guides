@@ -7,7 +7,7 @@ This repository demonstrates how to leverage Pyth's Entropy service to enable pr
 ## Requirements
 
 - Node `v20.11.0` or greater
-- pnpm (or another preferred package manager)
+- npm
 - Wallet with Berachain Testnet $BERA tokens - See the [Berachain Artio Faucet](https://artio.faucet.berachain.com)
 - [Foundry](https://book.getfoundry.sh/getting-started/installation) - ensure `foundryup` is run to install binaries
 
@@ -22,7 +22,7 @@ Install project dependencies:
 ```bash
 # FROM: ./pyth-entropy
 
-pnpm install;
+npm install;
 ```
 
 Run the following to add remappings to `foundry.toml`:

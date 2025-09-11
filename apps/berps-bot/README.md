@@ -16,7 +16,7 @@ An example of a trading bot for Berps using a [Bollinger Band](https://www.inves
 ```bash
 # FROM: ./berps-bot
 
-pnpm install;
+npm install;
 ```
 
 ### Step 2 - Set Environment Variables

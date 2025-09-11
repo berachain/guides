@@ -15,14 +15,13 @@
     "verify": "./node_modules/.bin/hardhat verify --network berachainTestnet"
   },
   "devDependencies": {
-    "@berachain/eslint-config": "workspace:*",
-    "@berachain/typescript-config": "workspace:*",
+    "eslint": "^8.56.0",
+    "typescript": "^5.0.0",
     "@nomicfoundation/hardhat-toolbox": "^4.0.0",
     "@nomicfoundation/hardhat-toolbox-viem": "^3.0.0",
     "@types/node": "^20.0.0",
     "hardhat": "^2.19.4",
     "prettier": "^3.0.0",
-    "typescript": "^5.0.0",
     "viem": "^2.7.9"
   }
 }

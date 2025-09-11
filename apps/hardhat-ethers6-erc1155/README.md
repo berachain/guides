@@ -6,7 +6,7 @@ This Berachain guided repository will show you the configurations needed to setu
 
 - NVM or Node `v18.18.2+`
 - MetaMask Wallet With `BERA` tokens
-- pnpm (recommended)
+- npm
 
 ## Quick Setup
 
@@ -15,7 +15,7 @@ Install dependencies:
 ```bash
 # FROM ./create-erc1155-contract-using-hardhat-ethers6
 
-pnpm install; # or npm install or yarn install
+npm install;
 ```
 
 Configure environment variables.
@@ -44,12 +44,12 @@ When your `WALLET_PRIVATE_KEY` is set up correctly, run the following to compile
 ```bash
 # FROM ./create-erc1155-contract-using-hardhat-ethers6
 
-pnpm run compile; # npx hardhat compile;
+npm run compile; # npx hardhat compile;
 
 # [Expected Output]:
 # Compiled 1 Solidity file successfully (evm target: paris).
 
-pnpm run deploy:berachain; # npx hardhat run scripts/deploy.ts --network berachainTestnet;
+npm run deploy:berachain; # npx hardhat run scripts/deploy.ts --network berachainTestnet;
 
 # [Expected Equivalent Output]:
 # {
@@ -66,7 +66,7 @@ In order to verify your contract, take note of the deployed contract `address` a
 # FROM ./create-erc1155-contract-using-hardhat-ethers6
 
 # npx hardhat verify --network berachainTestnet 0xe9470c884603c239502c4d92d108a5b3f14074b4 "https://example.com" "0x012456..";
-pnpm run verify 0xe9470c884603c239502c4d92d108a5b3f14074b4 "YOUR-UNIQUE-BASE-URL-FOR-HOLDING-JSON-FILES-WITH-SLASH-AT-THE-END" "0xYOUR_WALLET_ADDRESS";
+npm run verify 0xe9470c884603c239502c4d92d108a5b3f14074b4 "YOUR-UNIQUE-BASE-URL-FOR-HOLDING-JSON-FILES-WITH-SLASH-AT-THE-END" "0xYOUR_WALLET_ADDRESS";
 
 # [Expected Output]:
 # Successfully submitted source code for contract
@@ -86,7 +86,7 @@ If you'd like to run the contract locally with Hardhat, run the following comman
 ```bash
 # FROM ./create-erc1155-contract-using-hardhat-ethers6
 
-pnpm run node; # npx hardhat node;
+npm run node; # npx hardhat node;
 
 # [Expected Output]:
 # Started HTTP and WebSocket JSON-RPC server at http://127.0.0.1:8545/
@@ -104,7 +104,7 @@ pnpm run node; # npx hardhat node;
 ```bash
 # FROM ./create-erc1155-contract-using-hardhat-ethers6
 
-pnpm run deploy:localhost; # npx hardhat run scripts/deploy.ts --network localhost;
+npm run deploy:localhost; # npx hardhat run scripts/deploy.ts --network localhost;
 
 # [Expected Output]:
 # OogaBoogaNFT deployed to 0x5fbdb2315678afecb367f032d93f642f64180aa3
@@ -117,7 +117,7 @@ To run tests defined in `./test/OogaBoogaNFT.test.ts`, run the following:
 ```bash
 # FROM ./create-erc1155-contract-using-hardhat-ethers6
 
-pnpm run test; # npx hardhat test;
+npm run test; # npx hardhat test;
 
 # [Expected Output]:
 #  OogaBoogaNFT

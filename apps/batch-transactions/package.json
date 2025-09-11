@@ -9,8 +9,8 @@
   },
   "scripts": {
     "build": "forge build",
-    "lint": "pnpm prettier --check . && pnpm eslint .",
-    "lint:fix": "pnpm prettier --write . && pnpm eslint . --fix",
+    "lint": "prettier --check . && eslint .",
+    "lint:fix": "prettier --write . && eslint . --fix",
     "test": "forge test -vvv",
     "compile": "node scripts/compile.js",
     "dev": "node scripts/deploy-and-execute.js",

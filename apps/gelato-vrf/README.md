@@ -15,7 +15,7 @@ This repository includes contracts and configurations necessary for implementing
 Before beginning, make sure you have the following installed or set up on your computer beforehand.
 
 - nvm or Node `v20.0.0` or greater
-- pnpm, yarn, or npm
+- npm or yarn
 - Wallet that contains BERA token (for deployment - see the [faucet](https://bartio.faucet.berachain.com/))
 - hardhat
 

@@ -17,7 +17,7 @@ Before you begin, make sure you have:
    ```bash
    git clone <repository-url>
    cd viem-solc-helloworld
-   pnpm install
+   npm install
    ```
 
 2. **Environment Setup**
@@ -25,6 +25,8 @@ Before you begin, make sure you have:
    ```bash
    # Copy the example environment file
    cp .env.example .env
+   ```
+
 ````
 
 Then open `.env` and add your wallet's private key:
@@ -35,7 +37,7 @@ WALLET_PRIVATE_KEY=your_private_key_here
 
 3. **Deploy Your Contract**
    ```bash
-   pnpm deploy:berachain
+   npm run deploy:berachain
    ```
 
 ## Project Structure 📁
@@ -105,3 +107,4 @@ The contract is deployed to Berachain Bepolia testnet with the following configu
 ## Detailed Walkthrough
 
 For a detailed explanation of the deployment process and script functionality, see [WALKTHROUGH.md](./WALKTHROUGH.md).
+````

@@ -1,7 +1,7 @@
 {
   "name": "block-scanners",
   "version": "1.0.0",
-  "main": "find_monday_blocks.js",
+  "main": "find_day_boundaries.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },

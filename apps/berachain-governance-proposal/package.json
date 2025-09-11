@@ -11,9 +11,11 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "clean": "rm -rf node_modules; rm -rf .turbo;"
   },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "ethers": "^6.13.0"
+  },
   "devDependencies": {
-    "@berachain/eslint-config": "workspace:*",
-    "@berachain/typescript-config": "workspace:*",
     "@types/node": "^20.0.0",
     "prettier": "^3.0.0",
     "tsup": "^8.0.0",

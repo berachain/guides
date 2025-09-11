@@ -17,37 +17,17 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v2
-        with:
-          version: 8
-          run_install: false
-          
-      - name: Get pnpm store directory
-        shell: bash
-        run: |
-          echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
-          
-      - name: Setup pnpm cache
-        uses: actions/cache@v3
-        with:
-          path: ${{ env.STORE_PATH }}
-          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
-          restore-keys: |
-            ${{ runner.os }}-pnpm-store-
-            
-      - name: Install Foundry
+
+      - name: Install Foundry (optional)
         uses: foundry-rs/foundry-toolchain@v1
-            
-      - name: Install dependencies
-        run: pnpm install
-        
-      - name: Check formatting
-        run: pnpm format:check
-        
-      - name: Lint
-        run: pnpm lint
-        
-      - name: Build
-        run: pnpm build 
+
+      # Install and build only the beralyzer package to avoid monorepo turbo loop
+      - name: Install dependencies (beralyzer)
+        run: npm --prefix exp/beralyzer ci
+
+      - name: Build (beralyzer)
+        run: npm --prefix exp/beralyzer run build
+
+      # Optional: basic format check on tracked files (prettier)
+      - name: Prettier check
+        run: npx prettier --check "**/*.{ts,tsx,md}"

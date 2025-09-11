@@ -24,15 +24,14 @@
   "author": "@codingwithmanny",
   "license": "ISC",
   "devDependencies": {
-    "@berachain/eslint-config": "workspace:*",
-    "@berachain/typescript-config": "workspace:*",
+    
     "@types/jest": "^29.5.0",
     "@types/node": "^20.5.9",
     "jest": "^29.5.0",
     "prettier": "^3.0.0",
     "tsup": "^8.0.0",
     "typescript": "^5.8.3",
-    "@berachain/rpc-config": "workspace:*",
+    
     "dotenv": "^16.3.1",
     "dotenv-cli": "^7.3.0",
     "ethers": "^6.14.0",

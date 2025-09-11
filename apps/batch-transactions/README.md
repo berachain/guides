@@ -44,7 +44,7 @@ Welcome to the Batch Transactions project! This repository demonstrates how to d
 
 ```bash
 # FROM: ./apps/batch-transactions
-pnpm install
+npm install
 ```
 
 ### 2. Set Up Environment
@@ -70,14 +70,14 @@ CHAIN_NATIVE_CURRENCY_DECIMALS=18
 
 ```bash
 # FROM: ./apps/batch-transactions
-pnpm compile
+npm run compile
 ```
 
 ### 4. Deploy & Execute Batch
 
 ```bash
 # FROM: ./apps/batch-transactions
-pnpm dev
+npm run dev
 ```
 
 Expected output:
