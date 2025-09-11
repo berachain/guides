@@ -11,21 +11,19 @@
     "format": "prettier --write \"src/**/*.{ts,tsx}\"",
     "test": "forge test -vvv",
     "clean": "rm -rf node_modules; rm -rf out; rm -rf cache; rm -rf .turbo;",
-    "deploy:berachain": "echo $RPC_URL; forge script script/BingBongToken.s.sol --rpc-url $RPC_URL --broadcast --gas-price 10000000000",
-    "postinstall": "forge install"
+    "deploy:berachain": "echo $RPC_URL; forge script script/BingBongToken.s.sol --rpc-url $RPC_URL --broadcast --gas-price 10000000000"
   },
   "keywords": [],
   "author": "@codingwithmanny",
   "license": "ISC",
   "devDependencies": {
-    "@berachain/eslint-config": "workspace:*",
-    "@berachain/typescript-config": "workspace:*",
+    "eslint": "^8.56.0",
+    "typescript": "^5.0.0",
     "@types/jest": "^29.5.0",
     "@types/node": "^20.0.0",
     "jest": "^29.5.0",
     "prettier": "^3.0.0",
     "tsup": "^8.0.0",
-    "typescript": "^5.0.0",
     "dotenv-cli": "^7.3.0"
   }
 }

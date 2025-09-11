@@ -16,14 +16,18 @@ This is currently configured to run BeaconKit as a consensus client and Reth as 
 This devnet supports three ways to specify which versions of BeaconKit and bera-reth to use:
 
 ### Option 1: Custom Binaries (Local Builds)
+
 Set these variables in `env.sh` to use your own compiled binaries. See below for details about how to build these binaries.
+
 - **CUSTOM_BIN_BEACOND**: Set to path of custom beacond binary
 - **CUSTOM_BIN_RETH**: Set to path of custom reth binary
 
 ### Option 2: Specific Release Versions
+
 Set these variables in `env.sh` to use specific GitHub release versions:
-- **BEACOND_VERSION**: Set to specific version tag (e.g., "v1.2.0") 
-- **RETH_VERSION**: Set to specific version tag (e.g., "v0.2.0" 
+
+- **BEACOND_VERSION**: Set to specific version tag (e.g., "v1.2.0")
+- **RETH_VERSION**: Set to specific version tag (e.g., "v0.2.0"
 
 ### Building `beacond`
 

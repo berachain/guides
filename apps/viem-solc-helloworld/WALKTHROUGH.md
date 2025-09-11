@@ -138,13 +138,11 @@ When everything works, you'll see something like this:
 
 1. **Compilation Errors**
 
-
 - Check your Solidity code syntax
 - Verify compiler version compatibility
 - Look for missing semicolons or brackets
 
 2. **Transaction Failures**
-
    - Ensure sufficient gas (check the estimate)
    - Verify your private key has enough tokens
    - Check network connectivity

@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "",
   "scripts": {
+    "build": "tsup",
     "dev": "tsup --watch",
     "lint": "echo 'No lint script defined for this package'",
     "lint:fix": "eslint src/ --fix --no-ignore",
@@ -17,18 +18,15 @@
     "@pythnetwork/pyth-evm-js": "^1.41.0",
     "dotenv": "^16.4.5",
     "ethers": "^6.13.0",
-    "lodash": "^4.17.21",
-    "typescript": "^5.4.5"
+    "lodash": "^4.17.21"
   },
   "devDependencies": {
-    "@berachain/eslint-config": "workspace:*",
-    "@berachain/typescript-config": "workspace:*",
     "@types/jest": "^29.5.0",
     "@types/node": "^20.0.0",
     "jest": "^29.5.0",
     "prettier": "^2.8.8",
     "tsup": "^8.0.0",
-    "typescript": "^5.0.0",
+    "typescript": "^5.4.5",
     "@types/lodash": "^4.17.0",
     "eslint": "^8.0.1",
     "eslint-config-prettier": "^8.3.0",

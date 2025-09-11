@@ -6,13 +6,13 @@ A centralized configuration package for Berachain networks, providing chain conf
 
 ```bash
 # Core package
-pnpm add @branch/rpc-config
+npm install @branch/rpc-config
 
 # With viem support
-pnpm add viem
+npm install viem
 
 # With ethers support
-pnpm add ethers
+npm install ethers
 ```
 
 ## Usage

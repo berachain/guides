@@ -7,7 +7,7 @@ An example of Berachain being used with WalletConnect and Expo.
 ## Requirements
 
 - Node v20.11.0
-- pnpm or npm
+- npm
 - Expo Go - [Download Expo Go](https://expo.dev/expo-go)
 - iOS Simulator - See [iOS Simulator Configuration](#ios-simulator-configuration)
 - Android - (coming soon)
@@ -22,7 +22,7 @@ This will walk through the steps to get up and running.
 # FROM: ./expo-walletconnect
 
 # !!!IMPORTANT: make sure to have the flag for --ignore-workspace otherwise this will NOT WORK
-pnpm install --ignore-workspace;
+npm install;
 # or npm install;
 ```
 
@@ -69,7 +69,7 @@ EXPO_PUBLIC_CHAIN_BLOCKEXPLORER_URL="https://artio.beratrail.io"
 ```bash
 # FROM: ./walletconnect-expo
 
-pnpm ios;
+npm run ios;
 
 # [Expected Output]:
 # › Opening the iOS simulator, this might take a moment.

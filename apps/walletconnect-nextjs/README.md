@@ -7,7 +7,7 @@ An example of Berachain being used with WalletConnect.
 ## Requirements
 
 - Node v20.11.0
-- pnpm or npm
+- npm
 
 ## Getting Started
 
@@ -16,7 +16,7 @@ An example of Berachain being used with WalletConnect.
 ```bash
 # FROM: ./walletconnect-nextjs
 
-pnpm install;
+npm install;
 # or npm install;
 ```
 
@@ -46,7 +46,7 @@ NEXT_PUBLIC_PROJECT_ID=YOUR-WALLETCONNECT-PROJECT-ID
 ```bash
 # FROM: ./walletconnect-nextjs
 
-pnpm dev;
+npm run dev;
 # or npm run dev;
 
 # [Expected Output]:

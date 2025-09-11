@@ -10,7 +10,7 @@ This repository contains an example of how to deploy and interact with upgradeab
 ## Requirements
 
 - Node `v20.11.0` or greater
-- pnpm (or another preferred package manager)
+- npm
 - Wallet with Berachain Testnet $BERA tokens - See the [Berachain bArtio Faucet](https://bartio.faucet.berachain.com)
 - [Foundry](https://book.getfoundry.sh/getting-started/installation) - ensure `foundryup` is run to install binaries
 

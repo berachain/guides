@@ -25,9 +25,7 @@
     "with-env": "dotenv -e ./.env --"
   },
   "devDependencies": {
-    "@berachain/eslint-config": "workspace:*",
-    "@berachain/rpc-config": "workspace:*",
-    "@berachain/typescript-config": "workspace:*",
+    
     "@biomejs/biome": "^1.5.0",
     "@typescript-eslint/eslint-plugin": "^8.32.0",
     "@typescript-eslint/parser": "^8.32.0",
@@ -37,7 +35,7 @@
     "tsup": "^8.5.0",
     "turbo": "latest"
   },
-  "packageManager": "pnpm@9.0.4",
+  "packageManager": "npm@10.0.0",
   "engines": {
     "node": ">=20"
   },

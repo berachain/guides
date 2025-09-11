@@ -9,7 +9,7 @@ This repository contains an example of how to bridge an existing ERC20 token (in
 ## Requirements
 
 - Node `v20.11.0` or greater
-- pnpm (or another preferred package manager)
+- npm
 - Wallet with Berachain Testnet $BERA tokens - See the [Berachain bArtio Faucet](https://bartio.faucet.berachain.com)
 - Wallet with Sepolia Testnet $UNI tokens - See the [Sepolia Testnet Faucet](https://faucet.quicknode.com/ethereum/sepolia), trade on [Uniswap](https://app.uniswap.org/swap?outputCurrency=0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984&inputCurrency=ETH)
 - [Foundry](https://book.getfoundry.sh/getting-started/installation) - ensure `foundryup` is run to install binaries
@@ -21,7 +21,7 @@ Install project dependencies:
 ```bash
 # FROM: ./layerzero-oft
 
-pnpm install;
+npm install;
 ```
 
 ### Step 2 - Deploy Adapter to Sepolia
