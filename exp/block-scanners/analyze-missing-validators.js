@@ -255,6 +255,7 @@ async function analyzeMissingValidators(blockCount = ConfigHelper.getDefaultBloc
             const previousBlock = blocks[i + 1]; // Previous chronologically
             const signatures = block?.raw?.last_commit?.signatures || [];
             const analysis = computeMissingVotingPower(signatures, currentVotingPowerData);
+
             // Track consensus round from last_commit (applies to previous block)
             const roundValueRaw = block?.raw?.last_commit?.round;
             const roundValue = typeof roundValueRaw === 'string' ? parseInt(roundValueRaw, 10) : (typeof roundValueRaw === 'number' ? roundValueRaw : NaN);
