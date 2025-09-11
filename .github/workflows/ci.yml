@@ -30,4 +30,4 @@ jobs:
 
       # Optional: basic format check on tracked files (prettier)
       - name: Prettier check
-        run: npx prettier --check "**/*.{ts,tsx,md}"
+        run: npx prettier --check "**/*.{ts,tsx,md}" --ignore-path .prettierignore
