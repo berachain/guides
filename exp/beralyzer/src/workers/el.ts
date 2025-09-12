@@ -2,10 +2,56 @@ import { Client } from "pg";
 import { ethers } from "ethers";
 import { classifyClient, decodeExtraDataAscii } from "../decoders.js";
 
+// Transaction type classification
+function classifyTransactionType(tx: any): string {
+  const type = tx.type;
+  if (type === 0) return 'legacy';
+  if (type === 1) return 'access_list';
+  if (type === 2) return 'eip1559';
+  if (type === 3) return 'blob';
+  if (type === 4) return 'eip7702';
+  return 'unknown';
+}
+
+// Parse EIP-7702 transaction data
+function parseEIP7702Transaction(tx: any) {
+  if (tx.type !== 4) return null;
+  
+  const contractCode = tx.contract_code || null;
+  const codeHash = contractCode ? ethers.keccak256(contractCode) : null;
+  
+  return {
+    authorization: tx.authorization || null,
+    contractCodeHash: codeHash,
+    delegationAddress: tx.delegation_address || null
+  };
+}
+
+// Parse blob transaction data
+function parseBlobTransaction(tx: any) {
+  if (tx.type !== 3) return null;
+  
+  return {
+    blobVersionedHashes: tx.blob_versioned_hashes || null,
+    maxFeePerBlobGas: tx.max_fee_per_blob_gas ? BigInt(tx.max_fee_per_blob_gas).toString() : null,
+    blobGasUsed: tx.blob_gas_used ? BigInt(tx.blob_gas_used).toString() : null
+  };
+}
+
+// Parse access list transaction data
+function parseAccessListTransaction(tx: any) {
+  if (tx.type !== 1) return null;
+  
+  return {
+    accessList: tx.access_list || null
+  };
+}
+
 export interface ElWorkerConfig {
   elRpcUrl: string;
   blockBatchSize: number; // how many blocks per batch
   txConcurrency: number; // parallelism for tx/receipt fetches
+  advanceCursor?: boolean; // whether to advance the cursor (default true)
 }
 
 const TRANSFER_TOPIC =
@@ -167,9 +213,15 @@ export async function ingestEl(
             | string
             | undefined;
 
+          // Parse transaction type specific data
+          const transactionCategory = classifyTransactionType(tx);
+          const eip7702Data = parseEIP7702Transaction(tx);
+          const blobData = parseBlobTransaction(tx);
+          const accessListData = parseAccessListTransaction(tx);
+
           await pg.query(
-            `INSERT INTO transactions(hash, block_height, from_address, to_address, value_wei, gas_limit, max_fee_per_gas_wei, max_priority_fee_per_gas_wei, type, selector, input_size, creates_contract, created_contract_address, state_change_accounts, erc20_transfer_count, erc20_unique_token_count, status, gas_used, cumulative_gas_used, effective_gas_price_wei, total_fee_wei, priority_fee_per_gas_wei)
-             VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)
+            `INSERT INTO transactions(hash, block_height, from_address, to_address, value_wei, gas_limit, max_fee_per_gas_wei, max_priority_fee_per_gas_wei, type, selector, input_size, creates_contract, created_contract_address, state_change_accounts, erc20_transfer_count, erc20_unique_token_count, status, gas_used, cumulative_gas_used, effective_gas_price_wei, total_fee_wei, priority_fee_per_gas_wei, transaction_category, access_list, blob_versioned_hashes, max_fee_per_blob_gas_wei, blob_gas_used, eip_7702_authorization, eip_7702_contract_code_hash, eip_7702_delegation_address)
+             VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30)
              ON CONFLICT (hash) DO UPDATE SET
                selector=EXCLUDED.selector,
                input_size=EXCLUDED.input_size,
@@ -182,7 +234,15 @@ export async function ingestEl(
                cumulative_gas_used=EXCLUDED.cumulative_gas_used,
                effective_gas_price_wei=EXCLUDED.effective_gas_price_wei,
                total_fee_wei=EXCLUDED.total_fee_wei,
-               priority_fee_per_gas_wei=EXCLUDED.priority_fee_per_gas_wei`,
+               priority_fee_per_gas_wei=EXCLUDED.priority_fee_per_gas_wei,
+               transaction_category=EXCLUDED.transaction_category,
+               access_list=EXCLUDED.access_list,
+               blob_versioned_hashes=EXCLUDED.blob_versioned_hashes,
+               max_fee_per_blob_gas_wei=EXCLUDED.max_fee_per_blob_gas_wei,
+               blob_gas_used=EXCLUDED.blob_gas_used,
+               eip_7702_authorization=EXCLUDED.eip_7702_authorization,
+               eip_7702_contract_code_hash=EXCLUDED.eip_7702_contract_code_hash,
+               eip_7702_delegation_address=EXCLUDED.eip_7702_delegation_address`,
             [
               tx.hash,
               bn,
@@ -212,6 +272,14 @@ export async function ingestEl(
               effPriceHexR ? BigInt(effPriceHexR).toString() : null,
               effPriceHexR && gasUsedHexR ? totalFee.toString() : null,
               effPriceHexR ? prioPerGas.toString() : null,
+              transactionCategory,
+              accessListData?.accessList || null,
+              blobData?.blobVersionedHashes || null,
+              blobData?.maxFeePerBlobGas || null,
+              blobData?.blobGasUsed || null,
+              eip7702Data?.authorization || null,
+              eip7702Data?.contractCodeHash || null,
+              eip7702Data?.delegationAddress || null,
             ],
           );
 
@@ -244,11 +312,17 @@ export async function ingestEl(
     }
 
     nextCursor = to;
-    await pg.query(
-      `INSERT INTO ingest_cursors(module,last_processed_height) VALUES($1,$2)
-       ON CONFLICT (module) DO UPDATE SET last_processed_height=EXCLUDED.last_processed_height, updated_at=NOW()`,
-      ["blocks_el", nextCursor],
-    );
+    
+    // Only advance cursor if explicitly allowed
+    if (cfg.advanceCursor !== false) {
+      await pg.query(
+        `INSERT INTO ingest_cursors(module,last_processed_height) VALUES($1,$2)
+         ON CONFLICT (module) DO UPDATE SET last_processed_height=EXCLUDED.last_processed_height, updated_at=NOW()`,
+        ["blocks_el", nextCursor],
+      );
+    } else {
+      console.log("Cursor advancement disabled, staying at current position");
+    }
   }
   if (cfg.log)
     console.log(
