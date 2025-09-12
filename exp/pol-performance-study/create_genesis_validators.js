@@ -2,7 +2,7 @@
 
 const fs = require('fs');
 const https = require('https');
-const { exec } = require('child_process');
+const { execFile } = require('child_process');
 const { parse } = require('csv-parse/sync');
 const { stringify } = require('csv-stringify/sync');
 
@@ -35,9 +35,16 @@ function getOperator(pubkey) {
     // Remove '0x' prefix if present and add it back to ensure consistent format
     const formattedPubkey = pubkey.startsWith('0x') ? pubkey : `0x${pubkey}`;
     
-    const command = `cast call ${BEACON_DEPOSIT_ADDRESS} "getOperator(bytes)" ${formattedPubkey} --rpc-url ${RPC_URL}`;
+    const args = [
+      'call',
+      BEACON_DEPOSIT_ADDRESS,
+      'getOperator(bytes)',
+      formattedPubkey,
+      '--rpc-url',
+      RPC_URL
+    ];
     
-    exec(command, (error, stdout, stderr) => {
+    execFile('cast', args, (error, stdout, stderr) => {
       if (error) {
         console.error(`Error executing cast command: ${error.message}`);
         console.error(`stderr: ${stderr}`);
