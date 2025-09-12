@@ -10,11 +10,41 @@ import { runDecoderOnce } from "./workers/decoder.js";
 import { resolve } from "path";
 import { readFileSync, readdirSync } from "fs";
 
+// Error classification for graceful handling
+function isRetryableError(error: Error): boolean {
+  const message = error.message.toLowerCase();
+  return (
+    message.includes('econnrefused') ||
+    message.includes('timeout') ||
+    message.includes('network') ||
+    message.includes('connection') ||
+    message.includes('econnreset') ||
+    message.includes('enotfound')
+  );
+}
+
+function isFatalError(error: Error): boolean {
+  const message = error.message.toLowerCase();
+  return (
+    message.includes('syntax error') ||
+    message.includes('relation') && message.includes('does not exist') ||
+    message.includes('permission denied') ||
+    message.includes('authentication failed') ||
+    message.includes('invalid schema')
+  );
+}
+
 async function main() {
   const cfg = loadConfig();
   console.log(`Beralyzer daemon starting. DB=${cfg.pgDsn}`);
+  
+  let consecutiveFailures = 0;
+  const maxConsecutiveFailures = 5;
+  
   while (true) {
     const pg = await connectPg(cfg.pgDsn);
+    let shouldAdvanceCursor = true;
+    
     try {
       // Apply migrations at startup of each loop (idempotent)
       try {
@@ -42,29 +72,116 @@ async function main() {
         }
       } catch (e) {
         console.error("Migration error:", (e as Error).message);
+        if (isFatalError(e as Error)) {
+          console.error("Fatal migration error, stopping daemon");
+          process.exit(1);
+        }
       }
 
-      await ingestEl(pg, {
-        elRpcUrl: cfg.elRpcUrl,
-        blockBatchSize: 50,
-        txConcurrency: 16,
-        log: cfg.log,
-      });
-      await ingestErc20Registry(pg, { elRpcUrl: cfg.elRpcUrl, batchSize: 500 });
-      await ingestClAbsences(pg, {
-        clRpcUrl: cfg.clRpcUrl,
-        batchSize: 100,
-        validatorRefreshInterval: 500,
-        log: cfg.log,
-      });
-      await runDecoderOnce(pg);
-      await snapshotTodayIfMissing(pg, { clRpcUrl: cfg.clRpcUrl });
+      // Try each ingestion step, but don't advance cursor if any fail
+      try {
+        await ingestEl(pg, {
+          elRpcUrl: cfg.elRpcUrl,
+          blockBatchSize: 50,
+          txConcurrency: 16,
+          log: cfg.log,
+          advanceCursor: shouldAdvanceCursor,
+        });
+      } catch (e) {
+        console.error("EL ingestion error:", (e as Error).message);
+        if (isFatalError(e as Error)) {
+          console.error("Fatal EL error, stopping daemon");
+          process.exit(1);
+        }
+        if (isRetryableError(e as Error)) {
+          console.log("EL RPC unavailable, pausing cursor advancement");
+          shouldAdvanceCursor = false;
+        }
+      }
+
+      try {
+        await ingestErc20Registry(pg, { elRpcUrl: cfg.elRpcUrl, batchSize: 500 });
+      } catch (e) {
+        console.error("ERC20 registry error:", (e as Error).message);
+        if (isFatalError(e as Error)) {
+          console.error("Fatal ERC20 error, stopping daemon");
+          process.exit(1);
+        }
+        if (isRetryableError(e as Error)) {
+          console.log("EL RPC unavailable for ERC20, pausing cursor advancement");
+          shouldAdvanceCursor = false;
+        }
+      }
+
+      try {
+        await ingestClAbsences(pg, {
+          clRpcUrl: cfg.clRpcUrl,
+          batchSize: 100,
+          validatorRefreshInterval: 500,
+          log: cfg.log,
+        });
+      } catch (e) {
+        console.error("CL ingestion error:", (e as Error).message);
+        if (isFatalError(e as Error)) {
+          console.error("Fatal CL error, stopping daemon");
+          process.exit(1);
+        }
+        if (isRetryableError(e as Error)) {
+          console.log("CL RPC unavailable, pausing cursor advancement");
+          shouldAdvanceCursor = false;
+        }
+      }
+
+      try {
+        await runDecoderOnce(pg);
+      } catch (e) {
+        console.error("Decoder error:", (e as Error).message);
+        // Decoder errors are usually not fatal, just log and continue
+      }
+
+      try {
+        await snapshotTodayIfMissing(pg, { clRpcUrl: cfg.clRpcUrl });
+      } catch (e) {
+        console.error("Snapshot error:", (e as Error).message);
+        if (isRetryableError(e as Error)) {
+          console.log("CL RPC unavailable for snapshots, pausing cursor advancement");
+          shouldAdvanceCursor = false;
+        }
+      }
+
+      // Reset failure counter on successful run
+      if (shouldAdvanceCursor) {
+        consecutiveFailures = 0;
+      } else {
+        consecutiveFailures++;
+        console.log(`Consecutive failures: ${consecutiveFailures}/${maxConsecutiveFailures}`);
+        
+        if (consecutiveFailures >= maxConsecutiveFailures) {
+          console.error(`Too many consecutive failures (${consecutiveFailures}), stopping daemon`);
+          process.exit(1);
+        }
+      }
+
     } catch (e) {
-      console.error("Tick error:", (e as Error).message);
+      console.error("Unexpected error:", (e as Error).message);
+      if (isFatalError(e as Error)) {
+        console.error("Fatal error, stopping daemon");
+        process.exit(1);
+      }
+      shouldAdvanceCursor = false;
+      consecutiveFailures++;
     } finally {
       await pg.end();
     }
-    await new Promise((r) => setTimeout(r, cfg.pollMs));
+    
+    // Only sleep if we're not in a failure state
+    if (shouldAdvanceCursor || cfg.pollMs > 0) {
+      await new Promise((r) => setTimeout(r, cfg.pollMs));
+    } else {
+      // Longer sleep when RPC is down to avoid hammering
+      console.log("RPC unavailable, sleeping 30s before retry");
+      await new Promise((r) => setTimeout(r, 30000));
+    }
   }
 }
 

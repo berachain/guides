@@ -4,6 +4,23 @@ CREATE TABLE IF NOT EXISTS schema_migrations (
   applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- Transaction types reference
+CREATE TABLE IF NOT EXISTS transaction_types (
+  type_id SMALLINT PRIMARY KEY,
+  name TEXT NOT NULL,
+  description TEXT,
+  eip_number TEXT
+);
+
+-- Insert known transaction types
+INSERT INTO transaction_types VALUES 
+(0, 'Legacy', 'Pre-EIP-1559 transactions', NULL),
+(1, 'EIP-2930', 'Access list transactions', 'EIP-2930'),
+(2, 'EIP-1559', 'Fee market transactions', 'EIP-1559'),
+(3, 'EIP-4844', 'Blob transactions', 'EIP-4844'),
+(4, 'EIP-7702', 'Account abstraction transactions', 'EIP-7702')
+ON CONFLICT (type_id) DO NOTHING;
+
 -- Blocks
 CREATE TABLE IF NOT EXISTS blocks (
   height BIGINT PRIMARY KEY,
@@ -21,13 +38,12 @@ CREATE TABLE IF NOT EXISTS blocks (
   total_priority_fees_wei NUMERIC(78,0),
   effective_gas_price_avg_wei NUMERIC(78,0),
   priority_fee_avg_wei NUMERIC(78,0),
-  -- consensus fields merged into blocks
+  -- consensus fields merged into blocks (removed absent_validators JSONB)
   missing_count INT,
   missing_voting_power NUMERIC(78,0),
   total_voting_power NUMERIC(78,0),
   missing_percentage DOUBLE PRECISION,
   last_commit_round INT,
-  absent_validators JSONB,
   CONSTRAINT chain_client_type_chk
     CHECK (chain_client_type IN ('Reth','Geth','Erigon','Nethermind','Besu','Unknown'))
 );
@@ -59,13 +75,29 @@ CREATE TABLE IF NOT EXISTS transactions (
   cumulative_gas_used BIGINT,
   effective_gas_price_wei NUMERIC(78,0),
   total_fee_wei NUMERIC(78,0),
-  priority_fee_per_gas_wei NUMERIC(78,0)
+  priority_fee_per_gas_wei NUMERIC(78,0),
+  -- transaction type classification
+  transaction_category TEXT,
+  -- EIP-2930 access list transactions
+  access_list JSONB,
+  -- EIP-4844 blob transactions
+  blob_versioned_hashes TEXT[],
+  max_fee_per_blob_gas_wei NUMERIC(78,0),
+  blob_gas_used BIGINT,
+  -- EIP-7702 account abstraction transactions
+  eip_7702_authorization TEXT,
+  eip_7702_contract_code_hash TEXT,
+  eip_7702_delegation_address TEXT
 );
 CREATE INDEX IF NOT EXISTS tx_block_idx ON transactions (block_height);
 CREATE INDEX IF NOT EXISTS tx_selector_idx ON transactions (selector);
 CREATE INDEX IF NOT EXISTS tx_creates_contract_idx ON transactions (creates_contract);
 CREATE INDEX IF NOT EXISTS tx_block_hash_idx ON transactions (block_height, hash);
 CREATE INDEX IF NOT EXISTS tx_created_contract_addr_idx ON transactions (created_contract_address);
+CREATE INDEX IF NOT EXISTS tx_type_idx ON transactions (type);
+CREATE INDEX IF NOT EXISTS tx_category_idx ON transactions (transaction_category);
+CREATE INDEX IF NOT EXISTS tx_eip7702_code_hash_idx ON transactions (eip_7702_contract_code_hash) WHERE eip_7702_contract_code_hash IS NOT NULL;
+CREATE INDEX IF NOT EXISTS tx_blob_hashes_idx ON transactions USING GIN (blob_versioned_hashes) WHERE blob_versioned_hashes IS NOT NULL;
 
 -- Receipts table removed; realized fields are on transactions
 
