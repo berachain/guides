@@ -35,11 +35,11 @@ const tokenNameCache = new Map(); // token -> name
 // Utility functions
 
 /**
- * Converts various value types to BigInt safely
- * @param {bigint|number|string} value - The value to convert
- * @returns {bigint} The converted BigInt value
- * @throws {Error} If the value type is unsupported
- */
+* Converts various value types to BigInt safely
+* @param {bigint|number|string} value - The value to convert
+* @returns {bigint} The converted BigInt value
+* @throws {Error} If the value type is unsupported
+*/
 function bn(value) {
     if (typeof value === 'bigint') return value;
     if (typeof value === 'number') return BigInt(Math.floor(value)); // Floor to avoid decimals
@@ -48,11 +48,11 @@ function bn(value) {
 }
 
 /**
- * Formats a BigInt amount with decimal places (like ethers.formatUnits)
- * @param {bigint} amountBI - The BigInt amount in wei/smallest unit
- * @param {number} decimals - Number of decimal places to format
- * @returns {string} Formatted string representation
- */
+* Formats a BigInt amount with decimal places (like ethers.formatUnits)
+* @param {bigint} amountBI - The BigInt amount in wei/smallest unit
+* @param {number} decimals - Number of decimal places to format
+* @returns {string} Formatted string representation
+*/
 function formatUnitsBI(amountBI, decimals) {
     const negative = amountBI < 0n;
     let x = negative ? -amountBI : amountBI; // Work with absolute value
@@ -65,19 +65,19 @@ function formatUnitsBI(amountBI, decimals) {
 }
 
 /**
- * Logs a message to stderr (useful for progress/debug info that shouldn't interfere with stdout)
- * @param {string} message - The message to log
- */
+* Logs a message to stderr (useful for progress/debug info that shouldn't interfere with stdout)
+* @param {string} message - The message to log
+*/
 function log(message) {
     console.error(message);
 }
 
 /**
- * Displays a progress bar in the terminal
- * @param {number} current - Current progress value
- * @param {number} total - Total/max progress value
- * @param {string} description - Optional description to show with the progress bar
- */
+* Displays a progress bar in the terminal
+* @param {number} current - Current progress value
+* @param {number} total - Total/max progress value
+* @param {string} description - Optional description to show with the progress bar
+*/
 function logProgress(current, total, description = '') {
     const percent = Math.round((current / total) * 100);
     // Create visual progress bar: █ for completed, ░ for remaining (50 chars total)
@@ -87,17 +87,17 @@ function logProgress(current, total, description = '') {
 }
 
 /**
- * Retries an async operation with exponential backoff
- * @param {Function} operation - Async function to retry
- * @param {number} maxRetries - Maximum number of retry attempts (default: 3)
- * @param {number} initialDelay - Initial delay in ms (default: 1000)
- * @returns {Promise<any>} Result of the operation
- * @throws {Error} Last error if all retries fail
- */
+* Retries an async operation with exponential backoff
+* @param {Function} operation - Async function to retry
+* @param {number} maxRetries - Maximum number of retry attempts (default: 3)
+* @param {number} initialDelay - Initial delay in ms (default: 1000)
+* @returns {Promise<any>} Result of the operation
+* @throws {Error} Last error if all retries fail
+*/
 async function withRetry(operation, maxRetries = 3, initialDelay = 1000) {
     let lastError;
     let delay = initialDelay;
-    
+
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
         try {
             return await operation();
@@ -120,14 +120,14 @@ async function withRetry(operation, maxRetries = 3, initialDelay = 1000) {
 }
 
 /**
- * Progress bar utility class for displaying operation progress
- */
+* Progress bar utility class for displaying operation progress
+*/
 class ProgressBar {
     /**
-     * Creates a new progress bar
-     * @param {number} total - Total number of items to process
-     * @param {string} description - Description to show with the progress bar
-     */
+    * Creates a new progress bar
+    * @param {number} total - Total number of items to process
+    * @param {string} description - Description to show with the progress bar
+    */
     constructor(total, description = '') {
         this.total = total;
         this.current = 0;
@@ -135,17 +135,17 @@ class ProgressBar {
     }
     
     /**
-     * Updates the progress bar to a specific value
-     * @param {number} value - Current progress value
-     */
+    * Updates the progress bar to a specific value
+    * @param {number} value - Current progress value
+    */
     update(value) {
         this.current = value;
         logProgress(this.current, this.total, this.description);
     }
     
     /**
-     * Finalizes the progress bar, ensuring it shows 100% completion
-     */
+    * Finalizes the progress bar, ensuring it shows 100% completion
+    */
     finish() {
         if (this.current < this.total) {
             this.update(this.total); // Complete the progress bar
@@ -157,11 +157,11 @@ class ProgressBar {
 }
 
 /**
- * Factory function to create a new progress bar
- * @param {number} total - Total number of items to process
- * @param {string} description - Description to show with the progress bar
- * @returns {ProgressBar} New progress bar instance
- */
+* Factory function to create a new progress bar
+* @param {number} total - Total number of items to process
+* @param {string} description - Description to show with the progress bar
+* @returns {ProgressBar} New progress bar instance
+*/
 function createProgressBar(total, description = '') {
     return new ProgressBar(total, description);
 }
@@ -169,34 +169,34 @@ function createProgressBar(total, description = '') {
 // Scoring/calculation functions
 
 /**
- * Calculates uptime score based on empty block percentage
- * Perfect uptime (no empty blocks) = 100%, more empty blocks = lower score
- * @param {number} emptyBlocks - Number of empty blocks produced
- * @param {number} totalBlocks - Total number of blocks produced
- * @returns {number} Uptime score (0-100)
- */
+* Calculates uptime score based on empty block percentage
+* Perfect uptime (no empty blocks) = 100%, more empty blocks = lower score
+* @param {number} emptyBlocks - Number of empty blocks produced
+* @param {number} totalBlocks - Total number of blocks produced
+* @returns {number} Uptime score (0-100)
+*/
 function calculateUptimeScore(emptyBlocks, totalBlocks) {
     const emptyBlockPercentage = calculateEmptyBlockPercentage(emptyBlocks, totalBlocks);
     return Math.max(0, 100 - emptyBlockPercentage); // Invert percentage: fewer empty blocks = higher score
 }
 
 /**
- * Calculates the percentage of empty blocks
- * @param {number} emptyBlocks - Number of empty blocks
- * @param {number} totalBlocks - Total number of blocks
- * @returns {number} Percentage of empty blocks (0-100)
- */
+* Calculates the percentage of empty blocks
+* @param {number} emptyBlocks - Number of empty blocks
+* @param {number} totalBlocks - Total number of blocks
+* @returns {number} Percentage of empty blocks (0-100)
+*/
 function calculateEmptyBlockPercentage(emptyBlocks, totalBlocks) {
     return totalBlocks > 0 ? (emptyBlocks / totalBlocks) * 100 : 0;
 }
 
 /**
- * Calculates the POL (Proof of Liquidity) ratio: boost/stake
- * Higher ratio indicates more BGT boost relative to validator stake
- * @param {number} boost - BGT boost amount
- * @param {number} stake - Validator stake amount
- * @returns {number} POL ratio (boost/stake), 0 if stake is 0
- */
+* Calculates the POL (Proof of Liquidity) ratio: boost/stake
+* Higher ratio indicates more BGT boost relative to validator stake
+* @param {number} boost - BGT boost amount
+* @param {number} stake - Validator stake amount
+* @returns {number} POL ratio (boost/stake), 0 if stake is 0
+*/
 function calculatePolRatio(boost, stake) {
     return stake === 0 ? 0 : boost / stake;
 }
@@ -205,11 +205,11 @@ function calculatePolRatio(boost, stake) {
 
 
 /**
- * Gets the decimal places for an ERC20 token (cached)
- * @param {ethers.Provider} provider - Ethers provider instance
- * @param {string} token - Token contract address
- * @returns {Promise<number>} Number of decimal places (defaults to 18 if unknown)
- */
+* Gets the decimal places for an ERC20 token (cached)
+* @param {ethers.Provider} provider - Ethers provider instance
+* @param {string} token - Token contract address
+* @returns {Promise<number>} Number of decimal places (defaults to 18 if unknown)
+*/
 async function getTokenDecimals(provider, token) {
     if (tokenDecimalsCache.has(token)) return tokenDecimalsCache.get(token);
     try {
@@ -227,11 +227,11 @@ async function getTokenDecimals(provider, token) {
 }
 
 /**
- * Gets the name of an ERC20 token (cached)
- * @param {ethers.Provider} provider - Ethers provider instance
- * @param {string} token - Token contract address
- * @returns {Promise<string>} Token name (or truncated address if unknown)
- */
+* Gets the name of an ERC20 token (cached)
+* @param {ethers.Provider} provider - Ethers provider instance
+* @param {string} token - Token contract address
+* @returns {Promise<string>} Token name (or truncated address if unknown)
+*/
 async function getTokenName(provider, token) {
     if (tokenNameCache.has(token)) return tokenNameCache.get(token);
     try {
@@ -250,11 +250,11 @@ async function getTokenName(provider, token) {
 }
 
 /**
- * Gets the USD exchange rate for a token using Kyberswap API (cached)
- * @param {string} tokenIn - Token contract address to get rate for
- * @returns {Promise<number>} USD rate per token
- * @throws {Error} If API call fails
- */
+* Gets the USD exchange rate for a token using Kyberswap API (cached)
+* @param {string} tokenIn - Token contract address to get rate for
+* @returns {Promise<number>} USD rate per token
+* @throws {Error} If API call fails
+*/
 async function getUsdRatePerToken(tokenIn) {
     if (tokenUsdRateCache.has(tokenIn)) {
         log(`Using cached rate for ${tokenIn}: $${tokenUsdRateCache.get(tokenIn).toFixed(8)}`);
@@ -301,11 +301,11 @@ async function getUsdRatePerToken(tokenIn) {
 }
 
 /**
- * Gets the proposer address for a specific block height from consensus layer
- * @param {number} blockHeight - Block height to query
- * @returns {Promise<string>} Proposer address
- * @throws {Error} If block not found or no proposer
- */
+* Gets the proposer address for a specific block height from consensus layer
+* @param {number} blockHeight - Block height to query
+* @returns {Promise<string>} Proposer address
+* @throws {Error} If block not found or no proposer
+*/
 async function getBlockProposer(blockHeight) {
     return withRetry(async () => {
         const response = await fetch(`${CL_ETHRPC_URL}/header?height=${blockHeight}`);
@@ -319,11 +319,11 @@ async function getBlockProposer(blockHeight) {
 
 
 /**
- * Gets validator voting power data from consensus layer at a specific block height
- * @param {number} blockHeight - Block height to query validator set
- * @returns {Promise<Object|null>} Validator data object or null if no validators found
- * @returns {Object} validators - Map of validator address to {address, voting_power, pub_key}
- */
+* Gets validator voting power data from consensus layer at a specific block height
+* @param {number} blockHeight - Block height to query validator set
+* @returns {Promise<Object|null>} Validator data object or null if no validators found
+* @returns {Object} validators - Map of validator address to {address, voting_power, pub_key}
+*/
 async function getValidatorVotingPower(blockHeight) {
     return withRetry(async () => {
         const validators = {};
@@ -349,41 +349,41 @@ async function getValidatorVotingPower(blockHeight) {
             }
             
             // Process each validator in this page
-            data.result.validators.forEach(validator => {
-                validators[validator.address] = {
-                    address: validator.address,
-                    voting_power: validator.voting_power / 1e9, // Convert GWEI to BERA
-                    pub_key: validator.pub_key.value
-                };
-            });
-            
+        data.result.validators.forEach(validator => {
+            validators[validator.address] = {
+                address: validator.address,
+                voting_power: validator.voting_power / 1e9, // Convert GWEI to BERA
+                pub_key: validator.pub_key.value
+            };
+        });
+        
             // Check if we've reached the end of results
-            if (data.result.validators.length < perPage) {
+        if (data.result.validators.length < perPage) {
                 break; // Last page
-            }
-            
+        }
+        
             page++; // Continue to next page
-        }
-        
-        if (Object.keys(validators).length === 0) {
-            log(`No validators found for block ${blockHeight}`);
-            return null;
-        }
-        
-        if (process.env.VERBOSE) {
-            log(`Total validators found: ${Object.keys(validators).length}`);
-        }
+    }
+    
+    if (Object.keys(validators).length === 0) {
+        log(`No validators found for block ${blockHeight}`);
+        return null;
+    }
+    
+    if (process.env.VERBOSE) {
+        log(`Total validators found: ${Object.keys(validators).length}`);
+    }
         
         return validators;
     });
 }
 
 /**
- * Gets the BGT boost amount for a validator at a specific block
- * @param {string} validatorPubkey - Validator public key (without 0x prefix)
- * @param {number} blockNumber - Block number to query
- * @returns {Promise<number>} BGT boost amount (0 if none or error)
- */
+* Gets the BGT boost amount for a validator at a specific block
+* @param {string} validatorPubkey - Validator public key (without 0x prefix)
+* @param {number} blockNumber - Block number to query
+* @returns {Promise<number>} BGT boost amount (0 if none or error)
+*/
 async function getValidatorBoost(validatorPubkey, blockNumber) {
     try {
         const result = await callContractFunction(
@@ -405,13 +405,13 @@ async function getValidatorBoost(validatorPubkey, blockNumber) {
 }
 
 /**
- * Calls a smart contract function using the cast CLI tool
- * @param {string} contractAddress - Contract address to call
- * @param {string} functionSignature - Function signature (e.g., "balanceOf(address)")
- * @param {Array<string>} params - Function parameters
- * @param {string|number} blockNumber - Block number to query (default: 'latest')
- * @returns {Promise<string>} Raw contract call result
- */
+* Calls a smart contract function using the cast CLI tool
+* @param {string} contractAddress - Contract address to call
+* @param {string} functionSignature - Function signature (e.g., "balanceOf(address)")
+* @param {Array<string>} params - Function parameters
+* @param {string|number} blockNumber - Block number to query (default: 'latest')
+* @returns {Promise<string>} Raw contract call result
+*/
 async function callContractFunction(contractAddress, functionSignature, params, blockNumber = 'latest') {
     return withRetry(async () => {
         const { execSync } = await import('child_process');
@@ -424,10 +424,10 @@ async function callContractFunction(contractAddress, functionSignature, params, 
 // Data loading and processing functions
 
 /**
- * Loads validator information from genesis_validators.csv file
- * @returns {Array<Object>} Array of validator objects with name, proposer, pubkey, operatorAddress
- * @throws {Error} If CSV file cannot be read or parsed
- */
+* Loads validator information from genesis_validators.csv file
+* @returns {Array<Object>} Array of validator objects with name, proposer, pubkey, operatorAddress
+* @throws {Error} If CSV file cannot be read or parsed
+*/
 function loadValidators() {
     const csvContent = fs.readFileSync('genesis_validators.csv', 'utf8');
     const lines = csvContent.split('\n');
@@ -451,12 +451,12 @@ function loadValidators() {
 }
 
 /**
- * Collects stake, boost, and POL ratio data for a single validator at a specific block
- * @param {Object} validator - Validator object with proposer address and pubkey
- * @param {number} blockNumber - Block number to query data at
- * @param {Object} votingPowerData - Pre-fetched voting power data from consensus layer
- * @returns {Promise<Object>} Object with stake, boost, and ratio properties
- */
+* Collects stake, boost, and POL ratio data for a single validator at a specific block
+* @param {Object} validator - Validator object with proposer address and pubkey
+* @param {number} blockNumber - Block number to query data at
+* @param {Object} votingPowerData - Pre-fetched voting power data from consensus layer
+* @returns {Promise<Object>} Object with stake, boost, and ratio properties
+*/
 async function collectValidatorData(validator, blockNumber, votingPowerData) {
     try {
         // First try exact address match for stake data
@@ -496,13 +496,13 @@ async function collectValidatorData(validator, blockNumber, votingPowerData) {
 // Block scanning functions
 
 /**
- * Scans a chunk of blocks to identify proposers and empty blocks
- * @param {number} chunkStart - Starting block number (inclusive)
- * @param {number} chunkEnd - Ending block number (inclusive)
- * @param {Array<Object>} validators - Array of validator objects (unused but kept for consistency)
- * @param {Map} validatorMap - Map of proposer addresses to validator objects for fast lookup
- * @returns {Promise<Map>} Map of proposer -> {blocks: [], emptyBlockNumbers: []}
- */
+* Scans a chunk of blocks to identify proposers and empty blocks
+* @param {number} chunkStart - Starting block number (inclusive)
+* @param {number} chunkEnd - Ending block number (inclusive)
+* @param {Array<Object>} validators - Array of validator objects (unused but kept for consistency)
+* @param {Map} validatorMap - Map of proposer addresses to validator objects for fast lookup
+* @returns {Promise<Map>} Map of proposer -> {blocks: [], emptyBlockNumbers: []}
+*/
 async function scanBlockChunk(chunkStart, chunkEnd, validators, validatorMap) {
     const provider = new ethers.JsonRpcProvider(EL_ETHRPC_URL);
     const chunkResults = new Map();
@@ -540,15 +540,15 @@ async function scanBlockChunk(chunkStart, chunkEnd, validators, validatorMap) {
 }
 
 /**
- * Scans a range of blocks in parallel using multiple workers
- * Divides the work into chunks and processes them concurrently for better performance
- * @param {number} startBlock - Starting block number (inclusive)
- * @param {number} endBlock - Ending block number (inclusive)
- * @param {Array<Object>} validators - Array of validator objects
- * @param {Map} validatorMap - Map of proposer addresses to validator objects
- * @param {boolean} showProgress - Whether to show progress bar (default: true)
- * @returns {Promise<Map>} Merged results from all chunks
- */
+* Scans a range of blocks in parallel using multiple workers
+* Divides the work into chunks and processes them concurrently for better performance
+* @param {number} startBlock - Starting block number (inclusive)
+* @param {number} endBlock - Ending block number (inclusive)
+* @param {Array<Object>} validators - Array of validator objects
+* @param {Map} validatorMap - Map of proposer addresses to validator objects
+* @param {boolean} showProgress - Whether to show progress bar (default: true)
+* @returns {Promise<Map>} Merged results from all chunks
+*/
 async function scanBlocksParallel(startBlock, endBlock, validators, validatorMap, showProgress = true) {
     const totalChunks = Math.ceil((endBlock - startBlock + 1) / CHUNK_SIZE);
     const progress = showProgress ? createProgressBar(totalChunks, 'Scanning block chunks') : null;
@@ -604,13 +604,13 @@ async function scanBlocksParallel(startBlock, endBlock, validators, validatorMap
 
 
 /**
- * Builds a set of pubkey topics and mapping for efficient event filtering
- * Creates keccak256 hashes of validator pubkeys for use in event log filtering
- * @param {Array<Object>} validators - Array of validator objects with pubkey property
- * @returns {Object} Object with set of topics and mapping from topic to proposer
- * @returns {Set} set - Set of keccak256 hashed pubkeys for filtering
- * @returns {Map} topicToProposer - Map from topic hash to proposer address
- */
+* Builds a set of pubkey topics and mapping for efficient event filtering
+* Creates keccak256 hashes of validator pubkeys for use in event log filtering
+* @param {Array<Object>} validators - Array of validator objects with pubkey property
+* @returns {Object} Object with set of topics and mapping from topic to proposer
+* @returns {Set} set - Set of keccak256 hashed pubkeys for filtering
+* @returns {Map} topicToProposer - Map from topic hash to proposer address
+*/
 function buildPubkeyTopicSet(validators) {
     const set = new Set();
     const topicToProposer = new Map();
@@ -628,11 +628,21 @@ function buildPubkeyTopicSet(validators) {
 
 /**
  * Indexes POL (Proof of Liquidity) events from the blockchain for validator incentives
- * Scans for Distributed and BGTBoosterIncentivesProcessed events across specified day ranges
- * @param {Array<Object>} validators - Array of validator objects
+ * 
+ * This function builds a comprehensive map of validator incentive earnings by scanning
+ * blockchain events across specified day ranges. It compiles two types of POL events:
+ * 1. Distributed events: BGT emissions from the protocol to validator vaults
+ * 2. BGTBoosterIncentivesProcessed events: Booster token incentives from validators to users
+ * 
+ * The function processes events in chunks to prevent memory issues, then aggregates
+ * all token amounts (stored as BigInt for precision) by validator and date.
+ * 
+ * @param {Array<Object>} validators - Array of validator objects with pubkey for filtering
  * @param {Object} dayRanges - Object mapping dates to {startBlock, endBlock} ranges
- * @returns {Promise<Object>} Object with daily aggregated data
- * @returns {Object} daily - Daily event data: date -> proposer -> {vaultBgtBI, boosters}
+ * @returns {Promise<Object>} Object with compiled daily aggregated data
+ * @returns {Object} daily - Structure: date -> proposer -> {vaultBgtBI: BigInt, boosters: {token: BigInt}}
+ *   - vaultBgtBI: Total BGT emissions to validator vaults (in wei)
+ *   - boosters: Map of token addresses to BigInt amounts of booster incentives
  */
 async function indexPolEvents(validators, dayRanges) {
     const provider = new ethers.JsonRpcProvider(EL_ETHRPC_URL);
@@ -646,37 +656,87 @@ async function indexPolEvents(validators, dayRanges) {
     const { set: pubTopicSet, topicToProposer } = buildPubkeyTopicSet(validators);
     const daily = {}; // date -> proposer -> { vaultBgtBI: bigint, boosters: { token: bigint } }
     
-    // Helper function to chunk log requests to prevent memory issues
-    async function getLogsChunked(fromBlock, toBlock, filter, chunkSize = 5000) {
-        const logs = [];
+    /**
+     * Helper function to fetch event logs in parallel batches for better performance
+     * 
+     * This function builds a complete log collection by breaking large block ranges
+     * into manageable chunks and processing them in controlled parallel batches. It compiles logs by:
+     * 1. Dividing the block range into chunks of ~5000 blocks each
+     * 2. Processing chunks in parallel batches to balance speed and memory usage
+     * 3. Concatenating all chunk results into a single comprehensive log array
+     * 
+     * The batched parallel approach provides better performance than sequential while
+     * preventing memory issues by limiting concurrent requests.
+     * 
+     * @param {number} fromBlock - Starting block number (inclusive)
+     * @param {number} toBlock - Ending block number (inclusive)
+     * @param {Object} filter - Ethers log filter object with topics and addresses
+     * @param {number} chunkSize - Size of each chunk in blocks (default: 5000)
+     * @param {number} batchSize - Number of chunks to process in parallel (default: 8)
+     * @returns {Promise<Array>} Compiled array of all log entries from the range
+     */
+    async function getLogsChunked(fromBlock, toBlock, filter, chunkSize = 3000, batchSize = 4) {
+        const totalBlocks = toBlock - fromBlock + 1;
+        
+        // Create chunk ranges
+        const chunks = [];
         let currentBlock = fromBlock;
         
         while (currentBlock <= toBlock) {
-            const chunkEndBlock = Math.min(currentBlock + chunkSize - 1, toBlock);
-            
-            try {
-                const chunkLogs = await provider.getLogs({
-                    ...filter,
-                    fromBlock: currentBlock,
-                    toBlock: chunkEndBlock
-                });
-                logs.push(...chunkLogs);
-            } catch (e) {
-                log(`Error fetching logs for blocks ${currentBlock}-${chunkEndBlock}: ${e.message}`);
-                // Continue with next chunk instead of failing completely
-            }
-            
-            currentBlock = chunkEndBlock + 1;
+            const chunkEnd = Math.min(currentBlock + chunkSize - 1, toBlock);
+            chunks.push({ start: currentBlock, end: chunkEnd });
+            currentBlock = chunkEnd + 1;
         }
         
-        return logs;
+        const allLogs = [];
+        
+        // Process chunks in parallel batches
+        for (let i = 0; i < chunks.length; i += batchSize) {
+            const batch = chunks.slice(i, i + batchSize);
+            
+            const batchPromises = batch.map(async (chunk, batchIndex) => {
+                try {
+                    const chunkLogs = await provider.getLogs({
+                        ...filter,
+                        fromBlock: chunk.start,
+                        toBlock: chunk.end
+                    });
+                    return chunkLogs;
+                } catch (e) {
+                    log(`Error fetching logs for chunk ${i + batchIndex + 1}/${chunks.length} (blocks ${chunk.start}-${chunk.end}): ${e.message}`);
+                    return []; // Return empty array on error to avoid breaking Promise.all
+                }
+            });
+            
+            // Wait for this batch to complete
+            const batchResults = await Promise.all(batchPromises);
+            
+            // Add batch results to main array incrementally to avoid large memory spikes
+            for (const chunkLogs of batchResults) {
+                if (chunkLogs && chunkLogs.length > 0) {
+                    allLogs.push(...chunkLogs);
+                }
+            }
+            
+            // Force garbage collection between batches if available
+            if (global.gc && i % 4 === 0) {
+                global.gc();
+            }
+            
+            // Small delay between batches to be nice to the RPC endpoint
+            if (i + batchSize < chunks.length) {
+                await new Promise(resolve => setTimeout(resolve, 100));
+            }
+        }
+        
+        return allLogs;
     }
     
     for (const [date, range] of Object.entries(dayRanges)) {
         daily[date] = {};
         const blockRange = range.endBlock - range.startBlock + 1;
         
-        log(`Indexing POL events for ${date} (${blockRange} blocks in chunks of 5000)...`);
+        log(`Indexing POL events for ${date} (${blockRange} blocks in parallel batches of 4x3000)...`);
         
         // Distributed events from Distributor
         try {
@@ -723,6 +783,29 @@ async function indexPolEvents(validators, dayRanges) {
     return { daily };
 }
 
+/**
+ * Computes USD valuations for all validator incentive earnings
+ * 
+ * This function builds USD-denominated valuations by taking the raw BigInt token amounts
+ * from POL events and converting them to USD values. It compiles the conversion process:
+ * 1. Discovers all unique tokens from the daily aggregated data
+ * 2. Fetches token metadata (decimals, names) from smart contracts
+ * 3. Retrieves real-time USD exchange rates from Kyberswap API
+ * 4. Performs BigInt arithmetic to convert token amounts to USD values
+ * 
+ * The function uses BigInt math throughout to maintain precision, only converting
+ * to regular numbers at the final step for USD display values.
+ * 
+ * @param {Object} dailyAgg - Daily aggregated POL data from indexPolEvents
+ * @param {Array<Object>} validators - Array of validator objects (for reference)
+ * @param {Object} dayRanges - Day ranges being analyzed (for iteration)
+ * @returns {Promise<Object>} Object with compiled USD valuations and token rates
+ * @returns {Object} dailyUsd - Structure: date -> proposer -> {vaultsUSD, boostersUSD, totalUSD}
+ *   - vaultsUSD: USD value of BGT vault emissions
+ *   - boostersUSD: USD value of booster token incentives
+ *   - totalUSD: Combined USD value
+ * @returns {Object} perTokenRates - Map of token addresses to USD exchange rates
+ */
 async function computeUsdValuations(dailyAgg, validators, dayRanges) {
     const provider = new ethers.JsonRpcProvider(EL_ETHRPC_URL);
     // collect tokens
@@ -828,12 +911,27 @@ Memory Requirements:
     }
     
     const daysToAnalyze = parseInt(args.find(arg => arg.startsWith('--days='))?.split('=')[1]) || 45;
-    const showFullDetail = process.env.VERBOSE === 'true';
+    const showFullDetail = process.env.VERBOSE === 'true' || process.env.VERBOSE === '1';
     
     
     
     
-    // Day boundary detection
+    /**
+     * Finds exact block numbers for day boundaries (midnight UTC)
+     * 
+     * This function builds a mapping of dates to their corresponding block numbers by
+     * performing binary search against block timestamps. It compiles precise boundaries by:
+     * 1. Estimating initial block numbers using genesis timestamp and block time
+     * 2. Iteratively adjusting block candidates based on timestamp differences
+     * 3. Finding the exact block where timestamp transitions from previous day to target day
+     * 
+     * The compilation process ensures each date maps to the first block of that UTC day,
+     * which is essential for accurate daily analysis ranges.
+     * 
+     * @param {Array<Date>} dates - Array of Date objects to find boundaries for
+     * @returns {Promise<Object>} Compiled mapping of date strings to block numbers
+     * @returns {Object} boundaries - Structure: "YYYY-MM-DD" -> blockNumber
+     */
     async function findDayBoundaries(dates) {
         log('Finding day boundary blocks...');
         let numGuesses = 0;
@@ -934,304 +1032,425 @@ Memory Requirements:
     
     
     
-    // Stake and boost collection
-    async function collectStakeAndBoost(validators, dayBoundaries) {
-        log('Collecting stake and boost data...');
-        const stakeBoostData = {};
-        const progress = createProgressBar(Object.keys(dayBoundaries).length, 'Collecting stake/boost');
-        let completed = 0;
+    /**
+     * Collects stake and boost data for all validators at day boundary blocks
+     * 
+     * This function builds a comprehensive dataset of validator financial positions by
+     * compiling stake and boost amounts at specific points in time. It constructs the data by:
+     * 1. Querying consensus layer for voting power (stake) data at each day boundary
+     * 2. Calling BGT smart contract to get boost amounts for each validator
+     * 3. Calculating POL ratios (boost/stake) for scoring purposes
+     * 4. Aggregating all data into a structured format for daily analysis
+     * 
+     * The compilation process handles address matching (case-insensitive) and provides
+     * fallback values to ensure complete datasets even when some queries fail.
+     * 
+     * @param {Array<Object>} validators - Array of validator objects with proposer addresses
+     * @param {Object} dayBoundaries - Mapping of date strings to block numbers
+     * @returns {Promise<Object>} Compiled stake and boost data structure
+     * @returns {Object} stakeBoostData - Structure: date -> proposer -> {stake, boost, ratio}
+     *   - stake: Validator stake amount in BERA
+     *   - boost: BGT boost amount
+     *   - ratio: Calculated POL ratio (boost/stake)
+     */
+async function collectStakeAndBoost(validators, dayBoundaries) {
+    log('Collecting stake and boost data...');
+    const stakeBoostData = {};
+    const progress = createProgressBar(Object.keys(dayBoundaries).length, 'Collecting stake/boost');
+    let completed = 0;
+    
+    for (const [date, blockNumber] of Object.entries(dayBoundaries)) {
+        stakeBoostData[date] = {};
         
-        for (const [date, blockNumber] of Object.entries(dayBoundaries)) {
-            stakeBoostData[date] = {};
+        try {
+            // Get voting power for all validators at this block
+            const votingPowerData = await getValidatorVotingPower(blockNumber);
             
-            try {
-                // Get voting power for all validators at this block
-                const votingPowerData = await getValidatorVotingPower(blockNumber);
+            if (votingPowerData && process.env.VERBOSE) {
+                log(`Collected voting power data for ${Object.keys(votingPowerData).length} validators at block ${blockNumber}`);
                 
-                if (votingPowerData && process.env.VERBOSE) {
-                    log(`Collected voting power data for ${Object.keys(votingPowerData).length} validators at block ${blockNumber}`);
-                    
-                    // Calculate total stake for debugging
-                    const totalStake = Object.values(votingPowerData).reduce((sum, v) => sum + v.voting_power, 0);
-                    log(`Total stake at block ${blockNumber}: ${totalStake.toLocaleString()} BERA`);
-                } else if (!votingPowerData) {
-                    log(`No voting power data collected for block ${blockNumber}`);
-                }
-                
-                // Get boost data for each validator
-                for (const validator of validators) {
-                    stakeBoostData[date][validator.proposer] = await collectValidatorData(validator, blockNumber, votingPowerData);
-                }
-                
-                // Log collected stake data summary (only in verbose mode)
-                if (process.env.VERBOSE) {
-                    const totalStake = Object.values(stakeBoostData[date]).reduce((sum, data) => sum + data.stake, 0);
-                    log(`Stake data collected for ${date}: total stake = ${totalStake.toLocaleString()} BERA`);
-                }
-            } catch (error) {
-                log(`Error collecting voting power data for ${date}: ${error.message}`);
-                // Set default values for all validators on this date
-                for (const validator of validators) {
-                    stakeBoostData[date][validator.proposer] = {
-                        stake: 0,
-                        boost: 0,
-                        ratio: 0
-                    };
-                }
+                // Calculate total stake for debugging
+                const totalStake = Object.values(votingPowerData).reduce((sum, v) => sum + v.voting_power, 0);
+                log(`Total stake at block ${blockNumber}: ${totalStake.toLocaleString()} BERA`);
+            } else if (!votingPowerData) {
+                log(`No voting power data collected for block ${blockNumber}`);
             }
             
-            completed++;
-            progress.update(completed);
+            // Get boost data for each validator
+            for (const validator of validators) {
+                stakeBoostData[date][validator.proposer] = await collectValidatorData(validator, blockNumber, votingPowerData);
+            }
+            
+                    // Log collected stake data summary (only in verbose mode)
+        if (process.env.VERBOSE) {
+            const totalStake = Object.values(stakeBoostData[date]).reduce((sum, data) => sum + data.stake, 0);
+            log(`Stake data collected for ${date}: total stake = ${totalStake.toLocaleString()} BERA`);
+        }
+        } catch (error) {
+            log(`Error collecting voting power data for ${date}: ${error.message}`);
+            // Set default values for all validators on this date
+            for (const validator of validators) {
+                stakeBoostData[date][validator.proposer] = {
+                    stake: 0,
+                    boost: 0,
+                    ratio: 0
+                };
+            }
         }
         
-        progress.finish();
-        return stakeBoostData;
+        completed++;
+        progress.update(completed);
     }
     
-    // Statistics calculation
-    function calculateStatistics(blockResults, stakeBoostData, dayBoundaries, validators) {
-        const statistics = {};
-        const sortedDates = Object.keys(dayBoundaries).sort();
-        
-        // Only process the analyzed dates (excluding the boundary date)
-        const datesToProcess = sortedDates.slice(0, sortedDates.length - 1);
-        
-     // Calculate per-day statistics
-     for (let i = 0; i < datesToProcess.length; i++) {
-         const date = datesToProcess[i];
-         const nextDate = sortedDates[i + 1];
-         const dayStartBlock = dayBoundaries[date];
-         if (!nextDate) {
-             throw new Error(`No next day block found for date ${date}. This script refuses to guess the end block. If you want to analyze the last day, please provide a complete day range.`);
-         }
-         const dayEndBlock = dayBoundaries[nextDate] - 1;
-         
-         // Find max POL ratio for this day
-         const dayRatios = Object.values(stakeBoostData[date] || {}).map(data => data.ratio);
-         const maxRatio = Math.max(...dayRatios, 0);
-         
-         // Get economic data for this day
-         const dayUsd = global.__DAILY_USD__?.[date] || {};
-         
-         // Calculate max stake-scaled BGT vault returns for normalization
-         const dayStakeScaledBgtReturns = Object.entries(dayUsd).map(([proposer, data]) => {
-             const stake = stakeBoostData[date]?.[proposer]?.stake || 0;
-             const bgtValue = data.vaultsUSD || 0;
-             return stake > 0 ? bgtValue / stake : 0;
-         });
-         const maxStakeScaledBgtReturns = Math.max(...dayStakeScaledBgtReturns, 0);
-         
-         // Calculate max stake-scaled booster incentive returns for normalization
-         const dayStakeScaledBoosterReturns = Object.entries(dayUsd).map(([proposer, data]) => {
-             const stake = stakeBoostData[date]?.[proposer]?.stake || 0;
-             const boosterValue = data.boostersUSD || 0;
-             return stake > 0 ? boosterValue / stake : 0;
-         });
-         const maxStakeScaledBoosterReturns = Math.max(...dayStakeScaledBoosterReturns, 0);
-         
-         statistics[date] = {};
-         
-         // Process each validator's data for this day
-         for (const [proposer, validatorData] of blockResults) {
-             const dayBlocks = validatorData.blocks.filter(blockNum => 
-                 blockNum >= dayStartBlock && blockNum <= dayEndBlock
-             );
-             
-             // Count empty blocks for this day
-             const dayEmptyBlocks = validatorData.emptyBlockNumbers.filter(blockNum => 
-                 blockNum >= dayStartBlock && blockNum <= dayEndBlock
-             ).length;
-             
-             const totalBlocks = dayBlocks.length;
-             const uptimeScore = calculateUptimeScore(dayEmptyBlocks, totalBlocks);
-             const emptyBlockPercentage = calculateEmptyBlockPercentage(dayEmptyBlocks, totalBlocks);
-             
-             const polRatio = stakeBoostData[date]?.[proposer]?.ratio || 0;
-             const polScore = maxRatio > 0 ? (polRatio / maxRatio) * 100 : 0;
-             
-             // Stake-scaled BGT vault scoring
-             const economicData = dayUsd[proposer] || { vaultsUSD: 0, boostersUSD: 0 };
-             const stake = stakeBoostData[date]?.[proposer]?.stake || 0;
-             const stakeScaledBgtValue = stake > 0 ? economicData.vaultsUSD / stake : 0;
-             const stakeScaledBgtScore = maxStakeScaledBgtReturns > 0 ? (stakeScaledBgtValue / maxStakeScaledBgtReturns) * 100 : 0;
-             
-             // Stake-scaled booster incentive scoring
-             const stakeScaledBoosterValue = stake > 0 ? economicData.boostersUSD / stake : 0;
-             const stakeScaledBoosterScore = maxStakeScaledBoosterReturns > 0 ? (stakeScaledBoosterValue / maxStakeScaledBoosterReturns) * 100 : 0;
-             
-             statistics[date][proposer] = {
-                 totalBlocks,
-                 emptyBlocks: dayEmptyBlocks,
-                 emptyBlockPercentage,
-                 uptimeScore,
-                 polScore,
-                 stakeScaledBgtScore,
-                 stakeScaledBoosterScore,
-                 stake: stakeBoostData[date]?.[proposer]?.stake || 0,
-                 boost: stakeBoostData[date]?.[proposer]?.boost || 0,
-                 polRatio,
-                 vaultsUSD: economicData.vaultsUSD,
-                 boostersUSD: economicData.boostersUSD,
-                 stakeScaledBgtValue,
-                 stakeScaledBoosterValue
-             };
-         }
-         
-         // Add validators that weren't found in blockResults (they had 0 blocks)
-         for (const validator of validators) {
-             if (!statistics[date][validator.proposer]) {
-                 const polRatio = stakeBoostData[date]?.[validator.proposer]?.ratio || 0;
-                 const polScore = maxRatio > 0 ? (polRatio / maxRatio) * 100 : 0;
-                 
-                 const economicData = dayUsd[validator.proposer] || { vaultsUSD: 0, boostersUSD: 0 };
-                 const stake = stakeBoostData[date]?.[validator.proposer]?.stake || 0;
-                 const stakeScaledBgtValue = stake > 0 ? economicData.vaultsUSD / stake : 0;
-                 const stakeScaledBgtScore = maxStakeScaledBgtReturns > 0 ? (stakeScaledBgtValue / maxStakeScaledBgtReturns) * 100 : 0;
-                 
-                 const stakeScaledBoosterValue = stake > 0 ? economicData.boostersUSD / stake : 0;
-                 const stakeScaledBoosterScore = maxStakeScaledBoosterReturns > 0 ? (stakeScaledBoosterValue / maxStakeScaledBoosterReturns) * 100 : 0;
-                 
-                 statistics[date][validator.proposer] = {
-                     totalBlocks: 0,
-                     emptyBlocks: 0,
-                     emptyBlockPercentage: 0,
-                     uptimeScore: 100, // Perfect uptime if no blocks
-                     polScore,
-                     stakeScaledBgtScore,
-                     stakeScaledBoosterScore,
-                     stake: stakeBoostData[date]?.[validator.proposer]?.stake || 0,
-                     boost: stakeBoostData[date]?.[validator.proposer]?.boost || 0,
-                     polRatio,
-                     vaultsUSD: economicData.vaultsUSD,
-                     boostersUSD: economicData.boostersUSD,
-                     stakeScaledBgtValue,
-                     stakeScaledBoosterValue
-                 };
-             }
-         }
-     }
-        
-        return statistics;
-    }
+    progress.finish();
+    return stakeBoostData;
+}
+
+    /**
+     * Calculates comprehensive daily statistics and 4-dimensional scores for all validators
+     * 
+     * This function builds the core scoring dataset by compiling multiple data sources
+     * into normalized performance metrics. It constructs the statistics by:
+     * 1. Processing block results to calculate uptime metrics (empty blocks vs total blocks)
+     * 2. Extracting POL ratios from stake/boost data for POL scoring
+     * 3. Computing economic values from USD data for BGT vault and booster scoring
+     * 4. Normalizing each metric against daily maximums to create 0-100% scores
+     * 5. Aggregating all metrics into comprehensive daily statistics per validator
+     * 
+     * The compilation process ensures fair comparison by normalizing each score type
+     * against the best performer for that metric on that day.
+     * 
+     * @param {Map} blockResults - Block scanning results: proposer -> {blocks, emptyBlockNumbers}
+     * @param {Object} stakeBoostData - Stake and boost data: date -> proposer -> {stake, boost, ratio}
+     * @param {Object} dayBoundaries - Day boundary blocks: date -> blockNumber
+     * @param {Array<Object>} validators - Array of validator objects for complete coverage
+     * @returns {Object} Compiled daily statistics structure
+     * @returns {Object} statistics - Structure: date -> proposer -> {all scores and metrics}
+     *   - uptimeScore, polScore, stakeScaledBgtScore, stakeScaledBoosterScore (0-100%)
+     *   - totalBlocks, emptyBlocks, stake, boost, economic values
+     */
+function calculateStatistics(blockResults, stakeBoostData, dayBoundaries, validators) {
+    const statistics = {};
+    const sortedDates = Object.keys(dayBoundaries).sort();
     
-    // Report generation
-    function generateReport(statistics, validators, dayBoundaries) {
-        const sortedDates = Object.keys(dayBoundaries).sort();
-        const validatorMap = new Map(validators.map(v => [v.proposer, v]));
+    // Only process the analyzed dates (excluding the boundary date)
+    const datesToProcess = sortedDates.slice(0, sortedDates.length - 1);
+    
+    // Calculate per-day statistics
+    for (let i = 0; i < datesToProcess.length; i++) {
+        const date = datesToProcess[i];
+        const nextDate = sortedDates[i + 1];
+        const dayStartBlock = dayBoundaries[date];
+        if (!nextDate) {
+            throw new Error(`No next day block found for date ${date}. This script refuses to guess the end block. If you want to analyze the last day, please provide a complete day range.`);
+        }
+        const dayEndBlock = dayBoundaries[nextDate] - 1;
         
-        // Calculate averages for each validator
-        const validatorAverages = {};
+        // Find max POL ratio for this day
+        const dayRatios = Object.values(stakeBoostData[date] || {}).map(data => data.ratio);
+        const maxRatio = Math.max(...dayRatios, 0);
+            
+            // Get economic data for this day
+            const dayUsd = global.__DAILY_USD__?.[date] || {};
+            
+            // Calculate max stake-scaled BGT vault returns for normalization
+            // IMPORTANT: Consider ALL validators, not just those with economic data
+            const dayStakeScaledBgtReturns = validators.map(validator => {
+                const stake = stakeBoostData[date]?.[validator.proposer]?.stake || 0;
+                const bgtValue = dayUsd[validator.proposer]?.vaultsUSD || 0;
+                return stake > 0 ? bgtValue / stake : 0;
+            });
+            const maxStakeScaledBgtReturns = Math.max(...dayStakeScaledBgtReturns, 0);
+            
+            // Calculate max stake-scaled booster incentive returns for normalization
+            // IMPORTANT: Consider ALL validators, not just those with economic data
+            const dayStakeScaledBoosterReturns = validators.map(validator => {
+                const stake = stakeBoostData[date]?.[validator.proposer]?.stake || 0;
+                const boosterValue = dayUsd[validator.proposer]?.boostersUSD || 0;
+                return stake > 0 ? boosterValue / stake : 0;
+            });
+            const maxStakeScaledBoosterReturns = Math.max(...dayStakeScaledBoosterReturns, 0);
         
-         for (const validator of validators) {
-             const uptimeScores = [];
-             const polScores = [];
-             const stakeScaledBgtScores = [];
-             const stakeScaledBoosterScores = [];
-             
-             for (const date of sortedDates) {
-                 const dayStats = statistics[date]?.[validator.proposer];
-                 if (dayStats) {
-                     uptimeScores.push(dayStats.uptimeScore);
-                     polScores.push(dayStats.polScore);
-                     stakeScaledBgtScores.push(dayStats.stakeScaledBgtScore);
-                     stakeScaledBoosterScores.push(dayStats.stakeScaledBoosterScore);
-                 }
-             }
-             
-             const avgUptimeScore = uptimeScores.length > 0 ? 
-             uptimeScores.reduce((sum, score) => sum + score, 0) / uptimeScores.length : 0;
-             const avgPolScore = polScores.length > 0 ? 
-             polScores.reduce((sum, score) => sum + score, 0) / polScores.length : 0;
-             const avgStakeScaledBgtScore = stakeScaledBgtScores.length > 0 ? 
-             stakeScaledBgtScores.reduce((sum, score) => sum + score, 0) / stakeScaledBgtScores.length : 0;
-             const avgStakeScaledBoosterScore = stakeScaledBoosterScores.length > 0 ? 
-             stakeScaledBoosterScores.reduce((sum, score) => sum + score, 0) / stakeScaledBoosterScores.length : 0;
-             
-             // Equal weighting of all 4 metrics
-             const totalScore = (avgUptimeScore + avgPolScore + avgStakeScaledBgtScore + avgStakeScaledBoosterScore) / 4;
+        statistics[date] = {};
+        
+        // Process each validator's data for this day
+        for (const [proposer, validatorData] of blockResults) {
+            const dayBlocks = validatorData.blocks.filter(blockNum => 
+                blockNum >= dayStartBlock && blockNum <= dayEndBlock
+            );
             
-            // Get most recent stake from the last analyzed date (not the boundary date)
-            const lastAnalyzedDate = sortedDates[sortedDates.length - 2]; // -2 because -1 is the boundary date
-            const mostRecentStake = statistics[lastAnalyzedDate]?.[validator.proposer]?.stake || 0;
+            // Count empty blocks for this day
+            const dayEmptyBlocks = validatorData.emptyBlockNumbers.filter(blockNum => 
+                blockNum >= dayStartBlock && blockNum <= dayEndBlock
+            ).length;
             
-             validatorAverages[validator.proposer] = {
-                 name: validator.name,
-                 validatorAddress: validator.proposer,
-                 operatorAddress: validator.operatorAddress,
-                 pubkey: validator.pubkey,
-                 avgUptimeScore,
-                 avgPolScore,
-                 avgStakeScaledBgtScore,
-                 avgStakeScaledBoosterScore,
-                 totalScore,
-                 stake: mostRecentStake,
-                 days: sortedDates.map(date => ({
-                     date,
-                     ...statistics[date]?.[validator.proposer]
-                 }))
-             };
+            const totalBlocks = dayBlocks.length;
+            const uptimeScore = calculateUptimeScore(dayEmptyBlocks, totalBlocks);
+            const emptyBlockPercentage = calculateEmptyBlockPercentage(dayEmptyBlocks, totalBlocks);
+            
+            const polRatio = stakeBoostData[date]?.[proposer]?.ratio || 0;
+            const polScore = maxRatio > 0 ? (polRatio / maxRatio) * 100 : 0;
+                
+                // Stake-scaled BGT vault scoring
+                const economicData = dayUsd[proposer] || { vaultsUSD: 0, boostersUSD: 0 };
+                const stake = stakeBoostData[date]?.[proposer]?.stake || 0;
+                const stakeScaledBgtValue = stake > 0 ? economicData.vaultsUSD / stake : 0;
+                const stakeScaledBgtScore = maxStakeScaledBgtReturns > 0 ? (stakeScaledBgtValue / maxStakeScaledBgtReturns) * 100 : 0;
+                
+                // Stake-scaled booster incentive scoring
+                const stakeScaledBoosterValue = stake > 0 ? economicData.boostersUSD / stake : 0;
+                const stakeScaledBoosterScore = maxStakeScaledBoosterReturns > 0 ? (stakeScaledBoosterValue / maxStakeScaledBoosterReturns) * 100 : 0;
+            
+            statistics[date][proposer] = {
+                totalBlocks,
+                emptyBlocks: dayEmptyBlocks,
+                emptyBlockPercentage,
+                uptimeScore,
+                polScore,
+                    stakeScaledBgtScore,
+                    stakeScaledBoosterScore,
+                stake: stakeBoostData[date]?.[proposer]?.stake || 0,
+                boost: stakeBoostData[date]?.[proposer]?.boost || 0,
+                    polRatio,
+                    vaultsUSD: economicData.vaultsUSD,
+                    boostersUSD: economicData.boostersUSD,
+                    stakeScaledBgtValue,
+                    stakeScaledBoosterValue
+            };
         }
         
-        // Sort by total score
-        const rankings = Object.values(validatorAverages).sort((a, b) => b.totalScore - a.totalScore);
+        // Add validators that weren't found in blockResults (they had 0 blocks)
+        for (const validator of validators) {
+            if (!statistics[date][validator.proposer]) {
+                const polRatio = stakeBoostData[date]?.[validator.proposer]?.ratio || 0;
+                const polScore = maxRatio > 0 ? (polRatio / maxRatio) * 100 : 0;
+                    
+                    const economicData = dayUsd[validator.proposer] || { vaultsUSD: 0, boostersUSD: 0 };
+                    const stake = stakeBoostData[date]?.[validator.proposer]?.stake || 0;
+                    const stakeScaledBgtValue = stake > 0 ? economicData.vaultsUSD / stake : 0;
+                    const stakeScaledBgtScore = maxStakeScaledBgtReturns > 0 ? (stakeScaledBgtValue / maxStakeScaledBgtReturns) * 100 : 0;
+                    
+                    const stakeScaledBoosterValue = stake > 0 ? economicData.boostersUSD / stake : 0;
+                    const stakeScaledBoosterScore = maxStakeScaledBoosterReturns > 0 ? (stakeScaledBoosterValue / maxStakeScaledBoosterReturns) * 100 : 0;
+                
+                statistics[date][validator.proposer] = {
+                    totalBlocks: 0,
+                    emptyBlocks: 0,
+                    emptyBlockPercentage: 0,
+                    uptimeScore: 100, // Perfect uptime if no blocks
+                    polScore,
+                        stakeScaledBgtScore,
+                        stakeScaledBoosterScore,
+                    stake: stakeBoostData[date]?.[validator.proposer]?.stake || 0,
+                    boost: stakeBoostData[date]?.[validator.proposer]?.boost || 0,
+                        polRatio,
+                        vaultsUSD: economicData.vaultsUSD,
+                        boostersUSD: economicData.boostersUSD,
+                        stakeScaledBgtValue,
+                        stakeScaledBoosterValue
+                };
+            }
+        }
+    }
+    
+    return statistics;
+}
+
+    /**
+     * Generates comprehensive validator performance reports with rankings and detailed output
+     * 
+     * This function builds the final performance analysis by compiling daily statistics
+     * into averaged scores and comprehensive rankings. It constructs the report by:
+     * 1. Averaging daily scores across the analysis period for each validator
+     * 2. Calculating total scores using equal weighting of all 4 metrics
+     * 3. Ranking validators by their total performance scores
+     * 4. Generating formatted console output with aligned columns
+     * 5. Creating detailed CSV output with optional daily breakdowns (VERBOSE mode)
+     * 
+     * The compilation process produces both human-readable console rankings and
+     * machine-readable CSV data for further analysis or visualization.
+     * 
+     * @param {Object} statistics - Daily statistics from calculateStatistics
+     * @param {Array<Object>} validators - Array of validator objects with metadata
+     * @param {Object} dayBoundaries - Day boundary blocks for date processing
+     * @returns {Array<Object>} Compiled validator rankings sorted by total score
+     * @returns {Object} rankings - Array of validator objects with averaged scores:
+     *   - name, addresses, pubkey, all averaged scores, stake, daily breakdowns
+     */
+function generateReport(statistics, validators, dayBoundaries) {
+    const sortedDates = Object.keys(dayBoundaries).sort();
+    const validatorMap = new Map(validators.map(v => [v.proposer, v]));
+    
+    // Calculate averages for each validator
+    const validatorAverages = {};
+    
+    for (const validator of validators) {
+        const uptimeScores = [];
+        const polScores = [];
+            const stakeScaledBgtScores = [];
+            const stakeScaledBoosterScores = [];
         
-         // Console output
-         log('\nValidator Rankings:');
-         log('='.repeat(140));
-         log(
-             'Rank'.padEnd(6) +
-             'Validator'.padEnd(30) +
-             'Total'.padEnd(8) +
-             'Uptime'.padEnd(8) +
-             'Boost/Stake'.padEnd(12) +
-             'BGT→Vault/Stake'.padEnd(15) +
-             'Incentive/Stake'.padEnd(16) +
-             'Stake (BERA)'
-         );
-         log('-'.repeat(140));
-         
-         rankings.forEach((validator, index) => {
-             const line = `${(index + 1).toString().padEnd(6)}${validator.name.padEnd(30)}${validator.totalScore.toFixed(2).padEnd(8)}${validator.avgUptimeScore.toFixed(2).padEnd(8)}${validator.avgPolScore.toFixed(2).padEnd(12)}${validator.avgStakeScaledBgtScore.toFixed(2).padEnd(15)}${validator.avgStakeScaledBoosterScore.toFixed(2).padEnd(16)}${validator.stake.toLocaleString()}`;
-             log(line);
-         });
-         log('='.repeat(140));
+        for (const date of sortedDates) {
+            const dayStats = statistics[date]?.[validator.proposer];
+            if (dayStats) {
+                uptimeScores.push(dayStats.uptimeScore);
+                polScores.push(dayStats.polScore);
+                    stakeScaledBgtScores.push(dayStats.stakeScaledBgtScore);
+                    stakeScaledBoosterScores.push(dayStats.stakeScaledBoosterScore);
+            }
+        }
         
-         // CSV output
-         let csvHeader = 'Validator name,Pubkey,Proposer,Operator,Stake,Uptime Score,Boost/Stake Ratio Score,BGT→Vault/Stake Score,Incentive→User/Stake Score,Total Score';
+        const avgUptimeScore = uptimeScores.length > 0 ? 
+            uptimeScores.reduce((sum, score) => sum + score, 0) / uptimeScores.length : 0;
+        const avgPolScore = polScores.length > 0 ? 
+            polScores.reduce((sum, score) => sum + score, 0) / polScores.length : 0;
+            const avgStakeScaledBgtScore = stakeScaledBgtScores.length > 0 ? 
+            stakeScaledBgtScores.reduce((sum, score) => sum + score, 0) / stakeScaledBgtScores.length : 0;
+            const avgStakeScaledBoosterScore = stakeScaledBoosterScores.length > 0 ? 
+            stakeScaledBoosterScores.reduce((sum, score) => sum + score, 0) / stakeScaledBoosterScores.length : 0;
+            
+            // Equal weighting of all 4 metrics
+            const totalScore = (avgUptimeScore + avgPolScore + avgStakeScaledBgtScore + avgStakeScaledBoosterScore) / 4;
         
+        // Get most recent stake from the last analyzed date (not the boundary date)
+        const lastAnalyzedDate = sortedDates[sortedDates.length - 2]; // -2 because -1 is the boundary date
+        const mostRecentStake = statistics[lastAnalyzedDate]?.[validator.proposer]?.stake || 0;
+        
+        validatorAverages[validator.proposer] = {
+            name: validator.name,
+            validatorAddress: validator.proposer,
+            operatorAddress: validator.operatorAddress,
+            pubkey: validator.pubkey,
+            avgUptimeScore,
+            avgPolScore,
+                avgStakeScaledBgtScore,
+                avgStakeScaledBoosterScore,
+            totalScore,
+            stake: mostRecentStake,
+            days: sortedDates.map(date => ({
+                date,
+                ...statistics[date]?.[validator.proposer]
+            }))
+        };
+    }
+    
+    // Sort by total score
+    const rankings = Object.values(validatorAverages).sort((a, b) => b.totalScore - a.totalScore);
+    
+    // Console output
+    log('\nValidator Rankings:');
+        log('='.repeat(140));
+        log(
+            'Rank'.padEnd(6) +
+            'Validator'.padEnd(30) +
+            'Total'.padEnd(8) +
+            'Uptime'.padEnd(8) +
+            'Boost/Stake'.padEnd(12) +
+            'BGT→Vault/Stake'.padEnd(15) +
+            'Incentive/Stake'.padEnd(16) +
+        'Stake (BERA)'
+    );
+        log('-'.repeat(140));
+    
+    rankings.forEach((validator, index) => {
+            const line = `${(index + 1).toString().padEnd(6)}${validator.name.padEnd(30)}${validator.totalScore.toFixed(2).padEnd(8)}${validator.avgUptimeScore.toFixed(2).padEnd(8)}${validator.avgPolScore.toFixed(2).padEnd(12)}${validator.avgStakeScaledBgtScore.toFixed(2).padEnd(15)}${validator.avgStakeScaledBoosterScore.toFixed(2).padEnd(16)}${validator.stake.toLocaleString()}`;
+        log(line);
+    });
+        log('='.repeat(140));
+    
+    // CSV output
+        let csvHeader = 'Validator name,Pubkey,Proposer,Operator,Stake,Uptime Score,Boost/Stake Ratio Score,BGT→Vault/Stake Score,Incentive→User/Stake Score,Total Score';
+    
         if (showFullDetail) {
             // Only add columns for dates that were actually analyzed (exclude boundary date)
             const datesToAnalyze = sortedDates.slice(0, sortedDates.length - 1);
-            datesToAnalyze.forEach(date => {
-                csvHeader += `,${date} BGT boost,${date} stake,${date} empty blocks,${date} total blocks,${date} boost/stake ratio,${date} empty block %,${date} BGT→vault USD,${date} incentive→user USD,${date} total USD`;
-            });
-        }
-        
-         const csvRows = rankings.map(validator => {
-             let row = `${validator.name},${validator.pubkey},${validator.validatorAddress},${validator.operatorAddress},${validator.stake.toFixed(6)},${validator.avgUptimeScore.toFixed(2)},${validator.avgPolScore.toFixed(2)},${validator.avgStakeScaledBgtScore.toFixed(2)},${validator.avgStakeScaledBoosterScore.toFixed(2)},${validator.totalScore.toFixed(2)}`;
             
+            // Group columns by data type across all days
+            datesToAnalyze.forEach(date => csvHeader += `,${date} BGT boost`);
+            datesToAnalyze.forEach(date => csvHeader += `,${date} stake`);
+            datesToAnalyze.forEach(date => csvHeader += `,${date} empty blocks`);
+            datesToAnalyze.forEach(date => csvHeader += `,${date} total blocks`);
+            datesToAnalyze.forEach(date => csvHeader += `,${date} boost/stake ratio`);
+            datesToAnalyze.forEach(date => csvHeader += `,${date} BGT→vault USD`);
+            datesToAnalyze.forEach(date => csvHeader += `,${date} incentive→user USD`);
+        }
+    
+    const csvRows = rankings.map(validator => {
+            let row = `${validator.name},${validator.pubkey},${validator.validatorAddress},${validator.operatorAddress},${validator.stake.toFixed(6)},${validator.avgUptimeScore.toFixed(2)},${validator.avgPolScore.toFixed(2)},${validator.avgStakeScaledBgtScore.toFixed(2)},${validator.avgStakeScaledBoosterScore.toFixed(2)},${validator.totalScore.toFixed(2)}`;
+        
             if (showFullDetail) {
                 // Only include data for dates that were actually analyzed (exclude boundary date)
                 const datesToAnalyze = sortedDates.slice(0, sortedDates.length - 1);
+                
+                // Group data by type across all days (matching header order)
                 datesToAnalyze.forEach(date => {
                     const day = validator.days.find(d => d.date === date);
+                    row += `,${(day?.boost || 0).toFixed(6)}`;
+                });
+                datesToAnalyze.forEach(date => {
+                    const day = validator.days.find(d => d.date === date);
+                    row += `,${(day?.stake || 0).toFixed(6)}`;
+                });
+                datesToAnalyze.forEach(date => {
+                    const day = validator.days.find(d => d.date === date);
+                    row += `,${day?.emptyBlocks || 0}`;
+                });
+                datesToAnalyze.forEach(date => {
+                    const day = validator.days.find(d => d.date === date);
+                    row += `,${day?.totalBlocks || 0}`;
+                });
+                datesToAnalyze.forEach(date => {
+                    const day = validator.days.find(d => d.date === date);
+                    row += `,${(day?.polRatio || 0).toFixed(6)}`;
+                });
+                datesToAnalyze.forEach(date => {
                     const dayUsd = global.__DAILY_USD__?.[date]?.[validator.validatorAddress] || {};
-                    row += `,${(day?.boost || 0).toFixed(6)},${(day?.stake || 0).toFixed(6)},${day?.emptyBlocks || 0},${day?.totalBlocks || 0},${(day?.polRatio || 0).toFixed(6)},${(day?.emptyBlockPercentage || 0).toFixed(2)},${(dayUsd.vaultsUSD || 0).toFixed(6)},${(dayUsd.boostersUSD || 0).toFixed(6)},${(dayUsd.totalUSD || 0).toFixed(6)}`;
+                    row += `,${(dayUsd.vaultsUSD || 0).toFixed(6)}`;
+                });
+                datesToAnalyze.forEach(date => {
+                    const dayUsd = global.__DAILY_USD__?.[date]?.[validator.validatorAddress] || {};
+                    row += `,${(dayUsd.boostersUSD || 0).toFixed(6)}`;
                 });
             }
-            
-            return row;
-        });
         
-        const csvContent = [csvHeader, ...csvRows].join('\n');
-        const reportFile = `validator_stats.csv`;
-        fs.writeFileSync(reportFile, csvContent);
-        log(`\nDetailed report saved to ${reportFile}`);
-        
-        return rankings;
-    }
+        return row;
+    });
     
-    // Generate summary CSV with validators vs incentive tokens matrix
+    const csvContent = [csvHeader, ...csvRows].join('\n');
+    const reportFile = `validator_stats.csv`;
+    fs.writeFileSync(reportFile, csvContent);
+    log(`\nDetailed report saved to ${reportFile}`);
+    
+    return rankings;
+}
+
+    /**
+     * Generates incentive token distribution matrix showing validators vs tokens earned
+     * 
+     * This function builds a comprehensive matrix view by compiling token earnings
+     * across all validators and time periods. It constructs the matrix by:
+     * 1. Discovering all unique tokens from POL event data across all days
+     * 2. Aggregating token amounts per validator using BigInt arithmetic for precision
+     * 3. Converting BigInt amounts to human-readable token quantities
+     * 4. Creating a matrix with validators as rows and tokens as columns
+     * 5. Adding exchange rate headers and total columns/rows for comprehensive view
+     * 
+     * The compilation process produces a detailed CSV matrix that shows exactly
+     * which validators earned which tokens and in what quantities, with USD rates
+     * for easy economic interpretation.
+     * 
+     * @param {Object} statistics - Daily statistics (for validator iteration)
+     * @param {Array<Object>} validators - Array of validator objects with metadata
+     * @param {Object} dayBoundaries - Day boundaries for date processing
+     * @param {Object} polDaily - Raw POL event data with BigInt token amounts
+     * @param {Map} tokenNameCache - Cached token names for display
+     * @returns {string} Compiled CSV filename that was written
+     * @returns {File} validator_incentive_summary.csv - Matrix with:
+     *   - Row 1: Token names and addresses as column headers
+     *   - Row 2: USD exchange rates per token
+     *   - Data rows: Token amounts earned by each validator
+     *   - Totals: Row and column summation
+     */
     function generateSummaryCSV(statistics, validators, dayBoundaries, polDaily, tokenNameCache) {
         const sortedDates = Object.keys(dayBoundaries).sort();
         const datesToAnalyze = sortedDates.slice(0, sortedDates.length - 1);
@@ -1287,48 +1506,48 @@ Memory Requirements:
         const csvRows = [];
         const tokenTotals = {};
         tokenList.forEach(token => tokenTotals[token] = 0);
-        
-        for (const validator of validators) {
+    
+    for (const validator of validators) {
             let row = `${validator.name},${validator.proposer},${validator.operatorAddress}`;
             let validatorTotal = 0;
             
             tokenList.forEach(token => {
                 let tokenAmount = 0;
                 try {
-                
-                 if (token === 'BGT_Vaults') {
-                     // Sum up vault BGT across all days using BigInt math
-                     let totalBgtBI = 0n;
-                     for (const date of datesToAnalyze) {
-                         const dayData = polDaily[date]?.[validator.proposer];
-                         if (dayData?.vaultBgtBI) {
-                             totalBgtBI += dayData.vaultBgtBI;
-                         }
-                     }
-                     // Convert to number safely using string conversion
-                     tokenAmount = parseFloat(totalBgtBI.toString()) / 1e18;
-                 } else {
-                     // Sum up booster tokens across all days using BigInt math
-                     let totalTokenBI = 0n;
-                     const decimals = Number(tokenDecimalsCache.get(token) || 18);
-                     for (const date of datesToAnalyze) {
-                         const dayData = polDaily[date]?.[validator.proposer];
-                         if (dayData?.boosters?.[token]) {
-                             const tokenValue = dayData.boosters[token];
-                             // Ensure we're working with BigInt
-                             if (typeof tokenValue === 'bigint') {
-                                 totalTokenBI += tokenValue;
-                             } else {
-                                 log(`Warning: Non-BigInt token value for ${token}: ${typeof tokenValue} = ${tokenValue}`);
-                             }
-                         }
-                     }
-                     // Convert to number safely using string conversion
-                     const totalTokenStr = totalTokenBI.toString();
-                     const divisor = Math.pow(10, decimals);
-                     const parsedFloat = parseFloat(totalTokenStr);
-                     tokenAmount = parsedFloat / divisor;
-                 }
+                    
+                    if (token === 'BGT_Vaults') {
+                        // Sum up vault BGT across all days using BigInt math
+                        let totalBgtBI = 0n;
+                        for (const date of datesToAnalyze) {
+                            const dayData = polDaily[date]?.[validator.proposer];
+                            if (dayData?.vaultBgtBI) {
+                                totalBgtBI += dayData.vaultBgtBI;
+                            }
+                        }
+                        // Convert to number safely using string conversion
+                        tokenAmount = parseFloat(totalBgtBI.toString()) / 1e18;
+                    } else {
+                        // Sum up booster tokens across all days using BigInt math
+                        let totalTokenBI = 0n;
+                        const decimals = Number(tokenDecimalsCache.get(token) || 18);
+                        for (const date of datesToAnalyze) {
+                            const dayData = polDaily[date]?.[validator.proposer];
+                            if (dayData?.boosters?.[token]) {
+                                const tokenValue = dayData.boosters[token];
+                                // Ensure we're working with BigInt
+                                if (typeof tokenValue === 'bigint') {
+                                    totalTokenBI += tokenValue;
+                                } else {
+                                    log(`Warning: Non-BigInt token value for ${token}: ${typeof tokenValue} = ${tokenValue}`);
+                                }
+                            }
+                        }
+                        // Convert to number safely using string conversion
+                        const totalTokenStr = totalTokenBI.toString();
+                        const divisor = Math.pow(10, decimals);
+                        const parsedFloat = parseFloat(totalTokenStr);
+                        tokenAmount = parsedFloat / divisor;
+                    }
                 } catch (error) {
                     log(`Error processing token ${token} for validator ${validator.name}: ${error.message}`);
                     tokenAmount = 0; // Set to 0 on error
@@ -1361,63 +1580,82 @@ Memory Requirements:
         return summaryFile;
     }
     
-    // Main execution
-    async function main() {
-        try {
-            
+    /**
+     * Main execution function that orchestrates the complete validator analysis
+     * 
+     * This function builds the comprehensive validator performance analysis by compiling
+     * data from multiple sources and generating detailed reports. It constructs the analysis by:
+     * 1. Setting up date ranges and loading validator configuration
+     * 2. Finding precise day boundaries for accurate daily analysis
+     * 3. Scanning all blocks to identify proposers and empty blocks
+     * 4. Collecting stake and boost data at day boundaries
+     * 5. Indexing POL events to capture incentive flows
+     * 6. Converting all amounts to USD using real-time exchange rates
+     * 7. Calculating 4-dimensional scores and generating rankings
+     * 8. Producing both detailed statistics and incentive matrix reports
+     * 
+     * The compilation process handles large datasets with chunked processing,
+     * parallel execution, and BigInt arithmetic to ensure accuracy and performance.
+     * 
+     * @returns {Promise<void>} Completes analysis and writes output files
+     * @throws {Error} If critical data cannot be obtained or processed
+     */
+async function main() {
+    try {
+        
             
             // Analysis mode
-            log(`Analyzing ${daysToAnalyze} days of validator performance...`);
+        log(`Analyzing ${daysToAnalyze} days of validator performance...`);
+        
+        // Generate dates to analyze (complete days, starting from yesterday)
+        // Also include today to find the boundary for the last analyzed day's end block
+        const today = new Date();
+        const dates = Array.from({ length: daysToAnalyze + 1 }, (_, i) => {
+            const date = new Date(today);
+            date.setDate(date.getDate() - (daysToAnalyze - i)); // i=0 -> first day to analyze, i=daysToAnalyze -> today
+            return date;
+        });
+        
+        // Load validators
+        const validators = loadValidators();
+        if (validators.length === 0) {
+            throw new Error('No validators loaded from genesis_validators.csv');
+        }
+        
+        const validatorMap = new Map(validators.map(v => [v.proposer, v]));
+        
+        // Find day boundaries
+        const dayBoundaries = await findDayBoundaries(dates);
+        
+        // Calculate block ranges for each day
+        const sortedDates = Object.keys(dayBoundaries).sort();
+        const dayRanges = {};
+        
+        // Only analyze the first N days (excluding today which is used for boundary calculation)
+        const datesToAnalyze = sortedDates.slice(0, daysToAnalyze);
+        
+        for (let i = 0; i < datesToAnalyze.length; i++) {
+            const currentDate = datesToAnalyze[i];
+            const nextDate = sortedDates[i + 1];
             
-            // Generate dates to analyze (complete days, starting from yesterday)
-            // Also include today to find the boundary for the last analyzed day's end block
-            const today = new Date();
-            const dates = Array.from({ length: daysToAnalyze + 1 }, (_, i) => {
-                const date = new Date(today);
-                date.setDate(date.getDate() - (daysToAnalyze - i)); // i=0 -> first day to analyze, i=daysToAnalyze -> today
-                return date;
-            });
-            
-            // Load validators
-            const validators = loadValidators();
-            if (validators.length === 0) {
-                throw new Error('No validators loaded from genesis_validators.csv');
+            const dayStartBlock = dayBoundaries[currentDate];
+            if (!nextDate) {
+                throw new Error(`No next day block found for date ${currentDate}. This script refuses to guess the end block. If you want to analyze the last day, please provide a complete day range.`);
             }
+            const dayEndBlock = dayBoundaries[nextDate] - 1;
             
-            const validatorMap = new Map(validators.map(v => [v.proposer, v]));
-            
-            // Find day boundaries
-            const dayBoundaries = await findDayBoundaries(dates);
-            
-            // Calculate block ranges for each day
-            const sortedDates = Object.keys(dayBoundaries).sort();
-            const dayRanges = {};
-            
-            // Only analyze the first N days (excluding today which is used for boundary calculation)
-            const datesToAnalyze = sortedDates.slice(0, daysToAnalyze);
-            
-            for (let i = 0; i < datesToAnalyze.length; i++) {
-                const currentDate = datesToAnalyze[i];
-                const nextDate = sortedDates[i + 1];
-                
-                const dayStartBlock = dayBoundaries[currentDate];
-                if (!nextDate) {
-                    throw new Error(`No next day block found for date ${currentDate}. This script refuses to guess the end block. If you want to analyze the last day, please provide a complete day range.`);
-                }
-                const dayEndBlock = dayBoundaries[nextDate] - 1;
-                
-                dayRanges[currentDate] = {
-                    startBlock: dayStartBlock,
-                    endBlock: dayEndBlock
-                };
-            }
-            
-            // Scan blocks for proposers and empty blocks
-            log('\nScanning blocks for proposers and empty blocks...');
-            
-            // Calculate total blocks to scan for progress bar
-            const totalBlocksToScan = Object.values(dayRanges).reduce((sum, range) => 
-                sum + (range.endBlock - range.startBlock + 1), 0
+            dayRanges[currentDate] = {
+                startBlock: dayStartBlock,
+                endBlock: dayEndBlock
+            };
+        }
+        
+        // Scan blocks for proposers and empty blocks
+        log('\nScanning blocks for proposers and empty blocks...');
+        
+        // Calculate total blocks to scan for progress bar
+        const totalBlocksToScan = Object.values(dayRanges).reduce((sum, range) => 
+            sum + (range.endBlock - range.startBlock + 1), 0
         );
         
         // Scan all day ranges
@@ -1462,7 +1700,7 @@ Memory Requirements:
         const { dailyUsd, perTokenRates } = await computeUsdValuations(polDaily, validators, dayRanges);
         // Expose for CSV generation
         global.__DAILY_USD__ = dailyUsd;
-        
+
         // Calculate statistics (unchanged scoring)
         log('\nCalculating statistics...');
         const statistics = calculateStatistics(blockResults, stakeBoostData, dayBoundaries, validators);
@@ -1480,9 +1718,9 @@ Memory Requirements:
             log(`Stack trace: ${error.stack}`);
             throw error;
         }
-        
+
         // Verbose per-day USD output per validator (if FULL_DETAIL)
-        if (process.env.VERBOSE === 'true') {
+        if (process.env.VERBOSE === 'true' || process.env.VERBOSE === '1') {
             const datesToAnalyze = Object.keys(dayRanges).sort();
             for (const v of rankings) {
                 log(`\nEconomic output (USD) for ${v.name} (${v.validatorAddress})`);
@@ -1494,7 +1732,7 @@ Memory Requirements:
                 });
             }
         }
-        
+
         // Summary: average total economic value per validator across days
         const datesAnalyzed = Object.keys(dayRanges).length;
         log('\nAverage daily economic value (USD) across analyzed days:');
@@ -1507,7 +1745,7 @@ Memory Requirements:
             const avg = datesAnalyzed > 0 ? sum / datesAnalyzed : 0;
             log(`${v.name}: $${avg.toFixed(6)} per day`);
         }
-        
+
         // Print token exchange rates summary
         log('\nToken USD exchange rates used:');
         Object.entries(perTokenRates).forEach(([token, rate]) => {
@@ -1516,7 +1754,8 @@ Memory Requirements:
         
     } catch (error) {
         log('Fatal error: ' + error.message);
-        process.exit(1);
+        // Let Node.js exit naturally instead of forcing exit
+        throw error;
     }
 }
 
