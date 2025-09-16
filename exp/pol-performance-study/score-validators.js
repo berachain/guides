@@ -12,12 +12,17 @@ const HONEY_TOKEN = process.env.HONEY_TOKEN || '0xFCBD14DC51f0A4d49d5E53C2E0950e
 const DISTRIBUTOR_ADDRESS = process.env.DISTRIBUTOR_ADDRESS || '0xD2f19a79b026Fb636A7c300bF5947df113940761';
 
 // Configuration constants
-const CHUNK_SIZE = 200;
+const CHUNK_SIZE = 200; // Block scanning chunk size
 const BLOCKS_PER_DAY = 43200; // Approximate, used for binary search estimates
 const EMPTY_BLOCK_THRESHOLD = 1; // A block is considered empty if it has <= 1 transactions (i.e., 0 or 1)
 const GENESIS_TIMESTAMP = 1737382451; // 2025-01-20 14:14:11 UTC
 const BGT_CONTRACT = '0x656b95E550C07a9ffe548bd4085c72418Ceb1dba';
 const KYBER_ROUTE_URL = 'https://gateway.mainnet.berachain.com/proxy/kyberswap/berachain/api/v1/routes';
+
+// Concurrency and performance constants
+const LOG_CHUNK_SIZE = 3000; // Size of each log fetching chunk in blocks
+const LOG_BATCH_SIZE = 8; // Number of log chunks to process in parallel
+const MAX_WORKER_COUNT = Math.max(1, os.cpus().length - 1); // Use most CPU cores, leave one free
 
 // Event signatures
 const DISTRIBUTED_SIG = 'Distributed(bytes,uint64,address,uint256)';
@@ -561,7 +566,7 @@ async function scanBlocksParallel(startBlock, endBlock, validators, validatorMap
     }
     
     const results = [];
-    const workerCount = Math.max(1, os.cpus().length - 1); // Use most CPU cores, leave one free
+    const workerCount = MAX_WORKER_COUNT;
     
     // Process chunks in batches to avoid overwhelming the RPC endpoints
     for (let i = 0; i < chunks.length; i += workerCount) {
@@ -671,11 +676,11 @@ async function indexPolEvents(validators, dayRanges) {
      * @param {number} fromBlock - Starting block number (inclusive)
      * @param {number} toBlock - Ending block number (inclusive)
      * @param {Object} filter - Ethers log filter object with topics and addresses
-     * @param {number} chunkSize - Size of each chunk in blocks (default: 5000)
-     * @param {number} batchSize - Number of chunks to process in parallel (default: 8)
+     * @param {number} chunkSize - Size of each chunk in blocks (default: 3000)
+     * @param {number} batchSize - Number of chunks to process in parallel (default: 4)
      * @returns {Promise<Array>} Compiled array of all log entries from the range
      */
-    async function getLogsChunked(fromBlock, toBlock, filter, chunkSize = 3000, batchSize = 4) {
+    async function getLogsChunked(fromBlock, toBlock, filter, chunkSize = LOG_CHUNK_SIZE, batchSize = LOG_BATCH_SIZE) {
         const totalBlocks = toBlock - fromBlock + 1;
         
         // Create chunk ranges
@@ -736,7 +741,7 @@ async function indexPolEvents(validators, dayRanges) {
         daily[date] = {};
         const blockRange = range.endBlock - range.startBlock + 1;
         
-        log(`Indexing POL events for ${date} (${blockRange} blocks in parallel batches of 4x3000)...`);
+        log(`Indexing POL events for ${date} (${blockRange} blocks in parallel batches of ${LOG_BATCH_SIZE}x${LOG_CHUNK_SIZE})...`);
         
         // Distributed events from Distributor
         try {
