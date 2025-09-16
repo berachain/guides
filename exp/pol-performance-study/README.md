@@ -1,134 +1,76 @@
 # Validator POL Performance Study
 
-A comprehensive analysis tool for Berachain validator performance that evaluates validators across multiple dimensions including uptime, Proof of Liquidity (POL) participation, and economic value generation.
+This script provides a comprehensive analysis of Berachain validator performance by examining both technical reliability and economic contribution to the Proof of Liquidity (POL) ecosystem. Rather than focusing solely on uptime metrics, it evaluates validators across four key dimensions to provide a holistic view of their value to the network.
 
-## What This Script Does
+## How It Works
 
-The `score-validators.js` script analyzes Berachain validator performance by:
+The analysis begins by scanning blockchain data across a specified time period, typically ranging from a single day for quick testing up to 45 days for comprehensive evaluation. The script identifies day boundaries by finding the exact blocks where each UTC day begins, then systematically processes all blocks within those ranges.
 
-1. **Scanning blockchain data** across specified day ranges to track validator behavior
-2. **Indexing POL events** to capture BGT vault emissions and booster token incentives
-3. **Calculating multi-dimensional scores** based on technical and economic performance
-4. **Generating detailed reports** with rankings and incentive distribution matrices
+For each day, the script collects three types of data. First, it scans every block to identify which validator proposed it and whether the block was empty (containing only the mandatory coinbase transaction). Second, it queries the consensus layer to obtain each validator's stake amount and the execution layer to fetch their BGT boost amounts from smart contracts. Third, it indexes POL events from the blockchain to capture BGT vault emissions and booster token incentives distributed to validators.
 
-## 4-Metric Scoring System
+The economic analysis involves fetching real-time token prices from the Kyberswap API, with special handling for HONEY (which maintains a 1:1 USD peg) and BGT (which is priced via WBERA since they're convertible 1:1). All token amounts are processed using BigInt arithmetic to handle the large numbers involved in blockchain calculations without losing precision.
 
-The script calculates validator scores using four equally-weighted metrics (25% each):
+## Scoring Methodology
 
-### 1. Uptime Score (0-100%)
-- **Formula**: `100 - (empty_blocks / total_blocks * 100)`
-- **What it measures**: How consistently validators produce non-empty blocks
-- **Perfect score**: 100% (no empty blocks)
-- **Calculation**: Inverted empty block percentage - fewer empty blocks = higher score
+The script calculates four distinct scores for each validator, each normalized to a 0-100% scale where 100% represents the best performer for that metric on that day.
 
-### 2. POL Score (0-100%)  
-- **Formula**: `(validator_pol_ratio / max_daily_pol_ratio) * 100`
-- **What it measures**: Validator's BGT boost relative to their stake, compared to the best performer
-- **Perfect score**: 100% (highest boost/stake ratio of the day)
-- **Calculation**: Normalized against the day's maximum POL ratio
+**Uptime Score** measures technical reliability using the formula:
+```
+Uptime Score = 100 - (empty_blocks / total_blocks × 100)
+```
+This inverted empty block percentage rewards validators who consistently include transactions in their blocks rather than producing empty ones.
 
-### 3. Economic Score (0-100%)
-- **Formula**: `(validator_economic_value / max_daily_economic_value) * 100`
-- **What it measures**: Total USD value generated from vault emissions and booster incentives
-- **Perfect score**: 100% (highest absolute economic value of the day)
-- **Calculation**: Normalized against the day's maximum economic output
+**POL Score** evaluates participation in the Proof of Liquidity system:
+```
+POL Score = (validator_boost_stake_ratio / daily_max_boost_stake_ratio) × 100
+```
+This measures how effectively a validator leverages BGT boost relative to their stake, normalized against the day's best performer.
 
-### 4. Stake-Scaled Economic Score (0-100%)
-- **Formula**: `(validator_economic_value_per_stake / max_daily_economic_per_stake) * 100`
-- **What it measures**: Economic efficiency - how much value generated per unit of stake
-- **Perfect score**: 100% (highest economic value per stake ratio of the day)
-- **Calculation**: Economic value divided by stake, normalized against day's maximum
+**Economic Score** captures absolute value generation:
+```
+Economic Score = (validator_total_usd / daily_max_total_usd) × 100
+```
+This reflects the total USD value a validator generates through vault emissions and booster incentives, regardless of their stake size.
 
-### Total Score
-- **Formula**: `(uptime_score + pol_score + economic_score + stake_scaled_economic_score) / 4`
-- **Range**: 0-100%
-- **Interpretation**: Higher scores indicate better overall validator performance
+**Stake-Scaled Economic Score** measures efficiency:
+```
+Stake-Scaled Economic Score = (validator_usd_per_stake / daily_max_usd_per_stake) × 100
+```
+This rewards validators who generate significant economic value relative to their stake size, identifying efficient operators.
 
-## Data Sources
-
-### Blockchain Events
-- **Distributed Events**: BGT emissions from vaults to validators
-- **BGTBoosterIncentivesProcessed Events**: Booster token incentives to validators
-- **Block Proposer Data**: From consensus layer to track which validator proposed each block
-- **Validator Voting Power**: Stake amounts from consensus layer
-- **BGT Boost Data**: From BGT smart contract `boostees()` function
-
-### External APIs
-- **Kyberswap API**: For token USD exchange rates
-- **Special Handling**: 
-  - HONEY token: 1:1 USD peg
-  - BGT token: Priced via WBERA substitute (1:1 convertible)
-
-## Output Files
-
-### 1. `validator_stats.csv`
-Detailed validator rankings with:
-- Basic info (name, addresses, pubkey)
-- Current stake amount
-- All 4 individual scores and total score
-- Optional: Daily breakdown with full metrics (if `VERBOSE=true`)
-
-### 2. `validator_incentive_summary.csv`
-Validator vs token incentive matrix with:
-- **Rows**: All validators
-- **Columns**: All discovered incentive tokens (BGT vaults + booster tokens)
-- **Header Row 1**: Token names and addresses
-- **Header Row 2**: USD exchange rates per token
-- **Data**: Token amounts earned by each validator
-- **Totals**: Row and column totals
-
-## Usage Examples
-
-```bash
-# Quick test - analyze yesterday only
-node score-validators.js --days=1
-
-# Weekly analysis
-node score-validators.js --days=7
-
-# Full analysis (default)
-node score-validators.js --days=45
-
-# Verbose output with daily breakdowns
-VERBOSE=true node score-validators.js --days=7
-
-# High memory usage for large analyses
-node --max-old-space-size=8192 score-validators.js --days=45
+The final score combines all four metrics with equal weighting:
+```
+Total Score = (Uptime + POL + Economic + Stake-Scaled Economic) / 4
 ```
 
-## Key Features
+## Analysis Process
 
-### Performance Optimizations
-- **Parallel block scanning**: Uses multiple CPU cores for faster processing
-- **Chunked log fetching**: Prevents memory crashes on large block ranges
-- **BigInt arithmetic**: Handles large token amounts without precision loss
-- **Caching**: Token decimals, names, and USD rates are cached
-- **Progress bars**: Visual feedback for long-running operations
+The script follows a systematic six-step process:
 
-### Error Handling
-- **Automatic retries**: Network failures are retried with exponential backoff
-- **Graceful degradation**: Individual failures don't crash the entire analysis
-- **Memory management**: Chunked processing prevents JavaScript memory limits
+**Step 1: Day Boundary Detection**
+The script calculates exact block numbers for midnight UTC on each day being analyzed, using binary search against block timestamps to find precise boundaries.
 
-### Economic Analysis
-- **Real-time pricing**: Uses Kyberswap for current token values
-- **Multi-token support**: Handles 19+ different incentive tokens
-- **Stake normalization**: Accounts for validator stake size in efficiency metrics
-- **USD conversion**: All values normalized to USD for comparison
+**Step 2: Block Scanning**
+Every block in the analysis period is scanned in parallel to identify the proposer and determine if the block is empty. This data feeds into the uptime calculations.
 
-## Requirements
+**Step 3: Stake and Boost Collection**
+For each day boundary, the script queries the consensus layer for validator stake amounts and the BGT smart contract for boost amounts, providing the data needed for POL scoring.
 
-- **Node.js**: ES modules support
-- **Foundry**: `cast` command for smart contract calls
-- **RPC Access**: Berachain execution and consensus layer endpoints
-- **CSV File**: `genesis_validators.csv` with validator information
+**Step 4: POL Event Indexing**
+The script scans for `Distributed` events (BGT vault emissions) and `BGTBoosterIncentivesProcessed` events (booster token incentives) to capture the economic value flowing to each validator.
 
-## Environment Variables
+**Step 5: USD Valuation**
+Token amounts are converted to USD values using real-time exchange rates from Kyberswap, with the economic calculations performed using BigInt arithmetic to maintain precision.
 
-- `EL_ETHRPC_URL`: Execution layer RPC endpoint
-- `CL_ETHRPC_URL`: Consensus layer RPC endpoint  
-- `VERBOSE`: Set to 'true' for detailed logging
-- `HONEY_TOKEN`: HONEY token contract address (optional)
-- `DISTRIBUTOR_ADDRESS`: Distributor contract address (optional)
+**Step 6: Scoring and Reporting**
+Daily metrics are calculated and averaged across the analysis period, then validators are ranked by their total scores and detailed reports are generated.
 
-This tool provides a comprehensive view of validator performance that goes beyond simple uptime metrics to include economic contribution and efficiency measures, giving a more complete picture of validator value to the network.
+## Output
+
+The analysis produces two complementary reports. The `validator_stats.csv` file contains comprehensive rankings with each validator's scores across all four dimensions, current stake amounts, and optional daily breakdowns when verbose mode is enabled.
+
+The `validator_incentive_summary.csv` file presents a matrix view showing exactly which tokens each validator earned and in what quantities. This matrix includes a second header row displaying the USD exchange rate for each token, making it easy to understand both the token distribution and economic impact.
+
+## Usage
+
+Run the script with `node score-validators.js --days=N` where N is the number of days to analyze. Use `--days=1` for quick testing, `--days=7` for weekly analysis, or the default 45 days for comprehensive evaluation. Set `VERBOSE=true` for detailed daily breakdowns and additional logging.
