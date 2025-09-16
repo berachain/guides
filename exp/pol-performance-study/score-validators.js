@@ -203,31 +203,6 @@ function calculatePolRatio(boost, stake) {
 
 // RPC helper functions
 
-/**
- * Makes a JSON-RPC call with automatic retry logic
- * @param {string} url - RPC endpoint URL
- * @param {string} method - RPC method name
- * @param {Array} params - RPC method parameters
- * @returns {Promise<any>} RPC result
- * @throws {Error} If RPC call fails after retries
- */
-async function jsonRpcCall(url, method, params = []) {
-    return withRetry(async () => {
-        const response = await fetch(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                jsonrpc: '2.0',
-                id: 1,
-                method,
-                params
-            })
-        });
-        const data = await response.json();
-        if (data.error) throw new Error(data.error.message);
-        return data.result;
-    });
-}
 
 /**
  * Gets the decimal places for an ERC20 token (cached)
@@ -342,16 +317,6 @@ async function getBlockProposer(blockHeight) {
     });
 }
 
-/**
- * Gets the timestamp for a specific block number from execution layer
- * @param {number} blockNumber - Block number to query
- * @returns {Promise<number>} Block timestamp
- */
-async function getBlockTimestamp(blockNumber) {
-    const provider = new ethers.JsonRpcProvider(EL_ETHRPC_URL);
-    const block = await provider.getBlock(blockNumber);
-    return block.timestamp;
-}
 
 /**
  * Gets validator voting power data from consensus layer at a specific block height
@@ -666,9 +631,8 @@ function buildPubkeyTopicSet(validators) {
  * Scans for Distributed and BGTBoosterIncentivesProcessed events across specified day ranges
  * @param {Array<Object>} validators - Array of validator objects
  * @param {Object} dayRanges - Object mapping dates to {startBlock, endBlock} ranges
- * @returns {Promise<Object>} Object with daily aggregated data and discovered tokens
+ * @returns {Promise<Object>} Object with daily aggregated data
  * @returns {Object} daily - Daily event data: date -> proposer -> {vaultBgtBI, boosters}
- * @returns {Set} discoveredTokens - Set of unique token addresses found in events
  */
 async function indexPolEvents(validators, dayRanges) {
     const provider = new ethers.JsonRpcProvider(EL_ETHRPC_URL);
@@ -681,7 +645,6 @@ async function indexPolEvents(validators, dayRanges) {
     
     const { set: pubTopicSet, topicToProposer } = buildPubkeyTopicSet(validators);
     const daily = {}; // date -> proposer -> { vaultBgtBI: bigint, boosters: { token: bigint } }
-    const discoveredTokens = new Set();
     
     // Helper function to chunk log requests to prevent memory issues
     async function getLogsChunked(fromBlock, toBlock, filter, chunkSize = 5000) {
@@ -750,17 +713,14 @@ async function indexPolEvents(validators, dayRanges) {
                 const amount = BigInt(parsed.args.amount.toString());
                 if (!daily[date][proposer]) daily[date][proposer] = { vaultBgtBI: 0n, boosters: {} };
                 daily[date][proposer].boosters[token] = (daily[date][proposer].boosters[token] || 0n) + amount;
-                discoveredTokens.add(token);
             }
         } catch (e) {
             log(`Error indexing Booster events for ${date}: ${e.message}`);
         }
     }
     
-    // Always include BGT token for valuation of vault emissions
-    discoveredTokens.add(BGT_CONTRACT.toLowerCase());
     
-    return { daily, discoveredTokens };
+    return { daily };
 }
 
 async function computeUsdValuations(dailyAgg, validators, dayRanges) {
@@ -1053,17 +1013,21 @@ Memory Requirements:
          // Get economic data for this day
          const dayUsd = global.__DAILY_USD__?.[date] || {};
          
-         // Calculate max economic returns for normalization
-         const dayEconomicReturns = Object.values(dayUsd).map(data => data.totalUSD || 0);
-         const maxEconomicReturns = Math.max(...dayEconomicReturns, 0);
-         
-         // Calculate max stake-scaled economic returns for normalization
-         const dayStakeScaledReturns = Object.entries(dayUsd).map(([proposer, data]) => {
+         // Calculate max stake-scaled BGT vault returns for normalization
+         const dayStakeScaledBgtReturns = Object.entries(dayUsd).map(([proposer, data]) => {
              const stake = stakeBoostData[date]?.[proposer]?.stake || 0;
-             const economicValue = data.totalUSD || 0;
-             return stake > 0 ? economicValue / stake : 0;
+             const bgtValue = data.vaultsUSD || 0;
+             return stake > 0 ? bgtValue / stake : 0;
          });
-         const maxStakeScaledReturns = Math.max(...dayStakeScaledReturns, 0);
+         const maxStakeScaledBgtReturns = Math.max(...dayStakeScaledBgtReturns, 0);
+         
+         // Calculate max stake-scaled booster incentive returns for normalization
+         const dayStakeScaledBoosterReturns = Object.entries(dayUsd).map(([proposer, data]) => {
+             const stake = stakeBoostData[date]?.[proposer]?.stake || 0;
+             const boosterValue = data.boostersUSD || 0;
+             return stake > 0 ? boosterValue / stake : 0;
+         });
+         const maxStakeScaledBoosterReturns = Math.max(...dayStakeScaledBoosterReturns, 0);
          
          statistics[date] = {};
          
@@ -1085,14 +1049,15 @@ Memory Requirements:
              const polRatio = stakeBoostData[date]?.[proposer]?.ratio || 0;
              const polScore = maxRatio > 0 ? (polRatio / maxRatio) * 100 : 0;
              
-             // Economic scoring
-             const economicData = dayUsd[proposer] || { totalUSD: 0 };
-             const economicScore = maxEconomicReturns > 0 ? (economicData.totalUSD / maxEconomicReturns) * 100 : 0;
-             
-             // Stake-scaled economic scoring
+             // Stake-scaled BGT vault scoring
+             const economicData = dayUsd[proposer] || { vaultsUSD: 0, boostersUSD: 0 };
              const stake = stakeBoostData[date]?.[proposer]?.stake || 0;
-             const stakeScaledEconomicValue = stake > 0 ? economicData.totalUSD / stake : 0;
-             const stakeScaledEconomicScore = maxStakeScaledReturns > 0 ? (stakeScaledEconomicValue / maxStakeScaledReturns) * 100 : 0;
+             const stakeScaledBgtValue = stake > 0 ? economicData.vaultsUSD / stake : 0;
+             const stakeScaledBgtScore = maxStakeScaledBgtReturns > 0 ? (stakeScaledBgtValue / maxStakeScaledBgtReturns) * 100 : 0;
+             
+             // Stake-scaled booster incentive scoring
+             const stakeScaledBoosterValue = stake > 0 ? economicData.boostersUSD / stake : 0;
+             const stakeScaledBoosterScore = maxStakeScaledBoosterReturns > 0 ? (stakeScaledBoosterValue / maxStakeScaledBoosterReturns) * 100 : 0;
              
              statistics[date][proposer] = {
                  totalBlocks,
@@ -1100,13 +1065,15 @@ Memory Requirements:
                  emptyBlockPercentage,
                  uptimeScore,
                  polScore,
-                 economicScore,
-                 stakeScaledEconomicScore,
+                 stakeScaledBgtScore,
+                 stakeScaledBoosterScore,
                  stake: stakeBoostData[date]?.[proposer]?.stake || 0,
                  boost: stakeBoostData[date]?.[proposer]?.boost || 0,
                  polRatio,
-                 economicValue: economicData.totalUSD,
-                 stakeScaledEconomicValue
+                 vaultsUSD: economicData.vaultsUSD,
+                 boostersUSD: economicData.boostersUSD,
+                 stakeScaledBgtValue,
+                 stakeScaledBoosterValue
              };
          }
          
@@ -1116,12 +1083,13 @@ Memory Requirements:
                  const polRatio = stakeBoostData[date]?.[validator.proposer]?.ratio || 0;
                  const polScore = maxRatio > 0 ? (polRatio / maxRatio) * 100 : 0;
                  
-                 const economicData = dayUsd[validator.proposer] || { totalUSD: 0 };
-                 const economicScore = maxEconomicReturns > 0 ? (economicData.totalUSD / maxEconomicReturns) * 100 : 0;
-                 
+                 const economicData = dayUsd[validator.proposer] || { vaultsUSD: 0, boostersUSD: 0 };
                  const stake = stakeBoostData[date]?.[validator.proposer]?.stake || 0;
-                 const stakeScaledEconomicValue = stake > 0 ? economicData.totalUSD / stake : 0;
-                 const stakeScaledEconomicScore = maxStakeScaledReturns > 0 ? (stakeScaledEconomicValue / maxStakeScaledReturns) * 100 : 0;
+                 const stakeScaledBgtValue = stake > 0 ? economicData.vaultsUSD / stake : 0;
+                 const stakeScaledBgtScore = maxStakeScaledBgtReturns > 0 ? (stakeScaledBgtValue / maxStakeScaledBgtReturns) * 100 : 0;
+                 
+                 const stakeScaledBoosterValue = stake > 0 ? economicData.boostersUSD / stake : 0;
+                 const stakeScaledBoosterScore = maxStakeScaledBoosterReturns > 0 ? (stakeScaledBoosterValue / maxStakeScaledBoosterReturns) * 100 : 0;
                  
                  statistics[date][validator.proposer] = {
                      totalBlocks: 0,
@@ -1129,13 +1097,15 @@ Memory Requirements:
                      emptyBlockPercentage: 0,
                      uptimeScore: 100, // Perfect uptime if no blocks
                      polScore,
-                     economicScore,
-                     stakeScaledEconomicScore,
+                     stakeScaledBgtScore,
+                     stakeScaledBoosterScore,
                      stake: stakeBoostData[date]?.[validator.proposer]?.stake || 0,
                      boost: stakeBoostData[date]?.[validator.proposer]?.boost || 0,
                      polRatio,
-                     economicValue: economicData.totalUSD,
-                     stakeScaledEconomicValue
+                     vaultsUSD: economicData.vaultsUSD,
+                     boostersUSD: economicData.boostersUSD,
+                     stakeScaledBgtValue,
+                     stakeScaledBoosterValue
                  };
              }
          }
@@ -1155,16 +1125,16 @@ Memory Requirements:
          for (const validator of validators) {
              const uptimeScores = [];
              const polScores = [];
-             const economicScores = [];
-             const stakeScaledEconomicScores = [];
+             const stakeScaledBgtScores = [];
+             const stakeScaledBoosterScores = [];
              
              for (const date of sortedDates) {
                  const dayStats = statistics[date]?.[validator.proposer];
                  if (dayStats) {
                      uptimeScores.push(dayStats.uptimeScore);
                      polScores.push(dayStats.polScore);
-                     economicScores.push(dayStats.economicScore);
-                     stakeScaledEconomicScores.push(dayStats.stakeScaledEconomicScore);
+                     stakeScaledBgtScores.push(dayStats.stakeScaledBgtScore);
+                     stakeScaledBoosterScores.push(dayStats.stakeScaledBoosterScore);
                  }
              }
              
@@ -1172,13 +1142,13 @@ Memory Requirements:
              uptimeScores.reduce((sum, score) => sum + score, 0) / uptimeScores.length : 0;
              const avgPolScore = polScores.length > 0 ? 
              polScores.reduce((sum, score) => sum + score, 0) / polScores.length : 0;
-             const avgEconomicScore = economicScores.length > 0 ? 
-             economicScores.reduce((sum, score) => sum + score, 0) / economicScores.length : 0;
-             const avgStakeScaledEconomicScore = stakeScaledEconomicScores.length > 0 ? 
-             stakeScaledEconomicScores.reduce((sum, score) => sum + score, 0) / stakeScaledEconomicScores.length : 0;
+             const avgStakeScaledBgtScore = stakeScaledBgtScores.length > 0 ? 
+             stakeScaledBgtScores.reduce((sum, score) => sum + score, 0) / stakeScaledBgtScores.length : 0;
+             const avgStakeScaledBoosterScore = stakeScaledBoosterScores.length > 0 ? 
+             stakeScaledBoosterScores.reduce((sum, score) => sum + score, 0) / stakeScaledBoosterScores.length : 0;
              
              // Equal weighting of all 4 metrics
-             const totalScore = (avgUptimeScore + avgPolScore + avgEconomicScore + avgStakeScaledEconomicScore) / 4;
+             const totalScore = (avgUptimeScore + avgPolScore + avgStakeScaledBgtScore + avgStakeScaledBoosterScore) / 4;
             
             // Get most recent stake from the last analyzed date (not the boundary date)
             const lastAnalyzedDate = sortedDates[sortedDates.length - 2]; // -2 because -1 is the boundary date
@@ -1191,8 +1161,8 @@ Memory Requirements:
                  pubkey: validator.pubkey,
                  avgUptimeScore,
                  avgPolScore,
-                 avgEconomicScore,
-                 avgStakeScaledEconomicScore,
+                 avgStakeScaledBgtScore,
+                 avgStakeScaledBoosterScore,
                  totalScore,
                  stake: mostRecentStake,
                  days: sortedDates.map(date => ({
@@ -1214,20 +1184,20 @@ Memory Requirements:
              'Total'.padEnd(8) +
              'Uptime'.padEnd(8) +
              'PoL'.padEnd(8) +
-             'Econ'.padEnd(8) +
-             'StakeEcon'.padEnd(10) +
+             'BGT/Stake'.padEnd(10) +
+             'Boost/Stake'.padEnd(12) +
              'Stake (BERA)'
          );
          log('-'.repeat(140));
          
          rankings.forEach((validator, index) => {
-             const line = `${(index + 1).toString().padEnd(6)}${validator.name.padEnd(30)}${validator.totalScore.toFixed(2).padEnd(8)}${validator.avgUptimeScore.toFixed(2).padEnd(8)}${validator.avgPolScore.toFixed(2).padEnd(8)}${validator.avgEconomicScore.toFixed(2).padEnd(8)}${validator.avgStakeScaledEconomicScore.toFixed(2).padEnd(10)}${validator.stake.toLocaleString()}`;
+             const line = `${(index + 1).toString().padEnd(6)}${validator.name.padEnd(30)}${validator.totalScore.toFixed(2).padEnd(8)}${validator.avgUptimeScore.toFixed(2).padEnd(8)}${validator.avgPolScore.toFixed(2).padEnd(8)}${validator.avgStakeScaledBgtScore.toFixed(2).padEnd(10)}${validator.avgStakeScaledBoosterScore.toFixed(2).padEnd(12)}${validator.stake.toLocaleString()}`;
              log(line);
          });
          log('='.repeat(140));
         
          // CSV output
-         let csvHeader = 'Validator name,Pubkey,Proposer,Operator,Stake,Uptime Score,POL Score,Economic Score,Stake-Scaled Economic Score,Total Score';
+         let csvHeader = 'Validator name,Pubkey,Proposer,Operator,Stake,Uptime Score,POL Score,BGT/Stake Score,Booster/Stake Score,Total Score';
         
         if (showFullDetail) {
             sortedDates.forEach(date => {
@@ -1236,7 +1206,7 @@ Memory Requirements:
         }
         
          const csvRows = rankings.map(validator => {
-             let row = `${validator.name},${validator.pubkey},${validator.validatorAddress},${validator.operatorAddress},${validator.stake.toFixed(6)},${validator.avgUptimeScore.toFixed(2)},${validator.avgPolScore.toFixed(2)},${validator.avgEconomicScore.toFixed(2)},${validator.avgStakeScaledEconomicScore.toFixed(2)},${validator.totalScore.toFixed(2)}`;
+             let row = `${validator.name},${validator.pubkey},${validator.validatorAddress},${validator.operatorAddress},${validator.stake.toFixed(6)},${validator.avgUptimeScore.toFixed(2)},${validator.avgPolScore.toFixed(2)},${validator.avgStakeScaledBgtScore.toFixed(2)},${validator.avgStakeScaledBoosterScore.toFixed(2)},${validator.totalScore.toFixed(2)}`;
             
             if (showFullDetail) {
                 validator.days.forEach(day => {
@@ -1477,7 +1447,7 @@ Memory Requirements:
         const stakeBoostData = await collectStakeAndBoost(validators, dayBoundaries);
         
         // Index POL events per day (BGT to vaults, booster tokens)
-        const { daily: polDaily, discoveredTokens } = await indexPolEvents(validators, dayRanges);
+        const { daily: polDaily } = await indexPolEvents(validators, dayRanges);
         
         // Force garbage collection after large data processing
         if (global.gc) {
