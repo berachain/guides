@@ -20,27 +20,27 @@ Uptime Score = 100 - (empty_blocks / total_blocks × 100)
 ```
 This inverted empty block percentage rewards validators who consistently include transactions in their blocks rather than producing empty ones.
 
-**POL Score** evaluates participation in the Proof of Liquidity system:
+**Boost/Stake Ratio Score** evaluates participation in the Proof of Liquidity system:
 ```
-POL Score = (validator_boost_stake_ratio / daily_max_boost_stake_ratio) × 100
+Boost/Stake Ratio Score = (validator_boost_stake_ratio / daily_max_boost_stake_ratio) × 100
 ```
 This measures how effectively a validator leverages BGT boost relative to their stake, normalized against the day's best performer.
 
-**BGT Vault Score** measures stake-scaled BGT earnings:
+**BGT→Vault/Stake Score** measures stake-scaled BGT vault earnings:
 ```
-BGT Vault Score = (validator_bgt_usd_per_stake / daily_max_bgt_usd_per_stake) × 100
+BGT→Vault/Stake Score = (validator_bgt_vault_usd_per_stake / daily_max_bgt_vault_usd_per_stake) × 100
 ```
-This reflects how effectively a validator generates BGT vault emissions relative to their stake size, rewarding efficient BGT accumulation.
+This reflects how effectively a validator generates BGT vault emissions relative to their stake size, measuring the flow of BGT from the protocol to validator vaults.
 
-**Booster Incentive Score** measures stake-scaled booster token earnings:
+**Incentive→User/Stake Score** measures stake-scaled booster incentive distribution:
 ```
-Booster Incentive Score = (validator_booster_usd_per_stake / daily_max_booster_usd_per_stake) × 100
+Incentive→User/Stake Score = (validator_booster_incentive_usd_per_stake / daily_max_booster_incentive_usd_per_stake) × 100
 ```
-This captures how well a validator attracts booster token incentives relative to their stake, indicating success in the broader POL ecosystem.
+This captures how well a validator attracts and distributes booster token incentives to users relative to their stake, indicating success in driving user engagement in the POL ecosystem.
 
 The final score combines all four metrics with equal weighting:
 ```
-Total Score = (Uptime + POL + BGT Vault + Booster Incentive) / 4
+Total Score = (Uptime + Boost/Stake Ratio + BGT→Vault/Stake + Incentive→User/Stake) / 4
 ```
 
 ## Analysis Process
@@ -67,9 +67,37 @@ Daily metrics are calculated and averaged across the analysis period, then valid
 
 ## Output
 
-The analysis produces two complementary reports. The `validator_stats.csv` file contains comprehensive rankings with each validator's scores across all four dimensions, current stake amounts, and optional daily breakdowns when verbose mode is enabled.
+The analysis produces two complementary reports with detailed column structures.
 
-The `validator_incentive_summary.csv` file presents a matrix view showing exactly which tokens each validator earned and in what quantities. This matrix includes a second header row displaying the USD exchange rate for each token, making it easy to understand both the token distribution and economic impact.
+### validator_stats.csv
+
+**Main Columns:**
+- `Validator name` - Validator display name
+- `Pubkey` - Validator public key
+- `Proposer` - Consensus layer address
+- `Operator` - Execution layer address
+- `Stake` - Current stake amount in BERA
+- `Uptime Score` - Empty block performance (0-100%)
+- `Boost/Stake Ratio Score` - POL participation efficiency (0-100%)
+- `BGT→Vault/Stake Score` - BGT vault earnings per stake (0-100%)
+- `Incentive→User/Stake Score` - Booster incentive distribution per stake (0-100%)
+- `Total Score` - Average of all 4 scores (0-100%)
+
+**VERBOSE Mode Additional Columns (per analyzed date):**
+When `VERBOSE=true`, 9 additional columns are added for each day:
+- `{date} BGT boost` - BGT boost amount for that day
+- `{date} stake` - Validator stake for that day
+- `{date} empty blocks` - Number of empty blocks proposed
+- `{date} total blocks` - Total blocks proposed
+- `{date} boost/stake ratio` - POL ratio for that day
+- `{date} empty block %` - Empty block percentage
+- `{date} BGT→vault USD` - USD value of BGT flowing to validator vaults
+- `{date} incentive→user USD` - USD value of booster tokens flowing to users
+- `{date} total USD` - Total economic value for that day
+
+### validator_incentive_summary.csv
+
+This file presents a matrix view showing exactly which tokens each validator earned and in what quantities. The matrix includes a second header row displaying the USD exchange rate for each token, making it easy to understand both the token distribution and economic impact.
 
 ## Usage
 
