@@ -84,16 +84,16 @@ The analysis produces two complementary reports with detailed column structures.
 - `Total Score` - Average of all 4 scores (0-100%)
 
 **VERBOSE Mode Additional Columns (per analyzed date):**
-When `VERBOSE=true`, 9 additional columns are added for each day:
+When `VERBOSE=true` or `VERBOSE=1`, 7 additional columns are added for each day:
 - `{date} BGT boost` - BGT boost amount for that day
 - `{date} stake` - Validator stake for that day
 - `{date} empty blocks` - Number of empty blocks proposed
 - `{date} total blocks` - Total blocks proposed
 - `{date} boost/stake ratio` - POL ratio for that day
-- `{date} empty block %` - Empty block percentage
 - `{date} BGT→vault USD` - USD value of BGT flowing to validator vaults
 - `{date} incentive→user USD` - USD value of booster tokens flowing to users
-- `{date} total USD` - Total economic value for that day
+
+Note: Calculated values like empty block percentage and total USD are omitted since they can be derived from the raw data.
 
 ### validator_incentive_summary.csv
 
