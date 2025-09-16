@@ -26,21 +26,21 @@ POL Score = (validator_boost_stake_ratio / daily_max_boost_stake_ratio) × 100
 ```
 This measures how effectively a validator leverages BGT boost relative to their stake, normalized against the day's best performer.
 
-**Economic Score** captures absolute value generation:
+**BGT Vault Score** measures stake-scaled BGT earnings:
 ```
-Economic Score = (validator_total_usd / daily_max_total_usd) × 100
+BGT Vault Score = (validator_bgt_usd_per_stake / daily_max_bgt_usd_per_stake) × 100
 ```
-This reflects the total USD value a validator generates through vault emissions and booster incentives, regardless of their stake size.
+This reflects how effectively a validator generates BGT vault emissions relative to their stake size, rewarding efficient BGT accumulation.
 
-**Stake-Scaled Economic Score** measures efficiency:
+**Booster Incentive Score** measures stake-scaled booster token earnings:
 ```
-Stake-Scaled Economic Score = (validator_usd_per_stake / daily_max_usd_per_stake) × 100
+Booster Incentive Score = (validator_booster_usd_per_stake / daily_max_booster_usd_per_stake) × 100
 ```
-This rewards validators who generate significant economic value relative to their stake size, identifying efficient operators.
+This captures how well a validator attracts booster token incentives relative to their stake, indicating success in the broader POL ecosystem.
 
 The final score combines all four metrics with equal weighting:
 ```
-Total Score = (Uptime + POL + Economic + Stake-Scaled Economic) / 4
+Total Score = (Uptime + POL + BGT Vault + Booster Incentive) / 4
 ```
 
 ## Analysis Process
