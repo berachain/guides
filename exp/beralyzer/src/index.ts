@@ -34,18 +34,56 @@ function isFatalError(error: Error): boolean {
   );
 }
 
+// Graceful shutdown handling
+let isShuttingDown = false;
+let currentOperation: Promise<any> | null = null;
+
+function setupGracefulShutdown() {
+  const shutdown = async (signal: string) => {
+    if (isShuttingDown) {
+      console.log(`Received ${signal} again, forcing exit`);
+      process.exit(1);
+    }
+    
+    console.log(`Received ${signal}, initiating graceful shutdown...`);
+    isShuttingDown = true;
+    
+    // Wait for current operation to complete
+    if (currentOperation) {
+      console.log("Waiting for current operation to complete...");
+      try {
+        await currentOperation;
+        console.log("Current operation completed");
+      } catch (e) {
+        console.error("Error during shutdown:", (e as Error).message);
+      }
+    }
+    
+    console.log("Graceful shutdown complete");
+    process.exit(0);
+  };
+  
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+  process.on('SIGINT', () => shutdown('SIGINT'));
+}
+
 async function main() {
+  setupGracefulShutdown();
+  
   const cfg = loadConfig();
   console.log(`Beralyzer daemon starting. DB=${cfg.pgDsn}`);
+  console.log(`Concurrency: ${cfg.concurrency.elFetch} EL threads, ${cfg.concurrency.trace} trace threads, ${cfg.concurrency.blockBatchSize} blocks/batch`);
   
   let consecutiveFailures = 0;
   const maxConsecutiveFailures = 5;
   
-  while (true) {
+  while (!isShuttingDown) {
     const pg = await connectPg(cfg.pgDsn);
     let shouldAdvanceCursor = true;
     
-    try {
+    // Wrap the main operation in a promise for graceful shutdown
+    currentOperation = (async () => {
+      try {
       // Apply migrations at startup of each loop (idempotent)
       try {
         const dir = resolve(process.cwd(), "sql");
@@ -82,8 +120,8 @@ async function main() {
       try {
         await ingestEl(pg, {
           elRpcUrl: cfg.elRpcUrl,
-          blockBatchSize: 50,
-          txConcurrency: 16,
+          blockBatchSize: cfg.concurrency.blockBatchSize,
+          txConcurrency: cfg.concurrency.trace,
           log: cfg.log,
           advanceCursor: shouldAdvanceCursor,
         });
@@ -162,16 +200,27 @@ async function main() {
         }
       }
 
-    } catch (e) {
-      console.error("Unexpected error:", (e as Error).message);
-      if (isFatalError(e as Error)) {
-        console.error("Fatal error, stopping daemon");
-        process.exit(1);
+      } catch (e) {
+        console.error("Unexpected error:", (e as Error).message);
+        if (isFatalError(e as Error)) {
+          console.error("Fatal error, stopping daemon");
+          process.exit(1);
+        }
+        shouldAdvanceCursor = false;
+        consecutiveFailures++;
+      } finally {
+        await pg.end();
       }
-      shouldAdvanceCursor = false;
-      consecutiveFailures++;
-    } finally {
-      await pg.end();
+    })();
+    
+    // Wait for current operation to complete
+    await currentOperation;
+    currentOperation = null;
+    
+    // Check if we're shutting down
+    if (isShuttingDown) {
+      console.log("Shutdown requested, exiting main loop");
+      break;
     }
     
     // Only sleep if we're not in a failure state
