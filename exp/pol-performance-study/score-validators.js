@@ -1183,25 +1183,27 @@ Memory Requirements:
              'Validator'.padEnd(30) +
              'Total'.padEnd(8) +
              'Uptime'.padEnd(8) +
-             'PoL'.padEnd(8) +
-             'BGT/Stake'.padEnd(10) +
              'Boost/Stake'.padEnd(12) +
+             'BGT→Vault/Stake'.padEnd(15) +
+             'Incentive/Stake'.padEnd(16) +
              'Stake (BERA)'
          );
          log('-'.repeat(140));
          
          rankings.forEach((validator, index) => {
-             const line = `${(index + 1).toString().padEnd(6)}${validator.name.padEnd(30)}${validator.totalScore.toFixed(2).padEnd(8)}${validator.avgUptimeScore.toFixed(2).padEnd(8)}${validator.avgPolScore.toFixed(2).padEnd(8)}${validator.avgStakeScaledBgtScore.toFixed(2).padEnd(10)}${validator.avgStakeScaledBoosterScore.toFixed(2).padEnd(12)}${validator.stake.toLocaleString()}`;
+             const line = `${(index + 1).toString().padEnd(6)}${validator.name.padEnd(30)}${validator.totalScore.toFixed(2).padEnd(8)}${validator.avgUptimeScore.toFixed(2).padEnd(8)}${validator.avgPolScore.toFixed(2).padEnd(12)}${validator.avgStakeScaledBgtScore.toFixed(2).padEnd(15)}${validator.avgStakeScaledBoosterScore.toFixed(2).padEnd(16)}${validator.stake.toLocaleString()}`;
              log(line);
          });
          log('='.repeat(140));
         
          // CSV output
-         let csvHeader = 'Validator name,Pubkey,Proposer,Operator,Stake,Uptime Score,POL Score,BGT/Stake Score,Booster/Stake Score,Total Score';
+         let csvHeader = 'Validator name,Pubkey,Proposer,Operator,Stake,Uptime Score,Boost/Stake Ratio Score,BGT→Vault/Stake Score,Incentive→User/Stake Score,Total Score';
         
         if (showFullDetail) {
-            sortedDates.forEach(date => {
-                csvHeader += `,${date} boost,${date} stake,${date} empty blocks,${date} total blocks,${date} boost/stake ratio,${date} empty block ratio,${date} vaultsUSD,${date} boostersUSD,${date} totalUSD`;
+            // Only add columns for dates that were actually analyzed (exclude boundary date)
+            const datesToAnalyze = sortedDates.slice(0, sortedDates.length - 1);
+            datesToAnalyze.forEach(date => {
+                csvHeader += `,${date} BGT boost,${date} stake,${date} empty blocks,${date} total blocks,${date} boost/stake ratio,${date} empty block %,${date} BGT→vault USD,${date} incentive→user USD,${date} total USD`;
             });
         }
         
@@ -1209,10 +1211,12 @@ Memory Requirements:
              let row = `${validator.name},${validator.pubkey},${validator.validatorAddress},${validator.operatorAddress},${validator.stake.toFixed(6)},${validator.avgUptimeScore.toFixed(2)},${validator.avgPolScore.toFixed(2)},${validator.avgStakeScaledBgtScore.toFixed(2)},${validator.avgStakeScaledBoosterScore.toFixed(2)},${validator.totalScore.toFixed(2)}`;
             
             if (showFullDetail) {
-                validator.days.forEach(day => {
-                    // Attach USD valuations if available from main()
-                    const dayUsd = global.__DAILY_USD__?.[day.date]?.[validator.validatorAddress] || {};
-                    row += `,${(day.boost || 0).toFixed(6)},${(day.stake || 0).toFixed(6)},${day.emptyBlocks || 0},${day.totalBlocks || 0},${(day.polRatio || 0).toFixed(6)},${(day.emptyBlockPercentage || 0).toFixed(2)},${(dayUsd.vaultsUSD || 0).toFixed(6)},${(dayUsd.boostersUSD || 0).toFixed(6)},${(dayUsd.totalUSD || 0).toFixed(6)}`;
+                // Only include data for dates that were actually analyzed (exclude boundary date)
+                const datesToAnalyze = sortedDates.slice(0, sortedDates.length - 1);
+                datesToAnalyze.forEach(date => {
+                    const day = validator.days.find(d => d.date === date);
+                    const dayUsd = global.__DAILY_USD__?.[date]?.[validator.validatorAddress] || {};
+                    row += `,${(day?.boost || 0).toFixed(6)},${(day?.stake || 0).toFixed(6)},${day?.emptyBlocks || 0},${day?.totalBlocks || 0},${(day?.polRatio || 0).toFixed(6)},${(day?.emptyBlockPercentage || 0).toFixed(2)},${(dayUsd.vaultsUSD || 0).toFixed(6)},${(dayUsd.boostersUSD || 0).toFixed(6)},${(dayUsd.totalUSD || 0).toFixed(6)}`;
                 });
             }
             
