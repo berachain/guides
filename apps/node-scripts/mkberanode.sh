@@ -11,13 +11,13 @@
 #   sudo ./mkberanode.sh \
 #     --chain {mainnet|bepolia} \
 #     --el {reth|geth} \
-#     --mode {archive|full} \
+#     --mode {archive|pruned} \
 #     [--cl-version vX.Y.Z] \
 #     [--el-version vA.B.C]
 #
 # Examples:
 #   sudo ./mkberanode.sh --chain mainnet --el reth --mode archive
-#   sudo ./mkberanode.sh --chain bepolia --el geth --mode full --cl-version v1.3.2 --el-version v1.19.5
+#   sudo ./mkberanode.sh --chain bepolia --el geth --mode pruned --cl-version v1.3.2 --el-version v1.19.5
 
 set -eu
 # Enable pipefail if the shell supports it (bash, zsh). Safe no-op on dash/sh.
@@ -28,7 +28,7 @@ if (set -o pipefail) 2>/dev/null; then :; fi
 # ------------------------------
 CHAIN=""            # mainnet|bepolia
 EL_CHOICE=""        # reth|geth
-MODE="full"         # archive|full
+MODE="pruned"         # archive|pruned
 CL_VERSION=""       # e.g. v1.3.2 (empty: latest)
 EL_VERSION=""       # e.g. v1.20.0 (empty: latest)
 GENESIS_FROM_MAIN=0  # if 1, fetch EL genesis from main branch
@@ -76,11 +76,11 @@ need_cmd() { command -v "$1" >/dev/null 2>&1 || { err "Required command '$1' not
 print_usage() {
   cat <<EOF
 Usage:
-  sudo $0 --chain {mainnet|bepolia} --el {reth|geth} --mode {archive|full} [--cl-version vX.Y.Z] [--el-version vA.B.C] [--genesis-main]
+  sudo $0 --chain {mainnet|bepolia} --el {reth|geth} --mode {archive|pruned} [--cl-version vX.Y.Z] [--el-version vA.B.C] [--genesis-main]
 
 Examples:
   sudo $0 --chain mainnet --el reth --mode archive
-  sudo $0 --chain bepolia --el geth --mode full --cl-version v1.3.2 --el-version v1.19.5
+  sudo $0 --chain bepolia --el geth --mode pruned --cl-version v1.3.2 --el-version v1.19.5
 
 Notes:
 - If versions are omitted, the script installs the latest releases.
@@ -124,8 +124,8 @@ case "${EL_CHOICE:-}" in
   *) err "--el must be reth or geth"; exit 1;;
 esac
 case "${MODE:-}" in
-  archive|full) ;;
-  *) err "--mode must be archive or full"; exit 1;;
+  archive|pruned) ;;
+  *) err "--mode must be archive or pruned"; exit 1;;
 esac
 
 # ------------------------------
@@ -475,7 +475,7 @@ init_cl() {
       sed -i "s|^rpc-dial-url = \".*\"|rpc-dial-url = \"http://localhost:$EL_AUTHRPC_PORT\"|" "$CL_HOME/config/app.toml" || true
       sed -i "s|^jwt-secret-path = \".*\"|jwt-secret-path = \"$JWT_PATH\"|" "$CL_HOME/config/app.toml" || true
       sed -i "s|^trusted-setup-path = \".*\"|trusted-setup-path = \"$CL_HOME/config/kzg-trusted-setup.json\"|" "$CL_HOME/config/app.toml" || true
-      # Pruning depends on mode: archive => nothing, full => default
+      # Pruning depends on mode: archive => nothing, pruned => default
       if [[ "$MODE" == "archive" ]]; then
         if grep -q '^pruning\s*=\s*"' "$CL_HOME/config/app.toml"; then
           sed -i "s|^pruning\s*=\s*\".*\"|pruning = \"nothing\"|" "$CL_HOME/config/app.toml" || true
