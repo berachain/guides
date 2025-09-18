@@ -69,6 +69,21 @@ Analyzes missing validators (block_id_flag = 1) per proposer with detailed histo
 
 **Usage:** `node analyze-missing-validators.js [--blocks N] [--chain NAME] [-a] [-p PROPOSER] [-h]`
 
+### `scan-proposer-activity.js`
+
+Backwards consensus layer scanner to find when a specific proposer last voted on a block and last proposed a block.
+
+**Features:**
+
+- Efficient backwards block scanning from latest block
+- Tracks both voting activity (last_commit signatures) and proposal activity
+- Flexible proposer input (with or without 0x prefix)
+- Progress reporting with block scanning status
+- Validator name lookup via database
+- Configurable scan limits with no upper bound for historical searches
+
+**Usage:** `node scan-proposer-activity.js [-p PROPOSER] [-c CHAIN] [-m MAX_BLOCKS] [-h]`
+
 ### Other Scripts
 
 - `find_day_boundaries.js` - Finds blocks at daily midnight UTC timestamps
