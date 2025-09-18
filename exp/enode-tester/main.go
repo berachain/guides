@@ -331,10 +331,10 @@ func (et *EnodeTester) PrintSummary() {
 		ownsNodeID, float64(ownsNodeID)/float64(total)*100,
 		handshakeOK, float64(handshakeOK)/float64(total)*100)
 
-	// Print only fully passed enodes
-	fmt.Println("\n✅ PASSED ENODES:")
+	// Print passed and partial enodes
+	fmt.Println("\n✅ PASSED & PARTIAL ENODES:")
 	for _, result := range et.results {
-		if result.IsReachable && result.HasValidID && result.HandshakeOK && result.OwnsNodeID {
+		if result.IsReachable && result.HasValidID && result.OwnsNodeID {
 			fmt.Println(result.Enode)
 		}
 	}
