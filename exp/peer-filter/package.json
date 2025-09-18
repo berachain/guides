@@ -1,0 +1,16 @@
+{
+  "name": "peer-filter",
+  "version": "1.0.0",
+  "description": "Filter and analyze Ethereum peer connections",
+  "main": "peer-filter.js",
+  "bin": {
+    "peer-filter": "./peer-filter.js"
+  },
+  "scripts": {
+    "list": "node peer-filter.js list",
+    "clean": "node peer-filter.js clean"
+  },
+  "keywords": ["ethereum", "peers", "geth", "reth", "berageth"],
+  "author": "Berachain",
+  "license": "MIT"
+}
