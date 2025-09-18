@@ -6,7 +6,8 @@ const path = require('path');
 // Hardcoded whitelist of allowed client names
 const ALLOWED_CLIENTS = [
     'BeraGeth',
-    'reth/v1.6.0-48941e6'
+    'reth/v1.6.0-48941e6',
+    'reth/v1.7.0-9d56da5'
 ];
 
 function parsePeerLog(input) {
