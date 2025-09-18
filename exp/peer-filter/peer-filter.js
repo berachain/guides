@@ -13,8 +13,8 @@ function parsePeerLog(input) {
     try {
         let data;
         
-        if (input === '--' || !input) {
-            // Read from stdin
+        if (!input) {
+            // Read from stdin when no input provided
             data = fs.readFileSync(0, 'utf8');
         } else {
             // Read from file
@@ -34,49 +34,54 @@ function parsePeerLog(input) {
 }
 
 
-function listAllClients(peers) {
-    console.log('=== All Clients Found ===\n');
+function summary(peers) {
+    console.log('=== Peer Summary ===\n');
     
     const clientCounts = {};
     const clientDetails = {};
+    let totalPeers = peers.length;
+    let whitelistedPeers = 0;
+    let nonWhitelistedPeers = 0;
     
     peers.forEach((peer, index) => {
         const clientName = peer.name || 'Unknown';
         const enode = peer.enode;
         
         if (!clientCounts[clientName]) {
-            clientCounts[clientName] = 0;
-            clientDetails[clientName] = [];
+            clientCounts[clientName] = { count: 0, whitelisted: false, details: [] };
         }
         
-        clientCounts[clientName]++;
-        clientDetails[clientName].push({
+        clientCounts[clientName].count++;
+        clientCounts[clientName].details.push({
             index: index + 1,
             enode: enode,
             name: peer.name,
             remoteAddress: peer.network?.remoteAddress || 'Unknown'
         });
+        
+        if (ALLOWED_CLIENTS.includes(clientName)) {
+            clientCounts[clientName].whitelisted = true;
+            whitelistedPeers++;
+        } else {
+            nonWhitelistedPeers++;
+        }
     });
     
     // Sort clients by count (descending)
     const sortedClients = Object.entries(clientCounts)
-        .sort(([,a], [,b]) => b - a);
+        .sort(([,a], [,b]) => b.count - a.count);
     
-    sortedClients.forEach(([clientName, count]) => {
-        console.log(`${clientName}: ${count} peers`);
-        console.log('  Examples:');
-        clientDetails[clientName].slice(0, 3).forEach(detail => {
-            console.log(`    ${detail.index}. ${detail.name}`);
-            console.log(`       ${detail.enode}`);
-        });
-        if (clientDetails[clientName].length > 3) {
-            console.log(`    ... and ${clientDetails[clientName].length - 3} more`);
-        }
-        console.log('');
+    console.log('Found Clients:');
+    sortedClients.forEach(([clientName, data]) => {
+        const status = data.whitelisted ? '✓ KEEP' : '✗ REMOVE';
+        console.log(`  ${clientName}: ${data.count} peers [${status}]`);
     });
     
-    console.log(`Total peers: ${peers.length}`);
-    console.log(`Unique clients: ${Object.keys(clientCounts).length}`);
+    console.log('\nSummary:');
+    console.log(`  Total peers: ${totalPeers}`);
+    console.log(`  To keep: ${whitelistedPeers} (${((whitelistedPeers/totalPeers)*100).toFixed(1)}%)`);
+    console.log(`  To remove: ${nonWhitelistedPeers} (${((nonWhitelistedPeers/totalPeers)*100).toFixed(1)}%)`);
+    console.log(`  Unique clients: ${Object.keys(clientCounts).length}`);
 }
 
 function cleanClients(peers) {
@@ -101,29 +106,26 @@ function showUsage() {
     console.log('Peer Filter Tool - Analyze and filter Ethereum peer connections');
     console.log('');
     console.log('USAGE:');
-    console.log('  node peer-filter.js <mode> [input]');
+    console.log('  node peer-filter.js <mode> [file]');
     console.log('');
     console.log('MODES:');
-    console.log('  list    List all client types found in the peer log');
+    console.log('  summary Show found clients and keep/remove statistics');
     console.log('  clean   Generate admin.removePeer() commands for non-whitelisted clients');
     console.log('');
     console.log('INPUT:');
     console.log('  <file>  Read peer data from specified file');
-    console.log('  --      Read peer data from stdin (standard input)');
-    console.log('  (none)  Read peer data from stdin (if no input specified)');
+    console.log('  (none)  Read peer data from stdin');
     console.log('');
     console.log('EXAMPLES:');
     console.log('  # Read from file');
-    console.log('  node peer-filter.js list seed-reth-1-peers.log');
+    console.log('  node peer-filter.js summary seed-reth-1-peers.log');
     console.log('  node peer-filter.js clean seed-reth-1-peers.log');
     console.log('');
-    console.log('  # Read from stdin using redirection');
-    console.log('  node peer-filter.js list < seed-reth-1-peers.log');
-    console.log('  node peer-filter.js clean -- < seed-reth-1-peers.log');
-    console.log('');
-    console.log('  # Read from stdin with explicit --');
-    console.log('  cat seed-reth-1-peers.log | node peer-filter.js list --');
-    console.log('  cat seed-reth-1-peers.log | node peer-filter.js clean --');
+    console.log('  # Read from stdin');
+    console.log('  cat seed-reth-1-peers.log | node peer-filter.js summary');
+    console.log('  cat seed-reth-1-peers.log | node peer-filter.js clean');
+    console.log('  node peer-filter.js summary < seed-reth-1-peers.log');
+    console.log('  node peer-filter.js clean < seed-reth-1-peers.log');
     console.log('');
     console.log('WHITELISTED CLIENTS:');
     ALLOWED_CLIENTS.forEach(client => {
@@ -152,7 +154,7 @@ function main() {
     const [mode, input] = args;
     
     // Validate mode
-    if (!['list', 'clean'].includes(mode.toLowerCase())) {
+    if (!['summary', 'clean'].includes(mode.toLowerCase())) {
         console.error(`Error: Unknown mode '${mode}'`);
         showUsage();
         process.exit(1);
@@ -166,8 +168,8 @@ function main() {
     }
     
     switch (mode.toLowerCase()) {
-        case 'list':
-            listAllClients(peers);
+        case 'summary':
+            summary(peers);
             break;
         case 'clean':
             cleanClients(peers);
@@ -181,7 +183,7 @@ if (require.main === module) {
 
 module.exports = {
     parsePeerLog,
-    listAllClients,
+    summary,
     cleanClients,
     ALLOWED_CLIENTS
 };
