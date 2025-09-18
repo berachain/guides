@@ -80,51 +80,20 @@ function listAllClients(peers) {
 }
 
 function cleanClients(peers) {
-    console.log('=== Cleaning Non-Whitelisted Clients ===\n');
-    console.log('Whitelisted clients:', ALLOWED_CLIENTS.join(', '));
-    console.log('');
-    
     const peersToRemove = [];
-    const clientStats = {};
     
-    peers.forEach((peer, index) => {
+    peers.forEach((peer) => {
         const clientName = peer.name || 'Unknown';
         
-        if (!clientStats[clientName]) {
-            clientStats[clientName] = { total: 0, whitelisted: 0, toRemove: 0 };
-        }
-        clientStats[clientName].total++;
-        
-        if (ALLOWED_CLIENTS.includes(clientName)) {
-            clientStats[clientName].whitelisted++;
-        } else {
-            clientStats[clientName].toRemove++;
-            peersToRemove.push({
-                index: index + 1,
-                enode: peer.enode,
-                clientName: clientName,
-                name: peer.name
-            });
+        if (!ALLOWED_CLIENTS.includes(clientName)) {
+            peersToRemove.push(peer.enode);
         }
     });
-    
-    // Show statistics
-    console.log('Client Statistics:');
-    Object.entries(clientStats).forEach(([clientName, stats]) => {
-        const status = ALLOWED_CLIENTS.includes(clientName) ? '✓ WHITELISTED' : '✗ TO REMOVE';
-        console.log(`  ${clientName}: ${stats.total} total, ${stats.whitelisted} whitelisted, ${stats.toRemove} to remove [${status}]`);
-    });
-    
-    console.log(`\nTotal peers to remove: ${peersToRemove.length}`);
-    console.log(`Total peers to keep: ${peers.length - peersToRemove.length}`);
     
     if (peersToRemove.length > 0) {
-        console.log('\n=== admin.removePeer() Commands ===\n');
-        peersToRemove.forEach(peer => {
-            console.log(`admin.removePeer("${peer.enode}");`);
+        peersToRemove.forEach(enode => {
+            console.log(`admin.removePeer("${enode}");`);
         });
-    } else {
-        console.log('\nNo peers need to be removed - all clients are whitelisted!');
     }
 }
 
