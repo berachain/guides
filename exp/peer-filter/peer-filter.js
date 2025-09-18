@@ -60,7 +60,8 @@ function summary(peers) {
             remoteAddress: peer.network?.remoteAddress || 'Unknown'
         });
         
-        if (ALLOWED_CLIENTS.includes(clientName)) {
+        const isWhitelisted = ALLOWED_CLIENTS.some(allowed => clientName.includes(allowed));
+        if (isWhitelisted) {
             clientCounts[clientName].whitelisted = true;
             whitelistedPeers++;
         } else {
@@ -91,7 +92,8 @@ function cleanClients(peers) {
     peers.forEach((peer) => {
         const clientName = peer.name || 'Unknown';
         
-        if (!ALLOWED_CLIENTS.includes(clientName)) {
+        const isWhitelisted = ALLOWED_CLIENTS.some(allowed => clientName.includes(allowed));
+        if (!isWhitelisted) {
             peersToRemove.push(peer.enode);
         }
     });
