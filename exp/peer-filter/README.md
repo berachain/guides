@@ -4,10 +4,23 @@ Standalone Node.js script for live peer management via IPC connection to geth/re
 
 ## Usage
 
+### Node.js Script
 ```bash
 node ipc-client.js [command] [ipc-path]
 # or
 IPC_SOCKET=/path/to/socket.ipc node ipc-client.js [command]
+```
+
+### Standalone Executable
+```bash
+# Build first
+npm install
+npm run build
+
+# Then run
+./dist/ipc-peer-filter [command] [ipc-path]
+# or
+IPC_SOCKET=/path/to/socket.ipc ./dist/ipc-peer-filter [command]
 ```
 
 ## Commands
@@ -25,17 +38,33 @@ IPC_SOCKET=/path/to/socket.ipc node ipc-client.js [command]
 node ipc-client.js /storage/berabox/installations/bb-testnet-geth/runtime/ipc/geth.ipc
 
 # Peer summary
-node ipc-client.js peer-summary /storage/berabox/installations/bb-testnet-geth/runtime/ipc/geth.ipc
+./dist/ipc-peer-filter peer-summary /storage/berabox/installations/bb-testnet-geth/runtime/ipc/geth.ipc
 
 # Check what would be removed (safe)
-node ipc-client.js peer-purge-dry-run /storage/berabox/installations/bb-testnet-geth/runtime/ipc/geth.ipc
+./dist/ipc-peer-filter peer-purge-dry-run /storage/berabox/installations/bb-testnet-geth/runtime/ipc/geth.ipc
 
 # Actually remove unwanted peers
-node ipc-client.js peer-purge /storage/berabox/installations/bb-testnet-geth/runtime/ipc/geth.ipc
+./dist/ipc-peer-filter peer-purge /storage/berabox/installations/bb-testnet-geth/runtime/ipc/geth.ipc
 
 # Use environment variable
 export IPC_SOCKET=/storage/berabox/installations/bb-mainnet-reth/runtime/ipc/reth.ipc
-node ipc-client.js peer-summary
+./dist/ipc-peer-filter peer-summary
+```
+
+## Build Options
+
+```bash
+# Install dependencies
+npm install
+
+# Build for current platform (Linux x64)
+npm run build
+
+# Build for Linux + macOS
+npm run build-all
+
+# Build Linux only
+npm run build-linux
 ```
 
 ## Whitelist
@@ -48,5 +77,5 @@ Keeps only these clients:
 
 ## Requirements
 
-- Node.js >= 14.0.0
-- Access to BeraBox IPC sockets
+- **Development**: Node.js >= 14.0.0
+- **Runtime**: None (standalone executable)
