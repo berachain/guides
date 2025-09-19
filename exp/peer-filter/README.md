@@ -4,7 +4,7 @@ A Node.js utility for analyzing and filtering Ethereum peer connections from JSO
 
 ## Features
 
-- **List Mode**: Identify all client types in a peer log
+- **Summary Mode**: Show client statistics and keep/remove recommendations
 - **Clean Mode**: Generate `admin.removePeer()` commands to remove non-whitelisted clients
 
 ## Installation
@@ -23,40 +23,33 @@ node peer-filter.js <mode> [input]
 ```
 
 **Modes:**
-- `list` - List all client types found in the peer log
+- `summary` - Show client statistics and keep/remove recommendations
 - `clean` - Generate `admin.removePeer()` commands for non-whitelisted clients
 
 **Input Options:**
 - `<file>` - Read peer data from specified file
-- `--` - Read peer data from stdin (standard input)
-- `(none)` - Read peer data from stdin (if no input specified)
+- `(none)` - Read peer data from stdin 
 
 **Help:**
 - `--help` or `-h` - Show detailed help information
 
 ### Examples
 
-#### List All Clients
+#### Show Client Summary
 
 ```bash
 # Read from file
-node peer-filter.js list seed-reth-1-peers.log
-
-# Read from stdin using pipe
-cat seed-reth-1-peers.log | node peer-filter.js list
+node peer-filter.js summary seed-reth-1-peers.log
 
 # Read from stdin using redirection
-node peer-filter.js list < seed-reth-1-peers.log
-
-# Read from stdin with explicit --
-cat seed-reth-1-peers.log | node peer-filter.js list --
+node peer-filter.js summary < seed-reth-1-peers.log
 ```
 
 This will show:
 - All client types found in the peer log
 - Count of peers per client type
-- Example peer details for each client type
-- Total statistics
+- Keep/remove status for each client type
+- Summary statistics with percentages
 
 #### Clean Non-Whitelisted Clients
 
@@ -64,33 +57,25 @@ This will show:
 # Read from file
 node peer-filter.js clean seed-reth-1-peers.log
 
-# Read from stdin using pipe
-cat seed-reth-1-peers.log | node peer-filter.js clean
-
 # Read from stdin using redirection
 node peer-filter.js clean -- < seed-reth-1-peers.log
-
-# Read from stdin with explicit --
-cat seed-reth-1-peers.log | node peer-filter.js clean --
 ```
 
 This will:
-- Show statistics about whitelisted vs non-whitelisted clients
 - Generate `admin.removePeer()` commands for non-whitelisted peers
-- Display the commands one per line for easy copy-paste
 
 ## Whitelisted Clients
 
-The following clients are currently whitelisted (can be modified in the script):
+Review `peer-filter.js` and adjust the list of whitelisted clients.
 
 - `BeraGeth` - Berachain's custom Geth client
-- `Geth` - Standard Ethereum Geth client
-- `reth` - Reth client
-- `bera1` - Custom client name
+- `BeraReth`/`bera-reth` - Berachain's custom Reth client
+- `reth/v1.6.0-48941e6` - Specific Reth version
+- `reth/v1.7.0-9d56da5` - Specific Reth version
 
 ## Input Format
 
-The script expects a JSON file with the following structure:
+The script expects a JSON file with the structure of "admin.peers" output from an reth/geth node.
 
 ```json
 {
@@ -111,52 +96,24 @@ The script expects a JSON file with the following structure:
 
 ## Example Output
 
-### List Mode
+### Summary Mode
 ```
-=== All Clients Found ===
+=== Peer Summary ===
 
-Geth: 45 peers
-  Examples:
-    1. Geth/v1.14.13-stable-eb00f169/linux-amd64/go1.23.2
-       enode://739e6fc82099998e09f587db6433a8a9ff379e0725aed516de5cd2cf103b3c46cc95e3431d2114b39639d50aeab6af03728fa6230edd0fcaca4a26556913bcbc@51.68.178.240:30303
-    ... and 42 more
+Found Clients:
+  Geth: 45 peers [✗ REMOVE]
+  BeraGeth: 12 peers [✓ KEEP]
 
-BeraGeth: 12 peers
-  Examples:
-    1. BeraGeth/v1.011602.3/linux-amd64/go1.24.6
-       enode://ce34a16fd072808740ccb602ebf32c786bb83a5b044a0d2d19c1988abfba1f2757e200f0f5244a632f5d71050d898d10a9e260322352dc4fc6e639cc23fe445f@34.47.95.52:30303
-    ... and 9 more
-
-Total peers: 57
-Unique clients: 2
+Summary:
+  Total peers: 57
+  To keep: 12 (21.1%)
+  To remove: 45 (78.9%)
+  Unique clients: 2
 ```
 
 ### Clean Mode
 ```
-=== Cleaning Non-Whitelisted Clients ===
-
-Whitelisted clients: BeraGeth, Geth, reth, bera1
-
-Client Statistics:
-  Geth: 45 total, 45 whitelisted, 0 to remove [✓ WHITELISTED]
-  BeraGeth: 12 total, 12 whitelisted, 0 to remove [✓ WHITELISTED]
-
-Total peers to remove: 0
-Total peers to keep: 57
-
-No peers need to be removed - all clients are whitelisted!
+admin.removePeer("enode://739e6fc82099998e09f587db6433a8a9ff379e0725aed516de5cd2cf103b3c46cc95e3431d2114b39639d50aeab6af03728fa6230edd0fcaca4a26556913bcbc@51.68.178.240:30303");
+admin.removePeer("enode://...");
 ```
 
-## Customization
-
-To modify the whitelist, edit the `ALLOWED_CLIENTS` array in `peer-filter.js`:
-
-```javascript
-const ALLOWED_CLIENTS = [
-    'BeraGeth',
-    'Geth',
-    'reth',
-    'bera1',
-    'YourCustomClient'  // Add your client here
-];
-```

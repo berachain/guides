@@ -7,7 +7,7 @@
     "peer-filter": "./peer-filter.js"
   },
   "scripts": {
-    "list": "node peer-filter.js list",
+    "summary": "node peer-filter.js summary",
     "clean": "node peer-filter.js clean"
   },
   "keywords": ["ethereum", "peers", "geth", "reth", "berageth"],
