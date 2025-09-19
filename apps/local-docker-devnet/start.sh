@@ -448,3 +448,12 @@ for i in $(seq 0 $((NUM_VALIDATORS - 1))); do
 done
 
 echo "\033[32mStarted!\033[0m";
+
+# Show prefunded wallet balance in BERA (requires Foundry's `cast`)
+if command -v cast >/dev/null 2>&1; then
+  echo "\nWallet ($WITHDRAW_ADDRESS) balance (BERA):";
+  (cast balance "$WITHDRAW_ADDRESS" --rpc-url "$RPC_URL" | cast --from-wei) || echo "Balance query failed (RPC not ready yet?).";
+else
+  echo "\nTo check wallet balance (BERA) once RPC is ready, run:";
+  echo "  cast balance $WITHDRAW_ADDRESS --rpc-url $RPC_URL | cast --from-wei";
+fi
