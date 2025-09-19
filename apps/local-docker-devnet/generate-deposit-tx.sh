@@ -56,6 +56,8 @@ echo cast send $BEACONDEPOSIT_ADDRESS \'deposit\(bytes,bytes,bytes,address\)\' \
 
 
 echo -e "\n\nSTATUS COMMANDS\n"
+echo -e "Check the funding wallet balance (BERA):";
+echo -e "cast balance $WITHDRAW_ADDRESS --rpc-url $RPC_URL | cast --from-wei";
 echo -e "Send this command to view validators:";
 echo -e "curl -s http://localhost:3500/eth/v1/beacon/states/head/validators | jq .data";
 
