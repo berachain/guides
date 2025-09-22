@@ -4,7 +4,7 @@
   "description": "Live IPC peer management and filtering for geth/reth nodes",
   "main": "ipc-client.js",
   "bin": {
-    "ipc-client": "./ipc-client.js"
+    "peer-filter": "./ipc-client.js"
   },
   "scripts": {
     "build": "pkg . --out-path=dist/",

@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 
 /**
  * IPC Client - Connect to geth/reth IPC endpoint and retrieve basic information
@@ -203,7 +202,6 @@ class IPCClient {
             
             // Display summary
             console.log(`📊 Total Peers:       ${summary.total}`);
-            console.log(`🏢 Unique Networks:   ${summary.networks.size}`);
             console.log(`📡 Protocols:         ${Array.from(summary.protocols).join(', ')}`);
             console.log(`📥 Inbound:           ${summary.inbound}`);
             console.log(`📤 Outbound:          ${summary.outbound}`);
@@ -400,7 +398,6 @@ class IPCClient {
     analyzePeers(peers) {
         const summary = {
             total: peers.length,
-            networks: new Set(),
             protocols: new Set(),
             clients: new Map(),
             versions: new Map(),
@@ -410,12 +407,6 @@ class IPCClient {
         };
 
         peers.forEach(peer => {
-            // Extract unique IP addresses
-            if (peer.network?.remoteAddress) {
-                const ip = peer.network.remoteAddress.split(':')[0];
-                summary.networks.add(ip);
-            }
-
             // Extract protocols
             if (peer.protocols) {
                 Object.keys(peer.protocols).forEach(protocol => {
