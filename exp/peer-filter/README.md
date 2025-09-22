@@ -31,42 +31,6 @@ IPC_SOCKET=/path/to/socket.ipc ./dist/ipc-peer-filter [command]
 - `peer-purge-dry-run` - Preview what would be removed
 - `peer-purge` - Remove unwanted peers
 
-## Examples
-
-```bash
-# Basic info
-node ipc-client.js /storage/berabox/installations/bb-testnet-geth/runtime/ipc/geth.ipc
-
-# Peer summary
-./dist/ipc-peer-filter peer-summary /storage/berabox/installations/bb-testnet-geth/runtime/ipc/geth.ipc
-
-# Check what would be removed (safe)
-./dist/ipc-peer-filter peer-purge-dry-run /storage/berabox/installations/bb-testnet-geth/runtime/ipc/geth.ipc
-
-# Actually remove unwanted peers
-./dist/ipc-peer-filter peer-purge /storage/berabox/installations/bb-testnet-geth/runtime/ipc/geth.ipc
-
-# Use environment variable
-export IPC_SOCKET=/storage/berabox/installations/bb-mainnet-reth/runtime/ipc/reth.ipc
-./dist/ipc-peer-filter peer-summary
-```
-
-## Build Options
-
-```bash
-# Install dependencies
-npm install
-
-# Build for current platform (Linux x64)
-npm run build
-
-# Build for Linux + macOS
-npm run build-all
-
-# Build Linux only
-npm run build-linux
-```
-
 ## Whitelist
 
 Keeps only these clients:
