@@ -1,16 +1,35 @@
 {
-  "name": "peer-filter",
+  "name": "ipc-peer-filter",
   "version": "1.0.0",
-  "description": "Filter and analyze Ethereum peer connections",
-  "main": "peer-filter.js",
+  "description": "Live IPC peer management and filtering for geth/reth nodes",
+  "main": "ipc-client.js",
   "bin": {
-    "peer-filter": "./peer-filter.js"
+    "peer-filter": "./ipc-client.js"
   },
   "scripts": {
-    "summary": "node peer-filter.js summary",
-    "clean": "node peer-filter.js clean"
+    "build": "pkg . --out-path=dist/",
+    "build-all": "pkg . --targets=node18-linux-x64,node18-macos-x64 --out-path=dist/",
+    "build-linux": "pkg . --targets=node18-linux-x64 --out-path=dist/"
   },
-  "keywords": ["ethereum", "peers", "geth", "reth", "berageth"],
+  "pkg": {
+    "targets": ["node18-linux-x64"],
+    "outputPath": "dist/"
+  },
+  "keywords": [
+    "berachain",
+    "geth",
+    "reth",
+    "ipc",
+    "peer-management",
+    "peer-filtering",
+    "ethereum"
+  ],
   "author": "Berachain",
-  "license": "MIT"
+  "license": "MIT",
+  "engines": {
+    "node": ">=14.0.0"
+  },
+  "devDependencies": {
+    "pkg": "^5.8.1"
+  }
 }

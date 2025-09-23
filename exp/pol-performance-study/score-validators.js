@@ -20,8 +20,8 @@ const BGT_CONTRACT = '0x656b95E550C07a9ffe548bd4085c72418Ceb1dba';
 const KYBER_ROUTE_URL = 'https://gateway.mainnet.berachain.com/proxy/kyberswap/berachain/api/v1/routes';
 
 // Concurrency and performance constants
-const LOG_CHUNK_SIZE = 3000; // Size of each log fetching chunk in blocks
-const LOG_BATCH_SIZE = 8; // Number of log chunks to process in parallel
+const LOG_CHUNK_SIZE = 1000; // Size of each log fetching chunk in blocks
+const LOG_BATCH_SIZE = 16; // Number of log chunks to process in parallel
 const MAX_WORKER_COUNT = Math.max(1, os.cpus().length - 1); // Use most CPU cores, leave one free
 
 // Event signatures
@@ -293,6 +293,12 @@ async function getUsdRatePerToken(tokenIn) {
     
     if (!resp.ok) {
         const errorText = await resp.text();
+        // Handle "route not found" errors by defaulting to 1.0 USD per token
+        if (resp.status === 400 && errorText.includes('route not found')) {
+            log(`Route not found for token ${tokenIn}, defaulting to $1.0 per token`);
+            tokenUsdRateCache.set(tokenIn, 1.0);
+            return 1.0;
+        }
         throw new Error(`Kyber route fetch failed: ${resp.status} - ${errorText}`);
     }
     
@@ -680,7 +686,7 @@ async function indexPolEvents(validators, dayRanges) {
      * @param {number} batchSize - Number of chunks to process in parallel (default: 4)
      * @returns {Promise<Array>} Compiled array of all log entries from the range
      */
-    async function getLogsChunked(fromBlock, toBlock, filter, chunkSize = LOG_CHUNK_SIZE, batchSize = LOG_BATCH_SIZE) {
+    async function processLogsChunked(fromBlock, toBlock, filter, eventType, chunkSize = LOG_CHUNK_SIZE, batchSize = LOG_BATCH_SIZE) {
         const totalBlocks = toBlock - fromBlock + 1;
         
         // Create chunk ranges
@@ -693,95 +699,122 @@ async function indexPolEvents(validators, dayRanges) {
             currentBlock = chunkEnd + 1;
         }
         
-        const allLogs = [];
+        // Process ALL chunks in parallel with controlled concurrency
+        log(`Processing ${chunks.length} chunks for ${eventType} events with max ${batchSize} concurrent requests...`);
         
-        // Process chunks in parallel batches
-        for (let i = 0; i < chunks.length; i += batchSize) {
-            const batch = chunks.slice(i, i + batchSize);
-            
-            const batchPromises = batch.map(async (chunk, batchIndex) => {
-                try {
-                    const chunkLogs = await provider.getLogs({
-                        ...filter,
-                        fromBlock: chunk.start,
-                        toBlock: chunk.end
-                    });
-                    return chunkLogs;
-                } catch (e) {
-                    log(`Error fetching logs for chunk ${i + batchIndex + 1}/${chunks.length} (blocks ${chunk.start}-${chunk.end}): ${e.message}`);
-                    return []; // Return empty array on error to avoid breaking Promise.all
+        const semaphore = {
+            count: batchSize,
+            waiters: [],
+            async acquire() {
+                if (this.count > 0) {
+                    this.count--;
+                    return;
                 }
-            });
-            
-            // Wait for this batch to complete
-            const batchResults = await Promise.all(batchPromises);
-            
-            // Add batch results to main array incrementally to avoid large memory spikes
-            for (const chunkLogs of batchResults) {
-                if (chunkLogs && chunkLogs.length > 0) {
-                    allLogs.push(...chunkLogs);
+                return new Promise(resolve => this.waiters.push(resolve));
+            },
+            release() {
+                if (this.waiters.length > 0) {
+                    const resolve = this.waiters.shift();
+                    resolve();
+                } else {
+                    this.count++;
                 }
             }
-            
-            // Force garbage collection between batches if available
-            if (global.gc && i % 4 === 0) {
-                global.gc();
-            }
-            
-            // Small delay between batches to be nice to the RPC endpoint
-            if (i + batchSize < chunks.length) {
-                await new Promise(resolve => setTimeout(resolve, 100));
-            }
-        }
+        };
         
-        return allLogs;
+        const allPromises = chunks.map(async (chunk, index) => {
+            await semaphore.acquire();
+            try {
+                const chunkLogs = await provider.getLogs({
+                    ...filter,
+                    fromBlock: chunk.start,
+                    toBlock: chunk.end
+                });
+                
+                // Process logs immediately in this worker to avoid memory accumulation
+                let processedCount = 0;
+                for (const log of chunkLogs) {
+                    const topicPub = (log.topics?.[1] || '').toLowerCase();
+                    if (!pubTopicSet.has(topicPub)) continue;
+                    
+                    const proposer = topicToProposer.get(topicPub);
+                    const date = getDateForBlock(log.blockNumber);
+                    if (!date) continue;
+                    
+                    const parsed = iface.parseLog(log);
+                    
+                    // Initialize proposer data if needed
+                    if (!daily[date][proposer]) daily[date][proposer] = { vaultBgtBI: 0n, boosters: {} };
+                    
+                    if (eventType === 'Distributed') {
+                        const amount = BigInt(parsed.args.amount.toString());
+                        daily[date][proposer].vaultBgtBI += amount;
+                    } else if (eventType === 'BGTBoosterIncentivesProcessed') {
+                        const token = parsed.args.token.toLowerCase();
+                        const amount = BigInt(parsed.args.amount.toString());
+                        daily[date][proposer].boosters[token] = (daily[date][proposer].boosters[token] || 0n) + amount;
+                    }
+                    processedCount++;
+                }
+                
+                return processedCount;
+            } catch (e) {
+                log(`Error processing ${eventType} logs for chunk ${index + 1}/${chunks.length} (blocks ${chunk.start}-${chunk.end}): ${e.message}`);
+                return 0;
+            } finally {
+                semaphore.release();
+            }
+        });
+        
+        // Wait for ALL chunks to complete
+        const processedCounts = await Promise.all(allPromises);
+        const totalProcessed = processedCounts.reduce((sum, count) => sum + count, 0);
+        log(`Processed ${totalProcessed} ${eventType} events from ${chunks.length} chunks`);
+        
+        return totalProcessed;
     }
     
-    for (const [date, range] of Object.entries(dayRanges)) {
+    // Initialize daily structure for all dates
+    for (const date of Object.keys(dayRanges)) {
         daily[date] = {};
-        const blockRange = range.endBlock - range.startBlock + 1;
-        
-        log(`Indexing POL events for ${date} (${blockRange} blocks in parallel batches of ${LOG_BATCH_SIZE}x${LOG_CHUNK_SIZE})...`);
-        
-        // Distributed events from Distributor
-        try {
-            const logs = await getLogsChunked(range.startBlock, range.endBlock, {
-                address: DISTRIBUTOR_ADDRESS,
-                topics: [distributedTopic0]
-            });
-            
-            for (const log of logs) {
-                const topicPub = (log.topics?.[1] || '').toLowerCase();
-                if (!pubTopicSet.has(topicPub)) continue;
-                const proposer = topicToProposer.get(topicPub);
-                const parsed = iface.parseLog(log);
-                const amount = BigInt(parsed.args.amount.toString());
-                if (!daily[date][proposer]) daily[date][proposer] = { vaultBgtBI: 0n, boosters: {} };
-                daily[date][proposer].vaultBgtBI += amount;
+    }
+    
+    // Calculate overall block range across all days
+    const allRanges = Object.values(dayRanges);
+    const overallStartBlock = Math.min(...allRanges.map(r => r.startBlock));
+    const overallEndBlock = Math.max(...allRanges.map(r => r.endBlock));
+    const totalBlocks = overallEndBlock - overallStartBlock + 1;
+    
+    log(`Indexing POL events for all ${Object.keys(dayRanges).length} days (${totalBlocks} total blocks in parallel batches of ${LOG_BATCH_SIZE}x${LOG_CHUNK_SIZE})...`);
+    
+    // Helper function to determine which date a block belongs to
+    function getDateForBlock(blockNumber) {
+        for (const [date, range] of Object.entries(dayRanges)) {
+            if (blockNumber >= range.startBlock && blockNumber <= range.endBlock) {
+                return date;
             }
-        } catch (e) {
-            log(`Error indexing Distributed for ${date}: ${e.message}`);
         }
-        
-        // Booster incentives processed from any RewardVault
-        try {
-            const logs = await getLogsChunked(range.startBlock, range.endBlock, {
-                topics: [boosterTopic0]
-            });
-            
-            for (const log of logs) {
-                const topicPub = (log.topics?.[1] || '').toLowerCase();
-                if (!pubTopicSet.has(topicPub)) continue;
-                const proposer = topicToProposer.get(topicPub);
-                const parsed = iface.parseLog(log);
-                const token = parsed.args.token.toLowerCase();
-                const amount = BigInt(parsed.args.amount.toString());
-                if (!daily[date][proposer]) daily[date][proposer] = { vaultBgtBI: 0n, boosters: {} };
-                daily[date][proposer].boosters[token] = (daily[date][proposer].boosters[token] || 0n) + amount;
-            }
-        } catch (e) {
-            log(`Error indexing Booster events for ${date}: ${e.message}`);
-        }
+        return null;
+    }
+    
+    // Process both event types with memory-efficient parallel processing
+    try {
+        // Process Distributed events from the specific distributor address
+        await processLogsChunked(overallStartBlock, overallEndBlock, {
+            address: DISTRIBUTOR_ADDRESS,
+            topics: [distributedTopic0]
+        }, 'Distributed');
+    } catch (e) {
+        log(`Error processing Distributed events: ${e.message}`);
+    }
+    
+    try {
+        // Process BGTBoosterIncentivesProcessed events from any address
+        await processLogsChunked(overallStartBlock, overallEndBlock, {
+            topics: [boosterTopic0]
+        }, 'BGTBoosterIncentivesProcessed');
+    } catch (e) {
+        log(`Error processing BGTBoosterIncentivesProcessed events: ${e.message}`);
     }
     
     
