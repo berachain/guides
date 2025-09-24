@@ -1,6 +1,6 @@
-# IPC Client
+# Peer Filter
 
-A Go application for connecting to geth/reth IPC endpoints and managing peer connections.
+A Go application for connecting to geth/reth IPC endpoints and managing peer connections with filtering capabilities.
 
 ## Building
 
@@ -16,12 +16,12 @@ A Go application for connecting to geth/reth IPC endpoints and managing peer con
 
 2. **Build the binary:**
    ```bash
-   go build -o ipc-client ipc-client.go
+   go build -o peer-filter ipc-client.go
    ```
 
 3. **Make executable (if needed):**
    ```bash
-   chmod +x ipc-client
+   chmod +x peer-filter
    ```
 
 ### Cross-Platform Compilation
@@ -29,17 +29,14 @@ A Go application for connecting to geth/reth IPC endpoints and managing peer con
 To compile for different platforms:
 
 ```bash
-# Linux (64-bit)
-GOOS=linux GOARCH=amd64 go build -o ipc-client-linux ipc-client.go
+# Linux x86_64
+GOOS=linux GOARCH=amd64 go build -o peer-filter-linux-amd64 ipc-client.go
 
-# macOS (64-bit)
-GOOS=darwin GOARCH=amd64 go build -o ipc-client-macos ipc-client.go
+# Linux ARM64
+GOOS=linux GOARCH=arm64 go build -o peer-filter-linux-arm64 ipc-client.go
 
-# Windows (64-bit)
-GOOS=windows GOARCH=amd64 go build -o ipc-client-windows.exe ipc-client.go
-
-# ARM64 (e.g., Apple Silicon, ARM servers)
-GOOS=linux GOARCH=arm64 go build -o ipc-client-arm64 ipc-client.go
+# macOS ARM64 (Apple Silicon)
+GOOS=darwin GOARCH=arm64 go build -o peer-filter-macos-arm64 ipc-client.go
 ```
 
 ## Usage
