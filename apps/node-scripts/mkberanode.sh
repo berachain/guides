@@ -468,7 +468,7 @@ install_snapshots() {
   # Find the downloaded snapshot files
   local beacon_snapshot el_snapshot
   beacon_snapshot=$(find "$snapshot_dir" -name "snapshot_beacond_${EL_CHOICE}_${MODE}_*.tar.lz4" | head -n1)
-  el_snapshot=$(find "$snapshot_dir" -name "*-${EL_CHOICE}-${MODE}_*.tar.lz4" | head -n1)
+  el_snapshot=$(find "$snapshot_dir" -name "bera-${EL_CHOICE}-*${MODE}*.tar.lz4" | head -n1)
   
   # Install beacon snapshot
   if [[ -n "$beacon_snapshot" && -f "$beacon_snapshot" ]]; then
