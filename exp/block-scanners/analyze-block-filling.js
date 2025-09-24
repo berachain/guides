@@ -21,6 +21,8 @@ const { hideBin } = require('yargs/helpers');
 const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 
+const { ValidatorNameDB, ConfigHelper } = require('./lib/shared-utils');
+
 // Define constants for table column names and sorting keys
 const COL_PROPOSER = 'Proposer';
 const COL_AVG_TXS_PER_BLOCK = 'Avg Txs/Block';
@@ -30,28 +32,17 @@ const COL_EMPTY_BLOCKS = 'Empty Blocks';
 const COL_SAMPLE_BLOCKS = 'Sample Blocks';
 const COL_CLIENT = 'Client';
 
-async function getProposerTitle(proposerAddress) {
-    return new Promise((resolve, reject) => {
-        const dbPath = path.join(__dirname, 'validators.db');
-        const db = new sqlite3.Database(dbPath, sqlite3.OPEN_READONLY, (err) => {
-            if (err) {
-                // If database doesn't exist or can't be opened, just return the address
-                resolve(proposerAddress);
-                return;
-            }
+// Initialize the validator database once
+const validatorDB = new ValidatorNameDB();
 
-            db.get('SELECT name FROM validators WHERE address = ?', [proposerAddress], (err, row) => {
-                db.close();
-                if (err) {
-                    resolve(proposerAddress);
-                } else if (row && row.name && row.name !== 'N/A') {
-                    resolve(row.name);
-                } else {
-                    resolve(proposerAddress);
-                }
-            });
-        });
-    });
+async function getProposerTitle(proposerAddress) {
+    try {
+        const name = await validatorDB.getValidatorName(proposerAddress);
+        return name || proposerAddress;
+    } catch (error) {
+        // If there's any error, just return the address
+        return proposerAddress;
+    }
 }
 
 async function decodeExtraDataAsAscii(extraData) {
@@ -283,7 +274,7 @@ async function processBlocksInChunks(provider, blockNumbers, clRpcBaseUrl, concu
     return results;
 }
 
-async function analyzeBlockProposers(provider, startBlock, endBlock, clRpcBaseUrl, sortBy = COL_PROPOSER, sortOrder = 'asc', concurrency = 10, batchSize = 100) {
+async function analyzeBlockProposers(provider, startBlock, endBlock, clRpcBaseUrl, sortBy = COL_PROPOSER, sortOrder = 'asc', concurrency = 16, batchSize = 1000) {
     const proposerStats = {};
     let totalBlocksScanned = 0;
     const GAS_LIMIT_REFERENCE = 36000000; 
@@ -463,8 +454,8 @@ async function main() {
     const BLOCKS_TO_SCAN_PRIOR = 43200;
     const DEFAULT_SORT_BY = COL_GAS_PERCENT_LIMIT;
     const FIXED_SORT_ORDER = 'desc';
-    const DEFAULT_CONCURRENCY = 10;
-    const DEFAULT_BATCH_SIZE = 100;
+    const DEFAULT_CONCURRENCY = 16;
+    const DEFAULT_BATCH_SIZE = 500;
 
     const elRpcUrlEnv = process.env.EL_ETHRPC_URL;
     const clRpcUrlEnv = process.env.CL_ETHRPC_URL;
