@@ -278,9 +278,9 @@ async function getUsdRatePerToken(tokenIn) {
     const WBERA_ADDRESS = '0x6969696969696969696969696969696969696969';
     const actualTokenIn = (tokenIn.toLowerCase() === BGT_CONTRACT.toLowerCase()) ? WBERA_ADDRESS : tokenIn;
     
-    // Simulate swapping 100 units of the token to get USD value
+    // Simulate swapping 1 unit of the token to get USD value
     const decimals = tokenDecimalsCache.get(tokenIn) ?? 18;
-    const amountIn = (10n ** BigInt(decimals)) * 100n; // 100 tokens in wei
+    const amountIn = 10n ** BigInt(decimals); // 1 token in wei
     const params = new URLSearchParams({
         tokenIn: actualTokenIn,
         tokenOut: HONEY_TOKEN.toLowerCase(), // Price against HONEY (USD-pegged)
@@ -306,7 +306,7 @@ async function getUsdRatePerToken(tokenIn) {
     
     // Extract USD value from API response (handles BigInt values safely)
     const amountOutUsd = parseFloat(data?.data?.routeSummary?.amountOutUsd || 0);
-    const rate = amountOutUsd / 100; // Divide by 100 since we used 100 tokens
+    const rate = amountOutUsd; // Direct rate since we used 1 token
     tokenUsdRateCache.set(tokenIn, rate);
     return rate;
 }
@@ -929,12 +929,15 @@ Usage:
         
   Options:
     --days=N          Number of days to analyze (default: 45)
+    --end-date=DATE   End date for analysis in YYYY-MM-DD format (default: yesterday)
     --help, -h        Show this help message
          
   Examples:
-    node score-validators.js --days=1      # Quick test: analyze yesterday only
-    node score-validators.js --days=7      # Analyze last 7 days
-    node score-validators.js              # Full analysis: last 45 days (default)
+    node score-validators.js --days=1                         # Quick test: analyze yesterday only
+    node score-validators.js --days=7                         # Analyze last 7 days ending yesterday
+    node score-validators.js --days=7 --end-date=2025-01-25   # Analyze 7 days ending on Jan 25, 2025
+    node score-validators.js --end-date=2025-01-20            # Analyze 45 days ending on Jan 20, 2025
+    node score-validators.js                                  # Full analysis: last 45 days (default)
         
 Environment Variables:
   EL_ETHRPC_URL     Execution layer RPC endpoint
@@ -948,7 +951,6 @@ Memory Requirements:
         process.exit(0);
     }
     
-    const daysToAnalyze = parseInt(args.find(arg => arg.startsWith('--days='))?.split('=')[1]) || 45;
     const showFullDetail = process.env.VERBOSE === 'true' || process.env.VERBOSE === '1';
     
     
@@ -1640,19 +1642,42 @@ function generateReport(statistics, validators, dayBoundaries) {
      */
 async function main() {
     try {
-        
+        // Parse command line arguments
+        const daysToAnalyze = parseInt(args.find(arg => arg.startsWith('--days='))?.split('=')[1]) || 45;
+        const endDateArg = args.find(arg => arg.startsWith('--end-date='))?.split('=')[1];
             
-            // Analysis mode
+        // Analysis mode
         log(`Analyzing ${daysToAnalyze} days of validator performance...`);
+        if (endDateArg) {
+            log(`End date specified: ${endDateArg}`);
+        }
         
-        // Generate dates to analyze (complete days, starting from yesterday)
-        // Also include today to find the boundary for the last analyzed day's end block
-        const today = new Date();
+        // Generate dates to analyze (complete days, ending on specified date or yesterday)
+        // Also include the day after the end date to find the boundary for the last analyzed day's end block
+        let endDate;
+        if (endDateArg) {
+            // Parse and validate the provided end date
+            const dateMatch = endDateArg.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+            if (!dateMatch) {
+                throw new Error(`Invalid end date format: ${endDateArg}. Expected YYYY-MM-DD format.`);
+            }
+            endDate = new Date(endDateArg + 'T23:59:59.999Z'); // End of day in UTC
+            endDate.setUTCDate(endDate.getUTCDate() + 1); // Move to start of next day for boundary calculation
+        } else {
+            // Default: use today (which means we analyze up to yesterday)
+            endDate = new Date();
+        }
+        
         const dates = Array.from({ length: daysToAnalyze + 1 }, (_, i) => {
-            const date = new Date(today);
-            date.setDate(date.getDate() - (daysToAnalyze - i)); // i=0 -> first day to analyze, i=daysToAnalyze -> today
+            const date = new Date(endDate);
+            date.setDate(date.getDate() - (daysToAnalyze - i)); // i=0 -> first day to analyze, i=daysToAnalyze -> boundary day
             return date;
         });
+        
+        // Log the actual analysis period
+        const firstDay = dates[0].toISOString().split('T')[0];
+        const lastDay = dates[dates.length - 2].toISOString().split('T')[0]; // -2 because last date is boundary
+        log(`Analysis period: ${firstDay} to ${lastDay} (${daysToAnalyze} days)`);
         
         // Load validators
         const validators = loadValidators();
