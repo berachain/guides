@@ -51,14 +51,6 @@ IPC_SOCKET=/path/to/socket.ipc ./peer-filter [command]
 - `peer-purge-dry-run` - Show how many peers would be removed by filter
 - `peer-purge` - Remove unwanted peers based on whitelist filter
 
-## Examples
-
-```bash
-./peer-filter /storage/berabox/installations/bb-testnet-geth/runtime/ipc/geth.ipc
-./peer-filter peer-summary /storage/berabox/installations/bb-testnet-geth/runtime/ipc/geth.ipc
-IPC_SOCKET=/storage/berabox/installations/bb-mainnet-reth/runtime/ipc/reth.ipc ./peer-filter peer-purge-dry-run
-```
-
 ## Features
 
 - Statically compiled binary (no runtime dependencies)
