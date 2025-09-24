@@ -16,7 +16,7 @@ A Go application for connecting to geth/reth IPC endpoints and managing peer con
 
 2. **Build the binary:**
    ```bash
-   go build -o peer-filter ipc-client.go
+   go build -o peer-filter peer-filter.go
    ```
 
 3. **Make executable (if needed):**
@@ -30,20 +30,17 @@ To compile for different platforms:
 
 ```bash
 # Linux x86_64
-GOOS=linux GOARCH=amd64 go build -o peer-filter-linux-amd64 ipc-client.go
+GOOS=linux GOARCH=amd64 go build -o peer-filter-linux-amd64 peer-filter.go
 
 # Linux ARM64
-GOOS=linux GOARCH=arm64 go build -o peer-filter-linux-arm64 ipc-client.go
-
-# macOS ARM64 (Apple Silicon)
-GOOS=darwin GOARCH=arm64 go build -o peer-filter-macos-arm64 ipc-client.go
+GOOS=linux GOARCH=arm64 go build -o peer-filter-linux-arm64 peer-filter.go
 ```
 
 ## Usage
 
 ```bash
-./ipc-client [command] [ipc-path]
-IPC_SOCKET=/path/to/socket.ipc ./ipc-client [command]
+./peer-filter [command] [ipc-path]
+IPC_SOCKET=/path/to/socket.ipc ./peer-filter [command]
 ```
 
 ## Commands
@@ -57,9 +54,9 @@ IPC_SOCKET=/path/to/socket.ipc ./ipc-client [command]
 ## Examples
 
 ```bash
-./ipc-client /storage/berabox/installations/bb-testnet-geth/runtime/ipc/geth.ipc
-./ipc-client peer-summary /storage/berabox/installations/bb-testnet-geth/runtime/ipc/geth.ipc
-IPC_SOCKET=/storage/berabox/installations/bb-mainnet-reth/runtime/ipc/reth.ipc ./ipc-client peer-purge-dry-run
+./peer-filter /storage/berabox/installations/bb-testnet-geth/runtime/ipc/geth.ipc
+./peer-filter peer-summary /storage/berabox/installations/bb-testnet-geth/runtime/ipc/geth.ipc
+IPC_SOCKET=/storage/berabox/installations/bb-mainnet-reth/runtime/ipc/reth.ipc ./peer-filter peer-purge-dry-run
 ```
 
 ## Features
