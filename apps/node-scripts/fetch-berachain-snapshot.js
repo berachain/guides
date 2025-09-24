@@ -1,18 +1,121 @@
 #!/opt/homebrew/bin/node
 
-// first one in the list is used; edit to suit your needs
-const el_client = 'reth' || 'geth';
-const snapshot_chain = "bera-testnet-snapshot" || "bera-snapshot";
-const geography = "na" || 'eu' || 'as'; // North America, EU, Asia
-const snapshot_type = "pruned" || "archive";
-
 const https = require('https');
 const path = require('path');
 const fs = require('fs');
 const child_process = require('child_process');
 
+// Parse command line arguments
+function parseArgs() {
+    const args = process.argv.slice(2);
+    const config = {
+        el_client: 'reth',
+        snapshot_chain: 'bera-snapshot',
+        geography: 'na',
+        snapshot_type: 'pruned'
+    };
+
+    for (let i = 0; i < args.length; i++) {
+        const arg = args[i];
+        switch (arg) {
+            case '--help':
+            case '-h':
+                showHelp();
+                process.exit(0);
+                break;
+            case '--client':
+            case '-c':
+                if (i + 1 < args.length) {
+                    config.el_client = args[++i];
+                } else {
+                    console.error('Error: --client requires a value (reth or geth)');
+                    process.exit(1);
+                }
+                break;
+            case '--network':
+            case '-n':
+                if (i + 1 < args.length) {
+                    const network = args[++i];
+                    config.snapshot_chain = network === 'testnet' ? 'bera-snapshot-testnet' : 'bera-snapshot';
+                } else {
+                    console.error('Error: --network requires a value (mainnet or testnet)');
+                    process.exit(1);
+                }
+                break;
+            case '--geography':
+            case '-g':
+                if (i + 1 < args.length) {
+                    config.geography = args[++i];
+                } else {
+                    console.error('Error: --geography requires a value (na, eu, or as)');
+                    process.exit(1);
+                }
+                break;
+            case '--type':
+            case '-t':
+                if (i + 1 < args.length) {
+                    config.snapshot_type = args[++i];
+                } else {
+                    console.error('Error: --type requires a value (pruned or archive)');
+                    process.exit(1);
+                }
+                break;
+            default:
+                console.error(`Error: Unknown option ${arg}`);
+                showHelp();
+                process.exit(1);
+        }
+    }
+
+    // Validate arguments
+    if (!['reth', 'geth'].includes(config.el_client)) {
+        console.error('Error: client must be either "reth" or "geth"');
+        process.exit(1);
+    }
+    if (!['na', 'eu', 'as'].includes(config.geography)) {
+        console.error('Error: geography must be "na", "eu", or "as"');
+        process.exit(1);
+    }
+    if (!['pruned', 'archive'].includes(config.snapshot_type)) {
+        console.error('Error: type must be either "pruned" or "archive"');
+        process.exit(1);
+    }
+
+    return config;
+}
+
+function showHelp() {
+    console.log(`
+Bera Snapshot Downloader
+
+Downloads Berachain snapshots for beacon and execution clients.
+
+Usage: ./fetch-berachain-snapshot.js [options]
+
+Options:
+  -c, --client <client>      Execution client: reth or geth (default: reth)
+  -n, --network <network>    Network: mainnet or testnet (default: mainnet)
+  -g, --geography <geo>      Geography: na, eu, or as (default: na)
+  -t, --type <type>         Snapshot type: pruned or archive (default: pruned)
+  -h, --help                Show this help message
+
+Examples:
+  ./fetch-berachain-snapshot.js                    # Download reth pruned mainnet from NA
+  ./fetch-berachain-snapshot.js -c geth            # Download geth pruned mainnet from NA
+  ./fetch-berachain-snapshot.js -n testnet -t archive  # Download reth archive testnet from NA
+  ./fetch-berachain-snapshot.js -c geth -n testnet -g eu -t archive  # Download geth archive testnet from EU
+    `);
+}
+
+const config = parseArgs();
+
 console.log('Bera Snapshot Downloader');
 console.log('-------------------------');
+console.log(`Network: ${config.snapshot_chain === 'bera-snapshot' ? 'mainnet' : 'testnet'}`);
+console.log(`Client: ${config.el_client}`);
+console.log(`Type: ${config.snapshot_type}`);
+console.log(`Geography: ${config.geography}`);
+console.log('');
 
 function startDownload(mediaLink, fileName) {
 	const filePath = `downloads/${fileName}`;
@@ -24,10 +127,14 @@ function startDownload(mediaLink, fileName) {
 }
 
 // Fetch bucket contents and start downloads
-console.log('Fetching bucket contents...');
+const bucketUrl = `https://storage.googleapis.com/storage/v1/b/${config.snapshot_chain}-${config.geography}/o`;
+console.log('Fetching bucket contents from:');
+console.log(`  ${bucketUrl}`);
+console.log('');
+
 const req = https.request({
 	hostname: 'storage.googleapis.com',
-	path: `/storage/v1/b/${snapshot_chain}-${geography}/o`,
+	path: `/storage/v1/b/${config.snapshot_chain}-${config.geography}/o`,
 	method: 'GET',
 	headers: { 'Accept': 'application/json' }
 }, async (res) => {
@@ -58,23 +165,43 @@ const req = https.request({
 		});
 		
 		const dir_keys = {
-			beacon_key: `beacon_${el_client}/${snapshot_type}`,
-			el_key: `bera-${el_client}/${snapshot_type}`
+			beacon_key: `beacon_${config.el_client}/${config.snapshot_type}`,
+			el_key: `bera-${config.el_client}/${config.snapshot_type}`
 		};
 
-		// Download files sequentially
+		// Find the files to download and log their URLs
+		const downloadsToQueue = [];
 		for (const key in dir_keys) {
 			const dir = dir_keys[key];
 			if (directoryStructure[dir]) {
 				const files = directoryStructure[dir];
 				files.sort((a, b) => new Date(b.timeCreated) - new Date(a.timeCreated));
-				console.log(`Found ${files[0].name} in ${dir}`);
-				try {
-					await startDownload(files[0].mediaLink, files[0].name);
-				} catch (err) {
-					console.error(`Error downloading ${files[0].name}: ${err.message}`);
-					process.exit(1);
-				}
+				const latest = files[0];
+				downloadsToQueue.push({
+					name: latest.name,
+					mediaLink: latest.mediaLink,
+					dir: dir
+				});
+			}
+		}
+
+		if (downloadsToQueue.length > 0) {
+			console.log('Will download the following files:');
+			downloadsToQueue.forEach(item => {
+				console.log(`  ${item.name} from ${item.dir}`);
+				console.log(`    URL: ${item.mediaLink}`);
+			});
+			console.log('');
+		}
+
+		// Download files sequentially
+		for (const item of downloadsToQueue) {
+			console.log(`Starting download: ${item.name}`);
+			try {
+				await startDownload(item.mediaLink, item.name);
+			} catch (err) {
+				console.error(`Error downloading ${item.name}: ${err.message}`);
+				process.exit(1);
 			}
 		}
 		console.log('\nAll downloads completed!');
