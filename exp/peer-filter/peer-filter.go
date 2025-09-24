@@ -678,8 +678,8 @@ func truncateString(s string, maxLen int) string {
 func showUsage() {
 	fmt.Println()
 	fmt.Println("Usage:")
-	fmt.Println("  ./ipc-client [command] [ipc-path]")
-	fmt.Println("  IPC_SOCKET=/path/to/socket.ipc ./ipc-client [command]")
+	fmt.Println("  ./peer-filter [command] [ipc-path]")
+	fmt.Println("  IPC_SOCKET=/path/to/socket.ipc ./peer-filter [command]")
 	fmt.Println()
 	fmt.Println("Commands:")
 	fmt.Println("  info (default)         - Show client version, block number, and peer count")
@@ -689,9 +689,9 @@ func showUsage() {
 	fmt.Println("  peer-purge            - Remove unwanted peers based on whitelist filter")
 	fmt.Println()
 	fmt.Println("Examples:")
-	fmt.Println("  ./ipc-client /storage/berabox/installations/bb-testnet-geth/runtime/ipc/geth.ipc")
-	fmt.Println("  ./ipc-client peer-summary /storage/berabox/installations/bb-testnet-geth/runtime/ipc/geth.ipc")
-	fmt.Println("  IPC_SOCKET=/storage/berabox/installations/bb-mainnet-reth/runtime/ipc/reth.ipc ./ipc-client peer-purge-dry-run")
+	fmt.Println("  ./peer-filter /storage/berabox/installations/bb-testnet-geth/runtime/ipc/geth.ipc")
+	fmt.Println("  ./peer-filter peer-summary /storage/berabox/installations/bb-testnet-geth/runtime/ipc/geth.ipc")
+	fmt.Println("  IPC_SOCKET=/storage/berabox/installations/bb-mainnet-reth/runtime/ipc/reth.ipc ./peer-filter peer-purge-dry-run")
 }
 
 func main() {
