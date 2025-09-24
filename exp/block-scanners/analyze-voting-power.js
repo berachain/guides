@@ -201,15 +201,39 @@ function extractClientVersion(clientString) {
     return 'unknown';
 }
 
-// Fetch validators from consensus layer
+// Fetch validators from consensus layer with proper pagination
 async function fetchValidators(clRpcUrl) {
     try {
-        const response = await axios.get(`${clRpcUrl}/validators`);
-        return response.data.result.validators.map(validator => ({
-            address: validator.address,
-            votingPower: parseInt(validator.voting_power),
-            pubKey: validator.pub_key
-        }));
+        const validators = [];
+        let page = 1;
+        const perPage = 100; // Reasonable page size for API pagination
+        
+        // Paginate through all validators
+        while (true) {
+            const response = await axios.get(`${clRpcUrl}/validators?per_page=${perPage}&page=${page}`);
+            
+            if (!response.data.result?.validators || response.data.result.validators.length === 0) {
+                break; // No more validators to fetch
+            }
+            
+            // Process each validator in this page
+            const pageValidators = response.data.result.validators.map(validator => ({
+                address: validator.address,
+                votingPower: parseInt(validator.voting_power),
+                pubKey: validator.pub_key
+            }));
+            
+            validators.push(...pageValidators);
+            
+            // Check if we've reached the end of results
+            if (response.data.result.validators.length < perPage) {
+                break; // Last page
+            }
+            
+            page++; // Continue to next page
+        }
+        
+        return validators;
     } catch (error) {
         console.error('Error fetching validators:', error.message);
         return [];
@@ -228,9 +252,9 @@ async function getBlockProposer(blockHeight, clRpcUrl) {
 
 async function analyzeVotingPower(networkName = 'mainnet', maxBlocksToScan = 10000, detailedMode = false, upgradeMode = false) {
     // Get network configuration
-    const networkConfig = ConfigHelper.getNetworkConfig(networkName);
+    const networkConfig = ConfigHelper.getChainConfig(networkName);
     const elProvider = new ethers.JsonRpcProvider(networkConfig.el);
-    const clRpcUrl = networkConfig.blockScanner;
+    const clRpcUrl = networkConfig.cl;
     
     // Initialize validator name database
     const validatorDB = new ValidatorNameDB();
@@ -373,7 +397,7 @@ async function analyzeVotingPower(networkName = 'mainnet', maxBlocksToScan = 100
     
     // Analyze identified validators
     for (const [proposerAddress, clientInfo] of proposerClients.entries()) {
-        const votingPower = validatorMap.get(proposerAddress) || 0;
+        const votingPower = validatorMap.get(proposerAddress)/1000000000 || 0;
         analyzedVotingPower += votingPower;
         
         // Client type stats
@@ -408,7 +432,7 @@ async function analyzeVotingPower(networkName = 'mainnet', maxBlocksToScan = 100
     console.log('\n📈 CLIENT DISTRIBUTION:');
     const clientTable = new Table({
         head: ['Client', 'Validators', 'Voting Power', '% by Count', '% by Power'],
-        colWidths: [15, 12, 15, 12, 12]
+        colWidths: [15, 12, 25, 12, 12]
     });
     
     const sortedClients = Array.from(clientStats.entries()).sort((a, b) => b[1].votingPower - a[1].votingPower);
@@ -430,7 +454,7 @@ async function analyzeVotingPower(networkName = 'mainnet', maxBlocksToScan = 100
         console.log('\n📋 VERSION DISTRIBUTION:');
         const versionTable = new Table({
             head: ['Client Version', 'Validators', 'Voting Power', '% by Count', '% by Power'],
-            colWidths: [25, 12, 15, 12, 12]
+            colWidths: [25, 12, 25, 12, 12]
         });
         
         const sortedVersions = Array.from(versionStats.entries()).sort((a, b) => b[1].votingPower - a[1].votingPower);
