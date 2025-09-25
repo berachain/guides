@@ -11,42 +11,39 @@ A comprehensive RPC testing tool for benchmarking Berachain node performance, in
 - **Circuit Breaker**: Prevents overwhelming failing nodes
 - **Read-Only Operations**: All calls are safe `eth_call` queries that don't modify state
 
-## Contract Methods Tested
+## Contract Methods Tested (22 Total)
 
-### BGT Token (`0x656b95E550C07a9ffe548bd4085c72418Ceb1dba`)
-- `totalSupply()` - Returns total BGT supply
-- `balanceOf(address)` - Returns BGT balance for various addresses:
-  - Zero address (0x0)
-  - Governance contract
-  - BeraChef contract
-  - BEX Vault contract
-  - HONEY contract
-  - WBERA contract
-- `minter()` - Returns the authorized minter address
+| Call Name | Contract | Address | Function | Description |
+|-----------|----------|---------|----------|-------------|
+| `bgt_totalSupply` | BGT Token | `0x656b95E550C07a9ffe548bd4085c72418Ceb1dba` | `totalSupply()` | Returns total BGT supply |
+| `bgt_balanceOf_zero` | BGT Token | `0x656b95E550C07a9ffe548bd4085c72418Ceb1dba` | `balanceOf(0x0)` | BGT balance of zero address |
+| `bgt_balanceOf_validator1` | BGT Token | `0x656b95E550C07a9ffe548bd4085c72418Ceb1dba` | `balanceOf(governance)` | BGT balance of governance address |
+| `bgt_balanceOf_validator2` | BGT Token | `0x656b95E550C07a9ffe548bd4085c72418Ceb1dba` | `balanceOf(berachef)` | BGT balance of BeraChef address |
+| `bgt_balanceOf_vault` | BGT Token | `0x656b95E550C07a9ffe548bd4085c72418Ceb1dba` | `balanceOf(vault)` | BGT balance of BEX Vault |
+| `bgt_balanceOf_honey` | BGT Token | `0x656b95E550C07a9ffe548bd4085c72418Ceb1dba` | `balanceOf(honey)` | BGT balance of HONEY contract |
+| `bgt_balanceOf_wbera` | BGT Token | `0x656b95E550C07a9ffe548bd4085c72418Ceb1dba` | `balanceOf(wbera)` | BGT balance of WBERA contract |
+| `bgt_minter` | BGT Token | `0x656b95E550C07a9ffe548bd4085c72418Ceb1dba` | `minter()` | Returns the authorized minter address |
+| `honey_totalSupply` | HONEY Token | `0xFCBD14DC51f0A4d49d5E53C2E0950e0bC26d0Dce` | `totalSupply()` | Returns total HONEY supply |
+| `honey_name` | HONEY Token | `0xFCBD14DC51f0A4d49d5E53C2E0950e0bC26d0Dce` | `name()` | Returns token name |
+| `honey_symbol` | HONEY Token | `0xFCBD14DC51f0A4d49d5E53C2E0950e0bC26d0Dce` | `symbol()` | Returns token symbol |
+| `honey_decimals` | HONEY Token | `0xFCBD14DC51f0A4d49d5E53C2E0950e0bC26d0Dce` | `decimals()` | Returns token decimals |
+| `wbera_totalSupply` | WBERA Token | `0x6969696969696969696969696969696969696969` | `totalSupply()` | Returns total WBERA supply |
+| `wbera_name` | WBERA Token | `0x6969696969696969696969696969696969696969` | `name()` | Returns token name |
+| `wbera_decimals` | WBERA Token | `0x6969696969696969696969696969696969696969` | `decimals()` | Returns token decimals |
+| `vault_getAuthorizer` | BEX Vault | `0x4Be03f781C497A489E3cB0287833452cA9b9E80B` | `getAuthorizer()` | Returns the vault's authorizer contract |
+| `vault_getProtocolFeesCollector` | BEX Vault | `0x4Be03f781C497A489E3cB0287833452cA9b9E80B` | `getProtocolFeesCollector()` | Returns protocol fees collector address |
+| `gov_votingDelay` | Governance | `0x4f4A5c2194B8e856b7a05B348F6ba3978FB6f6D5` | `votingDelay()` | Returns voting delay period |
+| `gov_votingPeriod` | Governance | `0x4f4A5c2194B8e856b7a05B348F6ba3978FB6f6D5` | `votingPeriod()` | Returns voting period length |
+| `eth_blockNumber` | JSON-RPC | N/A | `eth_blockNumber` | Latest block number |
+| `eth_gasPrice` | JSON-RPC | N/A | `eth_gasPrice` | Current gas price |
+| `net_version` | JSON-RPC | N/A | `net_version` | Network version ID |
 
-### HONEY Token (`0xFCBD14DC51f0A4d49d5E53C2E0950e0bC26d0Dce`)
-- `totalSupply()` - Returns total HONEY supply
-- `name()` - Returns token name
-- `symbol()` - Returns token symbol
-- `decimals()` - Returns token decimals
-
-### WBERA Token (`0x6969696969696969696969696969696969696969`)
-- `totalSupply()` - Returns total WBERA supply
-- `name()` - Returns token name
-- `decimals()` - Returns token decimals
-
-### BEX Vault (`0x4Be03f781C497A489E3cB0287833452cA9b9E80B`)
-- `getAuthorizer()` - Returns the vault's authorizer contract
-- `getProtocolFeesCollector()` - Returns protocol fees collector address
-
-### Governance (`0x4f4A5c2194B8e856b7a05B348F6ba3978FB6f6D5`)
-- `votingDelay()` - Returns voting delay period
-- `votingPeriod()` - Returns voting period length
-
-### Standard JSON-RPC Methods
-- `eth_blockNumber` - Latest block number
-- `eth_gasPrice` - Current gas price
-- `net_version` - Network version ID
+### Key Features of the Test Suite:
+- **Diverse BGT Balance Queries**: Tests BGT token balances across 6 different important contract addresses
+- **Token Metadata Calls**: Validates name, symbol, decimals, and supply functions across ERC20 tokens
+- **Governance Functions**: Tests core governance contract view functions
+- **Exchange Infrastructure**: Tests BEX vault authorization and fee collection functions
+- **Standard RPC Calls**: Includes basic JSON-RPC methods for baseline comparison
 
 ## Installation
 
