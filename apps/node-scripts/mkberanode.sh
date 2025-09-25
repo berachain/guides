@@ -14,13 +14,8 @@
 #     --mode {archive|pruned} \
 #     [--cl-version vX.Y.Z] \
 #     [--el-version vA.B.C] \
-#     [--snapshot] \
+#     [--no-snapshot] \
 #     [--snapshot-geography {na|eu|as}]
-#
-# Examples:
-#   sudo ./mkberanode.sh --chain mainnet --el reth --mode archive
-#   sudo ./mkberanode.sh --chain bepolia --el geth --mode pruned --cl-version v1.3.2 --el-version v1.19.5
-#   sudo ./mkberanode.sh --chain mainnet --el reth --mode pruned --snapshot --snapshot-geography eu
 
 set -eu
 # Enable pipefail if the shell supports it (bash, zsh). Safe no-op on dash/sh.
@@ -34,18 +29,15 @@ EL_CHOICE=""        # reth|geth
 MODE="pruned"         # archive|pruned
 CL_VERSION=""       # e.g. v1.3.2 (empty: latest)
 EL_VERSION=""       # e.g. v1.20.0 (empty: latest)
-GENESIS_FROM_MAIN=0  # if 1, fetch EL genesis from main branch
-USE_SNAPSHOT=0      # if 1, download and install snapshots
+USE_SNAPSHOT=1      # if 1, download and install snapshots
 SNAPSHOT_GEOGRAPHY="na"  # na|eu|as for snapshot region
 
 # Paths
 BASE_DIR="/opt/berachain"
 BIN_DIR="$BASE_DIR/bin"
-DATA_DIR="$BASE_DIR/data"
-CL_HOME="$DATA_DIR/cl"
-EL_HOME="$DATA_DIR/el"
-EL_CHAIN_DIR="$EL_HOME/chain"
-CONFIG_DIR="$BASE_DIR/config"
+CL_HOME="$BASE_DIR/var/beacond"
+EL_HOME="$BASE_DIR/var/el"
+CONFIG_DIR="$BASE_DIR/chainspec"
 RUNTIME_DIR="$BASE_DIR/runtime"
 JWT_PATH="$RUNTIME_DIR/jwt.hex"
 
@@ -82,19 +74,14 @@ need_cmd() { command -v "$1" >/dev/null 2>&1 || { err "Required command '$1' not
 print_usage() {
   cat <<EOF
 Usage:
-  sudo $0 --chain {mainnet|bepolia} --el {reth|geth} --mode {archive|pruned} [--cl-version vX.Y.Z] [--el-version vA.B.C] [--genesis-main] [--snapshot] [--snapshot-geography {na|eu|as}]
+  sudo $0 --chain {mainnet|bepolia} --el {reth|geth} --mode {archive|pruned} [--cl-version vX.Y.Z] [--el-version vA.B.C] [--no-snapshot] [--snapshot-geography {na|eu|as}]
 
 Examples:
   sudo $0 --chain mainnet --el reth --mode archive
   sudo $0 --chain bepolia --el geth --mode pruned --cl-version v1.3.2 --el-version v1.19.5
-  sudo $0 --chain mainnet --el reth --mode pruned --snapshot --snapshot-geography eu
+  sudo $0 --chain mainnet --el reth --mode pruned --snapshot-geography eu
+  sudo $0 --chain mainnet --el reth --mode pruned --no-snapshot
 
-Notes:
-- If versions are omitted, the script installs the latest releases.
-- --genesis-main forces fetching BOTH EL genesis and KZG from the main branch
-  (raw GitHub), regardless of the CL version used for binaries.
-- --snapshot downloads and installs snapshots to skip initial sync
-- --snapshot-geography selects snapshot region (na, eu, or as). Defaults to na.
 EOF
 }
 
@@ -106,6 +93,12 @@ if [[ $# -eq 0 ]]; then
   exit 1
 fi
 
+# Disallow running via interactive shells that inject completion noise
+if [[ -n ${BASH_COMPLETION_VERSINFO-} || $(type -t dump_bash_state || true) == function ]]; then
+  # Try to disable completion shim if sourced in environment
+  unset -f dump_bash_state >/dev/null 2>&1 || true
+fi
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --chain) CHAIN="${2:-}"; shift 2;;
@@ -113,8 +106,7 @@ while [[ $# -gt 0 ]]; do
     --mode) MODE="${2:-}"; shift 2;;
     --cl-version) CL_VERSION="${2:-}"; shift 2;;
     --el-version) EL_VERSION="${2:-}"; shift 2;;
-    --genesis-main) GENESIS_FROM_MAIN=1; shift 1;;
-    --snapshot) USE_SNAPSHOT=1; shift 1;;
+    --no-snapshot) USE_SNAPSHOT=0; shift 1;;
     --snapshot-geography) SNAPSHOT_GEOGRAPHY="${2:-}"; shift 2;;
     -h|--help) print_usage; exit 0;;
     *) err "Unknown arg: $1"; print_usage; exit 1;;
@@ -166,22 +158,29 @@ apt_install_if_missing() {
 }
 
 maybe_install_deps_debian() {
-  if is_debian_like && command -v apt-get >/dev/null 2>&1; then
-    info "Detected Debian-like system. Ensuring dependencies..."
-    apt-get update -y >/dev/null
-    # curl & tar are essential
-    apt_install_if_missing curl curl
-    apt_install_if_missing tar tar
-    # lz4 for snapshot decompression
-    apt_install_if_missing lz4 lz4 || warn "Failed to install lz4 - snapshots may not work"
-    # jq improves API parsing but is optional
-    apt_install_if_missing jq jq || warn "Failed to install jq - will use fallback parsing"
-    # openssl for JWT generation
-    apt_install_if_missing openssl openssl || warn "Failed to install openssl - JWT generation may fail"
-    # ca-certificates ensures TLS works for curl to GitHub
-    apt_install_if_missing ca-certificates update-ca-certificates || warn "Failed to update ca-certificates - TLS may fail"
+  info "Detected Debian-like system. Ensuring dependencies..."
+  if ! DEBIAN_FRONTEND=noninteractive apt-get update -y; then
+    err "apt-get update failed. Check network/apt mirrors and retry."
+    exit 1
   fi
+  # curl & tar are essential
+  apt_install_if_missing curl curl
+  apt_install_if_missing tar tar
+  # lz4 for snapshot decompression
+  apt_install_if_missing lz4 lz4 || warn "Failed to install lz4 - snapshots may not work"
+  # jq improves API parsing but is optional
+  apt_install_if_missing jq jq || warn "Failed to install jq - will use fallback parsing"
+  # openssl for JWT generation
+  apt_install_if_missing openssl openssl || warn "Failed to install openssl - JWT generation may fail"
+  # ca-certificates ensures TLS works for curl to GitHub
+  apt_install_if_missing ca-certificates update-ca-certificates || warn "Failed to update ca-certificates - TLS may fail"
 }
+
+# Enforce Debian/Ubuntu systems only
+if ! is_debian_like; then
+  err "This installer supports Debian/Ubuntu only."
+  exit 1
+fi
 
 maybe_install_deps_debian
 
@@ -194,6 +193,9 @@ need_cmd tar
 need_cmd systemctl
 need_cmd sed
 need_cmd awk
+need_cmd lsblk
+need_cmd findmnt
+need_cmd md5sum
 
 # External IPv4 detection helper
 detect_external_ip() {
@@ -348,149 +350,92 @@ parse_snapshot_urls() {
   extract_snapshot_info "$json_data" "$el_client" "$snapshot_type" "el"
 }
 
-download_snapshot_file() {
-  local url="$1"
-  local filename="$2"
-  local download_dir="$3"
-  
-  if [[ -z "$url" || -z "$filename" ]]; then
-    return 1
-  fi
-  
-  mkdir -p "$download_dir"
-  local filepath="$download_dir/$filename"
-  
-  info "Downloading $filename..."
-  if curl -L -C - -o "$filepath" "$url"; then
-    info "✓ $filename - Complete"
-    return 0
-  else
-    err "Failed to download $filename"
-    return 1
-  fi
-}
+:
 
-download_snapshots() {
-  if [[ $USE_SNAPSHOT -eq 0 ]]; then
-    return 0
-  fi
-
-  info "Downloading snapshots..."
-  
-  # Determine snapshot chain name
-  local snapshot_chain="bera-snapshot"
-  if [[ "$CHAIN" == "bepolia" ]]; then
-    snapshot_chain="bera-snapshot-testnet"
-  fi
-  
-  # Get script directory for downloads
-  local script_dir
-  script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-  local download_dir="$script_dir/downloads"
-  
-  # Fetch bucket contents
-  local json_data
-  json_data=$(fetch_snapshot_list "$snapshot_chain" "$SNAPSHOT_GEOGRAPHY")
-  if [[ $? -ne 0 || -z "$json_data" ]]; then
-    warn "Failed to fetch snapshot list, will proceed with normal initialization"
-    return 0
-  fi
-  
-  # Parse URLs and filenames
-  local snapshot_info
-  snapshot_info=$(parse_snapshot_urls "$json_data" "$EL_CHOICE" "$MODE")
-  
-  # Debug: show what parse_snapshot_urls returned
-  info "Debug: snapshot_info output:"
-  echo "$snapshot_info" >&2
-  
-  # Initialize variables to avoid unbound variable errors 
-  BEACON_URL="" BEACON_NAME="" EL_URL="" EL_NAME=""
-  
-  eval "$snapshot_info"
-  
-  # Debug: show variable values after eval
-  info "Debug: After eval - BEACON_URL='$BEACON_URL' EL_URL='$EL_URL'" >&2
-  
-  # Log what we'll download
-  if [[ -n "$BEACON_URL" && -n "$EL_URL" ]]; then
-    info "Will download the following snapshots:"
-    info "  Beacon: $BEACON_NAME"
-    info "    URL: $BEACON_URL"
-    info "  Execution: $EL_NAME" 
-    info "    URL: $EL_URL"
-    echo ""
-  else
-    warn "No suitable snapshots found for $EL_CHOICE $MODE, will proceed with normal initialization"
-    return 0
-  fi
-  
-  # Download files
-  download_snapshot_file "$BEACON_URL" "$BEACON_NAME" "$download_dir" || return 1
-  download_snapshot_file "$EL_URL" "$EL_NAME" "$download_dir" || return 1
-  
-  info "Snapshot downloads completed"
-  return 0
-}
-
-extract_snapshot_with_fallback() {
-  local archive="$1" dest="$2" description="$3"
+stream_extract() {
+  local url="$1" dest="$2" description="$3"
   mkdir -p "$dest"
-  if lz4 -d "$archive" -c | tar -xf - -C "$dest" --strip-components=1 2>/dev/null; then
-    return 0
-  else
-    info "Trying extraction without strip-components for $description..."
-    if lz4 -d "$archive" -c | tar -xf - -C "$dest" 2>/dev/null; then
-      return 0
-    else
-      warn "Failed to extract $description, will proceed with fresh sync"
-      return 1
-    fi
-  fi
+  curl -Lf "$url" | lz4 -d | tar -xf - -C "$dest"
 }
 
 install_snapshots() {
   if [[ $USE_SNAPSHOT -eq 0 ]]; then
     return 0
   fi
-
-  local script_dir
-  script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-  local snapshot_dir="$script_dir/downloads"
   
-  if [[ ! -d "$snapshot_dir" ]]; then
-    warn "Snapshot directory not found, skipping snapshot installation"
+  # Resolve snapshot URLs
+  info "Resolving snapshot URLs..."
+  local snapshot_chain="bera-snapshot"
+  if [[ "$CHAIN" == "bepolia" ]]; then
+    snapshot_chain="bera-snapshot-testnet"
+  fi
+  local json_data snapshot_info
+  json_data=$(fetch_snapshot_list "$snapshot_chain" "$SNAPSHOT_GEOGRAPHY") || json_data=""
+  if [[ -z "$json_data" ]]; then
+    warn "Failed to fetch snapshot list, will proceed with normal initialization"
     return 0
   fi
+  snapshot_info=$(parse_snapshot_urls "$json_data" "$EL_CHOICE" "$MODE")
+  # Initialize and eval results
+  BEACON_URL="" EL_URL=""
+  eval "$snapshot_info"
 
-  info "Installing snapshots..."
-  
-  # Find the downloaded snapshot files
-  local beacon_snapshot el_snapshot
-  beacon_snapshot=$(find "$snapshot_dir" -name "snapshot_beacond_${EL_CHOICE}_${MODE}_*.tar.lz4" | head -n1)
-  el_snapshot=$(find "$snapshot_dir" -name "bera-${EL_CHOICE}-*${MODE}*.tar.lz4" | head -n1)
-  
-  # Install beacon snapshot
-  if [[ -n "$beacon_snapshot" && -f "$beacon_snapshot" ]]; then
-    info "Installing beacon snapshot: $(basename "$beacon_snapshot")"
-    if extract_snapshot_with_fallback "$beacon_snapshot" "$CL_HOME" "beacon snapshot"; then
-      chown -R berachain:berachain "$CL_HOME" 2>/dev/null || warn "Failed to set ownership for CL snapshot data"
+  info "Installing snapshots (streaming)..."
+
+  # Beacon snapshot (stream)
+  if [[ -n "${BEACON_URL:-}" ]]; then
+    # Detect existing CL data using CometBFT blockstore presence
+    if [[ -d "$CL_HOME/data/blockstore.db" ]]; then
+      if [[ -n "$(ls -A "$CL_HOME/data/blockstore.db" 2>/dev/null)" ]]; then
+        info "Detected existing CL data at $CL_HOME/data/blockstore.db; skipping beacon snapshot"
+      else
+        info "Streaming beacon snapshot"
+        if stream_extract "$BEACON_URL" "$CL_HOME/data/" "beacon snapshot"; then
+          chown -R berachain:berachain "$CL_HOME" 2>/dev/null || warn "Failed to set ownership for CL snapshot data"
+        else
+          warn "Beacon snapshot streaming failed; will sync from genesis"
+        fi
+      fi
+    else
+      info "Streaming beacon snapshot"
+      if stream_extract "$BEACON_URL" "$CL_HOME/data/" "beacon snapshot"; then
+        chown -R berachain:berachain "$CL_HOME" 2>/dev/null || warn "Failed to set ownership for CL snapshot data"
+      else
+        warn "Beacon snapshot streaming failed; will sync from genesis"
+      fi
     fi
   else
-    info "No beacon snapshot found, will sync from genesis"
+    info "No beacon snapshot URL; will sync from genesis"
   fi
-  
-  # Install execution layer snapshot
-  if [[ -n "$el_snapshot" && -f "$el_snapshot" ]]; then
-    info "Installing execution layer snapshot: $(basename "$el_snapshot")"
-    if extract_snapshot_with_fallback "$el_snapshot" "$EL_HOME" "execution layer snapshot"; then
-      chown -R berachain:berachain "$EL_HOME" 2>/dev/null || warn "Failed to set ownership for EL snapshot data"
+
+  # Execution snapshot (stream)
+  if [[ -n "${EL_URL:-}" ]]; then
+    # Detect existing EL data paths for reth and geth
+    local el_data_exists=0
+    if [[ "$EL_CHOICE" == "reth" ]]; then
+      if [[ -d "$EL_HOME/db" ]]; then
+        if [[ -n "$(ls -A "$EL_HOME/db" 2>/dev/null)" ]]; then el_data_exists=1; fi
+      fi
+    else
+      if [[ -d "$EL_HOME/bera-geth/geth/chaindata" ]]; then
+        if [[ -n "$(ls -A "$EL_HOME/bera-geth/geth/chaindata" 2>/dev/null)" ]]; then el_data_exists=1; fi
+      fi
+    fi
+    if [[ $el_data_exists -eq 1 ]]; then
+      info "Detected existing EL data; skipping execution snapshot"
+    else
+      info "Streaming execution layer snapshot"
+      if stream_extract "$EL_URL" "$EL_HOME" "execution layer snapshot"; then
+        chown -R berachain:berachain "$EL_HOME" 2>/dev/null || warn "Failed to set ownership for EL snapshot data"
+      else
+        warn "Execution snapshot streaming failed; will sync from genesis"
+      fi
     fi
   else
-    info "No execution layer snapshot found, will sync from genesis"
+    info "No execution snapshot URL; will sync from genesis"
   fi
-  
-  info "Snapshot installation completed"
+
+  info "Snapshot installation (streaming) completed"
 }
 
 # ------------------------------
@@ -503,7 +448,7 @@ ensure_user_and_dirs() {
     useradd --system --home-dir "$BASE_DIR" --shell /usr/sbin/nologin --gid berachain berachain
   fi
 
-  mkdir -p "$BIN_DIR" "$CL_HOME" "$EL_CHAIN_DIR" "$CONFIG_DIR" "$RUNTIME_DIR"
+  mkdir -p "$BIN_DIR" "$CL_HOME" "$EL_HOME" "$CONFIG_DIR" "$RUNTIME_DIR"
   chown -R berachain:berachain "$BASE_DIR"
   chmod 0755 "$BASE_DIR"
 }
@@ -592,24 +537,15 @@ install_el() {
 }
 
 # ------------------------------
-# Network files for EL init
+# Network files for EL init  
 # ------------------------------
 construct_network_url() {
   local file="$1" chain_id="$2"
-  if [[ "$GENESIS_FROM_MAIN" -eq 1 ]]; then
-    echo "https://raw.githubusercontent.com/berachain/beacon-kit/main/testing/networks/${chain_id}/${file}"
-  else
-    echo "https://raw.githubusercontent.com/berachain/beacon-kit/${CL_VERSION}/testing/networks/${chain_id}/${file}"
-  fi
+  echo "https://raw.githubusercontent.com/berachain/beacon-kit/main/testing/networks/${chain_id}/${file}"
 }
 
 fetch_network_files() {
   local chain_id file_url
-
-  if [[ -z "${CL_VERSION:-}" ]]; then
-    # Align network files with installed beacond tag if possible
-    CL_VERSION="$(gh_latest_tag "$REPO_BEACOND")"
-  fi
 
   case "$CHAIN" in
     mainnet) chain_id="$CHAIN_ID_MAINNET" ;;
@@ -648,39 +584,105 @@ fetch_network_files() {
 }
 
 # ------------------------------
+# Instance storage provisioning
+# ------------------------------
+provision_instance_storage() {
+  # If /opt is already a separate mountpoint, do nothing
+  if mountpoint -q /opt; then
+    info "/opt is already a dedicated mount; skipping instance storage provisioning"
+    return 0
+  fi
+
+  # Enumerate EC2 instance-store devices by-id and choose the largest unmounted one
+  local selected_dev="" max_size=0
+  while IFS= read -r id; do
+    local path size
+    path="$(readlink -f "/dev/disk/by-id/${id}" 2>/dev/null || true)"
+    [[ -b "$path" ]] || continue
+    # Skip if mounted anywhere
+    if findmnt -n -S "$path" >/dev/null 2>&1; then
+      continue
+    fi
+    size="$(lsblk -bdno SIZE "$path" 2>/dev/null || echo 0)"
+    if [[ "$size" =~ ^[0-9]+$ ]] && (( size > max_size )); then
+      max_size=$size
+      selected_dev="$path"
+    fi
+  done < <(ls -1 /dev/disk/by-id 2>/dev/null | grep -E '^nvme-Amazon_EC2_NVMe_Instance_Storage' || true)
+
+  if [[ -z "$selected_dev" ]]; then
+    info "No unmounted EC2 instance-store device found; skipping instance storage provisioning"
+    return 0
+  fi
+
+  local dev="$selected_dev"
+
+  info "Preparing instance storage device $dev for /opt"
+
+  # Ensure required tools
+  apt_install_if_missing e2fsprogs mkfs.ext4 || true
+  apt_install_if_missing util-linux blkid || true
+
+  # Safety: if device is already mounted (race), skip
+  if findmnt -n -S "$dev" >/dev/null 2>&1; then
+    info "Device $dev is already mounted; skipping instance storage provisioning"
+    return 0
+  fi
+
+  # Force-create ext4 filesystem on the unmounted device (overwrites existing contents)
+  info "Creating ext4 filesystem on $dev (force)"
+  mkfs.ext4 -F "$dev" >/dev/null
+  local fstype_to_use="ext4"
+
+  local uuid
+  uuid=$(blkid -o value -s UUID "$dev" 2>/dev/null || true)
+  if [[ -z "$uuid" ]]; then
+    err "Could not determine UUID for $dev; skipping /etc/fstab configuration"
+    return 0
+  fi
+
+  mkdir -p /opt
+
+  # Add to /etc/fstab if not present with high-performance options
+  local mount_opts="defaults,noatime,nodiratime,discard=async,commit=60,nofail,x-systemd.device-timeout=10s"
+  if ! grep -q "UUID=$uuid\s\+/opt\s" /etc/fstab 2>/dev/null; then
+    info "Adding /opt mount to /etc/fstab"
+    echo "UUID=$uuid /opt $fstype_to_use $mount_opts 0 2" >> /etc/fstab
+  fi
+
+  # Mount it now
+  if ! mountpoint -q /opt; then
+    if mount /opt; then
+      info "Mounted $dev at /opt"
+    else
+      warn "Failed to mount $dev at /opt via fstab; attempting direct mount"
+      mount -t "$fstype_to_use" "$dev" /opt || warn "Direct mount of $dev at /opt failed"
+    fi
+  fi
+}
+
+# ------------------------------
 # Initialization (EL and CL)
 # ------------------------------
 init_el() {
   info "Initializing EL database..."
-  
-  # Check if snapshots were installed and contain data
-  local has_snapshot_data=0
-  if [[ "$EL_CHOICE" == "reth" ]]; then
-    if [[ -f "$EL_CHAIN_DIR/db/mdbx.dat" ]]; then
-      has_snapshot_data=1
-      info "Found existing reth database from snapshot."
-    fi
+  # Display EL genesis md5 for verification
+  if [[ -f "$CONFIG_DIR/el/genesis.json" ]]; then
+    local _gen_md5
+    _gen_md5=$(md5sum "$CONFIG_DIR/el/genesis.json" | awk '{print $1}')
+    info "EL genesis md5: ${_gen_md5}"
   else
-    if [[ -d "$EL_CHAIN_DIR/bera-geth" ]]; then
-      has_snapshot_data=1
-      info "Found existing geth database from snapshot."
-    fi
+    warn "EL genesis not found at $CONFIG_DIR/el/genesis.json"
   fi
   
+  
   # Only initialize from genesis if no snapshot data exists
-  if [[ $has_snapshot_data -eq 0 ]]; then
-    if [[ "$EL_CHOICE" == "reth" ]]; then
-      # Prepare reth config directory and place EL genesis where reth expects it (mimic berabox)
-      mkdir -p "$EL_HOME/config"
-      cp -f "$CONFIG_DIR/el/genesis.json" "$EL_HOME/config/genesis.json"
-      chown -R berachain:berachain "$EL_HOME/config"
-      sudo -u berachain bash -c "cd '$EL_HOME' && '$BIN_DIR/bera-reth' init --datadir ./chain/ --chain ./config/genesis.json >/dev/null 2>&1"
-    else
-      "$BIN_DIR/bera-geth" init --state.scheme=path --datadir "$EL_CHAIN_DIR" "$CONFIG_DIR/el/genesis.json" >/dev/null 2>&1
-      chown -R berachain:berachain "$EL_HOME"
-    fi
+  if [[ "$EL_CHOICE" == "reth" ]]; then
+    chown -R berachain:berachain "$EL_HOME/config"
+    sudo -u berachain bash -c "cd '$EL_HOME' && '$BIN_DIR/bera-reth' init --datadir $EL_HOME --chain $CONFIG_DIR/el/genesis.json >/dev/null 2>&1"
   else
-    info "Skipping EL genesis initialization - using snapshot data."
+    "$BIN_DIR/bera-geth" init --state.scheme=path --datadir "$EL_HOME/" "$CONFIG_DIR/el/genesis.json" >/dev/null 2>&1
+    chown -R berachain:berachain "$EL_HOME"
   fi
 }
 
@@ -694,7 +696,6 @@ init_cl() {
   info "Initializing beacond home at $CL_HOME..."
   if [[ ! -f "$CL_HOME/config/genesis.json" ]]; then
     sudo -u berachain "$BIN_DIR/beacond" 2>/dev/null init "berachain-node" --chain-id "$chain_id" --home "$CL_HOME" --beacon-kit.chain-spec "$CHAIN"
-    # After init, place network files into beacond config (mimic berabox init)
     if [[ -f "$CONFIG_DIR/cl/genesis.json" ]]; then
       cp -f "$CONFIG_DIR/cl/genesis.json" "$CL_HOME/config/genesis.json"
     fi
@@ -783,7 +784,7 @@ install_systemd_units() {
     local reth_mode_flag=""
     if [[ "$MODE" != "archive" ]]; then reth_mode_flag="--full"; fi
     el_exec="$BIN_DIR/bera-reth"
-    el_args="node --datadir $EL_CHAIN_DIR \
+    el_args="node --datadir $EL_HOME \
       --http --http.addr 0.0.0.0 --http.port $EL_HTTP_PORT \
       --ws --ws.addr 0.0.0.0 --ws.port $EL_WS_PORT \
       --authrpc.addr 127.0.0.1 --authrpc.port $EL_AUTHRPC_PORT --authrpc.jwtsecret $JWT_PATH \
@@ -795,7 +796,7 @@ install_systemd_units() {
       geth_archive_flags="--history.logs 0 --history.state 0 --history.transactions 0"
     fi
     el_exec="$BIN_DIR/bera-geth"
-    el_args="--datadir $EL_CHAIN_DIR \
+    el_args="--datadir $EL_HOME/ \
       --syncmode full --state.scheme path \
       --http --http.addr 0.0.0.0 --http.port $EL_HTTP_PORT \
       --ws --ws.addr 0.0.0.0 --ws.port $EL_WS_PORT \
@@ -837,13 +838,7 @@ UNIT
     beacon_network_type="testnet"
   fi
 
-  local cl_args="start --home $CL_HOME \
-    --beacon-kit.chain-spec $beacon_network_type \
-    --beacon-kit.engine.jwt-secret-path $JWT_PATH \
-    --beacon-kit.engine.rpc-dial-url http://127.0.0.1:$EL_AUTHRPC_PORT \
-    --beacon-kit.kzg.trusted-setup-path $CONFIG_DIR/kzg-trusted-setup.json \
-    --beacon-kit.node-api.enabled=true \
-    --beacon-kit.node-api.address=0.0.0.0:$CL_NODE_API_PORT"
+  local cl_args="start --home $CL_HOME"
 
   cat > "$SYSTEMD_DIR/$CL_SERVICE" <<UNIT
 [Unit]
@@ -875,14 +870,14 @@ UNIT
 # ------------------------------
 main() {
   bold "Berachain installer starting…"
+  provision_instance_storage
   ensure_user_and_dirs
   install_beacond
   install_el
   fetch_network_files
-  download_snapshots
-  install_snapshots
   init_el
   init_cl
+  install_snapshots
   ensure_jwt
   install_systemd_units
 
@@ -904,6 +899,3 @@ EON
 }
 
 main
-
-
-
