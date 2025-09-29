@@ -15,7 +15,7 @@
  * - Supports custom block range analysis
  * - Client upgrade tracking across time
  * 
- * Usage: node analyze-voting-power.js [--blocks N] [--detailed] [--upgrade] [--network mainnet|bepolia]
+ * Usage: node analyze-voting-power.js [--blocks N] [--detailed] [--upgrade] [--verbose] [--network mainnet|bepolia]
  */
 
 const { ethers } = require('ethers');
@@ -250,7 +250,7 @@ async function getBlockProposer(blockHeight, clRpcUrl) {
     }
 }
 
-async function analyzeVotingPower(networkName = 'mainnet', maxBlocksToScan = 10000, detailedMode = false, upgradeMode = false) {
+async function analyzeVotingPower(networkName = 'mainnet', maxBlocksToScan = 10000, detailedMode = false, upgradeMode = false, verboseMode = false) {
     // Get network configuration
     const networkConfig = ConfigHelper.getChainConfig(networkName);
     const elProvider = new ethers.JsonRpcProvider(networkConfig.el);
@@ -471,6 +471,40 @@ async function analyzeVotingPower(networkName = 'mainnet', maxBlocksToScan = 100
         
         console.log(versionTable.toString());
     }
+
+    if (detailedMode || verboseMode) {
+        console.log('\n🧾 VALIDATOR VERSIONS:');
+        const validatorTable = new Table({
+            head: ['Validator', 'Address', 'Client', 'Version', 'Voting Power'],
+            colWidths: [28, 18, 12, 12, 18]
+        });
+
+        const entries = await Promise.all(Array.from(proposerClients.entries()).map(async ([address, info]) => {
+            const name = await validatorDB.getValidatorName(address);
+            const vp = (validatorMap.get(address) / 1000000000) || 0;
+            return {
+                name: name || address.substring(0, 12) + '...',
+                shortAddress: address.substring(0, 12) + '...',
+                client: info.clientType,
+                version: info.clientVersion,
+                votingPower: vp
+            };
+        }));
+
+        entries.sort((a, b) => b.votingPower - a.votingPower);
+
+        for (const e of entries) {
+            validatorTable.push([
+                e.name,
+                e.shortAddress,
+                e.client,
+                e.version,
+                e.votingPower.toLocaleString()
+            ]);
+        }
+
+        console.log(validatorTable.toString());
+    }
     
     if (upgradeMode && validatorsWithUpgrades.size > 0) {
         console.log('\n🔄 CLIENT UPGRADES DETECTED:');
@@ -527,6 +561,12 @@ if (require.main === module) {
             default: false,
             description: 'Track client upgrades over time'
         })
+        .option('verbose', {
+            alias: 'v',
+            type: 'boolean',
+            default: false,
+            description: 'List validators with their running version'
+        })
         .option('network', {
             alias: 'n',
             type: 'string',
@@ -564,6 +604,7 @@ Options:
   -b, --blocks N         Number of blocks to scan backwards (default: 10000)
   -d, --detailed         Show detailed version breakdown
   -u, --upgrade          Track client upgrades over time
+  -v, --verbose          List validators and their running versions
   -n, --network NAME     Network to analyze: mainnet|bepolia (default: mainnet)
   -h, --help             Show this help message
 
@@ -572,12 +613,13 @@ Examples:
   node analyze-voting-power.js --blocks=5000       # Scan 5000 blocks
   node analyze-voting-power.js --detailed          # Show version details
   node analyze-voting-power.js --upgrade           # Track upgrades
+  node analyze-voting-power.js --verbose           # List validators with versions
   node analyze-voting-power.js --network=bepolia   # Use testnet
         `);
         process.exit(0);
     }
     
-    analyzeVotingPower(argv.network, argv.blocks, argv.detailed, argv.upgrade)
+    analyzeVotingPower(argv.network, argv.blocks, argv.detailed, argv.upgrade, argv.verbose)
         .then(results => {
             process.exit(0);
         })
