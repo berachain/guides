@@ -333,6 +333,24 @@ async function analyzeMissingValidators(blockCount = ConfigHelper.getDefaultBloc
         }
     }
     
+    // Show histogram of number of missed rounds (round > 0)
+    if (globalRounds.length > 0) {
+        console.log('\n⏱️ Missed rounds (round > 0):');
+        const missed = Array.from(roundCounts.entries())
+            .filter(([round]) => round > 0)
+            .sort((a, b) => a[0] - b[0]);
+        const totalBlocks = globalRounds.length;
+        const totalMissedBlocks = missed.reduce((sum, [, count]) => sum + count, 0);
+        const maxMissedCount = missed.reduce((m, [, c]) => Math.max(m, c), 0);
+        const barMaxWidthMissed = 40;
+        for (const [round, count] of missed) {
+            const barLength = maxMissedCount > 0 ? Math.max(1, Math.round((count / maxMissedCount) * barMaxWidthMissed)) : 0;
+            const bar = '#'.repeat(barLength);
+            console.log(`  ${round.toString().padStart(2, ' ')} | ${bar} (${count.toLocaleString()})`);
+        }
+        console.log(`  Blocks with missed rounds: ${totalMissedBlocks.toLocaleString()} of ${totalBlocks.toLocaleString()} (${((totalMissedBlocks / totalBlocks) * 100).toFixed(1)}%)`);
+    }
+    
     // Calculate statistics for each proposer (unlucky proposers analysis)
     const proposerAnalysis = [];
     
