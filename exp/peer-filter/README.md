@@ -6,36 +6,15 @@ A Go application for connecting to geth/reth IPC endpoints and managing peer con
 
 ### Prerequisites
 
-- Go 1.21 or later installed on your system
+- **Binary option**: Use pre-built binaries from the `dist/` directory for your platform
+- **Build option**: Go 1.21 or later installed on your system to compile from source
 - Node (bera-reth or bera-geth) must be configured with the `--ipcfilter <filepath>` option to enable the IPC endpoint. This endpoint allows sending administrative commands without exposing them over JSON-RPC, providing a secure way to manage peer connections and perform other administrative tasks.
 
 ### Compile Instructions
 
-1. **Download dependencies:**
-   ```bash
-   go mod tidy
-   ```
-
-2. **Build the binary:**
-   ```bash
-   go build -o peer-filter peer-filter.go
-   ```
-
-3. **Make executable (if needed):**
-   ```bash
-   chmod +x peer-filter
-   ```
-
-### Cross-Platform Compilation
-
-To compile for different platforms:
-
 ```bash
-# Linux x86_64
-GOOS=linux GOARCH=amd64 go build -o peer-filter-linux-amd64 peer-filter.go
-
-# Linux ARM64
-GOOS=linux GOARCH=arm64 go build -o peer-filter-linux-arm64 peer-filter.go
+go mod tidy
+go build -o peer-filter peer-filter.go
 ```
 
 ## Usage
