@@ -5,7 +5,9 @@ A Go application for connecting to geth/reth IPC endpoints and managing peer con
 ## Building
 
 ### Prerequisites
+
 - Go 1.21 or later installed on your system
+- Node (bera-reth or bera-geth) must be configured with the `--ipcfilter <filepath>` option to enable the IPC endpoint. This endpoint allows sending administrative commands without exposing them over JSON-RPC, providing a secure way to manage peer connections and perform other administrative tasks.
 
 ### Compile Instructions
 
