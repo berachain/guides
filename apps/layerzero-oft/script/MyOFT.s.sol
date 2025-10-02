@@ -1,37 +1,41 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.22;
 
-import {Script} from "forge-std/Script.sol";
-import "../src/MyOFT.sol";
+import {Script, console} from "forge-std/Script.sol";
+import {MyOFT} from "../src/MyOFT.sol";
 
-// Deploy OFT to Berachain and link to Sepolia
+// Deploy OFT to Berachain and link to Base
 contract MyOFTScript is Script {
     address constant LAYERZERO_ENDPOINT =
-        0x6EDCE65403992e310A62460808c4b910D972f10f;
+        0x6F475642a6e85809B1c36Fa62763669b1b48DD5B;
 
-    uint32 constant SEPOLIA_ENDPOINT_ID = 40161;
+    uint32 constant BASE_ENDPOINT_ID = 30110; // Base mainnet endpoint ID
 
     function run() public {
         // Setup
-        address SEPOLIA_ADAPTER_ADDRESS = vm.envAddress(
-            "SEPOLIA_ADAPTER_ADDRESS"
+        address baseAdapterAddress = vm.envAddress(
+            "BASE_ADAPTER_ADDRESS"
         );
         uint256 privateKey = vm.envUint("PRIVATE_KEY");
         vm.startBroadcast(privateKey);
 
         // Deploy
-        MyOFT myOFT = new MyOFT(
-            "Layer Zero UNI",
-            "lzUNI",
+        MyOFT myOft = new MyOFT(
+            "Layer Zero My Token",
+            "lzMCT",
             LAYERZERO_ENDPOINT,
             vm.addr(privateKey) // Wallet address of signer
         );
 
-        // Hook up Berachain OFT to Sepolia's adapter
-        myOFT.setPeer(
-            SEPOLIA_ENDPOINT_ID,
-            bytes32(uint256(uint160(SEPOLIA_ADAPTER_ADDRESS)))
+        // Hook up Berachain OFT to Base's adapter
+        myOft.setPeer(
+            BASE_ENDPOINT_ID,
+            bytes32(uint256(uint160(baseAdapterAddress)))
         );
+
+        console.log("OFT deployed at:", address(myOft));
+        console.log("Base adapter address:", baseAdapterAddress);
+
         vm.stopBroadcast();
     }
 }
