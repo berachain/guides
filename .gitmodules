@@ -28,3 +28,6 @@
 [submodule "exp/gas-burner/lib/forge-std"]
 	path = exp/gas-burner/lib/forge-std
 	url = https://github.com/foundry-rs/forge-std
+[submodule "apps/layerzero-oft/lib/solidity-bytes-utils"]
+	path = apps/layerzero-oft/lib/solidity-bytes-utils
+	url = https://github.com/GNSPS/solidity-bytes-utils.git
