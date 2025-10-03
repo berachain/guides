@@ -1,26 +1,29 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.22;
 
-import {Script} from "forge-std/Script.sol";
-import "../src/MyAdapter.sol";
+import {Script, console} from "forge-std/Script.sol";
+import {MyAdapter} from "../src/MyAdapter.sol";
 
-// Deploys OFT adapter to Sepolia
+// Deploys OFT adapter to Base Mainnet
 contract MyAdapterScript is Script {
-    address constant UNI_TOKEN = 0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984;
     address constant LAYERZERO_ENDPOINT =
-        0x6EDCE65403992e310A62460808c4b910D972f10f;
+        0x1a44076050125825900e736c501f859c50fE728c;
 
     function run() public {
         // Setup
+        address baseTokenAddress = vm.envAddress("BASE_TOKEN_ADDRESS");
         uint256 privateKey = vm.envUint("PRIVATE_KEY");
         vm.startBroadcast(privateKey);
 
         // Deploy
-        new MyAdapter(
-            UNI_TOKEN,
+        MyAdapter adapter = new MyAdapter(
+            baseTokenAddress,
             LAYERZERO_ENDPOINT,
             vm.addr(privateKey) // Wallet address of signer
         );
+
+        console.log("Adapter deployed at:", address(adapter));
+        console.log("Token address:", baseTokenAddress);
 
         vm.stopBroadcast();
     }
