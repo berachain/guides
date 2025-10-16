@@ -2,6 +2,7 @@
   "name": "layerzero-oft",
   "version": "1.0.0",
   "private": true,
+  "type": "module",
   "description": "",
   "main": "index.js",
   "scripts": {
@@ -23,18 +24,25 @@
   "author": "@larrythecucumber321",
   "license": "ISC",
   "devDependencies": {
-    "eslint": "^8.56.0",
-    "typescript": "^5.0.0",
+    "@layerzerolabs/lz-definitions": "^2.1.23",
+    "@layerzerolabs/lz-evm-messagelib-v2": "^3.0.54",
+    "@layerzerolabs/lz-evm-oapp-v2": "^3.0.54",
+    "@layerzerolabs/lz-evm-protocol-v2": "^3.0.54",
+    "@layerzerolabs/toolbox-foundry": "^0.1.2",
+    "@openzeppelin/contracts": "^5.0.2",
     "@types/jest": "^29.5.0",
     "@types/node": "^20.0.0",
+    "eslint": "^8.56.0",
     "jest": "^29.5.0",
     "prettier": "^3.0.0",
     "tsup": "^8.0.0",
-    "@layerzerolabs/lz-definitions": "^2.1.23",
-    "@layerzerolabs/lz-evm-messagelib-v2": "^2.1.23",
-    "@layerzerolabs/lz-evm-oapp-v2": "^2.1.23",
-    "@layerzerolabs/lz-evm-protocol-v2": "^2.1.23",
-    "@layerzerolabs/toolbox-foundry": "^0.1.2",
-    "@openzeppelin/contracts": "^5.0.2"
+    "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "@layerzerolabs/lz-v2-utilities": "^3.0.137",
+    "@layerzerolabs/metadata-tools": "^3.0.2",
+    "@layerzerolabs/toolbox-hardhat": "^0.6.12",
+    "@nomicfoundation/hardhat-toolbox": "^6.1.0",
+    "hardhat": "^3.0.6"
   }
 }
