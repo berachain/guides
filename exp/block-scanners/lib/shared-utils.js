@@ -79,6 +79,17 @@ class ValidatorNameDB {
     return [];
   }
 
+  async getAllValidators() {
+    try {
+      const sql = 'SELECT proposer_address, name, address, pubkey, voting_power, operator, status FROM validators WHERE status = "active_ongoing" ORDER BY name';
+      const res = await this.query(sql, []);
+      return res || [];
+    } catch (error) {
+      console.error('Error getting all validators:', error);
+      return [];
+    }
+  }
+
   async getValidatorName(address) {
     try {
       const attempts = [];
@@ -107,6 +118,67 @@ class ValidatorNameDB {
       }
       return null;
     } catch (error) {
+      return null;
+    }
+  }
+}
+
+/**
+ * Validator fetching utilities
+ */
+class ValidatorFetcher {
+  constructor(clUrl) {
+    this.clUrl = clUrl;
+  }
+
+  /**
+   * Gets all validators at a specific block height with pagination support
+   * @param {number} blockHeight - Block height to query
+   * @param {number} perPage - Validators per page (default: 99999 to get all in one request)
+   * @returns {Promise<Object|null>} Object with validator data or null on error
+   */
+  async getValidators(blockHeight, perPage = 99999) {
+    try {
+      const validators = {};
+      let page = 1;
+      
+      while (true) {
+        const response = await axios.get(`${this.clUrl}/validators?height=${blockHeight}&per_page=${perPage}&page=${page}`);
+        
+        if (response.data.error) {
+          console.error(`RPC error for block ${blockHeight} page ${page}: ${response.data.error.message}`);
+          break;
+        }
+        
+        if (!response.data.result?.validators || response.data.result.validators.length === 0) {
+          break; // No more validators to fetch
+        }
+        
+        // Process each validator in this page
+        response.data.result.validators.forEach(validator => {
+          validators[validator.address] = {
+            address: validator.address,
+            voting_power: validator.voting_power / 1e9, // Convert GWEI to BERA
+            pub_key: validator.pub_key.value
+          };
+        });
+        
+        // Check if we've reached the end of results or got all validators in one page
+        if (response.data.result.validators.length < perPage) {
+          break; // Last page
+        }
+        
+        page++; // Continue to next page
+      }
+      
+      if (Object.keys(validators).length === 0) {
+        console.error(`No validators found for block ${blockHeight}`);
+        return null;
+      }
+      
+      return validators;
+    } catch (error) {
+      console.error(`Error fetching validators at block ${blockHeight}:`, error.message);
       return null;
     }
   }
@@ -261,6 +333,7 @@ class ProgressReporter {
 
 module.exports = {
   ValidatorNameDB,
+  ValidatorFetcher,
   BlockFetcher,
   StatUtils,
   ProgressReporter,

@@ -4,15 +4,21 @@ import { ethers } from 'ethers';
 import fs from 'fs';
 import os from 'os';
 import { isMainThread } from 'worker_threads';
+import { BlockFetcher, ValidatorFetcher, ValidatorNameDB, ConfigHelper } from '../block-scanners/lib/shared-utils.js';
+import axios from 'axios';
 
-// Environment variables
-const EL_ETHRPC_URL = process.env.EL_ETHRPC_URL || 'http://37.27.231.195:59830';
-const CL_ETHRPC_URL = process.env.CL_ETHRPC_URL || 'http://37.27.231.195:59820';
+// Environment variables with config helper fallbacks
+const EL_ETHRPC_URL = process.env.EL_ETHRPC_URL || ConfigHelper.getRpcUrl('el', 'mainnet');
+const CL_ETHRPC_URL = process.env.CL_ETHRPC_URL || ConfigHelper.getRpcUrl('cl', 'mainnet');
+// Optional alternate RPCs. Primary remains as-is; alternates default to provided IPs if unset
+const EL_ETHRPC_URL_ALT = process.env.EL_ETHRPC_URL_ALT || 'http://37.27.231.195:59810';
+const CL_ETHRPC_URL_ALT = process.env.CL_ETHRPC_URL_ALT || 'http://37.27.231.195:59800';
+const HAS_ALTERNATE_RPCS = Boolean(EL_ETHRPC_URL_ALT && CL_ETHRPC_URL_ALT && (EL_ETHRPC_URL_ALT !== EL_ETHRPC_URL || CL_ETHRPC_URL_ALT !== CL_ETHRPC_URL));
 const HONEY_TOKEN = process.env.HONEY_TOKEN || '0xFCBD14DC51f0A4d49d5E53C2E0950e0bC26d0Dce';
 const DISTRIBUTOR_ADDRESS = process.env.DISTRIBUTOR_ADDRESS || '0xD2f19a79b026Fb636A7c300bF5947df113940761';
 
 // Configuration constants
-const CHUNK_SIZE = 200; // Block scanning chunk size
+const CHUNK_SIZE = 2000; // Block scanning chunk size
 const BLOCKS_PER_DAY = 43200; // Approximate, used for binary search estimates
 const EMPTY_BLOCK_THRESHOLD = 1; // A block is considered empty if it has <= 1 transactions (i.e., 0 or 1)
 const GENESIS_TIMESTAMP = 1737382451; // 2025-01-20 14:14:11 UTC
@@ -20,9 +26,9 @@ const BGT_CONTRACT = '0x656b95E550C07a9ffe548bd4085c72418Ceb1dba';
 const KYBER_ROUTE_URL = 'https://gateway.mainnet.berachain.com/proxy/kyberswap/berachain/api/v1/routes';
 
 // Concurrency and performance constants
-const LOG_CHUNK_SIZE = 1000; // Size of each log fetching chunk in blocks
-const LOG_BATCH_SIZE = 16; // Number of log chunks to process in parallel
-const MAX_WORKER_COUNT = Math.max(1, os.cpus().length - 1); // Use most CPU cores, leave one free
+const LOG_CHUNK_SIZE = 2000; // Size of each log fetching chunk in blocks
+const BASE_WORKER_COUNT = 12;
+const MAX_WORKER_COUNT = HAS_ALTERNATE_RPCS ? BASE_WORKER_COUNT * 2 : BASE_WORKER_COUNT; // Double total when splitting across primary+alternate
 
 // Event signatures
 const DISTRIBUTED_SIG = 'Distributed(bytes,uint64,address,uint256)';
@@ -317,9 +323,9 @@ async function getUsdRatePerToken(tokenIn) {
 * @returns {Promise<string>} Proposer address
 * @throws {Error} If block not found or no proposer
 */
-async function getBlockProposer(blockHeight) {
+async function getBlockProposer(blockHeight, clUrl = CL_ETHRPC_URL) {
     return withRetry(async () => {
-        const response = await fetch(`${CL_ETHRPC_URL}/header?height=${blockHeight}`);
+        const response = await fetch(`${clUrl}/header?height=${blockHeight}`);
         const data = await response.json();
         if (!data.result?.header?.proposer_address) {
             throw new Error(`No proposer found for block ${blockHeight}`);
@@ -330,61 +336,28 @@ async function getBlockProposer(blockHeight) {
 
 
 /**
-* Gets validator voting power data from consensus layer at a specific block height
+* Gets validator voting power data from consensus layer using shared utilities
 * @param {number} blockHeight - Block height to query validator set
 * @returns {Promise<Object|null>} Validator data object or null if no validators found
 * @returns {Object} validators - Map of validator address to {address, voting_power, pub_key}
 */
 async function getValidatorVotingPower(blockHeight) {
     return withRetry(async () => {
-        const validators = {};
-        let page = 1;
-        const perPage = 100; // Reasonable page size for API pagination
-        
-        // Paginate through all validators
-        while (true) {
-            const response = await fetch(`${CL_ETHRPC_URL}/validators?height=${blockHeight}&per_page=${perPage}&page=${page}`);
-            if (!response.ok) {
-                log(`HTTP error ${response.status}: ${response.statusText} for block ${blockHeight} page ${page}`);
-                break;
-            }
-            
-            const data = await response.json();
-            if (data.error) {
-                log(`RPC error for block ${blockHeight} page ${page}: ${data.error.message}`);
-                break;
-            }
-            
-            if (!data.result?.validators || data.result.validators.length === 0) {
-                break; // No more validators to fetch
-            }
-            
-            // Process each validator in this page
-        data.result.validators.forEach(validator => {
-            validators[validator.address] = {
-                address: validator.address,
-                voting_power: validator.voting_power / 1e9, // Convert GWEI to BERA
-                pub_key: validator.pub_key.value
-            };
-        });
-        
-            // Check if we've reached the end of results
-        if (data.result.validators.length < perPage) {
-                break; // Last page
+        // Convert "latest" to actual block number for CL API
+        let actualBlockHeight = blockHeight;
+        if (blockHeight === 'latest') {
+            const { execSync } = await import('child_process');
+            const blockNumOutput = execSync(`cast block-number --rpc-url ${EL_ETHRPC_URL}`, { encoding: 'utf8' });
+            actualBlockHeight = parseInt(blockNumOutput.trim());
         }
         
-            page++; // Continue to next page
-    }
-    
-    if (Object.keys(validators).length === 0) {
-        log(`No validators found for block ${blockHeight}`);
-        return null;
-    }
-    
-    if (process.env.VERBOSE) {
-        log(`Total validators found: ${Object.keys(validators).length}`);
-    }
+        const validatorFetcher = new ValidatorFetcher(CL_ETHRPC_URL);
+        const validators = await validatorFetcher.getValidators(actualBlockHeight);
         
+        if (process.env.VERBOSE && validators) {
+            log(`Total validators found: ${Object.keys(validators).length}`);
+        }
+            
         return validators;
     });
 }
@@ -400,7 +373,7 @@ async function getValidatorBoost(validatorPubkey, blockNumber) {
         const result = await callContractFunction(
             BGT_CONTRACT,
             "boostees(bytes)", // BGT contract function to get boost amount
-            [`0x${validatorPubkey}`], // Add 0x prefix to pubkey
+            [validatorPubkey],
             blockNumber
         );
         
@@ -435,11 +408,11 @@ async function callContractFunction(contractAddress, functionSignature, params, 
 // Data loading and processing functions
 
 /**
-* Loads validator information from genesis_validators.csv file
-* @returns {Array<Object>} Array of validator objects with name, proposer, pubkey, operatorAddress
+* Loads genesis validator information from genesis_validators.csv file
+* @returns {Array<Object>} Array of genesis validator objects with name, proposer, pubkey, operatorAddress
 * @throws {Error} If CSV file cannot be read or parsed
 */
-function loadValidators() {
+function loadGenesisValidators() {
     const csvContent = fs.readFileSync('genesis_validators.csv', 'utf8');
     const lines = csvContent.split('\n');
     const validators = [];
@@ -459,6 +432,51 @@ function loadValidators() {
     }
     
     return validators;
+}
+
+/**
+* Loads all validators from the shared validator database
+* @returns {Promise<Array<Object>>} Array of all current validator objects from database
+*/
+async function loadAllValidatorsFromDB() {
+    try {
+        log('Loading all active validators from database...');
+        const validatorDB = new ValidatorNameDB();
+        const dbValidators = await validatorDB.getAllValidators();
+        
+        if (!dbValidators || dbValidators.length === 0) {
+            throw new Error('No validators found in database');
+        }
+        
+        const validators = dbValidators.map(dbValidator => ({
+            name: dbValidator.name || 'Unknown',
+            proposer: dbValidator.proposer_address,
+            pubkey: dbValidator.pubkey || '',
+            operatorAddress: dbValidator.operator || dbValidator.address || dbValidator.proposer_address
+        }));
+        
+        log(`Loaded ${validators.length} validators from database`);
+        return validators;
+    } catch (error) {
+        log(`Error loading validators from database: ${error.message}`);
+        throw error;
+    }
+}
+
+/**
+* Loads validator information based on configuration
+* @param {boolean} ignoreGenesis - If true, load all validators from database and ignore CSV entirely
+* @returns {Promise<Array<Object>>} Array of validator objects with name, proposer, pubkey, operatorAddress
+* @throws {Error} If validators cannot be loaded
+*/
+async function loadValidators(ignoreGenesis = false) {
+    if (ignoreGenesis) {
+        log('Ignoring genesis CSV, loading ALL current validators from database...');
+        return await loadAllValidatorsFromDB();
+    } else {
+        log('Loading genesis validators from CSV file...');
+        return loadGenesisValidators();
+    }
 }
 
 /**
@@ -514,15 +532,15 @@ async function collectValidatorData(validator, blockNumber, votingPowerData) {
 * @param {Map} validatorMap - Map of proposer addresses to validator objects for fast lookup
 * @returns {Promise<Map>} Map of proposer -> {blocks: [], emptyBlockNumbers: []}
 */
-async function scanBlockChunk(chunkStart, chunkEnd, validators, validatorMap) {
-    const provider = new ethers.JsonRpcProvider(EL_ETHRPC_URL);
+async function scanBlockChunk(chunkStart, chunkEnd, validators, validatorMap, elRpcUrl = EL_ETHRPC_URL, clRpcUrl = CL_ETHRPC_URL) {
+    const provider = new ethers.JsonRpcProvider(elRpcUrl);
     const chunkResults = new Map();
     
     // Scan each block in the chunk
     for (let blockNum = chunkStart; blockNum <= chunkEnd; blockNum++) {
         try {
             // Get the proposer of this block from consensus layer
-            const proposer = await getBlockProposer(blockNum);
+            const proposer = await getBlockProposer(blockNum, clRpcUrl);
             
             // Only process blocks from validators we're tracking
             if (validatorMap.has(proposer)) {
@@ -573,13 +591,19 @@ async function scanBlocksParallel(startBlock, endBlock, validators, validatorMap
     
     const results = [];
     const workerCount = MAX_WORKER_COUNT;
+    const useAlternate = HAS_ALTERNATE_RPCS;
+    const primaryWorkers = useAlternate ? Math.floor(workerCount / 2) : workerCount;
+    const alternateWorkers = useAlternate ? workerCount - primaryWorkers : 0;
     
     // Process chunks in batches to avoid overwhelming the RPC endpoints
     for (let i = 0; i < chunks.length; i += workerCount) {
         const batch = chunks.slice(i, i + workerCount);
-        const batchPromises = batch.map(chunk => 
-            scanBlockChunk(chunk.chunkStart, chunk.chunkEnd, validators, validatorMap)
-        );
+        const batchPromises = batch.map((chunk, idx) => {
+            const isAlternate = useAlternate && (idx % 2 === 1);
+            const elUrl = isAlternate ? EL_ETHRPC_URL_ALT : EL_ETHRPC_URL;
+            const clUrl = isAlternate ? CL_ETHRPC_URL_ALT : CL_ETHRPC_URL;
+            return scanBlockChunk(chunk.chunkStart, chunk.chunkEnd, validators, validatorMap, elUrl, clUrl);
+        });
         
         // Wait for all chunks in this batch to complete
         const batchResults = await Promise.all(batchPromises);
@@ -656,7 +680,8 @@ function buildPubkeyTopicSet(validators) {
  *   - boosters: Map of token addresses to BigInt amounts of booster incentives
  */
 async function indexPolEvents(validators, dayRanges) {
-    const provider = new ethers.JsonRpcProvider(EL_ETHRPC_URL);
+    const providerPrimary = new ethers.JsonRpcProvider(EL_ETHRPC_URL);
+    const providerAlternate = HAS_ALTERNATE_RPCS ? new ethers.JsonRpcProvider(EL_ETHRPC_URL_ALT) : null;
     const iface = new ethers.Interface([
         'event Distributed(bytes indexed valPubkey, uint64 indexed nextTimestamp, address indexed receiver, uint256 amount)',
         'event BGTBoosterIncentivesProcessed(bytes indexed pubkey, address indexed token, uint256 bgtEmitted, uint256 amount)'
@@ -686,7 +711,7 @@ async function indexPolEvents(validators, dayRanges) {
      * @param {number} batchSize - Number of chunks to process in parallel (default: 4)
      * @returns {Promise<Array>} Compiled array of all log entries from the range
      */
-    async function processLogsChunked(fromBlock, toBlock, filter, eventType, chunkSize = LOG_CHUNK_SIZE, batchSize = LOG_BATCH_SIZE) {
+    async function processLogsChunked(fromBlock, toBlock, filter, eventType, chunkSize = LOG_CHUNK_SIZE, batchSize = MAX_WORKER_COUNT) {
         const totalBlocks = toBlock - fromBlock + 1;
         
         // Create chunk ranges
@@ -701,51 +726,119 @@ async function indexPolEvents(validators, dayRanges) {
         
         // Process ALL chunks in parallel with controlled concurrency
         log(`Processing ${chunks.length} chunks for ${eventType} events with max ${batchSize} concurrent requests...`);
+        const progress = createProgressBar(chunks.length, `Indexing ${eventType} chunks`);
+        let completedChunks = 0;
         
-        const semaphore = {
-            count: batchSize,
+        const useAlternate = Boolean(providerAlternate);
+        if (!useAlternate) {
+            const semaphore = {
+                count: batchSize,
+                waiters: [],
+                async acquire() {
+                    if (this.count > 0) {
+                        this.count--;
+                        return;
+                    }
+                    return new Promise(resolve => this.waiters.push(resolve));
+                },
+                release() {
+                    if (this.waiters.length > 0) {
+                        const resolve = this.waiters.shift();
+                        resolve();
+                    } else {
+                        this.count++;
+                    }
+                }
+            };
+            const allPromises = chunks.map(async (chunk, index) => {
+                await semaphore.acquire();
+                try {
+                    const chunkLogs = await providerPrimary.getLogs({
+                        ...filter,
+                        fromBlock: chunk.start,
+                        toBlock: chunk.end
+                    });
+                    let processedCount = 0;
+                    for (const log of chunkLogs) {
+                        const topicPub = (log.topics?.[1] || '').toLowerCase();
+                        if (!pubTopicSet.has(topicPub)) continue;
+                        const proposer = topicToProposer.get(topicPub);
+                        const date = getDateForBlock(log.blockNumber);
+                        if (!date) continue;
+                        const parsed = iface.parseLog(log);
+                        if (!daily[date][proposer]) daily[date][proposer] = { vaultBgtBI: 0n, boosters: {} };
+                        if (eventType === 'Distributed') {
+                            const amount = BigInt(parsed.args.amount.toString());
+                            daily[date][proposer].vaultBgtBI += amount;
+                        } else if (eventType === 'BGTBoosterIncentivesProcessed') {
+                            const token = parsed.args.token.toLowerCase();
+                            const amount = BigInt(parsed.args.amount.toString());
+                            daily[date][proposer].boosters[token] = (daily[date][proposer].boosters[token] || 0n) + amount;
+                        }
+                        processedCount++;
+                    }
+                    return processedCount;
+                } catch (e) {
+                    log(`Error processing ${eventType} logs for chunk ${index + 1}/${chunks.length} (blocks ${chunk.start}-${chunk.end}): ${e.message}`);
+                    return 0;
+                } finally {
+                    semaphore.release();
+                    completedChunks++;
+                    progress.update(completedChunks);
+                }
+            });
+            const processedCounts = await Promise.all(allPromises);
+            const totalProcessed = processedCounts.reduce((sum, count) => sum + count, 0);
+            progress.finish();
+            log(`Processed ${totalProcessed} ${eventType} events from ${chunks.length} chunks`);
+            return totalProcessed;
+        }
+        
+        // Split concurrency across primary and alternate providers
+        const primaryBatch = Math.floor(batchSize / 2);
+        const alternateBatch = batchSize - primaryBatch;
+        const primarySemaphore = {
+            count: primaryBatch,
             waiters: [],
             async acquire() {
-                if (this.count > 0) {
-                    this.count--;
-                    return;
-                }
+                if (this.count > 0) { this.count--; return; }
                 return new Promise(resolve => this.waiters.push(resolve));
             },
             release() {
-                if (this.waiters.length > 0) {
-                    const resolve = this.waiters.shift();
-                    resolve();
-                } else {
-                    this.count++;
-                }
+                if (this.waiters.length > 0) { const resolve = this.waiters.shift(); resolve(); } else { this.count++; }
             }
         };
-        
+        const alternateSemaphore = {
+            count: alternateBatch,
+            waiters: [],
+            async acquire() {
+                if (this.count > 0) { this.count--; return; }
+                return new Promise(resolve => this.waiters.push(resolve));
+            },
+            release() {
+                if (this.waiters.length > 0) { const resolve = this.waiters.shift(); resolve(); } else { this.count++; }
+            }
+        };
         const allPromises = chunks.map(async (chunk, index) => {
-            await semaphore.acquire();
+            const usePrimary = (index % 2 === 0);
+            const sem = usePrimary ? primarySemaphore : alternateSemaphore;
+            const provider = usePrimary ? providerPrimary : providerAlternate;
+            await sem.acquire();
             try {
                 const chunkLogs = await provider.getLogs({
                     ...filter,
                     fromBlock: chunk.start,
                     toBlock: chunk.end
                 });
-                
-                // Process logs immediately in this worker to avoid memory accumulation
                 let processedCount = 0;
                 for (const log of chunkLogs) {
                     const topicPub = (log.topics?.[1] || '').toLowerCase();
                     if (!pubTopicSet.has(topicPub)) continue;
-                    
                     const proposer = topicToProposer.get(topicPub);
                     const date = getDateForBlock(log.blockNumber);
                     if (!date) continue;
-                    
                     const parsed = iface.parseLog(log);
-                    
-                    // Initialize proposer data if needed
                     if (!daily[date][proposer]) daily[date][proposer] = { vaultBgtBI: 0n, boosters: {} };
-                    
                     if (eventType === 'Distributed') {
                         const amount = BigInt(parsed.args.amount.toString());
                         daily[date][proposer].vaultBgtBI += amount;
@@ -756,21 +849,22 @@ async function indexPolEvents(validators, dayRanges) {
                     }
                     processedCount++;
                 }
-                
                 return processedCount;
             } catch (e) {
                 log(`Error processing ${eventType} logs for chunk ${index + 1}/${chunks.length} (blocks ${chunk.start}-${chunk.end}): ${e.message}`);
                 return 0;
             } finally {
-                semaphore.release();
+                sem.release();
+                completedChunks++;
+                progress.update(completedChunks);
             }
         });
         
         // Wait for ALL chunks to complete
         const processedCounts = await Promise.all(allPromises);
         const totalProcessed = processedCounts.reduce((sum, count) => sum + count, 0);
+        progress.finish();
         log(`Processed ${totalProcessed} ${eventType} events from ${chunks.length} chunks`);
-        
         return totalProcessed;
     }
     
@@ -785,7 +879,7 @@ async function indexPolEvents(validators, dayRanges) {
     const overallEndBlock = Math.max(...allRanges.map(r => r.endBlock));
     const totalBlocks = overallEndBlock - overallStartBlock + 1;
     
-    log(`Indexing POL events for all ${Object.keys(dayRanges).length} days (${totalBlocks} total blocks in parallel batches of ${LOG_BATCH_SIZE}x${LOG_CHUNK_SIZE})...`);
+        log(`Indexing POL events for all ${Object.keys(dayRanges).length} days (${totalBlocks} total blocks in parallel batches of ${MAX_WORKER_COUNT}x${LOG_CHUNK_SIZE})...`);
     
     // Helper function to determine which date a block belongs to
     function getDateForBlock(blockNumber) {
@@ -918,6 +1012,7 @@ async function computeUsdValuations(dailyAgg, validators, dayRanges) {
 // Command line arguments
 const args = process.argv.slice(2);
 const showHelp = args.includes('--help') || args.includes('-h');
+const ignoreGenesis = args.includes('--ignore-genesis');
 
 // Show help if requested
 if (showHelp) {
@@ -930,6 +1025,7 @@ Usage:
   Options:
     --days=N          Number of days to analyze (default: 45)
     --end-date=DATE   End date for analysis in YYYY-MM-DD format (default: yesterday)
+    --ignore-genesis  Ignore genesis CSV and evaluate ALL current validators from database
     --help, -h        Show this help message
          
   Examples:
@@ -937,12 +1033,17 @@ Usage:
     node score-validators.js --days=7                         # Analyze last 7 days ending yesterday
     node score-validators.js --days=7 --end-date=2025-01-25   # Analyze 7 days ending on Jan 25, 2025
     node score-validators.js --end-date=2025-01-20            # Analyze 45 days ending on Jan 20, 2025
+    node score-validators.js --ignore-genesis                 # Analyze ALL current validators from database
     node score-validators.js                                  # Full analysis: last 45 days (default)
         
 Environment Variables:
-  EL_ETHRPC_URL     Execution layer RPC endpoint
-  CL_ETHRPC_URL     Consensus layer RPC endpoint
-  VERBOSE           Set to 'true' for verbose logs and detailed CSV output
+  EL_ETHRPC_URL         Execution layer RPC endpoint (primary)
+  CL_ETHRPC_URL         Consensus layer RPC endpoint (primary)
+  EL_ETHRPC_URL_ALT     Execution layer RPC endpoint (alternate)
+  CL_ETHRPC_URL_ALT     Consensus layer RPC endpoint (alternate)
+                        If alternates are set and differ from primaries, total workers double
+                        and half of chunked tasks go to alternates
+  VERBOSE               Set to 'true' for verbose logs and detailed CSV output
         
 Memory Requirements:
   For large day ranges, consider running with increased memory:
@@ -1680,9 +1781,9 @@ async function main() {
         log(`Analysis period: ${firstDay} to ${lastDay} (${daysToAnalyze} days)`);
         
         // Load validators
-        const validators = loadValidators();
+        const validators = await loadValidators(ignoreGenesis);
         if (validators.length === 0) {
-            throw new Error('No validators loaded from genesis_validators.csv');
+            throw new Error('No validators loaded');
         }
         
         const validatorMap = new Map(validators.map(v => [v.proposer, v]));

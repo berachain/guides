@@ -36,7 +36,7 @@ function parseArgs() {
             case '-n':
                 if (i + 1 < args.length) {
                     const network = args[++i];
-                    config.snapshot_chain = network === 'testnet' ? 'bera-snapshot-testnet' : 'bera-snapshot';
+                    config.snapshot_chain = network === 'testnet' ? 'bera-testnet-snapshot' : 'bera-snapshot';
                 } else {
                     console.error('Error: --network requires a value (mainnet or testnet)');
                     process.exit(1);
@@ -127,14 +127,17 @@ function startDownload(mediaLink, fileName) {
 }
 
 // Fetch bucket contents and start downloads
-const bucketUrl = `https://storage.googleapis.com/storage/v1/b/${config.snapshot_chain}-${config.geography}/o`;
+// Both mainnet and testnet append geography
+const bucketName = `${config.snapshot_chain}-${config.geography}`;
+
+const bucketUrl = `https://storage.googleapis.com/storage/v1/b/${bucketName}/o`;
 console.log('Fetching bucket contents from:');
 console.log(`  ${bucketUrl}`);
 console.log('');
 
 const req = https.request({
 	hostname: 'storage.googleapis.com',
-	path: `/storage/v1/b/${config.snapshot_chain}-${config.geography}/o`,
+	path: `/storage/v1/b/${bucketName}/o`,
 	method: 'GET',
 	headers: { 'Accept': 'application/json' }
 }, async (res) => {
@@ -164,17 +167,28 @@ const req = https.request({
 			}
 		});
 		
+		// Directory structure:
+		// Both mainnet and testnet:
+		//   - Beacon CL: beacon-kit/<type> (client-independent)
+		//   - Execution EL: bera-<client>/<type>
 		const dir_keys = {
-			beacon_key: `beacon_${config.el_client}/${config.snapshot_type}`,
+			beacon_key: `beacon-kit/${config.snapshot_type}`,
 			el_key: `bera-${config.el_client}/${config.snapshot_type}`
 		};
 
 		// Find the files to download and log their URLs
 		const downloadsToQueue = [];
+		const MIN_SIZE_BYTES = 1024 * 1024; // 1 MB minimum
+		
 		for (const key in dir_keys) {
 			const dir = dir_keys[key];
 			if (directoryStructure[dir]) {
-				const files = directoryStructure[dir];
+				// Filter out small files (likely placeholder/stub files)
+				const files = directoryStructure[dir].filter(f => parseInt(f.size) >= MIN_SIZE_BYTES);
+				if (files.length === 0) {
+					console.log(`Warning: No valid snapshots found in ${dir} (all files < 1MB)`);
+					continue;
+				}
 				files.sort((a, b) => new Date(b.timeCreated) - new Date(a.timeCreated));
 				const latest = files[0];
 				downloadsToQueue.push({
