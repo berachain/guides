@@ -127,7 +127,7 @@ export default function Deploy() {
         2,
       )}` as `0x${string}`;
 
-      // Process trasaction
+      // Process transaction
       const tx = await provider.request({
         method: "eth_sendTransaction",
         params: [
