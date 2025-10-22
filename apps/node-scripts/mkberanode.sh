@@ -26,7 +26,7 @@ if (set -o pipefail) 2>/dev/null; then :; fi
 # ------------------------------
 CHAIN=""            # mainnet|bepolia
 EL_CHOICE=""        # reth|geth
-MODE="pruned"         # archive|pruned
+MODE=""               # archive|pruned (required)
 CL_VERSION=""       # e.g. v1.3.2 (empty: latest)
 EL_VERSION=""       # e.g. v1.20.0 (empty: latest)
 USE_SNAPSHOT=1      # if 1, download and install snapshots
@@ -316,7 +316,11 @@ extract_snapshot_info() {
   local json_data="$1" el_client="$2" snapshot_type="$3" snapshot_kind="$4"
   local dir
   if [[ "$snapshot_kind" == "beacon" ]]; then
-    dir="beacon_${el_client}/${snapshot_type}"
+    local beacon_type="$snapshot_type"
+    if [[ "$snapshot_type" == "pruned" ]]; then
+      beacon_type="full"
+    fi
+    dir="beacon_${el_client}/${beacon_type}"
   else
     dir="bera-${el_client}/${snapshot_type}"
   fi
@@ -367,7 +371,7 @@ install_snapshots() {
   info "Resolving snapshot URLs..."
   local snapshot_chain="bera-snapshot"
   if [[ "$CHAIN" == "bepolia" ]]; then
-    snapshot_chain="bera-snapshot-testnet"
+    snapshot_chain="bera-testnet-snapshot"
   fi
   local json_data snapshot_info
   json_data=$(fetch_snapshot_list "$snapshot_chain" "$SNAPSHOT_GEOGRAPHY") || json_data=""
@@ -384,21 +388,16 @@ install_snapshots() {
 
   # Beacon snapshot (stream)
   if [[ -n "${BEACON_URL:-}" ]]; then
-    # Detect existing CL data using CometBFT blockstore presence
-    if [[ -d "$CL_HOME/data/blockstore.db" ]]; then
-      if [[ -n "$(ls -A "$CL_HOME/data/blockstore.db" 2>/dev/null)" ]]; then
-        info "Detected existing CL data at $CL_HOME/data/blockstore.db; skipping beacon snapshot"
-      else
-        info "Streaming beacon snapshot"
-        if stream_extract "$BEACON_URL" "$CL_HOME/data/" "beacon snapshot"; then
-          chown -R berachain:berachain "$CL_HOME" 2>/dev/null || warn "Failed to set ownership for CL snapshot data"
-        else
-          warn "Beacon snapshot streaming failed; will sync from genesis"
-        fi
-      fi
-    else
+    # Check if we should skip due to existing data
+    local should_skip=0
+    if [[ -d "$CL_HOME/data/blockstore.db" && -n "$(ls -A "$CL_HOME/data/blockstore.db" 2>/dev/null)" ]]; then
+      info "Detected existing CL data at $CL_HOME/data/blockstore.db; skipping beacon snapshot"
+      should_skip=1
+    fi
+    
+    if [[ $should_skip -eq 0 ]]; then
       info "Streaming beacon snapshot"
-      if stream_extract "$BEACON_URL" "$CL_HOME/data/" "beacon snapshot"; then
+      if stream_extract "$BEACON_URL" "$CL_HOME/" "beacon snapshot"; then
         chown -R berachain:berachain "$CL_HOME" 2>/dev/null || warn "Failed to set ownership for CL snapshot data"
       else
         warn "Beacon snapshot streaming failed; will sync from genesis"
@@ -410,18 +409,19 @@ install_snapshots() {
 
   # Execution snapshot (stream)
   if [[ -n "${EL_URL:-}" ]]; then
-    # Detect existing EL data paths for reth and geth
-    local el_data_exists=0
+    # Check if we should skip due to existing data
+    local should_skip=0
     if [[ "$EL_CHOICE" == "reth" ]]; then
-      if [[ -d "$EL_HOME/db" ]]; then
-        if [[ -n "$(ls -A "$EL_HOME/db" 2>/dev/null)" ]]; then el_data_exists=1; fi
+      if [[ -d "$EL_HOME/data/" && -n "$(ls -A "$EL_HOME/data/db" 2>/dev/null)" ]]; then
+        should_skip=1
       fi
     else
-      if [[ -d "$EL_HOME/bera-geth/geth/chaindata" ]]; then
-        if [[ -n "$(ls -A "$EL_HOME/bera-geth/geth/chaindata" 2>/dev/null)" ]]; then el_data_exists=1; fi
+      if [[ -d "$EL_HOME/bera-geth/geth/chaindata" && -n "$(ls -A "$EL_HOME/bera-geth/geth/chaindata" 2>/dev/null)" ]]; then
+        should_skip=1
       fi
     fi
-    if [[ $el_data_exists -eq 1 ]]; then
+    
+    if [[ $should_skip -eq 1 ]]; then
       info "Detected existing EL data; skipping execution snapshot"
     else
       info "Streaming execution layer snapshot"
@@ -678,10 +678,15 @@ init_el() {
   
   # Only initialize from genesis if no snapshot data exists
   if [[ "$EL_CHOICE" == "reth" ]]; then
-    chown -R berachain:berachain "$EL_HOME/config"
-    sudo -u berachain bash -c "cd '$EL_HOME' && '$BIN_DIR/bera-reth' init --datadir $EL_HOME --chain $CONFIG_DIR/el/genesis.json >/dev/null 2>&1"
+    if ! sudo -u berachain bash -c "cd '$EL_HOME' && '$BIN_DIR/bera-reth' init --datadir $EL_HOME/data --chain $CONFIG_DIR/el/genesis.json >/dev/null 2>&1"; then
+      err "bera-reth init failed with exit code $?"
+      exit 1
+    fi
   else
-    "$BIN_DIR/bera-geth" init --state.scheme=path --datadir "$EL_HOME/" "$CONFIG_DIR/el/genesis.json" >/dev/null 2>&1
+    if ! $BIN_DIR/bera-geth init --state.scheme=path --datadir $EL_HOME $CONFIG_DIR/el/genesis.json >/dev/null 2>&1; then
+      err "bera-geth init failed with exit code $?"
+      exit 1
+    fi
     chown -R berachain:berachain "$EL_HOME"
   fi
 }
@@ -695,7 +700,10 @@ init_cl() {
 
   info "Initializing beacond home at $CL_HOME..."
   if [[ ! -f "$CL_HOME/config/genesis.json" ]]; then
-    sudo -u berachain "$BIN_DIR/beacond" 2>/dev/null init "berachain-node" --chain-id "$chain_id" --home "$CL_HOME" --beacon-kit.chain-spec "$CHAIN"
+    if ! sudo -u berachain "$BIN_DIR/beacond" 2>/dev/null init "berachain-node" --chain-id "$chain_id" --home "$CL_HOME" --beacon-kit.chain-spec "$CHAIN"; then
+      err "beacond init failed with exit code $?"
+      exit 1
+    fi
     if [[ -f "$CONFIG_DIR/cl/genesis.json" ]]; then
       cp -f "$CONFIG_DIR/cl/genesis.json" "$CL_HOME/config/genesis.json"
     fi
@@ -784,11 +792,11 @@ install_systemd_units() {
     local reth_mode_flag=""
     if [[ "$MODE" != "archive" ]]; then reth_mode_flag="--full"; fi
     el_exec="$BIN_DIR/bera-reth"
-    el_args="node --datadir $EL_HOME \
+    el_args="node --datadir $EL_HOME/data \
       --http --http.addr 0.0.0.0 --http.port $EL_HTTP_PORT \
       --ws --ws.addr 0.0.0.0 --ws.port $EL_WS_PORT \
       --authrpc.addr 127.0.0.1 --authrpc.port $EL_AUTHRPC_PORT --authrpc.jwtsecret $JWT_PATH \
-      --port $EL_P2P_PORT --chain $EL_HOME/config/genesis.json $bootnodes_arg $reth_mode_flag"
+      --port $EL_P2P_PORT --chain $CONFIG_DIR/el/genesis.json $bootnodes_arg $reth_mode_flag"
   else
     # Geth: archive uses history flags; also run with PBSS and full sync
     local geth_archive_flags=""
@@ -796,7 +804,7 @@ install_systemd_units() {
       geth_archive_flags="--history.logs 0 --history.state 0 --history.transactions 0"
     fi
     el_exec="$BIN_DIR/bera-geth"
-    el_args="--datadir $EL_HOME/ \
+    el_args="--datadir $EL_HOME \
       --syncmode full --state.scheme path \
       --http --http.addr 0.0.0.0 --http.port $EL_HTTP_PORT \
       --ws --ws.addr 0.0.0.0 --ws.port $EL_WS_PORT \
@@ -875,9 +883,9 @@ main() {
   install_beacond
   install_el
   fetch_network_files
+  install_snapshots
   init_el
   init_cl
-  install_snapshots
   ensure_jwt
   install_systemd_units
 
@@ -899,3 +907,6 @@ EON
 }
 
 main
+
+
+
