@@ -24,11 +24,9 @@ export default function RootLayout({
       <body>
         <Nav />
         <main className="p-8">
-        <RootProvider>
-          {children}
-        </RootProvider>
+          <RootProvider>{children}</RootProvider>
         </main>
       </body>
     </html>
   );
-};
+}

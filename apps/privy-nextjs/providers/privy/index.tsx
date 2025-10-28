@@ -10,7 +10,7 @@ import dynamic from "next/dynamic";
 // ------------------------------------------------------------
 const Privy = ({ children }: { children: React.ReactNode }) => {
   return (
-    <PrivyProvider 
+    <PrivyProvider
       appId={process.env.NEXT_PUBLIC_PRIVY_APP_ID as string}
       clientId={process.env.NEXT_PUBLIC_PRIVY_CLIENT_ID as string}
       config={{
@@ -24,7 +24,7 @@ const Privy = ({ children }: { children: React.ReactNode }) => {
           },
         },
       }}
-      >
+    >
       {children}
     </PrivyProvider>
   );
