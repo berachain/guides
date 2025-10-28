@@ -9,15 +9,15 @@ import Wagmi from "@/providers/wagmi";
 // Main Provider
 // ------------------------------------------------------------
 const RootProvider = ({ children }: { children: React.ReactNode }) => {
-  return (<>
-    <Privy>
-      <Query>
-        <Wagmi>
-          {children}
-        </Wagmi>
-      </Query>
-    </Privy>
-  </>);
+  return (
+    <>
+      <Privy>
+        <Query>
+          <Wagmi>{children}</Wagmi>
+        </Query>
+      </Privy>
+    </>
+  );
 };
 
 // Exports
