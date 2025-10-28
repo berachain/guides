@@ -1,0 +1,94 @@
+@import "tailwindcss";
+
+:root {
+  --bg-dark: #0B0C0E;
+  --text-light: #8A919E;
+  --border-light: #232529;
+}
+
+@layer base {
+  body {
+    @apply bg-[var(--bg-dark)] text-[var(--text-light)] font-sans;
+  }
+
+  h1 {
+    @apply text-4xl font-bold text-white mb-4;
+  }
+
+  h2 {
+    @apply text-2xl font-bold text-white mb-4;
+  }
+
+  h3 {
+    @apply text-lg font-bold text-white mb-4;
+  }
+
+  h4 {
+    @apply text-sm font-medium text-[var(--text-light)] mb-4 uppercase;
+  }
+
+  form {
+    @apply mb-4;
+  }
+  
+  form input {
+    @apply w-full mb-4 px-3 block rounded-md border border-[var(--border-light)] bg-transparent text-white leading-10 disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  p {
+    @apply text-[var(--text-light)] mb-4;
+  }
+
+  .btn, button {
+    @apply inline-block bg-white text-black leading-10 px-10 text-sm rounded-full cursor-pointer hover:bg-gray-200 font-semibold transition-all duration-300 disabled:opacity-50 disabled:cursor-auto;
+  }
+
+  .btn-outline {
+    @apply bg-transparent text-white border border-[var(--border-light)] hover:bg-white hover:text-black disabled:hover:bg-transparent disabled:hover:text-white disabled:cursor-auto;
+  }
+
+  pre {
+    @apply text-xs text-white bg-zinc-900 p-4 rounded-md block mb-4 whitespace-break-spaces;
+  }
+
+  table {
+    @apply w-full text-left border-collapse overflow-hidden mb-4;
+  }
+
+  th, td {
+    @apply p-4 border-[var(--border-light)] border;
+  }
+
+  th {
+    @apply bg-[var(--border-light)] text-white text-sm font-semibold;
+  }
+
+  nav a {
+    @apply text-[var(--text-light)] hover:text-white transition-all duration-300 font-medium;
+  }
+}
+
+/* :root {
+  --background: #ffffff;
+  --foreground: #171717;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0a0a;
+    --foreground: #ededed;
+  }
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: Arial, Helvetica, sans-serif;
+} */
