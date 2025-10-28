@@ -2,7 +2,13 @@
 
 // Imports
 // ------------------------------------------------------------
-import { usePrivy, ConnectedWallet, useCreateWallet, useSignMessage, useSendTransaction } from "@privy-io/react-auth";
+import {
+  usePrivy,
+  ConnectedWallet,
+  useCreateWallet,
+  useSignMessage,
+  useSendTransaction,
+} from "@privy-io/react-auth";
 import { useWallets } from "@privy-io/react-auth";
 import dynamic from "next/dynamic";
 import { useEffect, useEffectEvent, useState } from "react";
@@ -13,14 +19,18 @@ import { parseEther } from "viem";
 // ------------------------------------------------------------
 const Auth = () => {
   // State / Props
-  const [selectedWallet, setSelectedWallet] = useState<ConnectedWallet | null>(null);
+  const [selectedWallet, setSelectedWallet] = useState<ConnectedWallet | null>(
+    null,
+  );
   const [walletBalance, setWalletBalance] = useState<number | null>(null);
   const { user, ready, authenticated, logout, login } = usePrivy();
   const { wallets, ready: walletsReady } = useWallets();
 
   // - Wallet signature states
   const [isSigningMessage, setIsSigningMessage] = useState(false);
-  const [signMessageError, setSignMessageError] = useState<Error | string |null>(null);
+  const [signMessageError, setSignMessageError] = useState<
+    Error | string | null
+  >(null);
   const [signMessageData, setSignMessageData] = useState<any>(null);
   const { signMessage } = useSignMessage({
     onSuccess: ({ signature }) => {
@@ -32,10 +42,12 @@ const Auth = () => {
       setIsSigningMessage(false);
       setSignMessageError(error);
     },
-  })
+  });
   // - Wallet transaction states
   const [isSendingTransaction, setIsSendingTransaction] = useState(false);
-  const [sendTransactionError, setSendTransactionError] = useState<Error | string |null>(null);
+  const [sendTransactionError, setSendTransactionError] = useState<
+    Error | string | null
+  >(null);
   const [sendTransactionData, setSendTransactionData] = useState<any>(null);
   const { sendTransaction } = useSendTransaction({
     onSuccess: ({ hash }) => {
@@ -51,9 +63,11 @@ const Auth = () => {
 
   // - Wallet creation states
   const [isCreatingWallet, setIsCreatingWallet] = useState(false);
-  const [createWalletError, setCreateWalletError] = useState<Error | string |null>(null);
+  const [createWalletError, setCreateWalletError] = useState<
+    Error | string | null
+  >(null);
   const [createWalletData, setCreateWalletData] = useState<any>(null);
-  const {createWallet } = useCreateWallet({
+  const { createWallet } = useCreateWallet({
     onSuccess: ({ wallet }) => {
       setIsCreatingWallet(false);
       setCreateWalletError(null);
@@ -79,9 +93,11 @@ const Auth = () => {
   // Functions
   /**
    * @dev this is to sign a message with the selected wallet
-   * @param e 
+   * @param e
    */
-  const handleSubmitSignMessage = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmitSignMessage = async (
+    e: React.FormEvent<HTMLFormElement>,
+  ) => {
     console.log("handleSubmitSignMessage");
     e.preventDefault();
     const message = (e.target as HTMLFormElement).message.value;
@@ -90,9 +106,11 @@ const Auth = () => {
 
   /**
    * @dev this is to send a transaction with the selected wallet
-   * @param e 
+   * @param e
    */
-  const handleSubmitSendTransaction = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmitSendTransaction = async (
+    e: React.FormEvent<HTMLFormElement>,
+  ) => {
     console.log("handleSubmitSendTransaction");
     e.preventDefault();
     const to = (e.target as HTMLFormElement).to.value;
@@ -106,7 +124,7 @@ const Auth = () => {
     if (!selectedWallet) {
       setWalletBalance(null);
       return;
-    };
+    }
     const provider = await selectedWallet?.getEthereumProvider();
     const balance = await provider?.request({
       method: "eth_getBalance",
@@ -134,12 +152,19 @@ const Auth = () => {
    * @dev this is to set the selected wallet
    */
   useEffect(() => {
-    if (wallets.length = 0) return;
-    setSelectedWallet(wallets.find((wallet) => wallet.meta.name.includes('Privy')) ?? null);
+    if ((wallets.length = 0)) return;
+    setSelectedWallet(
+      wallets.find((wallet) => wallet.meta.name.includes("Privy")) ?? null,
+    );
   }, [authenticated, wallets]);
 
   // Render
-  if (!ready) return <div><Loader className="w-8 h-8 animate-spin text-white" /></div>;
+  if (!ready)
+    return (
+      <div>
+        <Loader className="w-8 h-8 animate-spin text-white" />
+      </div>
+    );
 
   return (
     <div>
@@ -147,31 +172,40 @@ const Auth = () => {
         <>
           <h2>User</h2>
           <p>Details about the user stored in Privy.</p>
-          <button className="btn mb-4" onClick={logout}>Sign Out</button>
-          <code><pre>{JSON.stringify(user, null, 2)}</pre></code>
+          <button className="btn mb-4" onClick={logout}>
+            Sign Out
+          </button>
+          <code>
+            <pre>{JSON.stringify(user, null, 2)}</pre>
+          </code>
 
           <h2>Wallets</h2>
           <p>List of wallets connected to the user.</p>
 
           <h3>Selected Wallet</h3>
-          <code><pre>{selectedWallet?.address ? `${selectedWallet.address} / ${selectedWallet.chainId} / ${selectedWallet.meta.name}` : '(No wallet selected)'}</pre></code>
+          <code>
+            <pre>
+              {selectedWallet?.address
+                ? `${selectedWallet.address} / ${selectedWallet.chainId} / ${selectedWallet.meta.name}`
+                : "(No wallet selected)"}
+            </pre>
+          </code>
 
-          {selectedWallet?.address
-            ?
+          {selectedWallet?.address ? (
             <>
               <h3>Wallet Balance</h3>
               <code>
                 <pre>
                   {walletBalance
                     ? `${parseInt(walletBalance as unknown as string, 16)} / ${selectedWallet.chainId}`
-                    : '(No wallet balance found)'}
+                    : "(No wallet balance found)"}
                 </pre>
               </code>
             </>
-            : null}
+          ) : null}
 
-          {walletsReady
-            ? <>
+          {walletsReady ? (
+            <>
               {wallets.length > 0 ? (
                 <>
                   <h3>Available Wallets</h3>
@@ -191,45 +225,128 @@ const Auth = () => {
                           <td>{wallet.chainId}</td>
                           <td>{wallet.meta.name}</td>
                           <td className="text-right">
-                            {wallet.address === selectedWallet?.address ? <button className="btn btn-outline" disabled>Selected</button> : null}
+                            {wallet.address === selectedWallet?.address ? (
+                              <button className="btn btn-outline" disabled>
+                                Selected
+                              </button>
+                            ) : null}
                           </td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
                 </>
-              ) : <>
-                <code><pre>No wallets found.</pre></code>
-              </>}
+              ) : (
+                <>
+                  <code>
+                    <pre>No wallets found.</pre>
+                  </code>
+                </>
+              )}
             </>
-            : <Loader className="w-8 h-8 animate-spin text-white" />}
+          ) : (
+            <Loader className="w-8 h-8 animate-spin text-white" />
+          )}
 
-            <button className="btn mb-4" onClick={handleSubmitCreateWallet} disabled={isCreatingWallet}>Create Wallet</button>
-            <code><pre>{createWalletError ? createWalletError instanceof Error ? createWalletError.message : createWalletError : createWalletData ? createWalletData : ''}</pre></code>
+          <button
+            className="btn mb-4"
+            onClick={handleSubmitCreateWallet}
+            disabled={isCreatingWallet}
+          >
+            Create Wallet
+          </button>
+          <code>
+            <pre>
+              {createWalletError
+                ? createWalletError instanceof Error
+                  ? createWalletError.message
+                  : createWalletError
+                : createWalletData
+                  ? createWalletData
+                  : ""}
+            </pre>
+          </code>
 
-            <h3>Wallet Actions</h3>
+          <h3>Wallet Actions</h3>
 
-            <h4>Sign Message</h4>
+          <h4>Sign Message</h4>
 
-            <form onSubmit={handleSubmitSignMessage}>
-              <input name="message" type="text" placeholder="Message to sign" className="w-full mb-4" disabled={isSigningMessage} />
-              <button className="btn" type="submit" disabled={isSigningMessage}>Sign Message</button>
-            </form>
+          <form onSubmit={handleSubmitSignMessage}>
+            <input
+              name="message"
+              type="text"
+              placeholder="Message to sign"
+              className="w-full mb-4"
+              disabled={isSigningMessage}
+            />
+            <button className="btn" type="submit" disabled={isSigningMessage}>
+              Sign Message
+            </button>
+          </form>
 
-            <code><pre>{JSON.stringify(signMessageError ? signMessageError instanceof Error ? signMessageError.message : signMessageError : signMessageData ? signMessageData : '', null, 2)}</pre></code>
+          <code>
+            <pre>
+              {JSON.stringify(
+                signMessageError
+                  ? signMessageError instanceof Error
+                    ? signMessageError.message
+                    : signMessageError
+                  : signMessageData
+                    ? signMessageData
+                    : "",
+                null,
+                2,
+              )}
+            </pre>
+          </code>
 
-            <h4>Send Transaction</h4>
+          <h4>Send Transaction</h4>
 
-            <form onSubmit={handleSubmitSendTransaction}>
-              <input name="to" type="text" placeholder="To address" className="w-full mb-4" disabled={isSendingTransaction} />
-              <input step="0.000000000000000001" name="amount" type="number" placeholder="Amount" className="w-full mb-4" disabled={isSendingTransaction} />
-              <button className="btn" type="submit" disabled={isSendingTransaction}>Send Transaction</button>
-            </form>
+          <form onSubmit={handleSubmitSendTransaction}>
+            <input
+              name="to"
+              type="text"
+              placeholder="To address"
+              className="w-full mb-4"
+              disabled={isSendingTransaction}
+            />
+            <input
+              step="0.000000000000000001"
+              name="amount"
+              type="number"
+              placeholder="Amount"
+              className="w-full mb-4"
+              disabled={isSendingTransaction}
+            />
+            <button
+              className="btn"
+              type="submit"
+              disabled={isSendingTransaction}
+            >
+              Send Transaction
+            </button>
+          </form>
 
-            <code><pre>{JSON.stringify(sendTransactionError ? sendTransactionError instanceof Error ? sendTransactionError.message : sendTransactionError : sendTransactionData ? sendTransactionData : '', null, 2)}</pre></code>
+          <code>
+            <pre>
+              {JSON.stringify(
+                sendTransactionError
+                  ? sendTransactionError instanceof Error
+                    ? sendTransactionError.message
+                    : sendTransactionError
+                  : sendTransactionData
+                    ? sendTransactionData
+                    : "",
+                null,
+                2,
+              )}
+            </pre>
+          </code>
         </>
       ) : (
-        <button className="btn" onClick={login}>Sign In</button>
+        <button className="btn" onClick={login}>
+          Sign In
+        </button>
       )}
     </div>
   );

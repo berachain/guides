@@ -30,12 +30,12 @@ pnpm dev;
 
 # [Expected Output]:
 # > next dev
-# 
+#
 #    ▲ Next.js 16.0.0 (Turbopack)
 #    - Local:        http://localhost:3000
 #    - Network:      http://10.0.0.4:3000
 #    - Environments: .env.local
-# 
+#
 #  ✓ Starting...
 #  ✓ Ready in 709ms
 ```
