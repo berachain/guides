@@ -2,9 +2,9 @@
 
 // Imports
 // ------------------------------------------------------------
-import {WagmiProvider, createConfig} from '@privy-io/wagmi';
-import { berachain } from 'viem/chains';
-import { http } from 'viem';
+import { WagmiProvider, createConfig } from "@privy-io/wagmi";
+import { berachain } from "viem/chains";
+import { http } from "viem";
 
 // Config
 // ------------------------------------------------------------
@@ -18,9 +18,7 @@ const config = createConfig({
 // Provider
 // ------------------------------------------------------------
 const Wagmi = ({ children }: { children: React.ReactNode }) => {
-  return (<WagmiProvider config={config}>
-    {children}
-  </WagmiProvider>);
+  return <WagmiProvider config={config}>{children}</WagmiProvider>;
 };
 
 // Exports

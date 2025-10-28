@@ -1,16 +1,16 @@
 // Imports
 // ------------------------------------------------------------
-import { NextResponse } from 'next/server';
-import type { NextRequest } from 'next/server';
-import { verifyAuthToken } from '@privy-io/node';
+import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
+import { verifyAuthToken } from "@privy-io/node";
 
 // Proxy
 // ------------------------------------------------------------
 export const proxy = async (req: NextRequest) => {
   // 1 - Validate if token is present
-  const token = req.cookies.get('privy-token')?.value;
+  const token = req.cookies.get("privy-token")?.value;
   if (!token) {
-    return NextResponse.redirect(new URL('/', req.url));
+    return NextResponse.redirect(new URL("/", req.url));
   }
 
   // 2 - Verify token
@@ -22,14 +22,14 @@ export const proxy = async (req: NextRequest) => {
     });
     return NextResponse.next();
   } catch (error) {
-    console.error('Privy auth verification failed:', error);
-    return NextResponse.redirect(new URL('/', req.url));
+    console.error("Privy auth verification failed:", error);
+    return NextResponse.redirect(new URL("/", req.url));
   }
-}
+};
 
 // Config Paths
 // ------------------------------------------------------------
 // Optional: match only certain paths
 export const config = {
-  matcher: ['/protected/:path*'],
+  matcher: ["/protected/:path*"],
 };

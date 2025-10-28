@@ -5,45 +5,47 @@ import { classifyClient, decodeExtraDataAscii } from "../decoders.js";
 // Transaction type classification
 function classifyTransactionType(tx: any): string {
   const type = tx.type;
-  if (type === 0) return 'legacy';
-  if (type === 1) return 'access_list';
-  if (type === 2) return 'eip1559';
-  if (type === 3) return 'blob';
-  if (type === 4) return 'eip7702';
-  return 'unknown';
+  if (type === 0) return "legacy";
+  if (type === 1) return "access_list";
+  if (type === 2) return "eip1559";
+  if (type === 3) return "blob";
+  if (type === 4) return "eip7702";
+  return "unknown";
 }
 
 // Parse EIP-7702 transaction data
 function parseEIP7702Transaction(tx: any) {
   if (tx.type !== 4) return null;
-  
+
   const contractCode = tx.contract_code || null;
   const codeHash = contractCode ? ethers.keccak256(contractCode) : null;
-  
+
   return {
     authorization: tx.authorization || null,
     contractCodeHash: codeHash,
-    delegationAddress: tx.delegation_address || null
+    delegationAddress: tx.delegation_address || null,
   };
 }
 
 // Parse blob transaction data
 function parseBlobTransaction(tx: any) {
   if (tx.type !== 3) return null;
-  
+
   return {
     blobVersionedHashes: tx.blob_versioned_hashes || null,
-    maxFeePerBlobGas: tx.max_fee_per_blob_gas ? BigInt(tx.max_fee_per_blob_gas).toString() : null,
-    blobGasUsed: tx.blob_gas_used ? BigInt(tx.blob_gas_used).toString() : null
+    maxFeePerBlobGas: tx.max_fee_per_blob_gas
+      ? BigInt(tx.max_fee_per_blob_gas).toString()
+      : null,
+    blobGasUsed: tx.blob_gas_used ? BigInt(tx.blob_gas_used).toString() : null,
   };
 }
 
 // Parse access list transaction data
 function parseAccessListTransaction(tx: any) {
   if (tx.type !== 1) return null;
-  
+
   return {
-    accessList: tx.access_list || null
+    accessList: tx.access_list || null,
   };
 }
 
@@ -312,7 +314,7 @@ export async function ingestEl(
     }
 
     nextCursor = to;
-    
+
     // Only advance cursor if explicitly allowed
     if (cfg.advanceCursor !== false) {
       await pg.query(
