@@ -16,6 +16,7 @@
     "url": "https://github.com/codingwithmanny"
   },
   "scripts": {
+    "preinstall": "npx only-allow pnpm",
     "clean": "turbo clean; rm -rf node_modules; rm -rf .turbo;",
     "build": "turbo build",
     "dev": "turbo dev",
@@ -25,7 +26,6 @@
     "with-env": "dotenv -e ./.env --"
   },
   "devDependencies": {
-    
     "@biomejs/biome": "^1.5.0",
     "@typescript-eslint/eslint-plugin": "^8.32.0",
     "@typescript-eslint/parser": "^8.32.0",
@@ -35,7 +35,7 @@
     "tsup": "^8.5.0",
     "turbo": "latest"
   },
-  "packageManager": "npm@10.0.0",
+  "packageManager": "pnpm@10.0.0",
   "engines": {
     "node": ">=20"
   },
