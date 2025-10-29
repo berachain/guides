@@ -4,19 +4,21 @@
  * BeraChef Activation Scanner - Cutting Board Activity Analyzer
  * 
  * This script scans for ActivateRewardAllocation events from the BeraChef contract
- * to analyze validator cutting board activations. It provides insights into:
- * - How frequently validators change their reward allocations
- * - Time patterns between cutting board changes
- * - Validators with zero activations (using default allocations)
+ * to analyze validator cutting board activation activity. It provides insights into:
+ * - How frequently validators activate reward allocation changes
+ * - Time patterns between cutting board activations
+ * - Last activation date for each validator
+ * - Validators with zero activation events
  * - Current allocation status vs default allocations
  * 
  * Features:
  * - Scans ActivateRewardAllocation events using eth_getLogs
  * - Maps validator pubkeys to names using the validator database
  * - Calculates time statistics (gaps between changes, time since last change)
+ * - Displays last activation date for each validator
  * - Compares current allocations against default allocations
- * - Generates histograms of activation counts
- * - Supports custom block ranges and RPC endpoints
+ * - Generates histograms of activation event counts
+ * - Supports custom day ranges and RPC endpoints
  */
 
 const { ethers } = require('ethers');
@@ -24,8 +26,11 @@ const axios = require('axios');
 const yargs = require('yargs/yargs');
 const { hideBin } = require('yargs/helpers');
 const crypto = require('crypto');
+const Table = require('cli-table3');
 
-const { ValidatorNameDB, ConfigHelper, ProgressReporter } = require('./lib/shared-utils');
+const { ValidatorNameDB, ConfigHelper, ProgressReporter, BlockFetcher } = require('./lib/shared-utils');
+const fs = require('fs');
+const path = require('path');
 
 // Configuration
 const CONFIG = {
@@ -35,9 +40,11 @@ const CONFIG = {
     bepolia: '0xdf960E8F3F19C481dDE769edEDD439ea1a63426a'
   },
   
-  // Event signature for ActivateRewardAllocation
+  // Event signatures
   // ActivateRewardAllocation(bytes indexed valPubkey, uint64 startBlock, tuple[] weights)
-  eventSignature: '0x09fed3850dff4fef07a5284847da937f94021882ecab1c143fcacd69e5451bd8',
+  activateEventSignature: '0x09fed3850dff4fef07a5284847da937f94021882ecab1c143fcacd69e5451bd8',
+  // QueueRewardAllocation(bytes indexed valPubkey, uint64 startBlock, tuple[] weights)
+  queueEventSignature: '0x22fe555512d9a04d20e3735ac5fe7a73227c2c6398f1453a5d60ce7aaf5de2ae',
   
   // RPC request settings
   timeout: 30000,
@@ -51,6 +58,30 @@ const BERACHEF_IFACE = new ethers.Interface([
   'function getActiveRewardAllocation(bytes valPubkey) view returns (tuple(uint64 startBlock, tuple(address receiver, uint96 percentageNumerator)[] weights))',
   'function getDefaultRewardAllocation() view returns (tuple(uint64 startBlock, tuple(address receiver, uint96 percentageNumerator)[] weights))'
 ]);
+
+// Load genesis validators
+function loadGenesisValidators() {
+  try {
+    const genesisPath = path.join(__dirname, '..', 'pol-performance-study', 'genesis_validators.csv');
+    const content = fs.readFileSync(genesisPath, 'utf8');
+    const lines = content.trim().split('\n').slice(1); // Skip header
+    
+    const genesisSet = new Set();
+    for (const line of lines) {
+      const columns = line.split(',');
+      if (columns.length >= 3) {
+        const pubkey = columns[2].toLowerCase(); // CometBFT Pubkey column
+        genesisSet.add(pubkey);
+      }
+    }
+    return genesisSet;
+  } catch (error) {
+    console.warn(`⚠️  Could not load genesis validators: ${error.message}`);
+    return new Set();
+  }
+}
+
+const genesisValidators = loadGenesisValidators();
 
 // Helper: eth_call using ethers-style encoded data, return raw result hex
 async function ethCall(rpcUrl, to, data) {
@@ -187,7 +218,7 @@ async function getLogs(rpcUrl, fromBlock, toBlock, address, topics) {
 }
 
 // Decode ActivateRewardAllocation event
-function decodeActivateRewardAllocationEvent(log, blockTimestamp) {
+function decodeRewardAllocationEvent(log, blockTimestamp) {
   try {
     // The validator pubkey is in topics[1] (indexed parameter)
     const valPubkey = log.topics[1];
@@ -235,71 +266,158 @@ async function isUsingDefaultAllocation(rpcUrl, contractAddress, validatorPubkey
 
 // Scan for ActivateRewardAllocation events
 async function scanActivations(config) {
-  ProgressReporter.logStep('Scanning blocks', `${config.blocks} blocks for ActivateRewardAllocation events`);
+  ProgressReporter.logStep('Scanning blocks', `backwards for ActivateRewardAllocation events`);
   
   const contractAddress = CONFIG.contracts[config.chain];
   const latestBlock = await getLatestBlock(config.rpc);
-  const startBlock = Math.max(0, latestBlock - config.blocks + 1);
   
-  console.log(`📊 Block range: ${startBlock} to ${latestBlock} (${config.blocks} blocks)`);
+  // Calculate target timestamp for X days ago
+  const now = Math.floor(Date.now() / 1000);
+  const targetTimestamp = now - (config.days * 24 * 60 * 60);
+  
+  // Use proper date triangulation to find the block at target timestamp
+  const clUrl = ConfigHelper.getBlockScannerUrl(config.chain);
+  const blockFetcher = new BlockFetcher(clUrl);
+  
+  console.log(`📊 Finding block from ${config.days} days ago using date triangulation...`);
+  const earliestBlock = await blockFetcher.findBlockByTimestamp(targetTimestamp, latestBlock);
+  
+  if (!earliestBlock) {
+    throw new Error(`Could not find block for timestamp ${config.days} days ago`);
+  }
+  
+  console.log(`📊 Scanning backwards from block ${latestBlock} to ${earliestBlock} (${config.days} days)`);
+  
+  // Note: As of block 12181288 on mainnet, Figment has yet to update its cutting board,
+  // so there's no point looking for it. We'll stop when we've found activations for all but 1 validator.
   
   const activations = [];
   const validatorCounts = new Map();
   const validatorTimestamps = new Map();
+  const validatorsWithActivations = new Set();
+  
+  // Get total validator count to know when to stop
+  const allValidators = await validatorDB.getAllValidators();
+  const totalValidators = allValidators.length;
+  const targetValidatorsFound = totalValidators - 1; // All but 1
+  
+  console.log(`🎯 Target: Find activations for ${targetValidatorsFound} of ${totalValidators} validators`);
   
   try {
-    // Break large ranges into chunks of 10,000 blocks (RPC limit)
-    const chunkSize = 10000;
+    // Scan backwards in chunks of 172,800 blocks (4 × 43,200)
+    const chunkSize = 172800;
     let allLogs = [];
     let processedBlocks = 0;
+    let currentBlock = latestBlock;
     
-    for (let chunkStart = startBlock; chunkStart <= latestBlock; chunkStart += chunkSize) {
-      const chunkEnd = Math.min(chunkStart + chunkSize - 1, latestBlock);
+    while (currentBlock >= earliestBlock && validatorsWithActivations.size < targetValidatorsFound) {
+      const chunkStart = Math.max(earliestBlock, currentBlock - chunkSize + 1);
+      const chunkEnd = currentBlock;
       
       if (config.verbose) {
-        console.log(`📦 Processing chunk: blocks ${chunkStart}-${chunkEnd}...`);
+        console.log(`📦 Processing chunk: blocks ${chunkStart}-${chunkEnd}... (found ${validatorsWithActivations.size}/${targetValidatorsFound} validators)`);
       }
       
       try {
-        // Get logs filtered by the ActivateRewardAllocation event signature
-        const logs = await getLogs(config.rpc, chunkStart, chunkEnd, contractAddress, [CONFIG.eventSignature]);
-        allLogs = allLogs.concat(logs);
+        // Break chunk into smaller sub-chunks if needed (max 100,000 blocks per getLogs call)
+        const maxBlockRange = 100000;
+        const chunkLogs = [];
+        
+        for (let subStart = chunkStart; subStart <= chunkEnd; subStart += maxBlockRange) {
+          const subEnd = Math.min(subStart + maxBlockRange - 1, chunkEnd);
+          
+          try {
+            const logs = await getLogs(config.rpc, subStart, subEnd, contractAddress, [CONFIG.activateEventSignature]);
+            chunkLogs.push(...logs);
+          } catch (error) {
+            console.warn(`⚠️  Failed to get logs for sub-chunk ${subStart}-${subEnd}: ${error.message}`);
+          }
+        }
+        
+        allLogs = allLogs.concat(chunkLogs);
+        
+        // Track which validators we've found
+        for (const log of chunkLogs) {
+          const valPubkey = log.topics[1];
+          validatorsWithActivations.add(valPubkey);
+        }
         
         processedBlocks += (chunkEnd - chunkStart + 1);
-        const progress = ((processedBlocks / config.blocks) * 100).toFixed(1);
         
-        if (config.verbose || processedBlocks % 20000 === 0) {
-          ProgressReporter.showProgress(processedBlocks, config.blocks, chunkEnd);
+        if (config.verbose || processedBlocks % 86400 === 0) {
+          ProgressReporter.showProgress(processedBlocks, maxBlocksToScan, chunkEnd);
+        }
+        
+        // Check if we've found enough validators
+        if (validatorsWithActivations.size >= targetValidatorsFound) {
+          console.log(`\n✅ Found activations for ${validatorsWithActivations.size} validators (target: ${targetValidatorsFound})`);
+          break;
         }
         
       } catch (error) {
-        console.warn(`⚠️  Failed to get logs for chunk ${chunkStart}-${chunkEnd}: ${error.message}`);
+        console.warn(`⚠️  Failed to process chunk ${chunkStart}-${chunkEnd}: ${error.message}`);
         // Continue with next chunk
       }
+      
+      currentBlock = chunkStart - 1;
     }
     
     ProgressReporter.clearProgress();
-    console.log(`📋 Found ${allLogs.length} ActivateRewardAllocation events`);
+    console.log(`📋 Found ${allLogs.length} ActivateRewardAllocation events across ${validatorsWithActivations.size} validators`);
     
-    // Process each log
+    // Fetch all unique blocks in parallel with controlled concurrency
+    const uniqueBlockNumbers = [...new Set(allLogs.map(log => parseInt(log.blockNumber, 16)))];
+    console.log(`📦 Fetching timestamps for ${uniqueBlockNumbers.length} unique blocks with batched parallelism...`);
+    
+    const blockCache = new Map();
+    const concurrency = 50; // Concurrent requests at a time
+    
+    // Process blocks in batches
+    for (let i = 0; i < uniqueBlockNumbers.length; i += concurrency) {
+      const batch = uniqueBlockNumbers.slice(i, i + concurrency);
+      const batchPromises = batch.map(async (blockNum) => {
+        try {
+          const block = await getBlock(config.rpc, blockNum);
+          blockCache.set(blockNum, block.timestamp);
+        } catch (error) {
+          if (config.verbose) {
+            console.warn(`⚠️  Failed to get block ${blockNum}: ${error.message}`);
+          }
+        }
+      });
+      
+      await Promise.all(batchPromises);
+      
+      if (config.verbose) {
+        const progress = Math.min(100, ((i + concurrency) / uniqueBlockNumbers.length * 100).toFixed(1));
+        console.log(`   Progress: ${blockCache.size}/${uniqueBlockNumbers.length} blocks (${progress}%)`);
+      }
+    }
+    
+    console.log(`✅ Fetched ${blockCache.size} block timestamps`);
+    
+    // Process each log using cached block data
     for (const log of allLogs) {
       try {
-        // Get block timestamp for this log
-        const block = await getBlock(config.rpc, parseInt(log.blockNumber, 16));
-        const eventData = decodeActivateRewardAllocationEvent(log, block.timestamp);
+        const blockNum = parseInt(log.blockNumber, 16);
+        const blockTimestamp = blockCache.get(blockNum);
         
-        if (eventData) {
-          activations.push(eventData);
+        if (blockTimestamp) {
+          const eventData = decodeRewardAllocationEvent(log, blockTimestamp);
           
-          // Count activations per validator
-          const count = validatorCounts.get(eventData.valPubkey) || 0;
-          validatorCounts.set(eventData.valPubkey, count + 1);
-          
-          // Track timestamps for each validator
-          if (!validatorTimestamps.has(eventData.valPubkey)) {
-            validatorTimestamps.set(eventData.valPubkey, []);
+          if (eventData) {
+            activations.push(eventData);
+            
+            // Count activations per validator
+            const count = validatorCounts.get(eventData.valPubkey) || 0;
+            validatorCounts.set(eventData.valPubkey, count + 1);
+            
+            // Track timestamps for each validator
+            if (!validatorTimestamps.has(eventData.valPubkey)) {
+              validatorTimestamps.set(eventData.valPubkey, []);
+            }
+            validatorTimestamps.get(eventData.valPubkey).push(eventData.blockTimestamp);
           }
-          validatorTimestamps.get(eventData.valPubkey).push(eventData.blockTimestamp);
         }
       } catch (error) {
         if (config.verbose) {
@@ -322,11 +440,18 @@ async function analyzeCurrentAllocations(config, validatorCounts) {
   
   // Get all active validators from the database
   const allValidators = await validatorDB.getAllValidators();
-  console.log(`👥 Found ${allValidators.length} total active validators in database`);
+  
+  // Filter out exited validators (those with no stake)
+  const activeValidators = allValidators.filter(v => {
+    const stake = v.voting_power ? parseFloat(v.voting_power) / 1e9 : 0;
+    return stake > 0;
+  });
+  
+  console.log(`👥 Found ${activeValidators.length} active validators with stake (${allValidators.length - activeValidators.length} exited)`);
   
   // Count validators with 0 activations
   let validatorsWithZeroActivations = 0;
-  for (const validator of allValidators) {
+  for (const validator of activeValidators) {
     if (validator.address && !validatorCounts.has(validator.address)) {
       validatorsWithZeroActivations++;
     }
@@ -336,62 +461,93 @@ async function analyzeCurrentAllocations(config, validatorCounts) {
   const contractAddress = CONFIG.contracts[config.chain];
   const defaultAllocation = await getDefaultRewardAllocation(config.rpc, contractAddress);
   
-  // Check which validators are using the default allocation
+  // Check which validators are using the default allocation and get their startBlocks
   let validatorsUsingDefault = 0;
   const validatorAllocationStatus = new Map();
+  const validatorStartBlocks = new Map();
   
   if (defaultAllocation) {
-    console.log(`🔍 Checking allocation status for ${allValidators.length} validators...`);
+    console.log(`🔍 Checking allocation status for ${activeValidators.length} validators with batched parallelism...`);
     
-    for (const validator of allValidators) {
-      if (validator.pubkey) {
+    const validatorsToCheck = activeValidators.filter(v => v.pubkey);
+    const concurrency = 50;
+    
+    // Process validators in batches
+    for (let i = 0; i < validatorsToCheck.length; i += concurrency) {
+      const batch = validatorsToCheck.slice(i, i + concurrency);
+      const batchPromises = batch.map(async (validator) => {
         try {
-          const isUsingDefault = await isUsingDefaultAllocation(
-            config.rpc, 
-            contractAddress, 
-            validator.pubkey, 
-            defaultAllocation
-          );
+          const data = BERACHEF_IFACE.encodeFunctionData('getActiveRewardAllocation', [validator.pubkey]);
+          const result = await ethCall(config.rpc, contractAddress, data);
+          const activeAlloc = decodeRewardAllocation(result);
           
-          // Map by address (used in events) for easy lookup in display
+          const isUsingDefault = allocationsEqualIgnoringOrder(activeAlloc, defaultAllocation);
+          
           validatorAllocationStatus.set(validator.address, isUsingDefault);
+          validatorStartBlocks.set(validator.address, activeAlloc.startBlock);
           
           if (isUsingDefault === true) {
             validatorsUsingDefault++;
           }
         } catch (error) {
-          // Skip this validator if we can't check their allocation
           validatorAllocationStatus.set(validator.address, null);
+          validatorStartBlocks.set(validator.address, null);
         }
-      }
+      });
+      
+      await Promise.all(batchPromises);
     }
   }
   
   return {
     defaultAllocation,
     validatorsUsingDefault,
-    totalValidators: allValidators.length,
+    totalValidators: activeValidators.length,
     validatorsWithZeroActivations,
-    allValidators: allValidators,
-    validatorAllocationStatus
+    allValidators: activeValidators,
+    validatorAllocationStatus,
+    validatorStartBlocks
   };
 }
 
-// Generate histogram
+// Generate histogram with buckets
 function generateHistogram(validatorCounts, totalValidators) {
   const counts = Array.from(validatorCounts.values());
+  
+  // Define buckets: [min, max, label]
+  const buckets = [
+    [0, 0, '0'],
+    [1, 10, '1-10'],
+    [11, 50, '11-50'],
+    [51, 100, '51-100'],
+    [101, 500, '101-500'],
+    [501, 1000, '501-1000'],
+    [1001, 2000, '1001-2000'],
+    [2001, Infinity, '2001+']
+  ];
+  
   const histogram = new Map();
   
+  // Initialize buckets
+  for (const [min, max, label] of buckets) {
+    histogram.set(label, 0);
+  }
+  
+  // Count validators with activations into buckets
   for (const count of counts) {
-    const bucket = histogram.get(count) || 0;
-    histogram.set(count, bucket + 1);
+    for (const [min, max, label] of buckets) {
+      if (count >= min && count <= max) {
+        histogram.set(label, histogram.get(label) + 1);
+        break;
+      }
+    }
   }
   
   // Add validators with 0 activations
   const validatorsWithActivations = validatorCounts.size;
   const validatorsWithZeroActivations = totalValidators - validatorsWithActivations;
   if (validatorsWithZeroActivations > 0) {
-    histogram.set(0, validatorsWithZeroActivations);
+    histogram.set('0', validatorsWithZeroActivations);
   }
   
   return histogram;
@@ -449,57 +605,148 @@ function formatDuration(seconds) {
   return `${Math.floor(seconds / 86400)}d ${Math.floor((seconds % 86400) / 3600)}h`;
 }
 
+// Format stake in K (thousands) or M (millions) BERA
+function formatStake(stake) {
+  if (stake >= 1000000) {
+    return `${(stake / 1000000).toFixed(1)}M`;
+  } else if (stake >= 1000) {
+    return `${(stake / 1000).toFixed(1)}K`;
+  } else {
+    return stake.toFixed(1);
+  }
+}
+
 // Display results
 async function displayResults(activations, validatorCounts, validatorTimestamps, currentAllocations, config) {
-  console.log('\n' + '='.repeat(60));
-  console.log('🎯 BeraChef Activation Scanner Results');
-  console.log('='.repeat(60));
-  
-  console.log(`\n📊 Summary:`);
-  console.log(`   Total activations found: ${activations.length}`);
-  console.log(`   Validators with activations: ${validatorCounts.size}`);
-  console.log(`   Blocks scanned: ${config.blocks}`);
-  
-  // Display current allocation analysis
-  if (currentAllocations) {
-    console.log(`\n🎯 Current Validator Allocations:`);
-    console.log(`   Validators with 0 activations: ${currentAllocations.validatorsWithZeroActivations || 0}`);
-    console.log(`   Validators using default cutting board: ${currentAllocations.validatorsUsingDefault || 0}`);
-    console.log(`   Total active validators: ${currentAllocations.totalValidators}`);
+  if (!config.csv) {
+    console.log('\n' + '='.repeat(60));
+    console.log('🎯 BeraChef Activation Scanner Results');
+    console.log('='.repeat(60));
+    
+    console.log(`\n📊 Summary:`);
+    console.log(`   Total activations found: ${activations.length}`);
+    console.log(`   Validators with activations: ${validatorCounts.size}`);
+    console.log(`   Genesis validators loaded: ${genesisValidators.size}`);
   }
   
-  if (activations.length === 0) {
-    console.log('\n❌ No ActivateRewardAllocation events found in the specified block range.');
-    console.log('   This could mean:');
-    console.log('   - No validators activated cutting boards in this period');
-    console.log('   - Wrong contract address or event signature');
-    console.log('   - Network issues during scanning');
+  // Fetch latest block with timestamp for "days ago" calculations
+  const latestBlock = await getLatestBlock(config.rpc);
+  const latestBlockData = await getBlock(config.rpc, latestBlock);
+  const latestBlockTimestamp = parseInt(latestBlockData.timestamp, 16);
+  
+  // Calculate target timestamp for X days ago and find the actual block
+  const now = Math.floor(Date.now() / 1000);
+  const targetTimestamp = now - (config.days * 24 * 60 * 60);
+  
+  // Use proper date triangulation to find the earliest block
+  const clUrl = ConfigHelper.getBlockScannerUrl(config.chain);
+  const blockFetcher = new BlockFetcher(clUrl);
+  const earliestBlock = await blockFetcher.findBlockByTimestamp(targetTimestamp, latestBlock);
+  
+  if (!earliestBlock) {
+    throw new Error(`Could not find block for timestamp ${config.days} days ago`);
+  }
+  
+  const earliestBlockData = await getBlock(config.rpc, earliestBlock);
+  const earliestBlockTimestamp = parseInt(earliestBlockData.timestamp, 16);
+  const earliestDate = new Date(earliestBlockTimestamp * 1000).toLocaleDateString('en-US', { 
+    month: 'short', 
+    day: 'numeric'
+  });
+  
+  // Display current allocation analysis
+  if (!config.csv) {
+    if (currentAllocations) {
+      console.log(`\n🎯 Current Validator Allocations:`);
+      console.log(`   Validators with 0 activations: ${currentAllocations.validatorsWithZeroActivations || 0}`);
+      console.log(`   Validators using default cutting board: ${currentAllocations.validatorsUsingDefault || 0}`);
+      console.log(`   Total active validators: ${currentAllocations.totalValidators}`);
+    }
+    
+    if (activations.length === 0) {
+      console.log('\n❌ No ActivateRewardAllocation events found in the specified block range.');
+      console.log('   This could mean:');
+      console.log('   - No validators activated cutting board changes in this period');
+      console.log('   - Wrong contract address or event signature');
+      console.log('   - Network issues during scanning');
+      return;
+    }
+  } else if (activations.length === 0) {
+    // For CSV mode, just return if no activations
     return;
   }
   
   // Calculate time statistics
-  const latestBlockTimestamp = activations.length > 0 ? 
+  const activationLatestTimestamp = activations.length > 0 ? 
     Math.max(...activations.map(a => a.blockTimestamp)) : 0;
-  const timeStats = calculateTimeStats(validatorTimestamps, latestBlockTimestamp);
+  const timeStats = calculateTimeStats(validatorTimestamps, activationLatestTimestamp);
+  
+  // Collect all unique activeStartBlocks that need timestamp fetching
+  const uniqueStartBlocks = new Set();
+  if (currentAllocations.validatorStartBlocks) {
+    for (const startBlock of currentAllocations.validatorStartBlocks.values()) {
+      if (startBlock && startBlock > 0) {
+        uniqueStartBlocks.add(startBlock);
+      }
+    }
+  }
+  
+  // Batch fetch timestamps for all activeStartBlocks
+  const startBlockTimestamps = new Map();
+  if (uniqueStartBlocks.size > 0) {
+    if (!config.csv) {
+      console.log(`📦 Fetching timestamps for ${uniqueStartBlocks.size} unique active start blocks...`);
+    }
+    const blockNumbers = Array.from(uniqueStartBlocks);
+    const concurrency = 50;
+    
+    for (let i = 0; i < blockNumbers.length; i += concurrency) {
+      const batch = blockNumbers.slice(i, i + concurrency);
+      const batchPromises = batch.map(async (blockNum) => {
+        try {
+          const block = await getBlock(config.rpc, blockNum);
+          startBlockTimestamps.set(blockNum, parseInt(block.timestamp, 16));
+        } catch (error) {
+          if (config.verbose) {
+            console.warn(`⚠️  Failed to get block ${blockNum}: ${error.message}`);
+          }
+        }
+      });
+      
+      await Promise.all(batchPromises);
+    }
+    if (!config.csv) {
+      console.log(`✅ Fetched ${startBlockTimestamps.size} start block timestamps`);
+    }
+  }
   
   // Generate and display histogram
-  const histogram = generateHistogram(validatorCounts, currentAllocations.totalValidators);
-  const sortedHistogram = Array.from(histogram.entries()).sort((a, b) => a[0] - b[0]);
-  
-  console.log('\n📈 Histogram - Validators by Activation Count:');
-  console.log('   Activations | Validators');
-  console.log('   ------------|-----------');
-  
-  for (const [activationCount, validatorCount] of sortedHistogram) {
-    const bar = '█'.repeat(Math.min(validatorCount, 50));
-    console.log(`   ${activationCount.toString().padStart(11)} | ${validatorCount.toString().padStart(9)} ${bar}`);
+  if (!config.csv) {
+    const histogram = generateHistogram(validatorCounts, currentAllocations.totalValidators);
+    
+    // Display in bucket order
+    const bucketOrder = ['0', '1-10', '11-50', '51-100', '101-500', '501-1000', '1001-2000', '2001+'];
+    
+    console.log('\n📈 Histogram - Validators by Activation Count:');
+    console.log('   Activations | Validators');
+    console.log('   ------------|-----------');
+    
+    for (const bucket of bucketOrder) {
+      const validatorCount = histogram.get(bucket) || 0;
+      if (validatorCount > 0) {
+        const bar = '█'.repeat(Math.min(validatorCount, 50));
+        console.log(`   ${bucket.padStart(11)} | ${validatorCount.toString().padStart(9)} ${bar}`);
+      }
+    }
   }
   
   
   // Show detailed validator table
-  console.log('\n📋 Detailed Validator Analysis:');
-  console.log('   Validator Name | Stake (BERA) | Activations | Min Gap | Avg Gap | Max Gap | Since Last | Default');
-  console.log('   ' + '-'.repeat(25) + ' | ' + '-'.repeat(12) + ' | ' + '-'.repeat(11) + ' | ' + '-'.repeat(7) + ' | ' + '-'.repeat(7) + ' | ' + '-'.repeat(7) + ' | ' + '-'.repeat(9) + ' | ' + '-'.repeat(7));
+  const activationsColWidth = 18 + earliestDate.length; // "Activations since " + date
+  
+  if (!config.csv) {
+    console.log('\n📋 Detailed Validator Analysis (** = Genesis Validator):');
+  }
   
   // Get all validators from currentAllocations (already fetched in analyzeCurrentAllocations)
   const allValidators = currentAllocations.allValidators;
@@ -516,60 +763,155 @@ async function displayResults(activations, validatorCounts, validatorTimestamps,
   // Add validators with activations (now they should have stake data since we're using address field)
   for (const [address, activationCount] of validatorCounts.entries()) {
     const validator = validatorMap.get(address);
+    const activeStartBlock = currentAllocations.validatorStartBlocks?.get(address);
+    const activeStartTimestamp = activeStartBlock ? startBlockTimestamps.get(activeStartBlock) : null;
+    
     allValidatorData.push({ 
       pubkey: address, 
       activationCount, 
       hasStakeData: !!validator, 
-      validator 
+      validator,
+      activeStartTimestamp
     });
   }
   
   // Add validators with 0 activations
   for (const validator of allValidators) {
     if (validator.address && !validatorCounts.has(validator.address)) {
+      const activeStartBlock = currentAllocations.validatorStartBlocks?.get(validator.address);
+      const activeStartTimestamp = activeStartBlock ? startBlockTimestamps.get(activeStartBlock) : null;
+      
       allValidatorData.push({ 
         pubkey: validator.address, 
         activationCount: 0, 
         hasStakeData: true, 
-        validator 
+        validator,
+        activeStartTimestamp
       });
     }
   }
   
-  // Sort by activation count (descending), then by name
+  // Sort by active start timestamp (descending - most recent first), then by name
   allValidatorData.sort((a, b) => {
-    if (b.activationCount !== a.activationCount) {
-      return b.activationCount - a.activationCount;
+    const timestampA = a.activeStartTimestamp || 0;
+    const timestampB = b.activeStartTimestamp || 0;
+    
+    if (timestampB !== timestampA) {
+      return timestampB - timestampA;
     }
-    // If same activation count, sort by name
+    // If same timestamp, sort by name
     const nameA = a.validator?.name || a.pubkey;
     const nameB = b.validator?.name || b.pubkey;
     return nameA.localeCompare(nameB);
   });
   
-  for (const { pubkey, activationCount, hasStakeData, validator } of allValidatorData) {
-    const stats = timeStats.get(pubkey);
-    const name = await getValidatorName(pubkey);
+  if (config.csv) {
+    // Output CSV format
+    console.log(`Validator Name,Stake (BERA),Activations since ${earliestDate},Reward Alloc,Avg Gap,Default,Is Genesis`);
     
-    // Get stake - only validators with 0 activations have stake data
-    const stake = hasStakeData && validator && validator.voting_power ? 
-      (parseFloat(validator.voting_power) / 1e9) : null; // Convert to BERA
-    const stakeStr = stake ? stake.toFixed(1) : 'N/A';
+    for (const { pubkey, activationCount, hasStakeData, validator } of allValidatorData) {
+      const stats = timeStats.get(pubkey);
+      let name = await getValidatorName(pubkey);
+      
+      // Check if this is a genesis validator
+      const validatorPubkey = validator?.pubkey || pubkey;
+      const isGenesis = genesisValidators.has(validatorPubkey.toLowerCase());
+      
+      // Get stake
+      const stake = hasStakeData && validator && validator.voting_power ? 
+        (parseFloat(validator.voting_power) / 1e9) : null;
+      
+      // Skip exited validators
+      if (!stake || stake === 0) {
+        continue;
+      }
+      
+      const stakeStr = formatStake(stake);
+      
+      // Calculate days ago for current active allocation startBlock using actual timestamps
+      const activeStartBlock = currentAllocations.validatorStartBlocks?.get(pubkey);
+      let activeBlockDaysAgo = 'Never';
+      if (activeStartBlock && activeStartBlock > 0) {
+        const startBlockTimestamp = startBlockTimestamps.get(activeStartBlock);
+        if (startBlockTimestamp) {
+          const secondsAgo = latestBlockTimestamp - startBlockTimestamp;
+          const daysAgo = Math.floor(secondsAgo / 86400);
+          activeBlockDaysAgo = daysAgo === 0 ? 'Today' : `${daysAgo}d ago`;
+        }
+      }
+      
+      // Format time gaps
+      const avgGap = stats && stats.activationCount >= 4 ? formatDuration(stats.avgGapSeconds) : '';
+      
+      // Get default allocation status
+      const isUsingDefault = currentAllocations.validatorAllocationStatus?.get(pubkey);
+      const defaultStr = isUsingDefault === true ? 'Yes' : isUsingDefault === false ? 'No' : 'N/A';
+      
+      // Escape name for CSV (handle commas and quotes)
+      const escapedName = name.includes(',') || name.includes('"') ? `"${name.replace(/"/g, '""')}"` : name;
+      
+      console.log(`${escapedName},${stakeStr},${activationCount},${activeBlockDaysAgo},${avgGap},${defaultStr},${isGenesis ? 'Yes' : 'No'}`);
+    }
+  } else {
+    // Create table with cli-table3
+    const table = new Table({
+      head: ['Validator Name', 'Stake (BERA)', `Activations since ${earliestDate}`, 'Reward Alloc', 'Avg Gap', 'Default'],
+      colAligns: ['left', 'right', 'right', 'right', 'right', 'right'],
+      style: {
+        head: [],
+        border: []
+      }
+    });
     
-    // Format time gaps
-    const minGap = stats && stats.activationCount > 1 ? formatDuration(stats.minGapSeconds) : 'N/A';
-    const avgGap = stats && stats.activationCount > 1 ? formatDuration(stats.avgGapSeconds) : 'N/A';
-    const maxGap = stats && stats.activationCount > 1 ? formatDuration(stats.maxGapSeconds) : 'N/A';
-    const sinceLast = stats ? formatDuration(stats.timeSinceLastChange) : 'N/A';
+    // Populate table rows
+    for (const { pubkey, activationCount, hasStakeData, validator } of allValidatorData) {
+      const stats = timeStats.get(pubkey);
+      let name = await getValidatorName(pubkey);
+      
+      // Check if this is a genesis validator and add ** marker
+      const validatorPubkey = validator?.pubkey || pubkey;
+      const isGenesis = genesisValidators.has(validatorPubkey.toLowerCase());
+      if (isGenesis) {
+        name = name + ' **';
+      }
+      
+      // Get stake - only validators with 0 activations have stake data
+      const stake = hasStakeData && validator && validator.voting_power ? 
+        (parseFloat(validator.voting_power) / 1e9) : null; // Convert to BERA
+      
+      // Skip exited validators (those with no current stake)
+      if (!stake || stake === 0) {
+        continue;
+      }
+      
+      const stakeStr = formatStake(stake);
+      
+      // Calculate days ago for current active allocation startBlock using actual timestamps
+      const activeStartBlock = currentAllocations.validatorStartBlocks?.get(pubkey);
+      let activeBlockDaysAgo = 'Never';
+      if (activeStartBlock && activeStartBlock > 0) {
+        const startBlockTimestamp = startBlockTimestamps.get(activeStartBlock);
+        if (startBlockTimestamp) {
+          const secondsAgo = latestBlockTimestamp - startBlockTimestamp;
+          const daysAgo = Math.floor(secondsAgo / 86400);
+          activeBlockDaysAgo = daysAgo === 0 ? 'Today' : `${daysAgo}d ago`;
+        }
+      }
+      
+      // Format time gaps (only show for 4+ activations)
+      const avgGap = stats && stats.activationCount >= 4 ? formatDuration(stats.avgGapSeconds) : '';
+      
+      // Get default allocation status - now mapped by address
+      const isUsingDefault = currentAllocations.validatorAllocationStatus?.get(pubkey);
+      const defaultStr = isUsingDefault === true ? 'Yes' : isUsingDefault === false ? 'No' : 'N/A';
+      
+      // Truncate name if too long
+      const shortName = name.length > 30 ? name.slice(0, 27) + '...' : name;
+      
+      table.push([shortName, stakeStr, activationCount, activeBlockDaysAgo, avgGap, defaultStr]);
+    }
     
-    // Get default allocation status - now mapped by address
-    const isUsingDefault = currentAllocations.validatorAllocationStatus?.get(pubkey);
-    const defaultStr = isUsingDefault === true ? 'Yes' : isUsingDefault === false ? 'No' : 'N/A';
-    
-    // Truncate name if too long
-    const shortName = name.length > 25 ? name.slice(0, 22) + '...' : name;
-    
-    console.log(`   ${shortName.padEnd(25)} | ${stakeStr.padStart(12)} | ${activationCount.toString().padStart(11)} | ${minGap.padStart(7)} | ${avgGap.padStart(7)} | ${maxGap.padStart(7)} | ${sinceLast.padStart(9)} | ${defaultStr.padStart(7)}`);
+    console.log(table.toString());
   }
   
 }
@@ -577,11 +919,11 @@ async function displayResults(activations, validatorCounts, validatorTimestamps,
 // Parse command line arguments
 function parseArgs() {
   const argv = yargs(hideBin(process.argv))
-    .option('blocks', {
-      alias: 'b',
+    .option('days', {
+      alias: 'd',
       type: 'number',
-      default: ConfigHelper.getDefaultBlockCount(),
-      description: 'Number of blocks to scan back'
+      default: 180,
+      description: 'Maximum number of days to scan backwards'
     })
     .option('rpc', {
       alias: 'r',
@@ -601,6 +943,11 @@ function parseArgs() {
       default: false,
       description: 'Verbose output'
     })
+    .option('csv', {
+      type: 'boolean',
+      default: false,
+      description: 'Output validator table as CSV'
+    })
     .option('help', {
       alias: 'h',
       type: 'boolean',
@@ -619,10 +966,11 @@ function parseArgs() {
   }
   
   return {
-    blocks: argv.blocks,
+    days: argv.days,
     rpc: rpcUrl,
     chain: argv.chain,
     verbose: argv.verbose,
+    csv: argv.csv,
     help: argv.help
   };
 }
@@ -635,23 +983,26 @@ async function main() {
     console.log(`
 BeraChef Activation Scanner
 
-Scans blocks for ActivateRewardAllocation events from BeraChef contract
-and generates a histogram of validator cutting board activations.
+Scans blocks backwards for ActivateRewardAllocation events from BeraChef contract
+and generates a histogram of validator cutting board activation activity. Stops when it finds
+activations for all but one validator or reaches the day limit.
 
 Usage:
   node scan-berachef-activations.js [options]
 
 Options:
-  -b, --blocks <number>    Number of blocks to scan back (default: 1000)
+  -d, --days <number>     Maximum days to scan backwards (default: 180)
   -r, --rpc <url>         RPC endpoint URL
   -c, --chain <name>      Chain name: mainnet, bepolia (default: mainnet)
   -v, --verbose           Verbose output
+  --csv                   Output validator table as CSV
   -h, --help              Show this help
 
 Examples:
-  node scan-berachef-activations.js --blocks 1000 --chain mainnet
-  node scan-berachef-activations.js --blocks 500 --rpc https://bepolia.rpc.berachain.com
-  node scan-berachef-activations.js --blocks 2000 --verbose
+  node scan-berachef-activations.js --chain mainnet
+  node scan-berachef-activations.js --days 60 --verbose
+  node scan-berachef-activations.js --days 120 --rpc https://bepolia.rpc.berachain.com
+  node scan-berachef-activations.js --csv > validators.csv
 `);
     process.exit(0);
   }
