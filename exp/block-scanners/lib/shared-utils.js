@@ -12,8 +12,37 @@ const axios = require('axios');
 const { spawn } = require('child_process');
 const fs = require('fs');
 const path = require('path');
+const { ethers } = require('ethers');
 const config = require('../../config');
 const { ConfigHelper } = require('../../config');
+
+// Common defaults and helpers shared across scanners
+const DEFAULT_LOG_CHUNK_SIZE = parseInt(process.env.DEFAULT_LOG_CHUNK_SIZE || '50000', 10);
+
+function hashEvent(signature) {
+  return ethers.id(signature);
+}
+
+function decodeEventData(types, dataHex) {
+  return ethers.AbiCoder.defaultAbiCoder().decode(types, dataHex);
+}
+
+async function withRetry(operation, maxRetries = 5, initialDelayMs = 500) {
+  let attempt = 0;
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    try {
+      return await operation();
+    } catch (err) {
+      attempt++;
+      if (attempt > maxRetries) throw err;
+      const jitter = Math.floor(Math.random() * initialDelayMs);
+      const delay = initialDelayMs * Math.pow(2, attempt - 1) + jitter;
+      // Use a local promise-based delay to avoid introducing global sleep usage across scripts
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+  }
+}
 
 /**
  * Simple SQLite wrapper to look up validator names from the validator database
