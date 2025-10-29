@@ -10,31 +10,89 @@
  * - Validates deposit signatures using beacon CLI
  * - Tracks deposit events by public key
  * - Provides progress tracking and detailed reporting
- * - Requires ABI_DIR and EL_ETHRPC_URL environment variables
  * - Supports custom block ranges and chunk processing
  */
 
 const { ethers } = require('ethers');
-const BeaconDepositABI = require(process.env.ABI_DIR + '/core/BeaconDeposit.json');
 const cliProgress = require('cli-progress');
 const { execSync } = require('child_process');
+const { ConfigHelper, withRetry, hashEvent, decodeEventData, DEFAULT_LOG_CHUNK_SIZE } = require('./lib/shared-utils');
 
-// Verify required environment variables
-const requiredEnvVars = ['ABI_DIR', 'EL_ETHRPC_URL'];
-const missingEnvVars = requiredEnvVars.filter(envVar => !process.env[envVar]);
+// -----------------------------
+// CLI argument parsing
+// -----------------------------
+function printHelp() {
+    console.log(`
+Usage: node scan-deposits.js [--chain <name>] [--rpc <url>] [--start-block <n>] [--address <0x...>] [--help]
 
-if (missingEnvVars.length > 0) {
-    console.error('Error: Missing required environment variables:');
-    missingEnvVars.forEach(envVar => console.error(`- ${envVar}`));
-    process.exit(1);
+Options:
+  --help                 Show this help and exit
+  --chain <name>         Chain to use for RPC defaults (mainnet, bepolia)
+  --rpc <url>            RPC URL (overrides --chain)
+  --start-block <n>      Starting block (default: 0)
+  --address <0x...>      BeaconDeposit contract address (default: placeholder)
+`);
 }
 
+function parseArgs(argv) {
+    const args = { chain: undefined, rpc: undefined, startBlock: undefined, address: undefined, help: false };
+    for (let i = 2; i < argv.length; i++) {
+        const arg = argv[i];
+        switch (arg) {
+            case '--help':
+            case '-h':
+                args.help = true;
+                break;
+            case '--chain':
+                args.chain = argv[++i];
+                break;
+            case '--rpc':
+                args.rpc = argv[++i];
+                break;
+            case '--start-block':
+                args.startBlock = Number(argv[++i]);
+                break;
+            case '--address':
+                args.address = argv[++i];
+                break;
+            default:
+                if (arg.startsWith('-')) {
+                    console.error(`Unknown option: ${arg}`);
+                    process.exit(1);
+                }
+        }
+    }
+    return args;
+}
+
+const args = parseArgs(process.argv);
+if (args.help) {
+    printHelp();
+    process.exit(0);
+}
+
+// Resolve chain and RPC with helpers used by other scanners
+const SUPPORTED_CHAINS = ['mainnet', 'bepolia'];
+const chainName = args.chain || 'mainnet';
+if (args.chain && !SUPPORTED_CHAINS.includes(args.chain)) {
+    console.error(`Unknown --chain value: ${args.chain}. Supported: ${SUPPORTED_CHAINS.join(', ')}`);
+    process.exit(1);
+}
+// Precedence: --rpc > environment > config default for chain
+let resolvedRpcUrl = args.rpc || process.env.EL_ETHRPC_URL || ConfigHelper.getRpcUrl('el', chainName);
+
+// Event signature/topic and ABI decoding (no external ABI files required)
+const DEPOSIT_EVENT_SIGNATURE = 'DepositEvent(bytes,bytes,bytes,bytes,bytes)';
+const DEPOSIT_TOPIC = hashEvent(DEPOSIT_EVENT_SIGNATURE);
+
 // Configuration
-const RPC_URL = process.env.EL_ETHRPC_URL;
-const CONTRACT_ADDRESS = '0x4242424242424242424242424242424242424242'; // Replace with the BeaconDeposit contract address
-const START_BLOCK = 0; 
-const BLOCK_CHUNK_SIZE = 10000;
+const RPC_URL = resolvedRpcUrl;
+const CONTRACT_ADDRESS = args.address || '0x4242424242424242424242424242424242424242'; // Replace with the BeaconDeposit contract address
+const START_BLOCK = Number.isFinite(args.startBlock) ? args.startBlock : 0; 
+const BLOCK_CHUNK_SIZE = DEFAULT_LOG_CHUNK_SIZE;
 const GENESIS_FORK_VERSION = '0xdf609e3b062842c6425ff716aec2d2092c46455d9b2e1a2c9e32c6ba63ff0bda';
+
+// Retry uses shared helper; avoid local sleep usage
 
 async function validateDeposit(pubkey, withdrawalCredentials, amount, signature) {
     try {
@@ -50,22 +108,18 @@ async function validateDeposit(pubkey, withdrawalCredentials, amount, signature)
 
 async function fetchDepositEvents() {
     try {
+        if (!RPC_URL) {
+            console.error('Error: No RPC URL provided. Use --rpc or --chain.');
+            process.exit(1);
+        }
         // Initialize provider
         const provider = new ethers.JsonRpcProvider(RPC_URL);
 
-        // Create contract instance
-        const contract = new ethers.Contract(
-            CONTRACT_ADDRESS,
-            BeaconDepositABI,
-            provider
-        );
-
-        // Get the latest block number
-        const latestBlock = await provider.getBlockNumber();
+        // Get the latest block number (with retry)
+        const latestBlock = await withRetry(() => provider.getBlockNumber());
         console.log(`Latest block number: ${latestBlock}`);
 
         // Get the Deposit event filter
-        const DEPOSIT_TOPIC = '0x68af751683498a9f9be59fe8b0d52a64dd155255d85cdb29fea30b1e3f891d46';
 
         let totalEvents = 0;
         const eventsByPubkey = new Map();
@@ -87,21 +141,21 @@ async function fetchDepositEvents() {
             const toBlock = Math.min(fromBlock + BLOCK_CHUNK_SIZE - 1, latestBlock);
             const chunkSize = toBlock - fromBlock + 1;
 
-            // Fetch events for this chunk
-            const events = await provider.getLogs({
+            // Fetch events for this chunk (with retry)
+            const events = await withRetry(() => provider.getLogs({
                 address: CONTRACT_ADDRESS,
                 topics: [DEPOSIT_TOPIC],
                 fromBlock,
                 toBlock
-            });
+            }));
 
             // Store events by pubkey
             for (const event of events) {
-                const parsedEvent = contract.interface.parseLog(event);
-                const pubkey = parsedEvent.args.pubkey;
-                const withdrawalCredentials = parsedEvent.args.credentials;
-                const amount = parsedEvent.args.amount.toString();
-                const signature = parsedEvent.args.signature;
+                // Decode non-indexed args directly from log data
+                const [pubkey, withdrawalCredentials, amount, signature, indexBytes] = decodeEventData(
+                    ['bytes', 'bytes', 'bytes', 'bytes', 'bytes'],
+                    event.data
+                );
                 
                 if (!eventsByPubkey.has(pubkey)) {
                     eventsByPubkey.set(pubkey, []);
@@ -117,7 +171,7 @@ async function fetchDepositEvents() {
                 eventsByPubkey.get(pubkey).push({
                     blockNumber: event.blockNumber,
                     amount: amount,
-                    index: parsedEvent.args.index.toString(),
+                    index: indexBytes,
                     txHash: event.transactionHash,
                     validation: validationStatus
                 });
