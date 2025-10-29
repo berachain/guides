@@ -16,20 +16,20 @@
 const { ethers } = require('ethers');
 const cliProgress = require('cli-progress');
 const { execSync } = require('child_process');
-const { ConfigHelper, withRetry, hashEvent, decodeEventData, DEFAULT_LOG_CHUNK_SIZE } = require('./lib/shared-utils');
+const { ConfigHelper, config, withRetry, hashEvent, decodeEventData, scanLogsInChunks } = require('./lib/shared-utils');
 
 // -----------------------------
 // CLI argument parsing
 // -----------------------------
 function printHelp() {
     console.log(`
-Usage: node scan-deposits.js [--chain <name>] [--rpc <url>] [--start-block <n>] [--address <0x...>] [--help]
+Usage: node scan-deposits.js [--chain <name>] [--rpc <url>] [--start <n>] [--address <0x...>] [--help]
 
 Options:
   --help                 Show this help and exit
   --chain <name>         Chain to use for RPC defaults (mainnet, bepolia)
   --rpc <url>            RPC URL (overrides --chain)
-  --start-block <n>      Starting block (default: 0)
+  --start <n>            Starting block (default: 0)
   --address <0x...>      BeaconDeposit contract address (default: placeholder)
 `);
 }
@@ -49,7 +49,7 @@ function parseArgs(argv) {
             case '--rpc':
                 args.rpc = argv[++i];
                 break;
-            case '--start-block':
+            case '--start':
                 args.startBlock = Number(argv[++i]);
                 break;
             case '--address':
@@ -82,14 +82,14 @@ if (args.chain && !SUPPORTED_CHAINS.includes(args.chain)) {
 let resolvedRpcUrl = args.rpc || process.env.EL_ETHRPC_URL || ConfigHelper.getRpcUrl('el', chainName);
 
 // Event signature/topic and ABI decoding (no external ABI files required)
-const DEPOSIT_EVENT_SIGNATURE = 'DepositEvent(bytes,bytes,bytes,bytes,bytes)';
+const DEPOSIT_EVENT_SIGNATURE = 'Deposit(bytes,bytes,uint64,bytes,uint64)';
 const DEPOSIT_TOPIC = hashEvent(DEPOSIT_EVENT_SIGNATURE);
 
 // Configuration
 const RPC_URL = resolvedRpcUrl;
-const CONTRACT_ADDRESS = args.address || '0x4242424242424242424242424242424242424242'; // Replace with the BeaconDeposit contract address
+const CONTRACT_ADDRESS = args.address || ConfigHelper.getBeaconDepositAddress() || config.BEACON_DEPOSIT_ADDRESS;
 const START_BLOCK = Number.isFinite(args.startBlock) ? args.startBlock : 0; 
-const BLOCK_CHUNK_SIZE = DEFAULT_LOG_CHUNK_SIZE;
+const BLOCK_CHUNK_SIZE = ConfigHelper.getDefaultLogChunkSize();
 const GENESIS_FORK_VERSION = '0xdf609e3b062842c6425ff716aec2d2092c46455d9b2e1a2c9e32c6ba63ff0bda';
 
 // Retry uses shared helper; avoid local sleep usage
@@ -136,50 +136,40 @@ async function fetchDepositEvents() {
         const totalBlocks = latestBlock - START_BLOCK + 1;
         progressBar.start(totalBlocks, 0, { events: 0 });
         
-        // Process blocks in chunks
-        for (let fromBlock = START_BLOCK; fromBlock <= latestBlock; fromBlock += BLOCK_CHUNK_SIZE) {
-            const toBlock = Math.min(fromBlock + BLOCK_CHUNK_SIZE - 1, latestBlock);
-            const chunkSize = toBlock - fromBlock + 1;
-
-            // Fetch events for this chunk (with retry)
-            const events = await withRetry(() => provider.getLogs({
-                address: CONTRACT_ADDRESS,
-                topics: [DEPOSIT_TOPIC],
-                fromBlock,
-                toBlock
-            }));
-
-            // Store events by pubkey
-            for (const event of events) {
-                // Decode non-indexed args directly from log data
-                const [pubkey, withdrawalCredentials, amount, signature, indexBytes] = decodeEventData(
-                    ['bytes', 'bytes', 'bytes', 'bytes', 'bytes'],
-                    event.data
-                );
-                
-                if (!eventsByPubkey.has(pubkey)) {
-                    eventsByPubkey.set(pubkey, []);
+        // Process blocks in chunks using shared scanner
+        await scanLogsInChunks(provider, {
+            address: CONTRACT_ADDRESS,
+            topics: [DEPOSIT_TOPIC],
+            fromBlock: START_BLOCK,
+            toBlock: latestBlock,
+            chunkSize: BLOCK_CHUNK_SIZE,
+            onChunk: async ({ from, to, logs }) => {
+                for (const event of logs) {
+                    const [pubkey, credentials, amount, signature, index] = decodeEventData(
+                        ['bytes', 'bytes', 'uint64', 'bytes', 'uint64'],
+                        event.data
+                    );
+                    if (!eventsByPubkey.has(pubkey)) {
+                        eventsByPubkey.set(pubkey, []);
+                    }
+                    const validationStatus = await validateDeposit(
+                        pubkey,
+                        credentials,
+                        amount.toString(),
+                        signature
+                    );
+                    eventsByPubkey.get(pubkey).push({
+                        blockNumber: event.blockNumber,
+                        amount: amount.toString(),
+                        index: index.toString(),
+                        txHash: event.transactionHash,
+                        validation: validationStatus
+                    });
                 }
-
-                const validationStatus = await validateDeposit(
-                    pubkey,
-                    withdrawalCredentials,
-                    amount,
-                    signature
-                );
-
-                eventsByPubkey.get(pubkey).push({
-                    blockNumber: event.blockNumber,
-                    amount: amount,
-                    index: indexBytes,
-                    txHash: event.transactionHash,
-                    validation: validationStatus
-                });
+                totalEvents += logs.length;
+                progressBar.update(to - START_BLOCK + 1, { events: totalEvents });
             }
-
-            totalEvents += events.length;
-            progressBar.update(toBlock - START_BLOCK + 1, { events: totalEvents });
-        }
+        });
 
         progressBar.stop();
         console.log('\nScan complete!');
