@@ -14,10 +14,10 @@ const fs = require('fs');
 const path = require('path');
 const { ethers } = require('ethers');
 const config = require('../../config');
-const { ConfigHelper } = require('../../config');
+const { ConfigHelper } = config;
 
 // Common defaults and helpers shared across scanners
-const DEFAULT_LOG_CHUNK_SIZE = parseInt(process.env.DEFAULT_LOG_CHUNK_SIZE || '50000', 10);
+const DEFAULT_LOG_CHUNK_SIZE = parseInt(process.env.DEFAULT_LOG_CHUNK_SIZE || config.DEFAULT_LOG_CHUNK_SIZE || '50000', 10);
 
 function hashEvent(signature) {
   return ethers.id(signature);
@@ -42,6 +42,30 @@ async function withRetry(operation, maxRetries = 5, initialDelayMs = 500) {
       await new Promise(resolve => setTimeout(resolve, delay));
     }
   }
+}
+
+/**
+ * Scan logs in chunks with retries and optional per-chunk callback.
+ * The provider is expected to be an ethers JsonRpcProvider-compatible instance.
+ */
+async function scanLogsInChunks(provider, {
+  address,
+  topics,
+  fromBlock,
+  toBlock,
+  chunkSize = DEFAULT_LOG_CHUNK_SIZE,
+  onChunk
+}) {
+  const allLogs = [];
+  for (let from = fromBlock; from <= toBlock; from += chunkSize) {
+    const to = Math.min(toBlock, from + chunkSize - 1);
+    const logs = await withRetry(() => provider.getLogs({ address, topics, fromBlock: from, toBlock: to }));
+    if (onChunk) {
+      await onChunk({ from, to, logs });
+    }
+    allLogs.push(...logs);
+  }
+  return allLogs;
 }
 
 /**
@@ -461,5 +485,10 @@ module.exports = {
   StatUtils,
   ProgressReporter,
   ConfigHelper,
-  config
+  config,
+  DEFAULT_LOG_CHUNK_SIZE,
+  hashEvent,
+  decodeEventData,
+  withRetry,
+  scanLogsInChunks
 };
