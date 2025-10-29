@@ -213,6 +213,100 @@ class BlockFetcher {
     }
   }
 
+  async getBlockTimestamp(blockHeight) {
+    try {
+      const response = await axios.get(`${this.baseUrl}/block?height=${blockHeight}`);
+      const isoTime = response?.data?.result?.block?.header?.time;
+      if (!isoTime) return null;
+      return Math.floor(new Date(isoTime).getTime() / 1000);
+    } catch (error) {
+      console.error(`Error fetching block ${blockHeight}:`, error.message);
+      return null;
+    }
+  }
+
+  /**
+   * Binary search to find the first block with timestamp >= targetTimestamp
+   * Precondition: timestamp(lowHeight) < targetTimestamp <= timestamp(highHeight)
+   */
+  async binarySearchBoundary(lowHeight, highHeight, targetTimestamp) {
+    while (lowHeight + 1 < highHeight) {
+      const mid = Math.floor((lowHeight + highHeight) / 2);
+      const midTs = await this.getBlockTimestamp(mid);
+      if (midTs === null) {
+        break; // give up binary search if RPC fails
+      }
+      if (midTs >= targetTimestamp) {
+        highHeight = mid;
+      } else {
+        lowHeight = mid;
+      }
+    }
+    return highHeight;
+  }
+
+  /**
+   * Find the block number closest to (at or after) a target timestamp using binary search
+   * @param {number} targetTimestamp - Unix timestamp in seconds
+   * @param {number} latestBlock - Latest known block number
+   * @param {number} estimatedBlock - Optional initial estimate (will calculate if not provided)
+   * @returns {Promise<number|null>} Block number or null if not found
+   */
+  async findBlockByTimestamp(targetTimestamp, latestBlock, estimatedBlock = null) {
+    // Use provided estimate or calculate one based on known reference point
+    const START_BLOCK = 933558;
+    const START_TIMESTAMP = 1739205914; // 2025-02-10 16:45:14 UTC
+    const BLOCK_TIME = 2; // 2 seconds per block (rough estimate for initial bracketing only)
+    
+    let estimate = estimatedBlock;
+    if (!estimate) {
+      const estimatedBlocks = Math.floor((targetTimestamp - START_TIMESTAMP) / BLOCK_TIME);
+      estimate = Math.min(Math.max(START_BLOCK + estimatedBlocks, 2), latestBlock);
+    }
+
+    const estimateTs = await this.getBlockTimestamp(estimate);
+    if (estimateTs === null) return null;
+
+    let step = 1024;
+    // Expand upward if estimate before target
+    if (estimateTs < targetTimestamp) {
+      let lowH = estimate;
+      let lowTs = estimateTs;
+      let highH = Math.min(lowH + step, latestBlock);
+      let highTs = await this.getBlockTimestamp(highH);
+      while (highTs !== null && highTs < targetTimestamp && highH < latestBlock) {
+        lowH = highH;
+        lowTs = highTs;
+        step *= 2;
+        highH = Math.min(highH + step, latestBlock);
+        highTs = await this.getBlockTimestamp(highH);
+      }
+      if (highTs === null) return null;
+      if (highTs < targetTimestamp) {
+        return null; // Could not bracket target
+      }
+      return await this.binarySearchBoundary(lowH, highH, targetTimestamp);
+    }
+
+    // Expand downward if estimate on/after target
+    let highH = estimate;
+    let highTs = estimateTs;
+    let lowH = Math.max(highH - step, 1);
+    let lowTs = await this.getBlockTimestamp(lowH);
+    while (lowTs !== null && lowTs >= targetTimestamp && lowH > 1) {
+      highH = lowH;
+      highTs = lowTs;
+      step *= 2;
+      lowH = Math.max(lowH - step, 1);
+      lowTs = await this.getBlockTimestamp(lowH);
+    }
+    if (lowTs === null) return null;
+    if (lowTs >= targetTimestamp) {
+      return null; // Could not bracket target
+    }
+    return await this.binarySearchBoundary(lowH, highH, targetTimestamp);
+  }
+
   async fetchBlockRange(startBlock, blockCount, progressCallback = null) {
     const blocks = [];
     
