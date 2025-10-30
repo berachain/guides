@@ -1,0 +1,256 @@
+.app {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 100%);
+}
+
+.header {
+  background: #1a1a2e;
+  border-bottom: 2px solid #ff6b35;
+  padding: 1.5rem 0;
+}
+
+.header-content {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 0 2rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.header h1 {
+  font-size: 2rem;
+  color: #ff6b35;
+  font-weight: 700;
+}
+
+.container {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 2rem;
+}
+
+.pool-selector {
+  background: #1a1a2e;
+  padding: 1.5rem;
+  border-radius: 12px;
+  margin-bottom: 2rem;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.pool-selector label {
+  font-weight: 600;
+  color: #ff6b35;
+}
+
+.pool-selector select {
+  flex: 1;
+  padding: 0.75rem;
+  border: 2px solid #ff6b35;
+  border-radius: 8px;
+  background: #0f0f0f;
+  color: #e0e0e0;
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+.tabs {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 2rem;
+  flex-wrap: wrap;
+}
+
+.tabs button {
+  padding: 1rem 2rem;
+  border: 2px solid transparent;
+  border-radius: 8px;
+  background: #1a1a2e;
+  color: #e0e0e0;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.tabs button:hover {
+  background: #252542;
+  border-color: #ff6b35;
+}
+
+.tabs button.active {
+  background: #ff6b35;
+  color: #0f0f0f;
+}
+
+.content {
+  background: #1a1a2e;
+  border-radius: 12px;
+  padding: 2rem;
+  min-height: 400px;
+}
+
+.connect-prompt {
+  text-align: center;
+  padding: 4rem 2rem;
+}
+
+.connect-prompt h2 {
+  font-size: 2rem;
+  margin-bottom: 1rem;
+  color: #ff6b35;
+}
+
+.connect-prompt p {
+  font-size: 1.1rem;
+  color: #b0b0b0;
+}
+
+.card {
+  background: #252542;
+  border-radius: 8px;
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.card h3 {
+  font-size: 1.3rem;
+  margin-bottom: 1rem;
+  color: #ff6b35;
+  border-bottom: 1px solid #3a3a5a;
+  padding-bottom: 0.5rem;
+}
+
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.stat {
+  background: #1a1a2e;
+  padding: 1rem;
+  border-radius: 6px;
+}
+
+.stat-label {
+  font-size: 0.85rem;
+  color: #888;
+  margin-bottom: 0.5rem;
+  text-transform: uppercase;
+}
+
+.stat-value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #ff6b35;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  max-width: 600px;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.form-group label {
+  font-weight: 600;
+  color: #ff6b35;
+}
+
+.form-group input {
+  padding: 0.75rem;
+  border: 2px solid #3a3a5a;
+  border-radius: 6px;
+  background: #0f0f0f;
+  color: #e0e0e0;
+  font-size: 1rem;
+}
+
+.form-group input:focus {
+  outline: none;
+  border-color: #ff6b35;
+}
+
+button {
+  padding: 0.75rem 1.5rem;
+  border: none;
+  border-radius: 6px;
+  background: #ff6b35;
+  color: #0f0f0f;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+button:hover {
+  background: #ff8555;
+  transform: translateY(-2px);
+}
+
+button:disabled {
+  background: #3a3a5a;
+  color: #666;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.error {
+  background: #4a1a1a;
+  border: 2px solid #ff3535;
+  padding: 1rem;
+  border-radius: 6px;
+  color: #ff6b6b;
+  margin-bottom: 1rem;
+}
+
+.success {
+  background: #1a4a1a;
+  border: 2px solid #35ff35;
+  padding: 1rem;
+  border-radius: 6px;
+  color: #6bff6b;
+  margin-bottom: 1rem;
+}
+
+.warning {
+  background: #4a4a1a;
+  border: 2px solid #ffcc35;
+  padding: 1rem;
+  border-radius: 6px;
+  color: #ffdd6b;
+  margin-bottom: 1rem;
+}
+
+.loading {
+  text-align: center;
+  padding: 2rem;
+  font-size: 1.1rem;
+  color: #888;
+}
+
+.actions {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.address {
+  font-family: 'Courier New', monospace;
+  background: #0f0f0f;
+  padding: 0.5rem;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  word-break: break-all;
+}
+
