@@ -1,8 +1,9 @@
-import { Client } from "pg";
+import { Pool, Client } from "pg";
 import { ethers } from "ethers";
+import { RoundRobinProvider } from "../rpc-balancer.js";
 
 export interface Erc20WorkerConfig {
-  elRpcUrl: string;
+  elRpcUrls: string[]; // Multiple EL RPC URLs for load balancing
   batchSize: number;
 }
 
@@ -14,10 +15,10 @@ const ERC20_IFACE = new ethers.Interface([
 ]);
 
 export async function ingestErc20Registry(
-  pg: Client,
+  pg: Pool | Client,
   cfg: Erc20WorkerConfig,
 ): Promise<void> {
-  const provider = new ethers.JsonRpcProvider(cfg.elRpcUrl);
+  const provider = new RoundRobinProvider(cfg.elRpcUrls);
 
   // Cursor
   const curRes = await pg.query(
@@ -50,7 +51,7 @@ export async function ingestErc20Registry(
     if (Number(exists.rowCount) > 0) continue;
 
     try {
-      const c = new ethers.Contract(addr, ERC20_IFACE, provider);
+      const c = new ethers.Contract(addr, ERC20_IFACE, provider.getProvider());
       const [name, symbol, decimals] = await Promise.all([
         c.name().catch(() => null),
         c.symbol().catch(() => null),

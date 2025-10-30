@@ -1,13 +1,33 @@
-import { Client } from "pg";
+import { Pool, Client } from "pg";
 
-export async function connectPg(dsn: string): Promise<Client> {
-  const pg = new Client({ connectionString: dsn });
-  await pg.connect();
-  return pg;
+let globalPool: Pool | null = null;
+
+export function getPool(dsn: string, maxConnections: number = 50): Pool {
+  if (!globalPool) {
+    globalPool = new Pool({
+      connectionString: dsn,
+      max: maxConnections, // Max connections in pool
+      idleTimeoutMillis: 30000,
+      connectionTimeoutMillis: 2000,
+    });
+  }
+  return globalPool;
+}
+
+export async function connectPg(dsn: string, maxConnections?: number): Promise<Pool | Client> {
+  // For backward compatibility, return Pool (which has same query interface)
+  return getPool(dsn, maxConnections);
+}
+
+export async function closePool(): Promise<void> {
+  if (globalPool) {
+    await globalPool.end();
+    globalPool = null;
+  }
 }
 
 export async function getCursor(
-  pg: Client,
+  pg: Pool | Client,
   module: string,
 ): Promise<number | null> {
   const { rows } = await pg.query(
@@ -22,7 +42,7 @@ export async function getCursor(
 }
 
 export async function upsertCursor(
-  pg: Client,
+  pg: Pool | Client,
   module: string,
   height: number,
 ): Promise<void> {

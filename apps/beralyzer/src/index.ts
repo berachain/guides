@@ -1,7 +1,7 @@
 import "dotenv/config";
-import { Client } from "pg";
+import { Pool } from "pg";
 import { loadConfig } from "./config.js";
-import { connectPg, getCursor, upsertCursor } from "./db.js";
+import { connectPg, getCursor, upsertCursor, closePool } from "./db.js";
 import { ingestEl } from "./workers/el.js";
 import { ingestErc20Registry } from "./workers/erc20.js";
 import { ingestClAbsences } from "./workers/cl.js";
@@ -9,6 +9,15 @@ import { snapshotTodayIfMissing } from "./workers/day_snapshots.js";
 import { runDecoderOnce } from "./workers/decoder.js";
 import { resolve } from "path";
 import { readFileSync, readdirSync } from "fs";
+import { createServer } from "http";
+import {
+  register,
+  loopIterations,
+  loopDuration,
+  currentBlockHeight,
+  chainHeadHeight,
+  blocksBehind,
+} from "./metrics.js";
 
 // Error classification for graceful handling
 function isRetryableError(error: Error): boolean {
@@ -34,32 +43,95 @@ function isFatalError(error: Error): boolean {
   );
 }
 
-// Graceful shutdown handling
-let isShuttingDown = false;
-let currentOperation: Promise<any> | null = null;
+// Extract PostgreSQL error details
+function getPostgresErrorDetails(error: any): {
+  code?: string;
+  constraint?: string;
+  table?: string;
+  column?: string;
+  detail?: string;
+  hint?: string;
+} {
+  if (error.code) {
+    return {
+      code: error.code,
+      constraint: error.constraint,
+      table: error.table,
+      column: error.column,
+      detail: error.detail,
+      hint: error.hint,
+    };
+  }
+  return {};
+}
 
-function setupGracefulShutdown() {
-  const shutdown = async (signal: string) => {
+// Log database error with full details
+function logDatabaseError(prefix: string, error: Error, context?: Record<string, any>) {
+  const pgError = getPostgresErrorDetails(error);
+  const errorDetails: any = {
+    message: error.message,
+    stack: error.stack,
+  };
+  
+  if (pgError.code) {
+    errorDetails.postgres = {
+      code: pgError.code,
+      constraint: pgError.constraint,
+      table: pgError.table,
+      column: pgError.column,
+      detail: pgError.detail,
+      hint: pgError.hint,
+    };
+    
+    // Map common error codes to human-readable descriptions
+    const errorCodeMap: Record<string, string> = {
+      "23503": "Foreign key violation",
+      "23505": "Unique constraint violation",
+      "23514": "Check constraint violation",
+      "23502": "Not null constraint violation",
+      "23513": "Check constraint violation",
+      "42P01": "Undefined table",
+      "42P07": "Duplicate table",
+      "42703": "Undefined column",
+      "42804": "Datatype mismatch",
+      "23000": "Integrity constraint violation",
+    };
+    
+    errorDetails.error_type = errorCodeMap[pgError.code] || `PostgreSQL error ${pgError.code}`;
+    
+    if (pgError.code === "23503") {
+      errorDetails.referential_integrity = {
+        constraint: pgError.constraint,
+        table: pgError.table,
+        detail: pgError.detail,
+      };
+    }
+  }
+  
+  if (context) {
+    errorDetails.context = context;
+  }
+  
+  console.error(`${prefix}:`, JSON.stringify(errorDetails, null, 2));
+}
+
+// Shutdown handling - just exit, worker threads will be killed
+let isShuttingDown = false;
+let activeWorkerPromises: Set<Promise<any>> = new Set();
+
+function setupShutdown() {
+  const shutdown = (signal: string) => {
     if (isShuttingDown) {
-      console.log(`Received ${signal} again, forcing exit`);
+      console.log(`Received ${signal} again, forcing immediate exit`);
       process.exit(1);
     }
 
-    console.log(`Received ${signal}, initiating graceful shutdown...`);
+    console.log(`Received ${signal}, terminating worker threads and exiting`);
     isShuttingDown = true;
-
-    // Wait for current operation to complete
-    if (currentOperation) {
-      console.log("Waiting for current operation to complete...");
-      try {
-        await currentOperation;
-        console.log("Current operation completed");
-      } catch (e) {
-        console.error("Error during shutdown:", (e as Error).message);
-      }
-    }
-
-    console.log("Graceful shutdown complete");
+    
+    // Don't wait for anything - just exit
+    // Each block is wrapped in its own transaction, so we can safely exit
+    // Any in-progress transaction will be rolled back automatically
     process.exit(0);
   };
 
@@ -67,25 +139,55 @@ function setupGracefulShutdown() {
   process.on("SIGINT", () => shutdown("SIGINT"));
 }
 
+function setupMetricsServer(port: number = 9464) {
+  const server = createServer(async (req, res) => {
+    if (req.url === "/metrics") {
+      res.writeHead(200, { "Content-Type": register.contentType });
+      res.end(await register.metrics());
+    } else if (req.url === "/health") {
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ status: "ok" }));
+    } else {
+      res.writeHead(404);
+      res.end();
+    }
+  });
+
+  server.listen(port, "127.0.0.1", () => {
+    console.log(`Metrics server listening on http://127.0.0.1:${port}/metrics`);
+  });
+
+  return server;
+}
+
 async function main() {
-  setupGracefulShutdown();
+  setupShutdown();
 
   const cfg = loadConfig();
+  const metricsPort = parseInt(process.env.BERALYZER_METRICS_PORT || "9464", 10);
+  setupMetricsServer(metricsPort);
+
   console.log(`Beralyzer daemon starting. DB=${cfg.pgDsn}`);
   console.log(
-    `Concurrency: ${cfg.concurrency.elFetch} EL threads, ${cfg.concurrency.trace} trace threads, ${cfg.concurrency.blockBatchSize} blocks/batch`,
+    `Concurrency: ${cfg.concurrency.elFetch} EL threads, ${cfg.concurrency.trace} transaction threads, ${cfg.concurrency.receipt} receipt threads`,
   );
+  console.log(`Metrics: http://127.0.0.1:${metricsPort}/metrics`);
 
   let consecutiveFailures = 0;
   const maxConsecutiveFailures = 5;
 
+  // Create connection pool once (reused across all loops)
+  const maxConnections = Math.max(50, cfg.concurrency.elFetch + cfg.concurrency.trace + 10);
+  const pg = await connectPg(cfg.pgDsn, maxConnections) as Pool;
+
   while (!isShuttingDown) {
-    const pg = await connectPg(cfg.pgDsn);
+    const loopStart = Date.now();
+    loopIterations.inc();
+
     let shouldAdvanceCursor = true;
 
-    // Wrap the main operation in a promise for graceful shutdown
-    currentOperation = (async () => {
-      try {
+    // Main operation loop
+    try {
         // Apply migrations at startup of each loop (idempotent)
         try {
           const dir = resolve(process.cwd(), "sql");
@@ -111,8 +213,16 @@ async function main() {
             if (cfg.log) console.log(`Migration applied: ${f}`);
           }
         } catch (e) {
-          console.error("Migration error:", (e as Error).message);
-          if (isFatalError(e as Error)) {
+          const err = e as Error;
+          logDatabaseError("Migration error", err);
+          
+          const pgError = getPostgresErrorDetails(err);
+          if (pgError.code && ["23503", "23505", "23514", "23502"].includes(pgError.code)) {
+            console.error("Database constraint violation detected in migrations, stopping daemon");
+            process.exit(1);
+          }
+          
+          if (isFatalError(err)) {
             console.error("Fatal migration error, stopping daemon");
             process.exit(1);
           }
@@ -121,19 +231,31 @@ async function main() {
         // Try each ingestion step, but don't advance cursor if any fail
         try {
           await ingestEl(pg, {
-            elRpcUrl: cfg.elRpcUrl,
+            elRpcUrls: cfg.elRpcUrls,
             blockBatchSize: cfg.concurrency.blockBatchSize,
             txConcurrency: cfg.concurrency.trace,
+            receiptConcurrency: cfg.concurrency.receipt,
+            maxQueueDepth: 100, // Pause upstream stages when queue exceeds 100 blocks
             log: cfg.log,
             advanceCursor: shouldAdvanceCursor,
+            shouldShutdown: () => isShuttingDown,
           });
         } catch (e) {
-          console.error("EL ingestion error:", (e as Error).message);
-          if (isFatalError(e as Error)) {
+          const err = e as Error;
+          logDatabaseError("EL ingestion error", err);
+          
+          // Check if it's a database error that should be fatal
+          const pgError = getPostgresErrorDetails(err);
+          if (pgError.code && ["23503", "23505", "23514", "23502"].includes(pgError.code)) {
+            console.error("Database constraint violation detected, stopping daemon");
+            process.exit(1);
+          }
+          
+          if (isFatalError(err)) {
             console.error("Fatal EL error, stopping daemon");
             process.exit(1);
           }
-          if (isRetryableError(e as Error)) {
+          if (isRetryableError(err)) {
             console.log("EL RPC unavailable, pausing cursor advancement");
             shouldAdvanceCursor = false;
           }
@@ -141,16 +263,24 @@ async function main() {
 
         try {
           await ingestErc20Registry(pg, {
-            elRpcUrl: cfg.elRpcUrl,
+            elRpcUrls: cfg.elRpcUrls,
             batchSize: 500,
           });
         } catch (e) {
-          console.error("ERC20 registry error:", (e as Error).message);
-          if (isFatalError(e as Error)) {
+          const err = e as Error;
+          logDatabaseError("ERC20 registry error", err);
+          
+          const pgError = getPostgresErrorDetails(err);
+          if (pgError.code && ["23503", "23505", "23514", "23502"].includes(pgError.code)) {
+            console.error("Database constraint violation detected in ERC20 registry, stopping daemon");
+            process.exit(1);
+          }
+          
+          if (isFatalError(err)) {
             console.error("Fatal ERC20 error, stopping daemon");
             process.exit(1);
           }
-          if (isRetryableError(e as Error)) {
+          if (isRetryableError(err)) {
             console.log(
               "EL RPC unavailable for ERC20, pausing cursor advancement",
             );
@@ -160,18 +290,26 @@ async function main() {
 
         try {
           await ingestClAbsences(pg, {
-            clRpcUrl: cfg.clRpcUrl,
+            clRpcUrls: cfg.clRpcUrls,
             batchSize: 100,
             validatorRefreshInterval: 500,
             log: cfg.log,
           });
         } catch (e) {
-          console.error("CL ingestion error:", (e as Error).message);
-          if (isFatalError(e as Error)) {
+          const err = e as Error;
+          logDatabaseError("CL ingestion error", err);
+          
+          const pgError = getPostgresErrorDetails(err);
+          if (pgError.code && ["23503", "23505", "23514", "23502"].includes(pgError.code)) {
+            console.error("Database constraint violation detected in CL ingestion, stopping daemon");
+            process.exit(1);
+          }
+          
+          if (isFatalError(err)) {
             console.error("Fatal CL error, stopping daemon");
             process.exit(1);
           }
-          if (isRetryableError(e as Error)) {
+          if (isRetryableError(err)) {
             console.log("CL RPC unavailable, pausing cursor advancement");
             shouldAdvanceCursor = false;
           }
@@ -180,15 +318,24 @@ async function main() {
         try {
           await runDecoderOnce(pg);
         } catch (e) {
-          console.error("Decoder error:", (e as Error).message);
+          const err = e as Error;
+          logDatabaseError("Decoder error", err, { non_fatal: true });
           // Decoder errors are usually not fatal, just log and continue
         }
 
         try {
-          await snapshotTodayIfMissing(pg, { clRpcUrl: cfg.clRpcUrl });
+          await snapshotTodayIfMissing(pg, { clRpcUrls: cfg.clRpcUrls });
         } catch (e) {
-          console.error("Snapshot error:", (e as Error).message);
-          if (isRetryableError(e as Error)) {
+          const err = e as Error;
+          logDatabaseError("Snapshot error", err);
+          
+          const pgError = getPostgresErrorDetails(err);
+          if (pgError.code && ["23503", "23505", "23514", "23502"].includes(pgError.code)) {
+            console.error("Database constraint violation detected in snapshots, stopping daemon");
+            process.exit(1);
+          }
+          
+          if (isRetryableError(err)) {
             console.log(
               "CL RPC unavailable for snapshots, pausing cursor advancement",
             );
@@ -213,27 +360,32 @@ async function main() {
           }
         }
       } catch (e) {
-        console.error("Unexpected error:", (e as Error).message);
-        if (isFatalError(e as Error)) {
+        const err = e as Error;
+        logDatabaseError("Unexpected error", err);
+        
+        const pgError = getPostgresErrorDetails(err);
+        if (pgError.code && ["23503", "23505", "23514", "23502"].includes(pgError.code)) {
+          console.error("Database constraint violation detected, stopping daemon");
+          process.exit(1);
+        }
+        
+        if (isFatalError(err)) {
           console.error("Fatal error, stopping daemon");
           process.exit(1);
         }
         shouldAdvanceCursor = false;
         consecutiveFailures++;
       } finally {
-        await pg.end();
+        // Don't close pool - it's reused across loops
+        const loopDurationSeconds = (Date.now() - loopStart) / 1000;
+        loopDuration.observe(loopDurationSeconds);
       }
-    })();
 
-    // Wait for current operation to complete
-    await currentOperation;
-    currentOperation = null;
-
-    // Check if we're shutting down
-    if (isShuttingDown) {
-      console.log("Shutdown requested, exiting main loop");
-      break;
-    }
+      // Check if we're shutting down
+      if (isShuttingDown) {
+        console.log("Shutdown requested, exiting main loop");
+        break;
+      }
 
     // Only sleep if we're not in a failure state
     if (shouldAdvanceCursor || cfg.pollMs > 0) {
@@ -246,7 +398,19 @@ async function main() {
   }
 }
 
-main().catch((err) => {
+main().catch(async (err) => {
   console.error(err);
+  await closePool();
   process.exit(1);
+});
+
+// Cleanup pool on exit
+process.on("SIGINT", async () => {
+  await closePool();
+  process.exit(0);
+});
+
+process.on("SIGTERM", async () => {
+  await closePool();
+  process.exit(0);
 });
