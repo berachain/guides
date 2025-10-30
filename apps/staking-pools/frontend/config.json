@@ -1,0 +1,23 @@
+{
+  "network": {
+    "name": "Berachain Bepolia",
+    "chainId": 80069,
+    "rpcUrl": "https://bepolia.rpc.berachain.com",
+    "explorerUrl": "https://testnet.berascan.com"
+  },
+  "contracts": {
+    "stakingPoolFactory": "0x176c081E95C82CA68DEa20CA419C7506Aa063C24",
+    "withdrawalVault": "0xAFAc2f11Cb39F0521b22494F6101002ce653D2f4"
+  },
+  "pools": {
+    "generated": {
+      "name": "Staking Pool cam-tn3",
+      "validatorPubkey": "0xaae78fde55220d12ee6b261e92afabbc670c6c27e40bedb58a0b65f7ae948be148c7e0d98e7dcca2366d0d4dacefd528",
+      "stakingPool": "0x2C880C3d78276a75e2b171b1Ec87c516d7Ed321d",
+      "smartOperator": "0x60ef8E64646D66D37Ca86F3E11D53cb68Ec24aBd",
+      "stakingRewardsVault": "0x84641ADab6b376d65BA185B79cD41559699B005A",
+      "incentiveCollector": "0xd49F99fe9bF9568E6e0466E88360A2566F506659",
+      "enabled": true
+    }
+  }
+}
