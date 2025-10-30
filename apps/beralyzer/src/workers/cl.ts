@@ -1,8 +1,8 @@
-import axios from "axios";
-import { Client } from "pg";
+import { Pool, Client } from "pg";
+import { RoundRobinClClient } from "../rpc-balancer.js";
 
 export interface ClWorkerConfig {
-  clRpcUrl: string;
+  clRpcUrls: string[]; // Multiple CL RPC URLs for load balancing
   batchSize: number; // heights per loop
   validatorRefreshInterval: number; // blocks between validator set refreshes
 }
@@ -14,55 +14,16 @@ type ValidatorsAtHeight = {
   validatorCount: number;
 };
 
-async function getLatestHeight(clUrl: string): Promise<number> {
-  const res = await axios.get(`${clUrl}/status`);
-  return parseInt(res.data.result.sync_info.latest_block_height, 10);
-}
-
-async function getBlock(clUrl: string, height: number): Promise<any | null> {
-  try {
-    const res = await axios.get(`${clUrl}/block?height=${height}`);
-    return res.data.result?.block ?? null;
-  } catch {
-    return null;
-  }
-}
-
-async function getValidators(
-  clUrl: string,
-  height: number,
-): Promise<ValidatorsAtHeight | null> {
-  try {
-    const res = await axios.get(
-      `${clUrl}/validators?per_page=99&height=${height}`,
-    );
-    const vals = res.data.result.validators as any[];
-    const votingPowerByAddress = new Map<string, bigint>();
-    const addressByPosition = new Map<number, string>();
-    let total = 0n;
-    vals.forEach((v, idx) => {
-      const addr: string = v.address;
-      const power = BigInt(v.voting_power);
-      votingPowerByAddress.set(addr, power);
-      addressByPosition.set(idx, addr);
-      total += power;
-    });
-    return {
-      votingPowerByAddress,
-      addressByPosition,
-      totalVotingPower: total,
-      validatorCount: vals.length,
-    };
-  } catch {
-    return null;
-  }
-}
-
 export async function ingestClAbsences(
-  pg: Client,
+  pg: Pool | Client,
   cfg: ClWorkerConfig & { log?: boolean },
 ): Promise<void> {
-  const latest = await getLatestHeight(cfg.clRpcUrl);
+  const clClient = new RoundRobinClClient(cfg.clRpcUrls);
+  if (cfg.log) {
+    console.log(`CL: Using ${cfg.clRpcUrls.length} RPC endpoint(s): ${cfg.clRpcUrls.join(", ")}`);
+  }
+  
+  const latest = await clClient.getLatestHeight();
   const curRes = await pg.query(
     "SELECT last_processed_height FROM ingest_cursors WHERE module=$1",
     ["cl_absences"],
@@ -91,14 +52,32 @@ export async function ingestClAbsences(
     for (let h = from; h <= to; h++) {
       // Refresh validators every validatorRefreshInterval or at first
       if (!cachedVals || h % cfg.validatorRefreshInterval === 0) {
-        cachedVals = await getValidators(cfg.clRpcUrl, h + 1); // last_commit references set at H+1
-        cachedAtHeight = h + 1;
+        const vals = await clClient.getValidators(h + 1); // last_commit references set at H+1
+        if (vals) {
+          const votingPowerByAddress = new Map<string, bigint>();
+          const addressByPosition = new Map<number, string>();
+          let total = 0n;
+          vals.forEach((v: any, idx: number) => {
+            const addr: string = v.address;
+            const power = BigInt(v.voting_power);
+            votingPowerByAddress.set(addr, power);
+            addressByPosition.set(idx, addr);
+            total += power;
+          });
+          cachedVals = {
+            votingPowerByAddress,
+            addressByPosition,
+            totalVotingPower: total,
+            validatorCount: vals.length,
+          };
+          cachedAtHeight = h + 1;
+        }
       }
       if (!cachedVals) continue;
 
       const [blockPrev, blockNext] = await Promise.all([
-        getBlock(cfg.clRpcUrl, h),
-        getBlock(cfg.clRpcUrl, h + 1),
+        clClient.getBlock(h),
+        clClient.getBlock(h + 1),
       ]);
       if (!blockPrev || !blockNext) continue;
 

@@ -1,7 +1,7 @@
 import { spawn } from "child_process";
-import { Client } from "pg";
+import { Pool, Client } from "pg";
 
-export async function runDecoderOnce(pg: Client): Promise<void> {
+export async function runDecoderOnce(pg: Pool | Client): Promise<void> {
   // Run the compiled Go helper to refresh validators.db (it writes SQLite and prints CSV)
   // We can parse stdout in the future; for now, we just ensure it runs successfully.
   return new Promise((resolve) => {
