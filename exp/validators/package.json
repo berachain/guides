@@ -1,0 +1,37 @@
+{
+  "name": "@exp/validators",
+  "version": "1.0.0",
+  "author": {
+    "name": "@codingwithmanny",
+    "url": "https://github.com/codingwithmanny"
+  },
+  "type": "module",
+  "description": "",
+  "main": "src/index.ts",
+  "scripts": {
+    "deposits": "tsx src/deposits.ts",
+    "pubkeys": "tsx src/pubkeys.ts",
+    "allocations": "tsx src/allocations.ts",
+    "rewards": "tsx src/rewards.ts",
+    "timestamp": "TZ=America/New_York date '+%Y-%m-%d %H:%M:00 %Z' > files/_lastupdated.txt"
+  },
+  "keywords": [
+    "berachain",
+    "validators",
+    "deposits",
+    "pubkeys",
+    "operators",
+    "names"
+  ],
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^24.10.0",
+    "tsx": "^4.7.0",
+    "typescript": "^5.9.3"
+  },
+  "dependencies": {
+    "chalk": "^5.6.2",
+    "dotenv": "^17.2.3",
+    "viem": "^2.38.6"
+  }
+}
