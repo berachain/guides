@@ -8,6 +8,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/lib-common.sh"
 
 CLI_PUBKEY=""
+CLI_CHAIN=""
 CLI_RPC_URL=""
 CLI_FACTORY_ADDR=""
 
@@ -19,10 +20,11 @@ Deploys a DelegationHandler contract for a validator pubkey.
 This is step 1 for delegators providing capital to validators.
 
 Usage:
-  delegator-deploy-handler.sh --pubkey 0x...
+  delegator-deploy-handler.sh --pubkey 0x... --chain bepolia|mainnet
   
 Required arguments:
   --pubkey 0x...            Validator pubkey (96 hex characters)
+  --chain bepolia|mainnet   Chain to use (required)
   
 Output:
   delegator-deploy-handler-command.sh
@@ -33,6 +35,7 @@ parse_args() {
   while [[ $# -gt 0 ]]; do
     case $1 in
       --pubkey) CLI_PUBKEY="$2"; shift 2 ;;
+      --chain) CLI_CHAIN="$2"; shift 2 ;;
       -h|--help) print_usage; exit 0 ;;
       *) log_error "Unknown arg: $1"; print_usage; exit 1 ;;
     esac
@@ -58,6 +61,12 @@ main() {
     exit 2
   fi
   
+  if [[ -z "$CLI_CHAIN" ]]; then
+    log_error "Missing --chain (required for delegator scripts)"
+    print_usage
+    exit 2
+  fi
+  
   if ! ensure_cast; then
     exit 1
   fi
@@ -66,9 +75,20 @@ main() {
   local PUBKEY
   PUBKEY=$(validate_pubkey "$CLI_PUBKEY")
   
-  # Detect network and RPC
-  local network rpc_url
-  read -r network rpc_url <<< "$(detect_network_and_rpc)"
+  # Validate chain
+  if [[ "$CLI_CHAIN" != "bepolia" && "$CLI_CHAIN" != "mainnet" ]]; then
+    log_error "Invalid chain: $CLI_CHAIN (must be 'bepolia' or 'mainnet')"
+    exit 1
+  fi
+  
+  # Get network and RPC from chain (no automatic detection for delegator scripts)
+  local network="$CLI_CHAIN"
+  local rpc_url
+  rpc_url=$(get_rpc_url_for_network "$network")
+  if [[ -z "$rpc_url" ]]; then
+    log_error "Unknown chain: $network"
+    exit 1
+  fi
   
   # Get factory address from network
   local factory
@@ -88,7 +108,13 @@ main() {
   local existing_handler
   existing_handler=$(get_delegation_handler "$factory" "$PUBKEY" "$rpc_url")
   
-  if [[ "$existing_handler" != "0x0000000000000000000000000000000000000000" ]]; then
+  # Trim whitespace
+  existing_handler=$(echo "$existing_handler" | xargs)
+  
+  # Check if handler exists: must be non-empty, non-zero address, and valid format
+  if [[ -n "$existing_handler" && \
+        "$existing_handler" != "0x0000000000000000000000000000000000000000" && \
+        "$existing_handler" =~ ^0x[0-9a-fA-F]{40}$ ]]; then
     log_success "DelegationHandler already deployed for this pubkey"
     log_info "Handler address: $existing_handler"
     echo ""
