@@ -9,6 +9,7 @@ source "$SCRIPT_DIR/lib-common.sh"
 
 CLI_HANDLER=""
 CLI_PUBKEY=""
+CLI_CHAIN=""
 CLI_FEE="0.001"
 
 print_usage() {
@@ -25,10 +26,11 @@ This generates FOUR commands:
 4. Withdraw BERA from handler to your address
 
 Usage:
-  delegator-withdraw-principal.sh --pubkey 0x... [--fee 0.001]
+  delegator-withdraw-principal.sh --pubkey 0x... --chain bepolia|mainnet [--fee 0.001]
   
 Required arguments:
   --pubkey 0x...            Validator pubkey (handler will be auto-detected from factory)
+  --chain bepolia|mainnet   Chain to use (required)
   
 Optional arguments:
   --fee BERA                Withdrawal request fee (default: 0.001 BERA)
@@ -48,6 +50,7 @@ parse_args() {
   while [[ $# -gt 0 ]]; do
     case $1 in
       --pubkey) CLI_PUBKEY="$2"; shift 2 ;;
+      --chain) CLI_CHAIN="$2"; shift 2 ;;
       --fee) CLI_FEE="$2"; shift 2 ;;
       -h|--help) print_usage; exit 0 ;;
       *) log_error "Unknown arg: $1"; print_usage; exit 1 ;;
@@ -119,15 +122,31 @@ main() {
   fi
   load_env "$SCRIPT_DIR"
   
-  # Detect network and RPC
-  local network rpc_url
-  read -r network rpc_url <<< "$(detect_network_and_rpc)"
-  # RPC from detect_network_and_rpc
-  
-  # Validate pubkey
+  # Validate required arguments
   if [[ -z "$CLI_PUBKEY" ]]; then
     log_error "Missing --pubkey"
     print_usage
+    exit 1
+  fi
+  
+  if [[ -z "$CLI_CHAIN" ]]; then
+    log_error "Missing --chain (required for delegator scripts)"
+    print_usage
+    exit 2
+  fi
+  
+  # Validate chain
+  if [[ "$CLI_CHAIN" != "bepolia" && "$CLI_CHAIN" != "mainnet" ]]; then
+    log_error "Invalid chain: $CLI_CHAIN (must be 'bepolia' or 'mainnet')"
+    exit 1
+  fi
+  
+  # Get network and RPC from chain (no automatic detection for delegator scripts)
+  local network="$CLI_CHAIN"
+  local rpc_url
+  rpc_url=$(get_rpc_url_for_network "$network")
+  if [[ -z "$rpc_url" ]]; then
+    log_error "Unknown chain: $network"
     exit 1
   fi
   
