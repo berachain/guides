@@ -31,6 +31,10 @@ const Table = require('cli-table3');
 const { ValidatorNameDB, ConfigHelper, ProgressReporter, BlockFetcher } = require('./lib/shared-utils');
 const fs = require('fs');
 const path = require('path');
+const { spawn } = require('child_process');
+
+// Database path for validator data
+const VALIDATOR_DB_PATH = path.join(__dirname, '..', 'var', 'db', 'validator.sqlite');
 
 // Configuration
 const CONFIG = {
@@ -52,7 +56,7 @@ const CONFIG = {
 };
 
 // Initialize validator database
-const validatorDB = new ValidatorNameDB();
+const validatorDB = new ValidatorNameDB(VALIDATOR_DB_PATH);
 // Ethers interface for BeraChef view functions
 const BERACHEF_IFACE = new ethers.Interface([
   'function getActiveRewardAllocation(bytes valPubkey) view returns (tuple(uint64 startBlock, tuple(address receiver, uint96 percentageNumerator)[] weights))',
@@ -84,8 +88,8 @@ function loadGenesisValidators() {
 const genesisValidators = loadGenesisValidators();
 
 // Helper: eth_call using ethers-style encoded data, return raw result hex
-async function ethCall(rpcUrl, to, data) {
-  return await rpcRequest(rpcUrl, 'eth_call', [{ to, data }, 'latest']);
+async function ethCall(rpcUrl, to, data, blockNumber = 'latest') {
+  return await rpcRequest(rpcUrl, 'eth_call', [{ to, data }, blockNumber]);
 }
 
 // Helper: decode RewardAllocation result
@@ -107,6 +111,109 @@ function decodeRewardAllocation(resultHex) {
       weights: alloc.weights.map(w => ({ receiver: (w.receiver || w[0]).toLowerCase(), percentageNumerator: BigInt(w.percentageNumerator || w[1]) }))
     };
   }
+}
+
+// Helper: execute SQL against the validator database
+async function executeSQL(sql, params = []) {
+  return new Promise((resolve, reject) => {
+    let finalSql = sql;
+    if (params.length > 0) {
+      for (let i = 0; i < params.length; i++) {
+        const param = params[i] == null ? 'NULL' : `'${params[i].toString().replace(/'/g, "''")}'`;
+        finalSql = finalSql.replace('?', param);
+      }
+    }
+    
+    const sqlite = spawn('sqlite3', [VALIDATOR_DB_PATH, finalSql]);
+    let output = '';
+    let error = '';
+    
+    sqlite.stdout.on('data', (data) => { output += data.toString(); });
+    sqlite.stderr.on('data', (data) => { error += data.toString(); });
+    
+    sqlite.on('close', (code) => {
+      if (code === 0) {
+        resolve({ ok: true, output });
+      } else {
+        reject(new Error(`SQLite error: ${error || 'Unknown error'}`));
+      }
+    });
+  });
+}
+
+// Ensure last_activation column exists in validators table
+async function ensureLastActivationColumn() {
+  try {
+    // Check if column exists by attempting to select it
+    await executeSQL('SELECT last_activation FROM validators LIMIT 1');
+  } catch (error) {
+    // Column doesn't exist, add it
+    console.log('📝 Adding last_activation column to validators table...');
+    await executeSQL('ALTER TABLE validators ADD COLUMN last_activation INTEGER');
+    console.log('✅ Column added successfully');
+  }
+}
+
+// Update last_activation for validators based on getActiveRewardAllocation at final block
+async function updateLastActivations(rpcUrl, contractAddress, finalBlockNumber, allValidators) {
+  console.log(`💾 Updating last_activation from getActiveRewardAllocation at block ${finalBlockNumber}...`);
+  
+  let updatedCount = 0;
+  let skippedCount = 0;
+  
+  // Process validators in parallel batches
+  const batchSize = 10;
+  for (let i = 0; i < allValidators.length; i += batchSize) {
+    const batch = allValidators.slice(i, i + batchSize);
+    await Promise.all(batch.map(async (validator) => {
+      if (!validator.pubkey) return;
+      
+      try {
+        // Normalize pubkey (ensure 0x prefix)
+        const pk = validator.pubkey.startsWith('0x') ? validator.pubkey : `0x${validator.pubkey}`;
+        
+        // Call getActiveRewardAllocation at the final block
+        const data = BERACHEF_IFACE.encodeFunctionData('getActiveRewardAllocation', [pk]);
+        const resultHex = await ethCall(rpcUrl, contractAddress, data, finalBlockNumber);
+        const allocation = decodeRewardAllocation(resultHex);
+        
+        if (allocation && allocation.startBlock) {
+          // Get the timestamp of the startBlock
+          const startBlockNumber = allocation.startBlock;
+          const blockData = await getBlock(rpcUrl, startBlockNumber);
+          const startBlockTimestamp = parseInt(blockData.timestamp, 16);
+          
+          // Update last_activation with the startBlock's timestamp
+          await executeSQL(
+            'UPDATE validators SET last_activation = ? WHERE pubkey = ?',
+            [startBlockTimestamp, validator.pubkey]
+          );
+          updatedCount++;
+        } else {
+          // No active allocation or invalid response - set to NULL
+          await executeSQL(
+            'UPDATE validators SET last_activation = NULL WHERE pubkey = ?',
+            [validator.pubkey]
+          );
+          skippedCount++;
+        }
+      } catch (error) {
+        console.warn(`⚠️  Failed to update last_activation for validator ${validator.name || validator.pubkey?.substring(0, 20)}: ${error.message}`);
+        // Set to NULL on error
+        try {
+          await executeSQL(
+            'UPDATE validators SET last_activation = NULL WHERE pubkey = ?',
+            [validator.pubkey]
+          );
+        } catch (e) {
+          // Ignore update errors
+        }
+        skippedCount++;
+      }
+    }));
+  }
+  
+  console.log(`✅ Updated last_activation for ${updatedCount} validators (${skippedCount} skipped/failed)`);
 }
 
 // Helper: compare two allocations ignoring order of weights
@@ -192,8 +299,12 @@ async function getLatestBlock(rpcUrl) {
 // Get block with timestamp
 async function getBlock(rpcUrl, blockNumber) {
   try {
+    // Handle both number and hex string inputs
+    const blockHex = typeof blockNumber === 'string' && blockNumber.startsWith('0x') 
+      ? blockNumber 
+      : `0x${blockNumber.toString(16)}`;
     const block = await rpcRequest(rpcUrl, 'eth_getBlockByNumber', [
-      '0x' + blockNumber.toString(16),
+      blockHex,
       false // don't include transactions
     ]);
     return block;
@@ -1010,8 +1121,58 @@ Examples:
   try {
     console.log('🚀 Starting BeraChef Activation Scanner...\n');
     
+    // Ensure database and column exist
+    await ensureLastActivationColumn();
+    
+    const contractAddress = CONFIG.contracts[config.chain];
+    
+    // Get final block number - try to get from evaluation_metadata, otherwise use latest
+    let finalBlockNumber = 'latest';
+    try {
+      // Use sqlite3 command directly to get end_date
+      const { execSync } = require('child_process');
+      const sql = "SELECT end_date FROM evaluation_metadata WHERE id = 1";
+      const output = execSync(`sqlite3 ${VALIDATOR_DB_PATH} "${sql}"`, { encoding: 'utf8' });
+      const endDateStr = output.trim();
+      
+      if (endDateStr && endDateStr.match(/^\d{4}-\d{2}-\d{2}$/)) {
+        // Find block at start of next day (which is the end of the study period)
+        const nextDay = new Date(endDateStr + 'T00:00:00.000Z');
+        nextDay.setUTCDate(nextDay.getUTCDate() + 1);
+        const nextDayTimestamp = Math.floor(nextDay.getTime() / 1000);
+        
+        const latestBlock = await getLatestBlock(config.rpc);
+        const clUrl = ConfigHelper.getBlockScannerUrl(config.chain);
+        const blockFetcher = new BlockFetcher(clUrl);
+        const finalBlock = await blockFetcher.findBlockByTimestamp(nextDayTimestamp, latestBlock);
+        
+        if (finalBlock) {
+          finalBlockNumber = `0x${finalBlock.toString(16)}`;
+          console.log(`📊 Using final block from evaluation period: ${finalBlock} (end of ${endDateStr})`);
+        } else {
+          const latestBlockHex = `0x${latestBlock.toString(16)}`;
+          finalBlockNumber = latestBlockHex;
+          console.log(`⚠️  Could not find block for end_date ${endDateStr}, using latest: ${latestBlock}`);
+        }
+      } else {
+        const latestBlock = await getLatestBlock(config.rpc);
+        finalBlockNumber = `0x${latestBlock.toString(16)}`;
+        console.log(`📊 No valid end_date found, using latest block: ${latestBlock}`);
+      }
+    } catch (e) {
+      // No evaluation_metadata or error reading it - use latest
+      const latestBlock = await getLatestBlock(config.rpc);
+      finalBlockNumber = `0x${latestBlock.toString(16)}`;
+      console.log(`📊 Using latest block as final (error reading metadata: ${e.message}): ${latestBlock}`);
+    }
+    
     const { activations, validatorCounts, validatorTimestamps } = await scanActivations(config);
     const currentAllocations = await analyzeCurrentAllocations(config, validatorCounts);
+    
+    // Update last_activation in database using getActiveRewardAllocation at final block
+    console.log(`\n💾 Updating last_activation from current reward allocations...`);
+    await updateLastActivations(config.rpc, contractAddress, finalBlockNumber, currentAllocations.allValidators);
+    
     await displayResults(activations, validatorCounts, validatorTimestamps, currentAllocations, config);
     
     ProgressReporter.logSuccess('Scan completed successfully!');

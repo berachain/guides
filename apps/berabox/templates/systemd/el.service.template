@@ -1,0 +1,20 @@
+[Unit]
+Description=Berabox Execution Layer - {INSTALLATION_NAME}
+
+[Service]
+Type=simple
+WorkingDirectory={INSTALLATION_DIR}
+ExecStart={EL_BIN} {EL_ARGS}
+Restart=always
+RestartSec=3
+KillSignal=SIGINT
+TimeoutStopSec=60s
+StandardOutput=append:{EL_LOGS_DIR}/{EL_CLIENT}.log
+StandardError=append:{EL_LOGS_DIR}/{EL_CLIENT}.log
+SyslogIdentifier=bb-{INSTALLATION_NAME}-el
+
+# Debug-friendly settings
+Environment=GOTRACEBACK=all
+
+[Install]
+WantedBy=default.target
