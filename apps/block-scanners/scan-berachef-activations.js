@@ -1129,11 +1129,10 @@ Examples:
     // Get final block number - try to get from evaluation_metadata, otherwise use latest
     let finalBlockNumber = 'latest';
     try {
-      // Use sqlite3 command directly to get end_date
-      const { execSync } = require('child_process');
+      // Use executeSQL function to get end_date (avoids shell command construction)
       const sql = "SELECT end_date FROM evaluation_metadata WHERE id = 1";
-      const output = execSync(`sqlite3 ${VALIDATOR_DB_PATH} "${sql}"`, { encoding: 'utf8' });
-      const endDateStr = output.trim();
+      const result = await executeSQL(sql);
+      const endDateStr = result.output.trim();
       
       if (endDateStr && endDateStr.match(/^\d{4}-\d{2}-\d{2}$/)) {
         // Find block at start of next day (which is the end of the study period)
