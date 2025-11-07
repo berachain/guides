@@ -1,0 +1,42 @@
+# BeraBox .gitignore
+# Minimal exclusions for actual project needs
+
+# Installation runtime data
+installations
+.vscode
+
+# Keep directory - contains all persistent keys (security sensitive)
+keep/
+
+# Generated systemd service files
+*.service
+
+# Temporary and log files
+*.log
+*.tmp
+*.bak
+*.pid
+*.lock
+
+# Editor swap files
+*.swp
+*.swo
+*~
+
+# JWT secrets and cryptographic keys
+*.hex
+*_key.json
+*.key
+*.pem
+
+# Database files (blockchain data)
+*.db
+mdbx.dat
+
+# Debug workspace files (auto-generated)
+*.code-workspace
+debug/
+
+# Experimental temporary files
+guides/exp/temp_*
+guides/exp/test_*

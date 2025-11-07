@@ -1,0 +1,855 @@
+#!/bin/bash
+set -euo pipefail
+# BeraBox - Multi-Installation Node Management System (Reimplemented)
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Source common functions and configuration
+source "$SCRIPT_DIR/scripts/common.sh"
+
+# Configuration and state management
+
+# Global state management 
+declare -A BB_STATE=(
+    [command]=""
+    [installation]=""
+    [component]=""
+)
+
+declare -A BB_CONFIG=(
+    [installations_dir]="$SCRIPT_DIR/installations"
+    [scripts_dir]="$SCRIPT_DIR/scripts"
+    [templates_dir]="$SCRIPT_DIR/templates"
+)
+
+# Command validation and routing (much cleaner than the original)
+bb_validate_command() {
+    local cmd="$1"
+    local valid_global_commands=(
+        "create" "list" "info" "build" "init" "debug" "reset" 
+        "start" "stop" "restart" "install" "uninstall" 
+        "autostart" "autostop" "help" "-h" "--help"
+    )
+    local valid_installation_commands=(
+        "info" "build" "init" "version" "install" "uninstall"
+        "start" "stop" "restart" "status" "logs" "debug" "attach"
+        "reset" "remove" "autostart" "autostop"
+    )
+    
+    # Check if it's a global command
+    for valid_cmd in "${valid_global_commands[@]}"; do
+        if [[ "$cmd" == "$valid_cmd" ]]; then
+            return 0
+        fi
+    done
+    
+    # If not global, might be installation-specific
+    if bb_installation_exists "$cmd"; then
+        BB_STATE[installation]="$cmd"
+        return 0
+    fi
+    
+    return 1
+}
+
+# Installation management functions (much more robust)
+bb_installation_exists() {
+    local installation="$1"
+    [[ -d "${BB_CONFIG[installations_dir]}/$installation" ]]
+}
+
+bb_get_installation_toml() {
+    local installation="$1"
+    echo "${BB_CONFIG[installations_dir]}/$installation/installation.toml"
+}
+
+bb_get_installation_dir() {
+    local installation="$1"
+    echo "${BB_CONFIG[installations_dir]}/$installation"
+}
+
+# installation validation 
+bb_validate_installation() {
+    local installation="$1"
+    local show_suggestions="${2:-true}"
+    
+    if [[ -z "$installation" ]]; then
+        log_error "Installation name required"
+        return 1
+    fi
+    
+    if ! bb_installation_exists "$installation"; then
+        log_error "Installation '$installation' not found"
+        if [[ "$show_suggestions" == "true" ]]; then
+            bb_show_available_installations
+        fi
+        return 1
+    fi
+    
+    local toml_file=$(bb_get_installation_toml "$installation")
+    if [[ ! -f "$toml_file" ]]; then
+        log_error "Installation '$installation' is corrupted (missing installation.toml)"
+        log_warn "Try recreating with: $0 create <chain> <el-client> <name>"
+        return 1
+    fi
+    
+    return 0
+}
+
+bb_show_available_installations() {
+    if [[ ! -d "${BB_CONFIG[installations_dir]}" ]]; then
+        echo "No installations directory found."
+        echo "Create one with: $0 create <chain> <el-client>"
+        return
+    fi
+    
+    local installations=($(find "${BB_CONFIG[installations_dir]}" -maxdepth 1 -type d -name "*" -exec basename {} \; | grep -v "^installations$" | sort))
+    
+    if [[ ${#installations[@]} -eq 0 ]]; then
+        echo "No installations found."
+        echo "Create one with: $0 create <chain> <el-client>"
+        return
+    fi
+    
+    echo "Available installations:"
+    for installation in "${installations[@]}"; do
+        local status="Unknown"
+        if systemctl --user list-unit-files "$installation-*" 2>/dev/null | grep -q "$installation"; then
+            if systemctl --user is-active --quiet "$installation-cl" && systemctl --user is-active --quiet "$installation-el"; then
+                status="${GREEN}Running${NC}"
+            elif systemctl --user is-active --quiet "$installation-cl" || systemctl --user is-active --quiet "$installation-el"; then
+                status="${YELLOW}Partial${NC}"
+            else
+                status="${CYAN}Stopped${NC}"
+            fi
+        else
+            status="${RED}Not Installed${NC}"
+        fi
+        echo -e "  - $installation [$status]"
+    done
+}
+
+# Command implementations (cleaner and more modular)
+
+bb_cmd_help() {
+    # Display figlet banner if available
+    if command -v figlet >/dev/null 2>&1; then
+        echo -e "${PURPLE}"
+        figlet -f slant "BeraBox"
+        echo -e "${NC}"
+        echo -e "${BLUE}Multi-Installation Node Management System${NC}"
+        echo ""
+    fi
+    
+    echo "Usage: $0 <command> [options]                    (global commands)"
+    echo "       $0 <installation> <command> [options]       (installation-specific commands)"
+    echo ""
+    echo -e "${GREEN}Setup Commands:${NC}"
+    echo "  create <chain> <el-client> [name] [--port-base <port>]"
+    echo "                                       Create new installation"
+    echo "  list                                 List all installations with status"
+    echo "  debug                                Generate debug configs with VS Code remote debugging"
+    echo "  help / -h / --help                   Show command help"
+    echo ""
+    echo -e "${GREEN}All Other Commands:${NC}"
+    echo "  [installation] info                  Show installation information"
+                echo "  [installation] build [--no-pull] [--quiet] [clean]  Build binaries (debug with symbols)"
+    echo "  [installation] init                  Initialize network parameters"
+    echo "  [installation] install               Install systemd services (no sudo required)"
+    echo "  [installation] start [cl|el]         Start services"
+    echo "  [installation] stop [cl|el]          Stop services"
+    echo "  [installation] restart [cl|el]       Restart services"
+    echo "  [installation] uninstall             Remove systemd services (preserves data)"
+    echo "  [installation] autostart             Enable autostart on system boot (requires sudo)"
+    echo "  [installation] autostop              Disable autostart on system boot"
+    echo "  [installation] reset [--force]       Reset installation(s) - stop services and wipe data"
+    echo ""
+    echo "  <installation> version set --cl <ver> --el <ver>  Set component versions"
+    echo "  <installation> version show-tags     Show available Git tags and branches"
+    echo "  <installation> status [cl|el]        Show service status"
+    echo "  <installation> logs [cl|el]          Follow service logs with multitail"
+    echo "  <installation> attach                Attach geth console to running EL (works with geth or reth via IPC)"
+    echo "  <installation> remove                Remove installation completely"
+}
+
+# info commands 
+bb_load_installation_config() {
+    local installation="$1"
+    local -n config_ref="$2"
+    
+    local toml_file=$(bb_get_installation_toml "$installation")
+    
+    config_ref[name]="$installation"
+    config_ref[chain]=$(bb_parse_toml_value "$toml_file" "chain" || echo "Unknown")
+    config_ref[el_client]=$(bb_parse_toml_value "$toml_file" "el_client" || echo "Unknown")
+    config_ref[created]=$(bb_parse_toml_value "$toml_file" "created" || echo "Unknown")
+    config_ref[beacon_kit_version]=$(bb_parse_toml_value "$toml_file" "beacon_kit" || echo "Unknown")
+    config_ref[base_port]=$(bb_parse_toml_value "$toml_file" "base_port" || echo "Unknown")
+    
+    # Set EL client version based on client type
+    if [[ "${config_ref[el_client]}" == "reth" ]]; then
+        config_ref[el_version]=$(bb_parse_toml_value "$toml_file" "bera_reth" || echo "Unknown")
+    else
+        config_ref[el_version]=$(bb_parse_toml_value "$toml_file" "bera_geth" || echo "Unknown")
+    fi
+}
+
+bb_get_service_status() {
+    local installation="$1"
+    local component="$2"
+    
+    # Delegate to systemd script for status checking
+    local status_output=$("${BB_CONFIG[scripts_dir]}/systemd-manage.sh" status "$installation" "$component" 2>/dev/null || echo "Not Installed")
+    
+    # Parse the status output to return a simple status
+    case "$status_output" in
+        *"active (running)"*) echo "Running" ;;
+        *"inactive (dead)"*) echo "Stopped" ;;
+        *"failed"*) echo "Failed" ;;
+        *"activating"*) echo "Starting" ;;
+        *"deactivating"*) echo "Stopping" ;;
+        *"Not Installed"*) echo "Not Installed" ;;
+        *"not-found"*) echo "Not Installed" ;;
+        *) echo "Unknown" ;;
+    esac
+}
+
+bb_cmd_info_all() {
+    bb_iterate_all_installations_with_errors "info" "bb_cmd_info_single" "$@"
+}
+
+# Single installation info display (used by iterator)
+bb_cmd_info_single() {
+    local installation="$1"
+    shift
+    
+    echo -e "${PURPLE}━━━ $installation ━━━${NC}"
+    
+    # Show info for this installation without header
+    declare -A config
+    if bb_load_installation_config "$installation" config; then
+        # Basic Information (condensed)
+        echo -e "${GREEN}Basic:${NC} ${config[chain]} + ${config[el_client]} (created: ${config[created]})"
+        echo -e "${GREEN}Versions:${NC} beacon-kit=${config[beacon_kit_version]}, bera-${config[el_client]}=${config[el_version]}"
+        
+        # Service Status (condensed)
+        local cl_status=$(bb_get_service_status "$installation" "cl")
+        local el_status=$(bb_get_service_status "$installation" "el")
+        echo -e "${GREEN}Services:${NC} CL=$cl_status, EL=$el_status"
+        
+        local max_port=$((config[base_port] + 19))
+        local cl_rpc_port=$((config[base_port] + 0))
+        local el_rpc_port=$((config[base_port] + 10))
+        local el_ws_port=$((config[base_port] + 15))
+        
+        echo -e "${GREEN}Ports:${NC} ${config[base_port]}-$max_port (CL RPC: http://127.0.0.1:$cl_rpc_port, EL RPC: http://127.0.0.1:$el_rpc_port, EL WS: ws://127.0.0.1:$el_ws_port)"
+        echo ""
+        return 0
+    else
+        log_error "✗ $installation: failed to load configuration"
+        echo ""
+        return 1
+    fi
+}
+
+# Build command implementation (delegates to original build script)
+bb_cmd_build() {
+    local installation="$1"
+    shift
+    
+    local no_pull_flag=""
+    local is_clean=false
+    local quiet_flag=""
+    
+    # Parse build arguments
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            "clean")
+                is_clean=true
+                shift
+                ;;
+            "--no-pull")
+                no_pull_flag="--no-pull"
+                shift
+                ;;
+            "--quiet")
+                quiet_flag="--quiet"
+                shift
+                ;;
+            *)
+                log_error "Unknown build option: $1"
+                return 1
+                ;;
+        esac
+    done
+    
+    if [[ "$is_clean" == "true" ]]; then
+        # Delegate to original build script with clean
+        if ! bb_validate_installation "$installation"; then
+            return 1
+        fi
+        # Use original bb functionality for now - this ensures compatibility
+        "${BB_CONFIG[scripts_dir]}/clean-build.sh" "$installation"
+    else
+        log_info "Building debug binaries for $installation"
+        
+        if ! bb_validate_installation "$installation"; then
+            return 1
+        fi
+        
+        local config_file=$(bb_get_installation_toml "$installation")
+        local el_client=$(bb_parse_toml_value "$config_file" "el_client" || echo "")
+        
+        if [[ -z "$el_client" ]]; then
+            log_error "Could not determine EL client for $installation"
+            return 1
+        fi
+        
+        # Build command arguments
+        local build_args=(
+            --installation "$installation"
+            --components "beacon-kit,bera-$el_client"
+        )
+        
+        if [[ -n "$no_pull_flag" ]]; then
+            build_args+=("$no_pull_flag")
+        fi
+        
+        if [[ -n "$quiet_flag" ]]; then
+            build_args+=("$quiet_flag")
+        fi
+        
+        
+        "${BB_CONFIG[scripts_dir]}/build.sh" "${build_args[@]}"
+    fi
+}
+
+# Init command implementation (delegates to original init script)
+bb_cmd_init() {
+    local installation="$1"
+    
+    if ! bb_validate_installation "$installation"; then
+        return 1
+    fi
+    
+    "${BB_CONFIG[scripts_dir]}/init.sh" --installation "$installation"
+}
+
+# Global init command (for all installations)
+bb_cmd_init_all() {
+    bb_iterate_all_installations_with_errors "init" "bb_cmd_init" "$@"
+}
+
+# Service management commands (delegate to systemd-manage.sh)
+bb_cmd_systemd() {
+    local command="$1"
+    local installation="$2"
+    local component="${3:-}"
+    
+    log_step "Service $command for $installation${component:+ ($component)}"
+    
+    if ! bb_validate_installation "$installation"; then
+        return 1
+    fi
+    
+    # Check ownership for systemd operations (except logs which can be viewed by anyone)
+    if [[ "$command" != "logs" ]] && ! bb_check_installation_ownership "$installation"; then
+        local owner=$(bb_get_installation_owner "$installation")
+        local current_user=$(whoami)
+        log_error "Cannot perform '$command' operation on installation '$installation'"
+        log_error "Installation is owned by user '$owner', but you are logged in as '$current_user'"
+        log_error "Only the owner can perform systemd operations (start, stop, install, etc.)"
+        log_error "You can still view logs with: $0 $installation logs"
+        return 1
+    fi
+    
+    "${BB_CONFIG[scripts_dir]}/systemd-manage.sh" "$command" "$installation" "$component"
+}
+
+# Global build command (for all installations)
+bb_cmd_build_all() {
+    bb_iterate_all_installations_with_errors "build" "bb_cmd_build" "$@"
+}
+
+# Autostart management command (enables autostart)
+bb_cmd_autostart() {
+    local installation="$1"
+    
+    if ! bb_validate_installation "$installation"; then
+        return 1
+    fi
+    
+    # Check ownership for autostart operations
+    if ! bb_check_installation_ownership "$installation"; then
+        local owner=$(bb_get_installation_owner "$installation")
+        local current_user=$(whoami)
+        log_error "Cannot enable autostart for installation '$installation'"
+        log_error "Installation is owned by user '$owner', but you are logged in as '$current_user'"
+        log_error "Only the owner can modify autostart settings"
+        return 1
+    fi
+    
+    log_info "Enabling autostart for installation '$installation'"
+    log_step "Enabling auto-start for $installation..."
+    if "${BB_CONFIG[scripts_dir]}/systemd-manage.sh" autostart "enable" "$installation"; then
+        log_info "✓ Auto-start enabled for $installation"
+        log_info "Services will start automatically on system boot"
+    else
+        log_error "Failed to enable services. Run '$0 $installation install' first."
+        return 1
+    fi
+}
+
+# Autostart management command (disables autostart)
+bb_cmd_autostop() {
+    local installation="$1"
+    
+    if ! bb_validate_installation "$installation"; then
+        return 1
+    fi
+    
+    # Check ownership for autostop operations
+    if ! bb_check_installation_ownership "$installation"; then
+        local owner=$(bb_get_installation_owner "$installation")
+        local current_user=$(whoami)
+        log_error "Cannot disable autostart for installation '$installation'"
+        log_error "Installation is owned by user '$owner', but you are logged in as '$current_user'"
+        log_error "Only the owner can modify autostart settings"
+        return 1
+    fi
+    
+    log_info "Disabling autostart for installation '$installation'"
+    log_step "Disabling auto-start for $installation..."
+    if "${BB_CONFIG[scripts_dir]}/systemd-manage.sh" autostart "disable" "$installation"; then
+        log_info "✓ Auto-start disabled for $installation"
+        log_info "Note: User lingering remains enabled (affects all user services)"
+    else
+        log_error "Failed to disable auto-start for $installation"
+        return 1
+    fi
+}
+
+# Wrapper functions for service commands to work with iterator
+bb_cmd_start_wrapper() {
+    local installation="$1"
+    bb_cmd_systemd "start" "$installation"
+}
+
+bb_cmd_stop_wrapper() {
+    local installation="$1"
+    bb_cmd_systemd "stop" "$installation"
+}
+
+bb_cmd_restart_wrapper() {
+    local installation="$1"
+    bb_cmd_systemd "restart" "$installation"
+}
+
+bb_cmd_install_wrapper() {
+    local installation="$1"
+    BB_CONFIG_INSTALLATIONS_DIR="${BB_CONFIG[installations_dir]}" "${BB_CONFIG[scripts_dir]}/install.sh" --installation "$installation"
+}
+
+bb_cmd_uninstall_wrapper() {
+    local installation="$1"
+    bb_cmd_systemd "uninstall" "$installation"
+}
+
+bb_cmd_start_all() {
+    bb_iterate_all_installations_with_errors "start" "bb_cmd_start_wrapper"
+}
+
+bb_cmd_stop_all() {
+    bb_iterate_all_installations_with_errors "stop" "bb_cmd_stop_wrapper"
+}
+
+bb_cmd_restart_all() {
+    bb_iterate_all_installations_with_errors "restart" "bb_cmd_restart_wrapper"
+}
+
+# Use the improved iterator from common.sh instead of duplicating functionality
+
+bb_cmd_install_all() {
+    bb_iterate_all_installations_with_errors "install" "bb_cmd_install_wrapper" "$@"
+}
+
+bb_cmd_uninstall_all() {
+    bb_iterate_all_installations_with_errors "uninstall" "bb_cmd_uninstall_wrapper" "$@"
+}
+
+bb_cmd_autostart_all() {
+    bb_iterate_all_installations_with_errors "autostart" "bb_cmd_autostart" "$@"
+}
+
+bb_cmd_autostop_all() {
+    bb_iterate_all_installations_with_errors "autostop" "bb_cmd_autostop" "$@"
+}
+
+bb_cmd_debug_all() {
+    log_operation "Generating debug configurations for all installations..."
+    
+    if [[ ! -d "${BB_CONFIG[installations_dir]}" ]]; then
+        log_warn "No installations directory found"
+        echo "Create an installation with: $0 create <chain> <el-client>"
+        return 1
+    fi
+    
+    if "${BB_CONFIG[scripts_dir]}/debug.sh"; then
+        log_result "✓ Debug configurations generated for all installations"
+    else
+        log_error "Failed to generate debug configurations"
+        return 1
+    fi
+}
+
+# Attach command - Connect geth console to installation's EL
+bb_cmd_attach() {
+    local installation="$1"
+    
+    if ! bb_validate_installation "$installation"; then
+        return 1
+    fi
+    
+    local installation_dir=$(bb_get_installation_dir "$installation")
+    local config_file="$installation_dir/installation.toml"
+    
+    # Get EL client type
+    local el_client=$(bb_parse_toml_value "$config_file" "el_client" || echo "unknown")
+    
+    # Determine IPC path based on client type
+    local ipc_path
+    case "$el_client" in
+        "reth")
+            ipc_path="$installation_dir/runtime/admin.ipc"
+            ;;
+        "geth")
+            ipc_path="$installation_dir/runtime/admin.ipc"
+            ;;
+        *)
+            log_error "Unknown EL client type: $el_client"
+            return 1
+            ;;
+    esac
+    
+    # Check if IPC file exists (indicates EL is running)
+    if [[ ! -S "$ipc_path" ]]; then
+        log_error "EL IPC socket not found: $ipc_path"
+        log_info "Is the EL service running? Check with: $0 $installation status el"
+        return 1
+    fi
+    
+    # Find geth binary (any geth can attach to any EL)
+    local geth_binary=""
+    
+    # First, try to find geth in installations
+    log_debug "Searching for geth binary in installations..."
+    for inst_dir in "${BB_CONFIG[installations_dir]}"/*; do
+        if [[ -d "$inst_dir" && -f "$inst_dir/src/bera-geth/geth-debug" ]]; then
+            geth_binary="$inst_dir/src/bera-geth/geth-debug"
+            log_debug "Found geth-debug in installation: $inst_dir"
+            break
+        elif [[ -d "$inst_dir" && -f "$inst_dir/src/bera-geth/geth" ]]; then
+            geth_binary="$inst_dir/src/bera-geth/geth"
+            log_debug "Found geth in installation: $inst_dir"
+            break
+        fi
+    done
+    
+    # Fallback to system PATH
+    if [[ -z "$geth_binary" ]] && command -v geth >/dev/null 2>&1; then
+        geth_binary="geth"
+        log_debug "Using system geth from PATH"
+    fi
+    
+    # Handle case where no geth is available
+    if [[ -z "$geth_binary" ]]; then
+        log_error "No geth binary found for IPC attachment"
+        echo ""
+        echo "💡 Build geth in any installation to enable EL attachment:"
+        echo "   $0 create testnet geth && $0 \$(whoami)-testnet-geth build"
+        echo "   # Or if you have a geth installation:"
+        echo "   $0 \$(whoami)-<existing>-geth build"
+        return 1
+    fi
+    
+    log_info "Attaching to $installation EL ($el_client) using: $(basename "$geth_binary")"
+    log_info "IPC path: $ipc_path"
+    echo ""
+    echo "🔗 Starting geth console session..."
+    echo "   Type 'exit' or Ctrl+D to disconnect"
+    echo ""
+    
+    # Execute the attach command
+    "$geth_binary" attach "ipc://$ipc_path"
+}
+
+# Version management commands
+bb_cmd_version() {
+    local installation="$1"
+    local action="${2:-}"
+    shift 2 2>/dev/null || shift $#
+    
+    if ! bb_validate_installation "$installation"; then
+        return 1
+    fi
+    
+    if [[ -z "$action" ]]; then
+        log_error "Version action required"
+        echo "Usage: $0 $installation version <show-tags|set>"
+        echo "  show-tags                     Show available Git tags and branches"
+        echo "  set --cl <ver> --el <ver>     Set component versions"
+        return 1
+    fi
+    
+    case "$action" in
+        "show-tags")
+            BB_CONFIG_INSTALLATIONS_DIR="${BB_CONFIG[installations_dir]}" "${BB_CONFIG[scripts_dir]}/version-manage.sh" show-tags "$installation"
+            ;;
+        "set")
+            BB_CONFIG_INSTALLATIONS_DIR="${BB_CONFIG[installations_dir]}" "${BB_CONFIG[scripts_dir]}/version-manage.sh" set "$installation" "$@"
+            ;;
+        *)
+            log_error "Unknown version action: $action"
+            echo "Available actions: show-tags, set"
+            return 1
+            ;;
+    esac
+}
+
+# Main command dispatch (much cleaner than the original monolithic approach)
+bb_dispatch_command() {
+    local cmd="$1"
+    shift
+    
+    case "$cmd" in
+        "create")
+            BB_CONFIG_INSTALLATIONS_DIR="${BB_CONFIG[installations_dir]}" "${BB_CONFIG[scripts_dir]}/installation-manage.sh" create "$@"
+            ;;
+        "list")
+            BB_CONFIG_INSTALLATIONS_DIR="${BB_CONFIG[installations_dir]}" "${BB_CONFIG[scripts_dir]}/installation-manage.sh" list
+            ;;
+        "build")
+            # Check for global build subcommands
+            if [[ "${1:-}" == "clean" ]]; then
+                # Run the clean script with remaining arguments
+                shift  # Remove 'clean'
+                "${BB_CONFIG[scripts_dir]}/clean-build.sh" "$@"
+            else
+                # No installation specified - build all installations
+                bb_cmd_build_all "$@"
+            fi
+            ;;
+        "init")
+            # Global init - initialize all installations
+            bb_cmd_init_all "$@"
+            ;;
+        "help"|"-h"|"--help")
+            bb_cmd_help "$@"
+            ;;
+        "info")
+            if [[ $# -eq 0 ]]; then
+                # Global info - show all installations
+                bb_cmd_info_all
+            else
+                # Specific installation info
+                local installation="$1"
+                BB_CONFIG_INSTALLATIONS_DIR="${BB_CONFIG[installations_dir]}" "${BB_CONFIG[scripts_dir]}/installation-manage.sh" info "$installation"
+            fi
+            ;;
+        "reset")
+            if [[ $# -eq 0 ]]; then
+                # Global reset - reset ALL installations
+                BB_CONFIG_INSTALLATIONS_DIR="${BB_CONFIG[installations_dir]}" "${BB_CONFIG[scripts_dir]}/installation-manage.sh" reset-all "$@"
+            else
+                # Specific installation reset
+                local installation="$1"
+                shift
+                BB_CONFIG_INSTALLATIONS_DIR="${BB_CONFIG[installations_dir]}" "${BB_CONFIG[scripts_dir]}/installation-manage.sh" reset "$installation" "$@"
+            fi
+            ;;
+        "start")
+            # Global start - start all installations
+            bb_cmd_start_all "$@"
+            ;;
+        "stop")
+            # Global stop - stop all installations
+            bb_cmd_stop_all "$@"
+            ;;
+        "restart")
+            # Global restart - restart all installations
+            bb_cmd_restart_all "$@"
+            ;;
+        "install")
+            # Global install - install services for all installations
+            bb_cmd_install_all "$@"
+            ;;
+        "uninstall")
+            # Global uninstall - uninstall services for all installations
+            bb_cmd_uninstall_all "$@"
+            ;;
+        "autostart")
+            # Global autostart - enable autostart for all installations
+            bb_cmd_autostart_all "$@"
+            ;;
+        "autostop")
+            # Global autostop - disable autostart for all installations
+            bb_cmd_autostop_all "$@"
+            ;;
+        "debug")
+            # Global debug - generate debug configs for all installations
+            bb_cmd_debug_all "$@"
+            ;;
+        *)
+            # Check if it's an installation name followed by a command
+            if bb_installation_exists "$cmd"; then
+                local installation="$cmd"
+                local subcmd="${1:-}"
+                if [[ -z "$subcmd" ]]; then
+                    log_error "No command specified for installation '$installation'"
+                    bb_show_available_commands_for_installation
+                    return 1
+                fi
+                shift
+                bb_dispatch_installation_command "$installation" "$subcmd" "$@"
+            else
+                log_error "Unknown command or installation: $cmd"
+                bb_show_available_installations
+                echo ""
+                echo "Use '$0 help' to see available commands"
+                return 1
+            fi
+            ;;
+    esac
+}
+
+bb_show_available_commands_for_installation() {
+    echo "Available installation commands:"
+    echo "  info, build, init, version, install, start, status, logs,"
+    echo "  stop, restart, reset, remove, uninstall, autostart, autostop, attach"
+}
+
+bb_dispatch_installation_command() {
+    local installation="$1"
+    local subcmd="$2"
+    shift 2
+    
+    if ! bb_validate_installation "$installation"; then
+        return 1
+    fi
+    
+    case "$subcmd" in
+        "info")
+            BB_CONFIG_INSTALLATIONS_DIR="${BB_CONFIG[installations_dir]}" "${BB_CONFIG[scripts_dir]}/installation-manage.sh" info "$installation"
+            ;;
+        "build")
+            bb_cmd_build "$installation" "$@"
+            ;;
+        "init")
+            bb_cmd_init "$installation"
+            ;;
+        "install")
+            # Check ownership for install operations
+            if ! bb_check_installation_ownership "$installation"; then
+                local owner=$(bb_get_installation_owner "$installation")
+                local current_user=$(whoami)
+                log_error "Cannot install services for installation '$installation'"
+                log_error "Installation is owned by user '$owner', but you are logged in as '$current_user'"
+                log_error "Only the owner can install systemd services"
+                return 1
+            fi
+            BB_CONFIG_INSTALLATIONS_DIR="${BB_CONFIG[installations_dir]}" "${BB_CONFIG[scripts_dir]}/install.sh" --installation "$installation"
+            ;;
+        "uninstall")
+            bb_cmd_systemd "uninstall" "$installation"
+            ;;
+        "start")
+            bb_cmd_systemd "start" "$installation" "$@"
+            ;;
+        "stop")
+            bb_cmd_systemd "stop" "$installation" "$@"
+            ;;
+        "restart")
+            bb_cmd_systemd "restart" "$installation" "$@"
+            ;;
+        "status")
+            bb_cmd_systemd "status" "$installation" "$@"
+            ;;
+        "logs")
+            bb_cmd_systemd "logs" "$installation" "$@"
+            ;;
+        "attach")
+            bb_cmd_attach "$installation"
+            ;;
+        "remove")
+            # Check ownership for remove operations
+            if ! bb_check_installation_ownership "$installation"; then
+                local owner=$(bb_get_installation_owner "$installation")
+                local current_user=$(whoami)
+                log_error "Cannot remove installation '$installation'"
+                log_error "Installation is owned by user '$owner', but you are logged in as '$current_user'"
+                log_error "Only the owner can remove installations"
+                return 1
+            fi
+            BB_CONFIG_INSTALLATIONS_DIR="${BB_CONFIG[installations_dir]}" "${BB_CONFIG[scripts_dir]}/installation-manage.sh" remove "$installation"
+            ;;
+        "reset")
+            # Check ownership for reset operations
+            if ! bb_check_installation_ownership "$installation"; then
+                local owner=$(bb_get_installation_owner "$installation")
+                local current_user=$(whoami)
+                log_error "Cannot reset installation '$installation'"
+                log_error "Installation is owned by user '$owner', but you are logged in as '$current_user'"
+                log_error "Only the owner can reset installations"
+                return 1
+            fi
+            BB_CONFIG_INSTALLATIONS_DIR="${BB_CONFIG[installations_dir]}" "${BB_CONFIG[scripts_dir]}/installation-manage.sh" reset "$installation"
+            ;;
+        "autostart")
+            bb_cmd_autostart "$installation"
+            ;;
+        "autostop")
+            bb_cmd_autostop "$installation"
+            ;;
+        "version")
+            bb_cmd_version "$installation" "$@"
+            ;;
+        *)
+            log_error "Unknown command '$subcmd' for installation '$installation'"
+            bb_show_available_commands_for_installation
+            return 1
+            ;;
+    esac
+}
+
+# Main entry point 
+bb_main() {
+    # Enable debug mode if requested
+    if [[ "${1:-}" == "--debug" ]]; then
+        BB_DEBUG="true"
+        shift
+    fi
+    
+    # Handle no arguments
+    if [[ $# -eq 0 ]]; then
+        bb_cmd_help
+        return 0
+    fi
+    
+    local command="$1"
+    shift
+    
+    log_debug "Processing command: $command with $# additional arguments"
+    
+    if ! bb_validate_command "$command"; then
+        log_error "Invalid command: $command"
+        bb_show_available_installations
+        echo ""
+        echo "Use '$0 help' to see available commands"
+        return 1
+    fi
+    
+    bb_dispatch_command "$command" "$@"
+}
+
+# Run main function (error handling managed internally)
+bb_main "$@"
