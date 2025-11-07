@@ -229,8 +229,11 @@ install_services() {
     log_step "Creating runtime directories..."
     # Ensure runtime directories exist before service installation
     # IPC socket will be created at runtime/admin.ipc
-    bb_ensure_directory "$INSTALLATION_DIR/logs/cl"
-    bb_ensure_directory "$INSTALLATION_DIR/logs/el"
+    local installation_toml="$INSTALLATION_DIR/installation.toml"
+    local cl_logs_dir=$(bb_get_installation_path "$installation_toml" "cl_logs_dir")
+    local el_logs_dir=$(bb_get_installation_path "$installation_toml" "el_logs_dir")
+    bb_ensure_directory "$cl_logs_dir"
+    bb_ensure_directory "$el_logs_dir"
     
     local cl_service=$(get_cl_service_name "$installation_name")
     local el_service=$(get_el_service_name "$installation_name")
@@ -488,6 +491,9 @@ logs_services() {
     local installation_name="${1-}"
     local component="${2-}"
     local installation_dir="$BERABOX_ROOT/installations/$installation_name"
+    local installation_toml="$installation_dir/installation.toml"
+    local cl_logs_dir=$(bb_get_installation_path "$installation_toml" "cl_logs_dir")
+    local el_logs_dir=$(bb_get_installation_path "$installation_toml" "el_logs_dir")
 
     # Always reload daemon before operations
     systemctl --user daemon-reload 2>/dev/null || true
@@ -495,7 +501,7 @@ logs_services() {
     case "$component" in
         "cl")
             # Find most recent CL log file
-            local cl_log=$(find "$installation_dir/logs/cl" -name "*.log" -type f 2>/dev/null | sort | tail -1)
+            local cl_log=$(find "$cl_logs_dir" -name "*.log" -type f 2>/dev/null | sort | tail -1)
             if [[ -f "$cl_log" ]]; then
                 log_info "Following CL log file: $cl_log"
                 multitail -cT ansi -t "CL" "$cl_log"
@@ -506,7 +512,7 @@ logs_services() {
             ;;
         "el")
             # Find most recent EL log file
-            local el_log=$(find "$installation_dir/logs/el" -name "*.log" -type f 2>/dev/null | sort | tail -1)
+            local el_log=$(find "$el_logs_dir" -name "*.log" -type f 2>/dev/null | sort | tail -1)
             if [[ -f "$el_log" ]]; then
                 log_info "Following EL log file: $el_log"
                 multitail -cT ansi -t "EL" "$el_log"
@@ -517,8 +523,8 @@ logs_services() {
             ;;
         ""|"both")
             # Find most recent log files from both components
-            local cl_log=$(find "$installation_dir/logs/cl" -name "*.log" -type f 2>/dev/null | sort | tail -1)
-            local el_log=$(find "$installation_dir/logs/el" -name "*.log" -type f 2>/dev/null | sort | tail -1)
+            local cl_log=$(find "$cl_logs_dir" -name "*.log" -type f 2>/dev/null | sort | tail -1)
+            local el_log=$(find "$el_logs_dir" -name "*.log" -type f 2>/dev/null | sort | tail -1)
             
             if [[ -f "$cl_log" ]] && [[ -f "$el_log" ]]; then
                 log_info "Following both CL and EL logs with multitail"
@@ -534,11 +540,11 @@ logs_services() {
             else
                 log_info "No log files found for $installation_name"
                 log_info "Available log directories:"
-                if [[ -d "$installation_dir/logs/cl" ]]; then
-                    log_info "  CL: $installation_dir/logs/cl"
+                if [[ -d "$cl_logs_dir" ]]; then
+                    log_info "  CL: $cl_logs_dir"
                 fi
-                if [[ -d "$installation_dir/logs/el" ]]; then
-                    log_info "  EL: $installation_dir/logs/el"
+                if [[ -d "$el_logs_dir" ]]; then
+                    log_info "  EL: $el_logs_dir"
                 fi
                 log_info ""
                 log_info "Use separate commands to monitor services:"
