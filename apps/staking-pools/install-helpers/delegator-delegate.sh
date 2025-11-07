@@ -1,13 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Delegate funds to a DelegationHandler and grant validator admin role
+# Deploy DelegationHandler (if needed) and delegate funds with validator admin role
 # Run with --help for usage information
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/lib-common.sh"
 
-CLI_HANDLER=""
 CLI_PUBKEY=""
 CLI_CHAIN=""
 CLI_AMOUNT=""
@@ -17,30 +16,39 @@ print_usage() {
   cat <<'USAGE'
 delegator-delegate.sh
 
-Delegates funds to a DelegationHandler and grants the validator admin role.
-This is step 2 for delegators providing capital to validators.
+Deploys a DelegationHandler (if needed) and delegates funds with validator admin role.
+This script combines deployment and delegation into a single workflow.
 
-This script generates THREE commands that must be executed in order:
-1. Send BERA to the handler contract
-2. Call delegate() to mark the funds as delegated
-3. Grant VALIDATOR_ADMIN_ROLE to the validator operator
+This script generates ONE command script that executes all steps in order:
+1. Deploy DelegationHandler (if not already deployed)
+2. Send BERA to the handler contract
+3. Call delegate() to mark the funds as delegated
+4. Grant VALIDATOR_ADMIN_ROLE to the validator operator
 
 Usage:
   delegator-delegate.sh --pubkey 0x... --chain bepolia|mainnet --amount 250000 --validator-admin 0x...
   
 Required arguments:
-  --pubkey 0x...            Validator pubkey (handler will be auto-detected from factory)
+  --pubkey 0x...            Validator pubkey (96 hex characters)
   --chain bepolia|mainnet   Chain to use (required)
   --amount BERA             Amount of BERA to delegate (e.g., 250000)
   --validator-admin 0x...   Address to grant VALIDATOR_ADMIN_ROLE
   
 Output:
-  delegator-delegate-1-send-funds.sh
-  delegator-delegate-2-delegate.sh
-  delegator-delegate-3-grant-role.sh
+  delegator-delegate-command.sh
 
-Execute them in order after reviewing each command.
+Review and execute the generated command script.
 USAGE
+}
+
+validate_pubkey() {
+  local pk="$1"
+  pk=$(echo "$pk" | tr 'A-F' 'a-f')
+  if [[ ! "$pk" =~ ^0x[0-9a-f]{96}$ ]]; then
+    log_error "Invalid pubkey: must be 0x followed by 96 hex characters"
+    exit 1
+  fi
+  echo "$pk"
 }
 
 parse_args() {
@@ -108,6 +116,10 @@ main() {
     exit 1
   fi
   
+  # Validate and normalize pubkey
+  local PUBKEY
+  PUBKEY=$(validate_pubkey "$CLI_PUBKEY")
+  
   # Get network and RPC from chain (no automatic detection for delegator scripts)
   local network="$CLI_CHAIN"
   local rpc_url
@@ -117,7 +129,7 @@ main() {
     exit 1
   fi
   
-  # Auto-detect handler from pubkey
+  # Get factory address from network
   local factory
   factory=$(get_delegation_handler_factory_for_network "$network")
   if [[ -z "$factory" || "$factory" == "0x0000000000000000000000000000000000000000" ]]; then
@@ -125,16 +137,25 @@ main() {
     exit 1
   fi
   
+  # Check if handler already exists
   local HANDLER
-  HANDLER=$(get_delegation_handler "$factory" "$CLI_PUBKEY" "$rpc_url")
+  HANDLER=$(get_delegation_handler "$factory" "$PUBKEY" "$rpc_url")
   
-  if [[ "$HANDLER" == "0x0000000000000000000000000000000000000000" ]]; then
-    log_error "No delegation handler found for pubkey: $CLI_PUBKEY"
-    log_error "Run delegator-deploy-handler.sh first"
-    exit 1
+  # Trim whitespace
+  HANDLER=$(echo "$HANDLER" | xargs)
+  
+  local needs_deployment=false
+  # Check if handler exists: must be non-empty, non-zero address, and valid format
+  if [[ -z "$HANDLER" || \
+        "$HANDLER" == "0x0000000000000000000000000000000000000000" || \
+        ! "$HANDLER" =~ ^0x[0-9a-fA-F]{40}$ ]]; then
+    needs_deployment=true
+    log_info "No DelegationHandler found for this pubkey"
+    log_info "Handler will be deployed as part of the command script"
+  else
+    log_success "DelegationHandler already deployed"
+    log_info "Handler address: $HANDLER"
   fi
-  
-  log_info "DelegationHandler: $HANDLER"
   
   # Validate required arguments
   if [[ -z "$CLI_AMOUNT" ]]; then
@@ -166,80 +187,122 @@ main() {
     CLI_AMOUNT=$(cast from-wei "$amount_wei")
   fi
   
-  log_info "DelegationHandler: $HANDLER"
+  log_info "Network: $network"
+  log_info "Validator pubkey: $PUBKEY"
+  log_info "DelegationHandlerFactory: $factory"
+  if [[ "$needs_deployment" == "false" ]]; then
+    log_info "DelegationHandler: $HANDLER"
+  fi
   log_info "Amount to delegate: $CLI_AMOUNT BERA"
   log_info "Validator admin: $VALIDATOR_ADMIN"
   log_info "RPC URL: $rpc_url"
   echo ""
   
-  # Check handler state
-  check_handler_state "$HANDLER" "$rpc_url"
-  echo ""
+  # If handler exists, check its state
+  if [[ "$needs_deployment" == "false" ]]; then
+    check_handler_state "$HANDLER" "$rpc_url"
+    echo ""
+  fi
   
-  # Generate commands
-  log_info "Generating delegation commands..."
+  # Generate single command script
+  log_info "Generating combined command script..."
   
   # Get wallet arguments (--ledger or --private-key)
   local wallet_args
   wallet_args=$(get_cast_wallet_args)
   
-  # Command 1: Send funds
-  cat > "delegator-delegate-1-send-funds.sh" <<EOF
-#!/usr/bin/env bash
-# Step 1: Send BERA to DelegationHandler
-# Handler: $HANDLER
-# Amount: $CLI_AMOUNT BERA
-# Generated: $(date -u +"%Y-%m-%d %H:%M:%S UTC")
-
-cast send $HANDLER \\
-  --value ${CLI_AMOUNT}ether \\
-  -r $rpc_url $wallet_args
-EOF
-  chmod +x "delegator-delegate-1-send-funds.sh"
-  
-  # Command 2: Delegate
-  cat > "delegator-delegate-2-delegate.sh" <<EOF
-#!/usr/bin/env bash
-# Step 2: Mark funds as delegated
-# Handler: $HANDLER
-# Amount: $amount_wei wei
-# Generated: $(date -u +"%Y-%m-%d %H:%M:%S UTC")
-
-cast send $HANDLER \\
-  'delegate(uint256)' \\
-  "$amount_wei" \\
-  -r $rpc_url $wallet_args
-EOF
-  chmod +x "delegator-delegate-2-delegate.sh"
-  
-  # Command 3: Grant role
+  # Calculate role hash
   local role_hash
   role_hash=$(cast keccak "VALIDATOR_ADMIN_ROLE()")
   
-  cat > "delegator-delegate-3-grant-role.sh" <<EOF
+  # Generate single command script
+  local cmd_file="delegator-delegate-command.sh"
+  
+  cat > "$cmd_file" <<EOF
 #!/usr/bin/env bash
-# Step 3: Grant VALIDATOR_ADMIN_ROLE
-# Handler: $HANDLER
+set -euo pipefail
+
+# Combined deployment and delegation command
+# Validator pubkey: $PUBKEY
+# Amount: $CLI_AMOUNT BERA
 # Validator admin: $VALIDATOR_ADMIN
 # Generated: $(date -u +"%Y-%m-%d %H:%M:%S UTC")
 
-cast send $HANDLER \\
+# Step 1: Deploy DelegationHandler (if needed)
+EOF
+
+  if [[ "$needs_deployment" == "true" ]]; then
+    cat >> "$cmd_file" <<EOF
+echo "Step 1: Deploying DelegationHandler..."
+cast send $factory \\
+  'deployDelegationHandler(bytes)' \\
+  "$PUBKEY" \\
+  -r $rpc_url $wallet_args
+
+echo ""
+echo "Querying handler address..."
+HANDLER=\$(cast call $factory \\
+  'delegationHandlers(bytes)(address)' \\
+  "$PUBKEY" \\
+  -r $rpc_url | xargs)
+
+if [[ -z "\$HANDLER" || "\$HANDLER" == "0x0000000000000000000000000000000000000000" ]]; then
+  echo "Error: Failed to get handler address after deployment"
+  exit 1
+fi
+
+echo "DelegationHandler deployed at: \$HANDLER"
+echo ""
+
+EOF
+  else
+    cat >> "$cmd_file" <<EOF
+HANDLER="$HANDLER"
+echo "Using existing DelegationHandler: \$HANDLER"
+echo ""
+
+EOF
+  fi
+
+  cat >> "$cmd_file" <<EOF
+# Step 2: Send BERA to DelegationHandler
+echo "Step 2: Sending $CLI_AMOUNT BERA to DelegationHandler..."
+cast send \$HANDLER \\
+  --value ${CLI_AMOUNT}ether \\
+  -r $rpc_url $wallet_args
+
+echo ""
+
+# Step 3: Mark funds as delegated
+echo "Step 3: Marking funds as delegated..."
+cast send \$HANDLER \\
+  'delegate(uint256)' \\
+  "$amount_wei" \\
+  -r $rpc_url $wallet_args
+
+echo ""
+
+# Step 4: Grant VALIDATOR_ADMIN_ROLE
+echo "Step 4: Granting VALIDATOR_ADMIN_ROLE to $VALIDATOR_ADMIN..."
+cast send \$HANDLER \\
   'grantRole(bytes32,address)' \\
   "$role_hash" \\
   "$VALIDATOR_ADMIN" \\
   -r $rpc_url $wallet_args
+
+echo ""
+echo "Delegation complete!"
+echo "The validator operator can now create their staking pool:"
+echo "  delegated-create-pool.sh --pubkey $PUBKEY"
 EOF
-  chmod +x "delegator-delegate-3-grant-role.sh"
+
+  chmod +x "$cmd_file"
   
-  log_success "Commands generated successfully"
+  log_success "Command script generated: $cmd_file"
   echo ""
   log_info "Next steps:"
-  echo "  1. Review and execute: ./delegator-delegate-1-send-funds.sh"
-  echo "  2. Review and execute: ./delegator-delegate-2-delegate.sh"
-  echo "  3. Review and execute: ./delegator-delegate-3-grant-role.sh"
-  echo ""
-  echo "After completion, the validator operator can create their staking pool:"
-  echo "  delegated-create-pool.sh --pubkey ${CLI_PUBKEY:-<pubkey>}"
+  echo "  1. Review the command: cat $cmd_file"
+  echo "  2. Execute: ./$cmd_file"
 }
 
 main "$@"
