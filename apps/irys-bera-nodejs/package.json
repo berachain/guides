@@ -12,8 +12,7 @@
     "format": "prettier --write \"src/**/*.{ts,tsx}\"",
     "test": "jest",
     "clean": "rm -rf .turbo && rm -rf node_modules && rm -rf dist",
-    "start": "ts-node src/index.ts",
-    "preinstall": ""
+    "start": "ts-node src/index.ts"
   },
   "keywords": [
     "irys",

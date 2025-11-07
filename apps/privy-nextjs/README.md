@@ -7,7 +7,7 @@ A demonstration NextJS 16 app utilizing Privy for authenications, embedded walle
 ## Requirements
 
 - node `v22.14.0` or greater (or just `nvm install`)
-- pnpm `v10.15.0` or greater
+- npm (comes with node)
 - Privy acocunt with credentials - See [https://dashboard.privy.io](https://dashboard.privy.io)
 
 ## Quick Start
@@ -25,8 +25,8 @@ cp .env.example .env.local;
 ```bash
 # FROM: ./
 
-pnpm install;
-pnpm dev;
+npm install;
+npm run dev;
 
 # [Expected Output]:
 # > next dev
