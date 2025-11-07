@@ -7,6 +7,7 @@ This guide covers setting up monitoring for your Berabox installations using Pro
 Berabox automatically configures Prometheus scraping endpoints and provides Grafana dashboard generation for comprehensive monitoring of all installations.
 
 **Generate monitoring configurations**:
+
 ```bash
 bb debug
 ```
@@ -14,6 +15,7 @@ bb debug
 This generates a `prometheus.yml` in the `debug` directory you can directly install to prometheus. It will then scrape data out of your running processes.
 
 **Example Prometheus setup**:
+
 ```bash
 bb bb-testnet-reth start
 bb debug
@@ -34,6 +36,7 @@ Berabox generates a ready-to-import Grafana dashboard JSON file in the `debug` d
 ## Setting Up Grafana API Access
 
 To let Berabox work its magic, you need to provide API access to your Grafana instance. This allows Berabox to:
+
 - Query existing datasources
 - Create a Prometheus datasource if one doesn't exist
 - Patch the dashboard JSON with the correct datasource UUID
@@ -51,11 +54,12 @@ To let Berabox work its magic, you need to provide API access to your Grafana in
    - Copy the key (Grafana only shows it once—don't let it escape!)
 
 2. **Install the API Key in Your Environment:**
+
    ```bash
    # Add these lines to your ~/.bashrc or ~/.zshrc
    export GRAFANA_API_KEY="your_api_key_here"
    export GRAFANA_URL="http://localhost:3000"
-   
+
    # Reload your shell to apply changes
    source ~/.bashrc
    ```

@@ -20,9 +20,11 @@ export async function ingestClAbsences(
 ): Promise<void> {
   const clClient = new RoundRobinClClient(cfg.clRpcUrls);
   if (cfg.log) {
-    console.log(`CL: Using ${cfg.clRpcUrls.length} RPC endpoint(s): ${cfg.clRpcUrls.join(", ")}`);
+    console.log(
+      `CL: Using ${cfg.clRpcUrls.length} RPC endpoint(s): ${cfg.clRpcUrls.join(", ")}`,
+    );
   }
-  
+
   const latest = await clClient.getLatestHeight();
   const curRes = await pg.query(
     "SELECT last_processed_height FROM ingest_cursors WHERE module=$1",

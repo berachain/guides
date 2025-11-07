@@ -14,20 +14,20 @@ export interface BeralyzerConfig {
 
 export function loadConfig(): BeralyzerConfig {
   const pgDsn = process.env.PG_DSN || "";
-  
+
   // Support semicolon or comma-separated URLs for load balancing
   const elRpcUrl = process.env.EL_ETHRPC_URL || "";
   const elRpcUrls = elRpcUrl
     .split(/[,;]/)
     .map((url) => url.trim())
     .filter((url) => url.length > 0);
-  
+
   const clRpcUrl = process.env.CL_ETHRPC_URL || "";
   const clRpcUrls = clRpcUrl
     .split(/[,;]/)
     .map((url) => url.trim())
     .filter((url) => url.length > 0);
-  
+
   if (!pgDsn || elRpcUrls.length === 0 || clRpcUrls.length === 0) {
     throw new Error(
       "Missing required env: PG_DSN, EL_ETHRPC_URL (comma-separated for load balancing), CL_ETHRPC_URL (comma-separated for load balancing)",
@@ -38,7 +38,10 @@ export function loadConfig(): BeralyzerConfig {
   const elFetch = parseInt(process.env.BERALYZER_CONCURRENCY_EL || "24", 10);
   const trace = parseInt(process.env.BERALYZER_CONCURRENCY_TRACE || "24", 10);
   // Receipt fetching gets 2x (double) the workers of transaction fetching
-  const receipt = parseInt(process.env.BERALYZER_CONCURRENCY_RECEIPT || String(trace * 2), 10);
+  const receipt = parseInt(
+    process.env.BERALYZER_CONCURRENCY_RECEIPT || String(trace * 2),
+    10,
+  );
   const blockBatchSize = parseInt(
     process.env.BERALYZER_BLOCK_BATCH_SIZE || "512",
     10,

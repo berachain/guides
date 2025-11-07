@@ -23,7 +23,7 @@ wget https://cdimage.debian.org/cdimage/release/current/arm64/iso-dvd/debian-12.
 2. **Choose "Virtualize"** (for ARM64 performance)
 3. **Select "Other"** as operating system
 4. **Configure VM:**
-   - Memory: 8192 MB (8GB) 
+   - Memory: 8192 MB (8GB)
    - CPU Cores: 4
    - Storage: 1TB recommended (it is lazy-allocated)
 5. **Configure Shared Folders:**
@@ -40,7 +40,7 @@ wget https://cdimage.debian.org/cdimage/release/current/arm64/iso-dvd/debian-12.
 Set up access to your shared berabox folder:
 
 ```bash
-su 
+su
 apt install sudo
 echo "$LOGNAME ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/$LOGNAME
 echo "share /mnt/ virtiofs defaults 0 0" | sudo tee -a /etc/fstab
@@ -51,6 +51,7 @@ mount /mnt/
 ### 5. Provision Development Dependencies
 
 Log back in to enable your sudo access, then:
+
 ```bash
 sudo /mnt/berabox/scripts/provision-debian.sh
 ```
@@ -58,6 +59,7 @@ sudo /mnt/berabox/scripts/provision-debian.sh
 ### 6. Set Up Development Environment & Verify Installation
 
 Log out then back in to reload your working environment and paths, then:
+
 ```bash
 ln -sf /mnt/berabox
 cd berabox

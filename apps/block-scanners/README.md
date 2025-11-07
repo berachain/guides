@@ -30,8 +30,9 @@ All scripts use the consolidated configuration from `../config.js` which support
 - Configurable RPC endpoints (execution and consensus layers)
 
 You can override default settings by setting environment variables:
+
 - `MAINNET_EL_URL` - Mainnet execution layer RPC endpoint
-- `MAINNET_CL_URL` - Mainnet consensus layer RPC endpoint  
+- `MAINNET_CL_URL` - Mainnet consensus layer RPC endpoint
 - `BEPOLIA_EL_URL` - Bepolia execution layer RPC endpoint
 - `BEPOLIA_CL_URL` - Bepolia consensus layer RPC endpoint
 - `VALIDATOR_DB_PATH` - Path to validator database for name lookups (see `cometbft-decoder`)
@@ -174,21 +175,25 @@ The validator database is expected at `../cometbft-decoder/validators_correlated
 ## Examples
 
 Analyze the last 1000 blocks on mainnet:
+
 ```bash
 node analyze-block-delays.js --blocks 1000 --chain mainnet
 ```
 
 Check validator voting power distribution:
+
 ```bash
 node analyze-voting-power.js -b 5000 -d
 ```
 
 Find when a specific validator last proposed a block:
+
 ```bash
 node scan-proposer-activity.js -p 0xYOUR_VALIDATOR_ADDRESS -c mainnet
 ```
 
 Analyze block filling patterns by a specific proposer:
+
 ```bash
 node analyze-block-filling.js -b 2000 -n "Validator Name"
 ```

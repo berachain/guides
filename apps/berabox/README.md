@@ -18,7 +18,7 @@ Multi-user, multi-installation, debug-first node management for Beacon-Kit + Ber
 ├── installations/             # User-prefixed installations
 │   ├── bb-testnet-geth/       # Automatic user prefix (bb = username)
 │   │   ├── data/cl|el/        # Separate CL/EL data & config
-│   │   ├── logs/cl|el/        # Separate CL/EL logs  
+│   │   ├── logs/cl|el/        # Separate CL/EL logs
 │   │   ├── systemd/           # Generated user service files
 │   │   ├── runtime/           # Runtime files
 │   │   │   └── ipc/           # IPC sockets (geth.ipc, reth.ipc)
@@ -66,7 +66,7 @@ bb bb-testnet-reth version set --cl v1.4.0-rc1 --el v1.20.0-rc5
 bb build
 bb init
 bb install
-bb start 
+bb start
 ```
 
 ## Commands
@@ -74,7 +74,8 @@ bb start
 ### Setup Commands
 
 **`create <chain> <el-client> [name] [--port-base <port>]`** - Create a new installation
-- `chain`: `mainnet` or `testnet`  
+
+- `chain`: `mainnet` or `testnet`
 - `el-client`: `reth` or `geth`
 - `name`: Optional custom name (defaults to `{chain}-{el-client}`, gets user prefix)
 
@@ -91,6 +92,7 @@ bb start
 Displays detailed information about an installation including versions, service status, port allocations, validator keys (if CL is initialized), and the execution layer enode (if EL is running). The validator keys include the CometBFT validator address and public key along with the Ethereum/Beacon pubkey used for block proposals. The enode is retrieved directly from the running execution layer via IPC and can be shared for P2P peering.
 
 **`[installation] build [--no-pull] [--quiet] [--release] [clean]`** - Build binaries
+
 - `--no-pull`: Skip git pull before switching branches (default: always pull)
 - `--release`: Build optimized release binaries instead of debug binaries
 - `--quiet`: Silence compiler output while keeping operational logging
@@ -113,7 +115,8 @@ Displays detailed information about an installation including versions, service 
 **`[installation] autostop`** - Disable autostart on system boot
 
 **`[installation] reset [--force]`** - Reset installation(s) - stop services and wipe data
-- `bb reset` - Reset ALL installations  
+
+- `bb reset` - Reset ALL installations
 - `bb <installation> reset` - Reset specific installation
 
 **`<installation> version set --cl <version> --el <version>`** - Set component versions
@@ -123,19 +126,21 @@ Displays detailed information about an installation including versions, service 
 **`<installation> status [cl|el]`** - Show service status
 
 **`<installation> logs [cl|el]`** - Follow service logs with multitail
+
 - Exit: Press `Ctrl+C`, Switch windows: `<Tab>`, Scroll: arrow keys, Search: `/`, Pause: `b`, Help: `h`
 
 **`<installation> attach`** - Attach geth console to running EL (works with geth or reth via IPC)
+
 - Requires a geth installation to provide the console used for attachment
 
 **`<installation> remove`** - Remove installation completely
 
 ## Configuration
 
-
 ### Multi-User Port Allocation
 
 **Automatic user-scoped allocation** prevents conflicts between users:
+
 - Each user gets 200-port range: `20000 + (user_id % 200) * 200`
 - Each installation gets 20 sequential ports within user range (allows 10 installations per user)
 
@@ -157,8 +162,8 @@ Use `bb info` for all installations or `bb <installation> info` for specific ins
 
 **Automatic Port Conflict Avoidance**: BeraBox automatically detects port conflicts with existing installations and system services. When creating a new installation, if the requested port base conflicts with existing ports, BeraBox automatically bumps the port base by 20 until it finds a clear range. This ensures installations never have port conflicts and can be created seamlessly.
 
-
 ### `installation.toml`
+
 Each installation has an `installation.toml` file that contains all configuration including ports, paths, and component versions. Noteworthy things in there:
 
 ```
@@ -188,13 +193,12 @@ Berabox is designed debug-first with full VS Code integration and automatic conf
 
 **Debug builds include full symbols**: Go (`-gcflags="all=-N"`), Rust (unoptimized debug). Use `--release` flag for optimized production builds without debug symbols.
 
-
-
 ### VS Code/Cursor Debugging
 
 Berabox provides comprehensive VS Code/Cursor debugging with remote debugging capabilities, process attachment via PID selection, and an integrated workspace that includes all source code and installations.
 
 **Generate debug workspace for all installations**:
+
 ```bash
 bb debug
 code bb-berabox.code-workspace
@@ -202,14 +206,17 @@ cursor bb-berabox.code-workspace
 ```
 
 **Debug configurations are pre-configured for**:
+
 - **Process Attachment**: Attach debugger to running CL/EL processes via PID selection
 - **Launch Debugging**: Start processes directly in debug mode with wait-for-debugger
 
 **Generated debug files**:
+
 - `bb-berabox.code-workspace` - Multi-folder workspace with all installations and source code
 - `.vscode/launch.json` - Launch configurations for attaching/launching CL/EL processes
 
 **Debug workflow**:
+
 ```bash
 bb bb-testnet-reth start
 bb debug
@@ -228,6 +235,7 @@ The debug system configures VS Code to attach to running processes using their d
 For comprehensive monitoring setup with Prometheus and Grafana, see [README-monitoring.md](README-monitoring.md).
 
 ### User Service Logs
+
 ```bash
 bb bb-testnet-reth status cl
 bb bb-testnet-reth logs cl
@@ -235,11 +243,12 @@ bb bb-testnet-reth attach
 multitail installations/bb-testnet-reth/logs/*/*.log
 ```
 
-### Geth Console Attachment 
+### Geth Console Attachment
 
-The `attach` command uses a clever cross-client compatibility trick: **any geth binary can attach to any execution layer client** (whether geth or reth) via IPC. 
+The `attach` command uses a clever cross-client compatibility trick: **any geth binary can attach to any execution layer client** (whether geth or reth) via IPC.
 
 **How it works:**
+
 1. Berabox finds any available `geth` binary (from any installation or system PATH)
 2. Uses it to connect via IPC to the target installation's execution layer
 3. Provides full JavaScript console access regardless of the underlying EL client
@@ -247,7 +256,7 @@ The `attach` command uses a clever cross-client compatibility trick: **any geth 
 ```
 # Inside any console session:
 eth.blockNumber               # Current block height
-net.peerCount                # Number of connected peers  
+net.peerCount                # Number of connected peers
 txpool.status                # Transaction pool status
 admin.nodeInfo               # Node information
 ```
@@ -260,4 +269,4 @@ For isolated VM development with UTM on Apple Silicon, see [README-vm-setup.md](
 
 ---
 
-*Built with ❤️ (and debugging symbols) for Berachain*
+_Built with ❤️ (and debugging symbols) for Berachain_
