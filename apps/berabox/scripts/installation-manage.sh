@@ -270,9 +270,12 @@ show_installation_info() {
     echo ""
     
     # Directory information
+    local cl_logs_dir=$(bb_get_installation_path "$config_file" "cl_logs_dir")
+    local el_logs_dir=$(bb_get_installation_path "$config_file" "el_logs_dir")
     printf "%-20s %s\n" "Installation Dir:" "$installation_dir"
     printf "%-20s %s\n" "Data Dir:" "$installation_dir/data"
-    printf "%-20s %s\n" "Logs Dir:" "$installation_dir/logs"
+    printf "%-20s %s\n" "CL Logs Dir:" "$cl_logs_dir"
+    printf "%-20s %s\n" "EL Logs Dir:" "$el_logs_dir"
     echo ""
     
     # Port information
