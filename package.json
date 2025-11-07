@@ -29,7 +29,7 @@
     "@typescript-eslint/eslint-plugin": "^8.32.0",
     "@typescript-eslint/parser": "^8.32.0",
     "pino-pretty": "^13.0.0",
-    "prettier": "^3.1.0",
+    "prettier": "^3.6.2",
     "prettier-plugin-solidity": "^1.4.0",
     "tsup": "^8.5.0",
     "turbo": "latest"

@@ -14,8 +14,8 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Database path for validator scoring data (absolute path)
-const VALIDATOR_DB_PATH = path.resolve(__dirname, '..', 'var', 'db', 'validator.sqlite');
+// Database path for validator scoring data - use shared config
+const VALIDATOR_DB_PATH = ConfigHelper.getValidatorDbPath();
 
 // Environment variables with config helper fallbacks
 const EL_ETHRPC_URL = process.env.EL_ETHRPC_URL || ConfigHelper.getRpcUrl('el', 'mainnet');
@@ -45,7 +45,7 @@ const BERACHEF_IFACE = new ethers.Interface([
 
 // Concurrency and performance constants
 const LOG_CHUNK_SIZE = 2000; // Size of each log fetching chunk in blocks
-const BASE_WORKER_COUNT = 12;
+const BASE_WORKER_COUNT = 6; // Reduced from 12 to avoid overwhelming consensus layer API
 const MAX_WORKER_COUNT = HAS_ALTERNATE_RPCS ? BASE_WORKER_COUNT * 2 : BASE_WORKER_COUNT; // Double total when splitting across primary+alternate
 
 /**
@@ -351,10 +351,19 @@ async function withRetry(operation, maxRetries = 3, initialDelay = 1000) {
             return await operation();
         } catch (error) {
             lastError = error;
-            // Only retry network-related errors
-            if (error.message.includes('Fetch failed') || error.message.includes('ETIMEDOUT') || error.message.includes('ECONNRESET')) {
+            const errorMsg = error.message.toLowerCase();
+            // Retry network-related errors including "aborted"
+            const isRetryable = errorMsg.includes('fetch failed') || 
+                              errorMsg.includes('etimedout') || 
+                              errorMsg.includes('econnreset') ||
+                              errorMsg.includes('aborted') ||
+                              errorMsg.includes('network') ||
+                              errorMsg.includes('timeout') ||
+                              errorMsg.includes('econnrefused');
+            
+            if (isRetryable) {
                 if (attempt < maxRetries) {
-                    log(`Attempt ${attempt} failed, retrying in ${delay/1000}s...`);
+                    log(`Attempt ${attempt} failed (${error.message}), retrying in ${delay/1000}s...`);
                     await new Promise(resolve => setTimeout(resolve, delay));
                     delay *= 2; // Exponential backoff
                 }
@@ -969,11 +978,16 @@ async function indexPolEvents(validators, dayRanges) {
         // Worker function that processes a single chunk
         const workerFn = async (chunk, index, provider) => {
             try {
-                const chunkLogs = await provider.getLogs({
-                    ...filter,
-                    fromBlock: chunk.start,
-                    toBlock: chunk.end
-                });
+                // Use retry logic for getLogs calls to handle network errors
+                const chunkLogs = await withRetry(
+                    () => provider.getLogs({
+                        ...filter,
+                        fromBlock: chunk.start,
+                        toBlock: chunk.end
+                    }),
+                    5, // max retries
+                    1000 // initial delay
+                );
                 let processedCount = 0;
                 for (const log of chunkLogs) {
                     const topicPub = (log.topics?.[1] || '').toLowerCase();
@@ -1359,7 +1373,6 @@ async function initializeScoringSchema() {
             stake_scaled_booster_score REAL,
             pol_participation_score REAL,
             total_score REAL,
-            stake REAL,
             is_using_default_cutting_board INTEGER,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
@@ -1502,8 +1515,8 @@ async function writeScoresToDatabase(rankings, startDate, endDate, daysAnalyzed,
                     
                     await executeSQL(
                         `INSERT INTO validator_scores 
-                        (pubkey, proposer_address, name, uptime_score, pol_score, stake_scaled_booster_score, pol_participation_score, total_score, stake, is_using_default_cutting_board)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                        (pubkey, proposer_address, name, uptime_score, pol_score, stake_scaled_booster_score, pol_participation_score, total_score, is_using_default_cutting_board)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
                         [
                             normalizedPubkey,
                             validator.validatorAddress,
@@ -1513,7 +1526,6 @@ async function writeScoresToDatabase(rankings, startDate, endDate, daysAnalyzed,
                             validator.avgStakeScaledBoosterScore.toFixed(2),
                             validator.polParticipationScore.toFixed(2),
                             validator.totalScore.toFixed(2),
-                            validator.stake.toFixed(6),
                             validator.isUsingDefaultCuttingBoard === true ? 1 : (validator.isUsingDefaultCuttingBoard === false ? 0 : null)
                         ]
                     );
@@ -1800,7 +1812,8 @@ Usage:
         
   Options:
     --days=N          Number of days to analyze (default: 45)
-    --end-date=DATE   End date for analysis in YYYY-MM-DD format (default: yesterday)
+    --end-date=DATE  End date for analysis in YYYY-MM-DD format (default: yesterday)
+    --to-date=DATE    Alias for --end-date (for consistency with other scripts)
     --ignore-genesis  Ignore genesis CSV and evaluate ALL current validators from database
     --help, -h        Show this help message
          
@@ -1808,6 +1821,7 @@ Usage:
     node score-validators.js --days=1                         # Quick test: analyze yesterday only
     node score-validators.js --days=7                         # Analyze last 7 days ending yesterday
     node score-validators.js --days=7 --end-date=2025-01-25   # Analyze 7 days ending on Jan 25, 2025
+    node score-validators.js --days=7 --to-date=2025-01-25    # Same as above, using --to-date alias
     node score-validators.js --end-date=2025-01-20            # Analyze 45 days ending on Jan 20, 2025
     node score-validators.js --ignore-genesis                 # Analyze ALL current validators from database
     node score-validators.js                                  # Full analysis: last 45 days (default)
@@ -2055,8 +2069,9 @@ async function collectStakeAndBoost(validators, dayBoundaries) {
         }
     };
     
-    // Process all dates in parallel using pipeline
-    const pipeline = new Pipeline(MAX_WORKER_COUNT, dateWorkerFn, 'Collecting stake/boost');
+    // Process all dates sequentially to avoid overwhelming consensus layer API
+    // Each date worker calls getValidatorVotingPower which can cause socket hang ups if too concurrent
+    const pipeline = new Pipeline(1, dateWorkerFn, 'Collecting stake/boost');
     await pipeline.process(dateWorkItems, null, true);
     
     return { stakeBoostData, totalVotingPowerByDate };
@@ -2092,7 +2107,32 @@ function calculateStatistics(blockResults, stakeBoostData, dayBoundaries, valida
     // Only process the analyzed dates (excluding the boundary date)
     const datesToProcess = sortedDates.slice(0, sortedDates.length - 1);
     
-    // Calculate per-day statistics
+    // Calculate GLOBAL maximums across all days for proper normalization
+    // This ensures the best overall performer gets close to 100%
+    let globalMaxRatio = 0;
+    let globalMaxStakeScaledBoosterReturns = 0;
+    
+    // First pass: find global maximums
+    for (const date of datesToProcess) {
+        const dayRatios = Object.values(stakeBoostData[date] || {}).map(data => data.ratio);
+        const dayMaxRatio = Math.max(...dayRatios, 0);
+        if (dayMaxRatio > globalMaxRatio) {
+            globalMaxRatio = dayMaxRatio;
+        }
+        
+        const dayUsd = global.__DAILY_USD__?.[date] || {};
+        const dayStakeScaledBoosterReturns = validators.map(validator => {
+            const stake = stakeBoostData[date]?.[validator.proposer]?.stake || 0;
+            const boosterValue = dayUsd[validator.proposer]?.boostersUSD || 0;
+            return stake > 0 ? boosterValue / stake : 0;
+        });
+        const dayMaxStakeScaledBoosterReturns = Math.max(...dayStakeScaledBoosterReturns, 0);
+        if (dayMaxStakeScaledBoosterReturns > globalMaxStakeScaledBoosterReturns) {
+            globalMaxStakeScaledBoosterReturns = dayMaxStakeScaledBoosterReturns;
+        }
+    }
+    
+    // Second pass: calculate per-day statistics using global maximums
     for (let i = 0; i < datesToProcess.length; i++) {
         const date = datesToProcess[i];
         const nextDate = sortedDates[i + 1];
@@ -2102,21 +2142,8 @@ function calculateStatistics(blockResults, stakeBoostData, dayBoundaries, valida
         }
         const dayEndBlock = dayBoundaries[nextDate] - 1;
         
-        // Find max POL ratio for this day
-        const dayRatios = Object.values(stakeBoostData[date] || {}).map(data => data.ratio);
-        const maxRatio = Math.max(...dayRatios, 0);
-            
             // Get economic data for this day
             const dayUsd = global.__DAILY_USD__?.[date] || {};
-            
-            // Calculate max stake-scaled booster incentive returns for normalization
-            // IMPORTANT: Consider ALL validators, not just those with economic data
-            const dayStakeScaledBoosterReturns = validators.map(validator => {
-                const stake = stakeBoostData[date]?.[validator.proposer]?.stake || 0;
-                const boosterValue = dayUsd[validator.proposer]?.boostersUSD || 0;
-                return stake > 0 ? boosterValue / stake : 0;
-            });
-            const maxStakeScaledBoosterReturns = Math.max(...dayStakeScaledBoosterReturns, 0);
         
         statistics[date] = {};
         
@@ -2136,13 +2163,13 @@ function calculateStatistics(blockResults, stakeBoostData, dayBoundaries, valida
             const emptyBlockPercentage = calculateEmptyBlockPercentage(dayEmptyBlocks, totalBlocks);
             
             const polRatio = stakeBoostData[date]?.[proposer]?.ratio || 0;
-            const polScore = maxRatio > 0 ? (polRatio / maxRatio) * 100 : 0;
+            const polScore = globalMaxRatio > 0 ? (polRatio / globalMaxRatio) * 100 : 0;
                 
                 // Stake-scaled booster incentive scoring
                 const economicData = dayUsd[proposer] || { vaultsUSD: 0, boostersUSD: 0 };
                 const stake = stakeBoostData[date]?.[proposer]?.stake || 0;
                 const stakeScaledBoosterValue = stake > 0 ? economicData.boostersUSD / stake : 0;
-                const stakeScaledBoosterScore = maxStakeScaledBoosterReturns > 0 ? (stakeScaledBoosterValue / maxStakeScaledBoosterReturns) * 100 : 0;
+                const stakeScaledBoosterScore = globalMaxStakeScaledBoosterReturns > 0 ? (stakeScaledBoosterValue / globalMaxStakeScaledBoosterReturns) * 100 : 0;
             
             statistics[date][proposer] = {
                 totalBlocks,
@@ -2164,12 +2191,12 @@ function calculateStatistics(blockResults, stakeBoostData, dayBoundaries, valida
         for (const validator of validators) {
             if (!statistics[date][validator.proposer]) {
                 const polRatio = stakeBoostData[date]?.[validator.proposer]?.ratio || 0;
-                const polScore = maxRatio > 0 ? (polRatio / maxRatio) * 100 : 0;
+                const polScore = globalMaxRatio > 0 ? (polRatio / globalMaxRatio) * 100 : 0;
                     
                     const economicData = dayUsd[validator.proposer] || { vaultsUSD: 0, boostersUSD: 0 };
                     const stake = stakeBoostData[date]?.[validator.proposer]?.stake || 0;
                     const stakeScaledBoosterValue = stake > 0 ? economicData.boostersUSD / stake : 0;
-                    const stakeScaledBoosterScore = maxStakeScaledBoosterReturns > 0 ? (stakeScaledBoosterValue / maxStakeScaledBoosterReturns) * 100 : 0;
+                    const stakeScaledBoosterScore = globalMaxStakeScaledBoosterReturns > 0 ? (stakeScaledBoosterValue / globalMaxStakeScaledBoosterReturns) * 100 : 0;
                 
                 statistics[date][validator.proposer] = {
                     totalBlocks: 0,
@@ -2536,7 +2563,9 @@ async function main() {
     try {
         // Parse command line arguments
         const daysToAnalyze = parseInt(args.find(arg => arg.startsWith('--days='))?.split('=')[1]) || 45;
-        const endDateArg = args.find(arg => arg.startsWith('--end-date='))?.split('=')[1];
+        // Support both --end-date=DATE and --to-date=DATE formats
+        const endDateArg = args.find(arg => arg.startsWith('--end-date='))?.split('=')[1] ||
+                          args.find(arg => arg.startsWith('--to-date='))?.split('=')[1];
             
         // Analysis mode
         log(`Analyzing ${daysToAnalyze} days of validator performance...`);
