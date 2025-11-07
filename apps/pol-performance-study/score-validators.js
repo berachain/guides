@@ -3,9 +3,19 @@
 import { ethers } from 'ethers';
 import fs from 'fs';
 import os from 'os';
+import { spawn } from 'child_process';
 import { isMainThread } from 'worker_threads';
 import { BlockFetcher, ValidatorFetcher, ValidatorNameDB, ConfigHelper } from '../block-scanners/lib/shared-utils.js';
 import axios from 'axios';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+// Get __dirname equivalent for ES modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Database path for validator scoring data (absolute path)
+const VALIDATOR_DB_PATH = path.resolve(__dirname, '..', 'var', 'db', 'validator.sqlite');
 
 // Environment variables with config helper fallbacks
 const EL_ETHRPC_URL = process.env.EL_ETHRPC_URL || ConfigHelper.getRpcUrl('el', 'mainnet');
@@ -23,12 +33,239 @@ const BLOCKS_PER_DAY = 43200; // Approximate, used for binary search estimates
 const EMPTY_BLOCK_THRESHOLD = 1; // A block is considered empty if it has <= 1 transactions (i.e., 0 or 1)
 const GENESIS_TIMESTAMP = 1737382451; // 2025-01-20 14:14:11 UTC
 const BGT_CONTRACT = '0x656b95E550C07a9ffe548bd4085c72418Ceb1dba';
+const BERACHEF_CONTRACT = '0xdf960E8F3F19C481dDE769edEDD439ea1a63426a';
+const ACTIVATE_EVENT_SIG = '0x09fed3850dff4fef07a5284847da937f94021882ecab1c143fcacd69e5451bd8';
 const KYBER_ROUTE_URL = 'https://gateway.mainnet.berachain.com/proxy/kyberswap/berachain/api/v1/routes';
+
+// BeraChef interface for contract calls
+const BERACHEF_IFACE = new ethers.Interface([
+    'function getActiveRewardAllocation(bytes valPubkey) view returns (tuple(uint64 startBlock, tuple(address receiver, uint96 percentageNumerator)[] weights))',
+    'function getDefaultRewardAllocation() view returns (tuple(uint64 startBlock, tuple(address receiver, uint96 percentageNumerator)[] weights))'
+]);
 
 // Concurrency and performance constants
 const LOG_CHUNK_SIZE = 2000; // Size of each log fetching chunk in blocks
 const BASE_WORKER_COUNT = 12;
 const MAX_WORKER_COUNT = HAS_ALTERNATE_RPCS ? BASE_WORKER_COUNT * 2 : BASE_WORKER_COUNT; // Double total when splitting across primary+alternate
+
+/**
+ * Generic pipeline system that maintains maximum parallelism
+ * Processes work items as workers become available, keeping all workers busy
+ * @template TInput - Input work item type
+ * @template TOutput - Output result type
+ */
+class Pipeline {
+    /**
+     * Creates a new pipeline
+     * @param {number} maxConcurrency - Maximum number of parallel workers
+     * @param {Function} workerFn - Async function that processes a work item
+     * @param {string} description - Description for progress logging
+     */
+    constructor(maxConcurrency, workerFn, description = 'Processing') {
+        this.maxConcurrency = maxConcurrency;
+        this.workerFn = workerFn;
+        this.description = description;
+    }
+    
+    /**
+     * Processes all work items in parallel pipeline with maximum parallelism
+     * All items are mapped upfront and semaphores ensure workers stay busy
+     * @param {Array<TInput>} workItems - Array of work items to process
+     * @param {Function} getProvider - Optional function (item, index) => provider to select provider per item
+     * @param {boolean} showProgress - Whether to show progress bar
+     * @returns {Promise<Array<TOutput>>} Array of results in same order as work items
+     */
+    async process(workItems, getProvider = null, showProgress = true) {
+        const total = workItems.length;
+        const progress = showProgress ? createProgressBar(total, this.description) : null;
+        
+        // Semaphore to control concurrency - ensures max workers busy at all times
+        const semaphore = {
+            count: this.maxConcurrency,
+            waiters: [],
+            async acquire() {
+                if (this.count > 0) {
+                    this.count--;
+                    return;
+                }
+                return new Promise(resolve => this.waiters.push(resolve));
+            },
+            release() {
+                if (this.waiters.length > 0) {
+                    const resolve = this.waiters.shift();
+                    resolve();
+                } else {
+                    this.count++;
+                }
+            }
+        };
+        
+        const results = new Array(total);
+        let completed = 0;
+        
+        // Process all items - semaphores automatically throttle and keep workers busy
+        const promises = workItems.map(async (item, index) => {
+            await semaphore.acquire();
+            try {
+                const provider = getProvider ? getProvider(item, index) : null;
+                const result = await this.workerFn(item, index, provider);
+                results[index] = result;
+                completed++;
+                if (progress) {
+                    progress.update(completed);
+                }
+                return result;
+            } catch (error) {
+                log(`Error processing ${this.description} item ${index + 1}/${total}: ${error.message}`);
+                results[index] = null;
+                completed++;
+                if (progress) {
+                    progress.update(completed);
+                }
+                return null;
+            } finally {
+                semaphore.release();
+            }
+        });
+        
+        // Wait for all to complete
+        await Promise.all(promises);
+        
+        if (progress) {
+            progress.finish();
+        }
+        
+        return results;
+    }
+}
+
+/**
+ * Multi-provider pipeline that splits work across primary and alternate providers
+ * Automatically balances load between providers for maximum throughput
+ */
+class MultiProviderPipeline {
+    /**
+     * Creates a multi-provider pipeline
+     * @param {number} maxConcurrency - Maximum total concurrent workers (split across providers)
+     * @param {Function} workerFn - Async function (item, index, provider) => result
+     * @param {Object} primaryProvider - Primary provider instance
+     * @param {Object} alternateProvider - Alternate provider instance (optional)
+     * @param {string} description - Description for progress logging
+     */
+    constructor(maxConcurrency, workerFn, primaryProvider, alternateProvider = null, description = 'Processing') {
+        this.maxConcurrency = maxConcurrency;
+        this.workerFn = workerFn;
+        this.primaryProvider = primaryProvider;
+        this.alternateProvider = alternateProvider;
+        this.description = description;
+        this.useAlternate = Boolean(alternateProvider);
+        
+        // Split workers between providers
+        if (this.useAlternate) {
+            this.primaryWorkers = Math.floor(maxConcurrency / 2);
+            this.alternateWorkers = maxConcurrency - this.primaryWorkers;
+        } else {
+            this.primaryWorkers = maxConcurrency;
+            this.alternateWorkers = 0;
+        }
+    }
+    
+    /**
+     * Processes all work items with automatic provider selection
+     * @param {Array} workItems - Work items to process
+     * @param {boolean} showProgress - Whether to show progress bar
+     * @returns {Promise<Array>} Results in same order as work items
+     */
+    async process(workItems, showProgress = true) {
+        const total = workItems.length;
+        const progress = showProgress ? createProgressBar(total, this.description) : null;
+        
+        // Separate semaphores for each provider
+        const primarySemaphore = {
+            count: this.primaryWorkers,
+            waiters: [],
+            async acquire() {
+                if (this.count > 0) {
+                    this.count--;
+                    return;
+                }
+                return new Promise(resolve => this.waiters.push(resolve));
+            },
+            release() {
+                if (this.waiters.length > 0) {
+                    const resolve = this.waiters.shift();
+                    resolve();
+                } else {
+                    this.count++;
+                }
+            }
+        };
+        
+        const alternateSemaphore = this.useAlternate ? {
+            count: this.alternateWorkers,
+            waiters: [],
+            async acquire() {
+                if (this.count > 0) {
+                    this.count--;
+                    return;
+                }
+                return new Promise(resolve => this.waiters.push(resolve));
+            },
+            release() {
+                if (this.waiters.length > 0) {
+                    const resolve = this.waiters.shift();
+                    resolve();
+                } else {
+                    this.count++;
+                }
+            }
+        } : null;
+        
+        const results = new Array(total);
+        let completed = 0;
+        
+        // Process item with automatic provider selection
+        const processItem = async (item, index) => {
+            // Round-robin provider selection (alternates between providers)
+            const usePrimary = !this.useAlternate || (index % 2 === 0);
+            const sem = usePrimary ? primarySemaphore : alternateSemaphore;
+            const provider = usePrimary ? this.primaryProvider : this.alternateProvider;
+            
+            await sem.acquire();
+            try {
+                const result = await this.workerFn(item, index, provider);
+                results[index] = result;
+                completed++;
+                if (progress) {
+                    progress.update(completed);
+                }
+                return result;
+            } catch (error) {
+                log(`Error processing ${this.description} item ${index + 1}/${total}: ${error.message}`);
+                results[index] = null;
+                completed++;
+                if (progress) {
+                    progress.update(completed);
+                }
+                return null;
+            } finally {
+                sem.release();
+            }
+        };
+        
+        // Start all items - semaphores will throttle automatically
+        const promises = workItems.map((item, index) => processItem(item, index));
+        
+        // Wait for all to complete
+        await Promise.all(promises);
+        
+        if (progress) {
+            progress.finish();
+        }
+        
+        return results;
+    }
+}
 
 // Event signatures
 const DISTRIBUTED_SIG = 'Distributed(bytes,uint64,address,uint256)';
@@ -364,26 +601,37 @@ async function getValidatorVotingPower(blockHeight) {
 
 /**
 * Gets the BGT boost amount for a validator at a specific block
-* @param {string} validatorPubkey - Validator public key (without 0x prefix)
+* @param {string} validatorPubkey - Validator public key (with or without 0x prefix, will be normalized)
 * @param {number} blockNumber - Block number to query
 * @returns {Promise<number>} BGT boost amount (0 if none or error)
 */
 async function getValidatorBoost(validatorPubkey, blockNumber) {
     try {
+        // Normalize pubkey format - ensure it has 0x prefix for cast call
+        // Cast can handle it either way, but let's be explicit
+        const normalizedPubkey = validatorPubkey && !validatorPubkey.startsWith('0x') 
+            ? '0x' + validatorPubkey 
+            : validatorPubkey;
+        
         const result = await callContractFunction(
             BGT_CONTRACT,
             "boostees(bytes)", // BGT contract function to get boost amount
-            [validatorPubkey],
+            [normalizedPubkey],
             blockNumber
         );
         
-        if (result && result !== '0x') {
+        if (result && result !== '0x' && result !== '0x0') {
             const rawValue = parseInt(result, 16); // Parse hex result
-            return rawValue / 1e18; // Convert wei to BGT (18 decimals)
+            const boostAmount = rawValue / 1e18; // Convert wei to BGT (18 decimals)
+            if (process.env.VERBOSE && boostAmount > 0) {
+                log(`  Validator ${normalizedPubkey.substring(0, 20)}... has boost: ${boostAmount.toFixed(2)} BGT`);
+            }
+            return boostAmount;
         }
         return 0;
     } catch (error) {
-        log(`Error getting boost for validator ${validatorPubkey}: ${error.message}`);
+        // Log error but don't fail silently - this could indicate a real issue
+        log(`⚠️  Error getting boost for validator ${validatorPubkey?.substring(0, 20)}... at block ${blockNumber}: ${error.message}`);
         return 0; // Return 0 on error rather than throwing
     }
 }
@@ -422,10 +670,14 @@ function loadGenesisValidators() {
         const line = lines[i].trim();
         if (line) {
             const [cometAddress, name, pubkey, operatorAddress] = line.split(',');
+            // Ensure pubkey always has 0x prefix - never remove it
+            const normalizedPubkey = pubkey && !pubkey.startsWith('0x') 
+                ? '0x' + pubkey 
+                : pubkey;
             validators.push({
                 name,
                 proposer: cometAddress, // Consensus layer address
-                pubkey: pubkey.startsWith('0x') ? pubkey.substring(2) : pubkey, // Remove 0x prefix if present
+                pubkey: normalizedPubkey,
                 operatorAddress // Execution layer address
             });
         }
@@ -569,8 +821,8 @@ async function scanBlockChunk(chunkStart, chunkEnd, validators, validatorMap, el
 }
 
 /**
-* Scans a range of blocks in parallel using multiple workers
-* Divides the work into chunks and processes them concurrently for better performance
+* Scans a range of blocks in parallel using pipeline system for maximum parallelism
+* Divides the work into chunks and processes them concurrently, keeping all workers busy
 * @param {number} startBlock - Starting block number (inclusive)
 * @param {number} endBlock - Ending block number (inclusive)
 * @param {Array<Object>} validators - Array of validator objects
@@ -579,9 +831,6 @@ async function scanBlockChunk(chunkStart, chunkEnd, validators, validatorMap, el
 * @returns {Promise<Map>} Merged results from all chunks
 */
 async function scanBlocksParallel(startBlock, endBlock, validators, validatorMap, showProgress = true) {
-    const totalChunks = Math.ceil((endBlock - startBlock + 1) / CHUNK_SIZE);
-    const progress = showProgress ? createProgressBar(totalChunks, 'Scanning block chunks') : null;
-    
     // Divide the block range into chunks
     const chunks = [];
     for (let chunkStart = startBlock; chunkStart <= endBlock; chunkStart += CHUNK_SIZE) {
@@ -589,39 +838,32 @@ async function scanBlocksParallel(startBlock, endBlock, validators, validatorMap
         chunks.push({ chunkStart, chunkEnd });
     }
     
-    const results = [];
-    const workerCount = MAX_WORKER_COUNT;
     const useAlternate = HAS_ALTERNATE_RPCS;
-    const primaryWorkers = useAlternate ? Math.floor(workerCount / 2) : workerCount;
-    const alternateWorkers = useAlternate ? workerCount - primaryWorkers : 0;
     
-    // Process chunks in batches to avoid overwhelming the RPC endpoints
-    for (let i = 0; i < chunks.length; i += workerCount) {
-        const batch = chunks.slice(i, i + workerCount);
-        const batchPromises = batch.map((chunk, idx) => {
-            const isAlternate = useAlternate && (idx % 2 === 1);
-            const elUrl = isAlternate ? EL_ETHRPC_URL_ALT : EL_ETHRPC_URL;
-            const clUrl = isAlternate ? CL_ETHRPC_URL_ALT : CL_ETHRPC_URL;
-            return scanBlockChunk(chunk.chunkStart, chunk.chunkEnd, validators, validatorMap, elUrl, clUrl);
-        });
-        
-        // Wait for all chunks in this batch to complete
-        const batchResults = await Promise.all(batchPromises);
-        results.push(...batchResults);
-        
-        // Update progress bar
-        if (progress) {
-            progress.update(Math.min(i + workerCount, chunks.length));
-        }
-    }
+    // Worker function that processes a single chunk
+    const workerFn = async (chunk, index, providerInfo) => {
+        const isAlternate = useAlternate && (index % 2 === 1);
+        const elUrl = isAlternate ? EL_ETHRPC_URL_ALT : EL_ETHRPC_URL;
+        const clUrl = isAlternate ? CL_ETHRPC_URL_ALT : CL_ETHRPC_URL;
+        return await scanBlockChunk(chunk.chunkStart, chunk.chunkEnd, validators, validatorMap, elUrl, clUrl);
+    };
     
-    if (progress) {
-        progress.finish();
-    }
+    // Create pipeline - splits work across providers automatically
+    const pipeline = new MultiProviderPipeline(
+        MAX_WORKER_COUNT,
+        workerFn,
+        { el: EL_ETHRPC_URL, cl: CL_ETHRPC_URL },
+        useAlternate ? { el: EL_ETHRPC_URL_ALT, cl: CL_ETHRPC_URL_ALT } : null,
+        'Scanning block chunks'
+    );
+    
+    // Process all chunks with maximum parallelism
+    const results = await pipeline.process(chunks, showProgress);
     
     // Merge results from all chunks
     const mergedResults = new Map();
     results.forEach(chunkResult => {
+        if (!chunkResult) return; // Skip null results from errors
         chunkResult.forEach((data, proposer) => {
             if (!mergedResults.has(proposer)) {
                 mergedResults.set(proposer, { blocks: [], emptyBlockNumbers: [] });
@@ -712,8 +954,6 @@ async function indexPolEvents(validators, dayRanges) {
      * @returns {Promise<Array>} Compiled array of all log entries from the range
      */
     async function processLogsChunked(fromBlock, toBlock, filter, eventType, chunkSize = LOG_CHUNK_SIZE, batchSize = MAX_WORKER_COUNT) {
-        const totalBlocks = toBlock - fromBlock + 1;
-        
         // Create chunk ranges
         const chunks = [];
         let currentBlock = fromBlock;
@@ -724,106 +964,10 @@ async function indexPolEvents(validators, dayRanges) {
             currentBlock = chunkEnd + 1;
         }
         
-        // Process ALL chunks in parallel with controlled concurrency
         log(`Processing ${chunks.length} chunks for ${eventType} events with max ${batchSize} concurrent requests...`);
-        const progress = createProgressBar(chunks.length, `Indexing ${eventType} chunks`);
-        let completedChunks = 0;
         
-        const useAlternate = Boolean(providerAlternate);
-        if (!useAlternate) {
-            const semaphore = {
-                count: batchSize,
-                waiters: [],
-                async acquire() {
-                    if (this.count > 0) {
-                        this.count--;
-                        return;
-                    }
-                    return new Promise(resolve => this.waiters.push(resolve));
-                },
-                release() {
-                    if (this.waiters.length > 0) {
-                        const resolve = this.waiters.shift();
-                        resolve();
-                    } else {
-                        this.count++;
-                    }
-                }
-            };
-            const allPromises = chunks.map(async (chunk, index) => {
-                await semaphore.acquire();
-                try {
-                    const chunkLogs = await providerPrimary.getLogs({
-                        ...filter,
-                        fromBlock: chunk.start,
-                        toBlock: chunk.end
-                    });
-                    let processedCount = 0;
-                    for (const log of chunkLogs) {
-                        const topicPub = (log.topics?.[1] || '').toLowerCase();
-                        if (!pubTopicSet.has(topicPub)) continue;
-                        const proposer = topicToProposer.get(topicPub);
-                        const date = getDateForBlock(log.blockNumber);
-                        if (!date) continue;
-                        const parsed = iface.parseLog(log);
-                        if (!daily[date][proposer]) daily[date][proposer] = { vaultBgtBI: 0n, boosters: {} };
-                        if (eventType === 'Distributed') {
-                            const amount = BigInt(parsed.args.amount.toString());
-                            daily[date][proposer].vaultBgtBI += amount;
-                        } else if (eventType === 'BGTBoosterIncentivesProcessed') {
-                            const token = parsed.args.token.toLowerCase();
-                            const amount = BigInt(parsed.args.amount.toString());
-                            daily[date][proposer].boosters[token] = (daily[date][proposer].boosters[token] || 0n) + amount;
-                        }
-                        processedCount++;
-                    }
-                    return processedCount;
-                } catch (e) {
-                    log(`Error processing ${eventType} logs for chunk ${index + 1}/${chunks.length} (blocks ${chunk.start}-${chunk.end}): ${e.message}`);
-                    return 0;
-                } finally {
-                    semaphore.release();
-                    completedChunks++;
-                    progress.update(completedChunks);
-                }
-            });
-            const processedCounts = await Promise.all(allPromises);
-            const totalProcessed = processedCounts.reduce((sum, count) => sum + count, 0);
-            progress.finish();
-            log(`Processed ${totalProcessed} ${eventType} events from ${chunks.length} chunks`);
-            return totalProcessed;
-        }
-        
-        // Split concurrency across primary and alternate providers
-        const primaryBatch = Math.floor(batchSize / 2);
-        const alternateBatch = batchSize - primaryBatch;
-        const primarySemaphore = {
-            count: primaryBatch,
-            waiters: [],
-            async acquire() {
-                if (this.count > 0) { this.count--; return; }
-                return new Promise(resolve => this.waiters.push(resolve));
-            },
-            release() {
-                if (this.waiters.length > 0) { const resolve = this.waiters.shift(); resolve(); } else { this.count++; }
-            }
-        };
-        const alternateSemaphore = {
-            count: alternateBatch,
-            waiters: [],
-            async acquire() {
-                if (this.count > 0) { this.count--; return; }
-                return new Promise(resolve => this.waiters.push(resolve));
-            },
-            release() {
-                if (this.waiters.length > 0) { const resolve = this.waiters.shift(); resolve(); } else { this.count++; }
-            }
-        };
-        const allPromises = chunks.map(async (chunk, index) => {
-            const usePrimary = (index % 2 === 0);
-            const sem = usePrimary ? primarySemaphore : alternateSemaphore;
-            const provider = usePrimary ? providerPrimary : providerAlternate;
-            await sem.acquire();
+        // Worker function that processes a single chunk
+        const workerFn = async (chunk, index, provider) => {
             try {
                 const chunkLogs = await provider.getLogs({
                     ...filter,
@@ -853,17 +997,21 @@ async function indexPolEvents(validators, dayRanges) {
             } catch (e) {
                 log(`Error processing ${eventType} logs for chunk ${index + 1}/${chunks.length} (blocks ${chunk.start}-${chunk.end}): ${e.message}`);
                 return 0;
-            } finally {
-                sem.release();
-                completedChunks++;
-                progress.update(completedChunks);
             }
-        });
+        };
         
-        // Wait for ALL chunks to complete
-        const processedCounts = await Promise.all(allPromises);
-        const totalProcessed = processedCounts.reduce((sum, count) => sum + count, 0);
-        progress.finish();
+        // Use MultiProviderPipeline for maximum parallelism across providers
+        const pipeline = new MultiProviderPipeline(
+            batchSize,
+            workerFn,
+            providerPrimary,
+            providerAlternate,
+            `Indexing ${eventType} chunks`
+        );
+        
+        // Process all chunks - pipeline maintains max parallelism at all times
+        const processedCounts = await pipeline.process(chunks, true);
+        const totalProcessed = processedCounts.reduce((sum, count) => sum + (count || 0), 0);
         log(`Processed ${totalProcessed} ${eventType} events from ${chunks.length} chunks`);
         return totalProcessed;
     }
@@ -916,6 +1064,625 @@ async function indexPolEvents(validators, dayRanges) {
 }
 
 /**
+ * Helper to decode RewardAllocation from contract call result
+ * @param {string} resultHex - Hex string result from contract call
+ * @returns {Object|null} Decoded allocation or null on error
+ */
+function decodeRewardAllocation(resultHex) {
+    try {
+        const decoded = BERACHEF_IFACE.decodeFunctionResult('getDefaultRewardAllocation', resultHex);
+        const alloc = decoded[0];
+        return {
+            startBlock: Number(alloc.startBlock.toString()),
+            weights: alloc.weights.map(w => ({ 
+                receiver: (w.receiver || w[0]).toLowerCase(), 
+                percentageNumerator: BigInt(w.percentageNumerator || w[1]) 
+            }))
+        };
+    } catch {
+        try {
+            const decoded = BERACHEF_IFACE.decodeFunctionResult('getActiveRewardAllocation', resultHex);
+            const alloc = decoded[0];
+            return {
+                startBlock: Number(alloc.startBlock.toString()),
+                weights: alloc.weights.map(w => ({ 
+                    receiver: (w.receiver || w[0]).toLowerCase(), 
+                    percentageNumerator: BigInt(w.percentageNumerator || w[1]) 
+                }))
+            };
+        } catch {
+            return null;
+        }
+    }
+}
+
+/**
+ * Helper to compare two allocations ignoring order of weights
+ * @param {Object} a - First allocation
+ * @param {Object} b - Second allocation
+ * @returns {boolean} True if allocations are equal (ignoring order)
+ */
+function allocationsEqualIgnoringOrder(a, b) {
+    if (!a || !b) return false;
+    if (a.weights.length !== b.weights.length) return false;
+    
+    const sortedA = [...a.weights].sort((x, y) => {
+        const addrCmp = x.receiver.localeCompare(y.receiver);
+        return addrCmp !== 0 ? addrCmp : Number(x.percentageNumerator - y.percentageNumerator);
+    });
+    const sortedB = [...b.weights].sort((x, y) => {
+        const addrCmp = x.receiver.localeCompare(y.receiver);
+        return addrCmp !== 0 ? addrCmp : Number(x.percentageNumerator - y.percentageNumerator);
+    });
+    
+    return sortedA.every((w, i) => 
+        w.receiver.toLowerCase() === sortedB[i].receiver.toLowerCase() &&
+        w.percentageNumerator === sortedB[i].percentageNumerator
+    );
+}
+
+/**
+ * Gets ISO week number for a date
+ * @param {Date} date - Date object
+ * @returns {string} ISO week string (YYYY-WW)
+ */
+function getISOWeek(date) {
+    const d = new Date(date);
+    d.setHours(0, 0, 0, 0);
+    d.setDate(d.getDate() + 3 - (d.getDay() + 6) % 7);
+    const week1 = new Date(d.getFullYear(), 0, 4);
+    const weekNum = 1 + Math.round(((d.getTime() - week1.getTime()) / 86400000 - 3 + (week1.getDay() + 6) % 7) / 7);
+    return `${d.getFullYear()}-W${String(weekNum).padStart(2, '0')}`;
+}
+
+/**
+ * Groups dates by ISO week
+ * @param {Array<string>} dates - Array of date strings (YYYY-MM-DD)
+ * @returns {Object} Object mapping ISO week strings to arrays of dates
+ */
+function groupDatesByWeek(dates) {
+    const weekGroups = {};
+    for (const dateStr of dates) {
+        const date = new Date(dateStr + 'T00:00:00Z');
+        const week = getISOWeek(date);
+        if (!weekGroups[week]) {
+            weekGroups[week] = [];
+        }
+        weekGroups[week].push(dateStr);
+    }
+    return weekGroups;
+}
+
+/**
+ * Scans for BeraChef ActivateRewardAllocation events
+ * @param {Array<Object>} validators - Array of validator objects with pubkeys
+ * @param {Object} dayRanges - Object mapping dates to {startBlock, endBlock}
+ * @returns {Promise<Object>} Object with activation data by validator and week
+ */
+async function scanBeraChefActivations(validators, dayRanges) {
+    const providerPrimary = new ethers.JsonRpcProvider(EL_ETHRPC_URL);
+    const providerAlternate = HAS_ALTERNATE_RPCS ? new ethers.JsonRpcProvider(EL_ETHRPC_URL_ALT) : null;
+    
+    const activateTopic0 = ACTIVATE_EVENT_SIG;
+    const { set: pubTopicSet, topicToProposer } = buildPubkeyTopicSet(validators);
+    
+    // Map of validator pubkey -> array of activation dates
+    const activationsByValidator = {};
+    for (const v of validators) {
+        const pk = v.pubkey.startsWith('0x') ? v.pubkey : `0x${v.pubkey}`;
+        activationsByValidator[pk.toLowerCase()] = [];
+    }
+    
+    // Calculate overall block range
+    const allRanges = Object.values(dayRanges);
+    const overallStartBlock = Math.min(...allRanges.map(r => r.startBlock));
+    const overallEndBlock = Math.max(...allRanges.map(r => r.endBlock));
+    
+    // Helper to get date for a block
+    function getDateForBlock(blockNumber) {
+        for (const [date, range] of Object.entries(dayRanges)) {
+            if (blockNumber >= range.startBlock && blockNumber <= range.endBlock) {
+                return date;
+            }
+        }
+        return null;
+    }
+    
+    log('Scanning BeraChef ActivateRewardAllocation events...');
+    
+    // Process logs in chunks
+    const chunkSize = LOG_CHUNK_SIZE;
+    const chunks = [];
+    for (let currentBlock = overallStartBlock; currentBlock <= overallEndBlock; currentBlock += chunkSize) {
+        const chunkEnd = Math.min(currentBlock + chunkSize - 1, overallEndBlock);
+        chunks.push({ start: currentBlock, end: chunkEnd });
+    }
+    
+    // Worker function that processes a single chunk
+    const workerFn = async (chunk, index, provider) => {
+        try {
+            const filter = {
+                address: BERACHEF_CONTRACT,
+                topics: [activateTopic0]
+            };
+            const chunkLogs = await provider.getLogs({
+                ...filter,
+                fromBlock: chunk.start,
+                toBlock: chunk.end
+            });
+            
+            let processedCount = 0;
+            for (const log of chunkLogs) {
+                const topicPub = (log.topics?.[1] || '').toLowerCase();
+                if (!pubTopicSet.has(topicPub)) continue;
+                
+                const proposer = topicToProposer.get(topicPub);
+                if (!proposer) continue;
+                
+                const validator = validators.find(v => v.proposer === proposer);
+                if (!validator) continue;
+                
+                const blockNumber = typeof log.blockNumber === 'number' ? log.blockNumber : parseInt(log.blockNumber.toString(), 10);
+                const date = getDateForBlock(blockNumber);
+                if (date) {
+                    const pk = validator.pubkey.startsWith('0x') ? validator.pubkey : `0x${validator.pubkey}`;
+                    if (activationsByValidator[pk.toLowerCase()]) {
+                        activationsByValidator[pk.toLowerCase()].push(date);
+                    }
+                }
+                processedCount++;
+            }
+            return processedCount;
+        } catch (e) {
+            log(`Error processing BeraChef activation logs for chunk ${index + 1}/${chunks.length}: ${e.message}`);
+            return 0;
+        }
+    };
+    
+    // Use MultiProviderPipeline for maximum parallelism across providers
+    const pipeline = new MultiProviderPipeline(
+        MAX_WORKER_COUNT,
+        workerFn,
+        providerPrimary,
+        providerAlternate,
+        'Scanning BeraChef activations'
+    );
+    
+    // Process all chunks - pipeline maintains max parallelism at all times
+    const processedCounts = await pipeline.process(chunks, true);
+    const totalProcessed = processedCounts.reduce((sum, count) => sum + (count || 0), 0);
+    log(`Processed ${totalProcessed} BeraChef activation events`);
+    
+    return activationsByValidator;
+}
+
+/**
+ * Gets default reward allocation from BeraChef contract
+ * @returns {Promise<Object|null>} Default allocation or null on error
+ */
+async function getDefaultRewardAllocation(blockNumber = 'latest') {
+    try {
+        const data = BERACHEF_IFACE.encodeFunctionData('getDefaultRewardAllocation', []);
+        const resultHex = await callContractFunction(BERACHEF_CONTRACT, 'getDefaultRewardAllocation()', [], blockNumber);
+        return decodeRewardAllocation(resultHex);
+    } catch (error) {
+        log(`Error getting default reward allocation: ${error.message}`);
+        return null;
+    }
+}
+
+/**
+ * Checks if validator is using default allocation (requires contract call)
+ * Compares the validator's active allocation at the specified block with the default allocation at that same block
+ * @param {string} validatorPubkey - Validator pubkey (with or without 0x prefix)
+ * @param {Object} defaultAllocation - Default allocation to compare against
+ * @param {number|string} blockNumber - Block number to query at (default: 'latest')
+ * @returns {Promise<boolean|null>} True if using default, false if custom, null on error
+ */
+async function isUsingDefaultAllocation(validatorPubkey, defaultAllocation, blockNumber = 'latest') {
+    if (!defaultAllocation) return null;
+    
+    try {
+        const pk = validatorPubkey.startsWith('0x') ? validatorPubkey : `0x${validatorPubkey}`;
+        const data = BERACHEF_IFACE.encodeFunctionData('getActiveRewardAllocation', [pk]);
+        const resultHex = await callContractFunction(BERACHEF_CONTRACT, 'getActiveRewardAllocation(bytes)', [pk], blockNumber);
+        const activeAllocation = decodeRewardAllocation(resultHex);
+        if (!activeAllocation) return null;
+        return allocationsEqualIgnoringOrder(activeAllocation, defaultAllocation);
+    } catch (error) {
+        return null;
+    }
+}
+
+/**
+ * Execute SQL against the validator database
+ * @param {string} sql - SQL query to execute
+ * @param {Array} params - Optional parameters for prepared statements
+ * @returns {Promise<Object>} Result object with ok flag and output
+ */
+async function executeSQL(sql, params = []) {
+    return new Promise((resolve, reject) => {
+        let finalSql = sql;
+        if (params.length > 0) {
+            for (let i = 0; i < params.length; i++) {
+                const param = params[i] == null ? 'NULL' : `'${params[i].toString().replace(/'/g, "''")}'`;
+                finalSql = finalSql.replace(/\?/g, (match, offset) => {
+                    // Only replace the first ? that hasn't been replaced yet
+                    const idx = finalSql.substring(0, offset).split('?').length - 1;
+                    return idx < params.length ? param : match;
+                });
+            }
+            // Simple replacement for first occurrence per param (better approach)
+            let paramIndex = 0;
+            finalSql = sql.replace(/\?/g, () => {
+                if (paramIndex < params.length) {
+                    const param = params[paramIndex] == null ? 'NULL' : `'${params[paramIndex].toString().replace(/'/g, "''")}'`;
+                    paramIndex++;
+                    return param;
+                }
+                return '?';
+            });
+        }
+        
+        const sqlite = spawn('sqlite3', [VALIDATOR_DB_PATH, finalSql]);
+        let output = '';
+        let error = '';
+        
+        sqlite.stdout.on('data', (data) => { output += data.toString(); });
+        sqlite.stderr.on('data', (data) => { error += data.toString(); });
+        
+        sqlite.on('close', (code) => {
+            if (code === 0) {
+                resolve({ ok: true, output });
+            } else {
+                reject(new Error(`SQLite error: ${error || 'Unknown error'}`));
+            }
+        });
+    });
+}
+
+/**
+ * Initialize the scoring schema in the database
+ * Creates validator_scores table and evaluation_metadata table
+ */
+async function initializeScoringSchema() {
+    log('📝 Initializing scoring schema in database...');
+    
+    // Create validator_scores table (rewritten on each evaluation)
+    await executeSQL(`
+        CREATE TABLE IF NOT EXISTS validator_scores (
+            pubkey TEXT PRIMARY KEY,
+            proposer_address TEXT,
+            name TEXT,
+            uptime_score REAL,
+            pol_score REAL,
+            stake_scaled_booster_score REAL,
+            pol_participation_score REAL,
+            total_score REAL,
+            stake REAL,
+            is_using_default_cutting_board INTEGER,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    `);
+    
+    // Create validator_notes table (one-to-many relationship)
+    await executeSQL(`
+        CREATE TABLE IF NOT EXISTS validator_notes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            validator_pubkey TEXT NOT NULL,
+            note_type TEXT NOT NULL,
+            note_message TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (validator_pubkey) REFERENCES validator_scores(pubkey)
+        )
+    `);
+    
+    // Add column if it doesn't exist (for existing databases)
+    try {
+        await executeSQL('SELECT is_using_default_cutting_board FROM validator_scores LIMIT 1');
+    } catch (error) {
+        log('📝 Adding is_using_default_cutting_board column to validator_scores table...');
+        await executeSQL('ALTER TABLE validator_scores ADD COLUMN is_using_default_cutting_board INTEGER');
+        log('✅ Column added successfully');
+    }
+    
+    // Create evaluation_metadata table (single row, updated on each run)
+    await executeSQL(`
+        CREATE TABLE IF NOT EXISTS evaluation_metadata (
+            id INTEGER PRIMARY KEY CHECK (id = 1),
+            evaluation_timestamp TIMESTAMP,
+            start_date TEXT,
+            end_date TEXT,
+            days_analyzed INTEGER,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    `);
+    
+    // Ensure the metadata row exists
+    await executeSQL(`
+        INSERT OR IGNORE INTO evaluation_metadata (id, evaluation_timestamp, start_date, end_date, days_analyzed)
+        VALUES (1, CURRENT_TIMESTAMP, NULL, NULL, 0)
+    `);
+    
+    log('✅ Scoring schema initialized');
+}
+
+/**
+ * Generate notes for a validator based on performance anomalies
+ * @param {Object} validator - Validator ranking object with scores and metrics
+ * @param {Object} statistics - Daily statistics
+ * @param {Object} totalVotingPowerByDate - Total voting power per date
+ * @param {Array<string>} sortedDates - Sorted array of dates
+ * @returns {Array<Object>} Array of note objects with type and message
+ */
+function generateValidatorNotes(validator, statistics, totalVotingPowerByDate, sortedDates) {
+    const notes = [];
+    const datesToAnalyze = sortedDates.slice(0, sortedDates.length - 1); // Exclude boundary date
+    
+    // Check for unexpectedly low block production share
+    let lowBlockProductionDays = 0;
+    let totalDaysChecked = 0;
+    
+    for (const date of datesToAnalyze) {
+        const dayStats = statistics[date]?.[validator.validatorAddress];
+        const totalVotingPower = totalVotingPowerByDate[date];
+        
+        if (dayStats && totalVotingPower > 0) {
+            totalDaysChecked++;
+            const votingPower = dayStats.stake || 0;
+            const votingPowerPercentage = (votingPower / totalVotingPower) * 100;
+            const actualBlocks = dayStats.totalBlocks || 0;
+            const actualBlocksPercentage = (actualBlocks / BLOCKS_PER_DAY) * 100;
+            
+            // If voting power > 0 but actual blocks % is significantly lower (< 90% of expected)
+            if (votingPowerPercentage > 0 && actualBlocksPercentage > 0) {
+                const ratio = actualBlocksPercentage / votingPowerPercentage;
+                if (ratio < 0.9) { // Less than 90% of expected blocks
+                    lowBlockProductionDays++;
+                }
+            } else if (votingPowerPercentage > 0 && actualBlocks === 0) {
+                // Has voting power but produced zero blocks
+                lowBlockProductionDays++;
+            }
+        }
+    }
+    
+    // Note for low block production if it happened on most days
+    if (totalDaysChecked > 0 && (lowBlockProductionDays / totalDaysChecked) >= 0.5) {
+        notes.push({
+            type: 'low_block_production',
+            message: `Unexpectedly low share of block production (produced fewer blocks than expected based on voting power on ${lowBlockProductionDays} of ${totalDaysChecked} analyzed days)`
+        });
+    }
+    
+    // Note for using default cutting board
+    if (validator.isUsingDefaultCuttingBoard === true) {
+        notes.push({
+            type: 'default_cutting_board',
+            message: 'Using default cutting board configuration (40% penalty applied to POL Participation score)'
+        });
+    }
+    
+    // Note for zero POL participation activations
+    if (validator.polParticipationScore <= 20) {
+        notes.push({
+            type: 'no_pol_activations',
+            message: 'No BeraChef reward allocation activations detected during the analysis period'
+        });
+    }
+    
+    return notes;
+}
+
+/**
+ * Write scoring data to database, replacing existing scores
+ * @param {Array} rankings - Array of validator ranking objects from generateReport
+ * @param {string} startDate - Start date of evaluation (YYYY-MM-DD)
+ * @param {string} endDate - End date of evaluation (YYYY-MM-DD)
+ * @param {number} daysAnalyzed - Number of days analyzed
+ * @param {Object} statistics - Daily statistics for note generation
+ * @param {Object} totalVotingPowerByDate - Total voting power per date
+ * @param {Array<string>} sortedDates - Sorted array of dates
+ */
+async function writeScoresToDatabase(rankings, startDate, endDate, daysAnalyzed, statistics, totalVotingPowerByDate, sortedDates) {
+    log('💾 Writing scores to database...');
+    
+    // Clear existing scores and notes
+    await executeSQL('DELETE FROM validator_scores');
+    await executeSQL('DELETE FROM validator_notes');
+    
+    // Insert new scores
+    let inserted = 0;
+    for (const validator of rankings) {
+        try {
+                    // Ensure pubkey has 0x prefix to match validators table format
+                    const normalizedPubkey = validator.pubkey && !validator.pubkey.startsWith('0x') 
+                        ? '0x' + validator.pubkey 
+                        : validator.pubkey;
+                    
+                    await executeSQL(
+                        `INSERT INTO validator_scores 
+                        (pubkey, proposer_address, name, uptime_score, pol_score, stake_scaled_booster_score, pol_participation_score, total_score, stake, is_using_default_cutting_board)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                        [
+                            normalizedPubkey,
+                            validator.validatorAddress,
+                            validator.name,
+                            validator.avgUptimeScore.toFixed(2),
+                            validator.avgPolScore.toFixed(2),
+                            validator.avgStakeScaledBoosterScore.toFixed(2),
+                            validator.polParticipationScore.toFixed(2),
+                            validator.totalScore.toFixed(2),
+                            validator.stake.toFixed(6),
+                            validator.isUsingDefaultCuttingBoard === true ? 1 : (validator.isUsingDefaultCuttingBoard === false ? 0 : null)
+                        ]
+                    );
+            inserted++;
+            
+            // Generate and insert notes for this validator
+            const notes = generateValidatorNotes(validator, statistics, totalVotingPowerByDate, sortedDates);
+            for (const note of notes) {
+                try {
+                        // Use normalized pubkey for notes as well
+                        const normalizedPubkey = validator.pubkey && !validator.pubkey.startsWith('0x') 
+                            ? '0x' + validator.pubkey 
+                            : validator.pubkey;
+                        await executeSQL(
+                            'INSERT INTO validator_notes (validator_pubkey, note_type, note_message) VALUES (?, ?, ?)',
+                            [normalizedPubkey, note.type, note.message]
+                        );
+                } catch (error) {
+                    log(`⚠️  Failed to insert note for ${validator.name}: ${error.message}`);
+                }
+            }
+        } catch (error) {
+            log(`⚠️  Failed to insert scores for ${validator.name}: ${error.message}`);
+        }
+    }
+    
+    // Update metadata
+    await executeSQL(
+        `UPDATE evaluation_metadata 
+        SET evaluation_timestamp = CURRENT_TIMESTAMP,
+            start_date = ?,
+            end_date = ?,
+            days_analyzed = ?,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = 1`,
+        [startDate, endDate, daysAnalyzed]
+    );
+    
+    log(`✅ Written scores for ${inserted} validators to database`);
+}
+
+/**
+ * Calculates POL Participation scores for all validators
+ * Score starts at 100, -10 points per week without activation, -40 points if using default cutting board
+ * @param {Object} activationsByValidator - Map of pubkey -> array of activation dates
+ * @param {Array<string>} datesToAnalyze - Array of date strings to analyze
+ * @param {Array<Object>} validators - Array of validator objects
+ * @param {Object} defaultAllocation - Default allocation for comparison (optional)
+ * @returns {Promise<Object>} Map of proposer -> POL Participation score
+ */
+async function calculatePolParticipationScores(activationsByValidator, datesToAnalyze, validators, defaultAllocation = null, lastBlockNumber = 'latest') {
+    const scores = {};
+    const defaultCuttingBoardFlags = {}; // Map of proposer -> boolean/null
+    
+    // Group dates by ISO week
+    const weekGroups = groupDatesByWeek(datesToAnalyze);
+    const weeks = Object.keys(weekGroups).sort();
+    
+    log(`Calculating POL Participation scores for ${validators.length} validators across ${weeks.length} weeks...`);
+    
+    // Check default cutting board status for all validators at the last block of the analysis period
+    // Fetch default allocation at that same block, then compare each validator's active allocation
+    if (defaultAllocation && lastBlockNumber !== 'latest') {
+        log(`Checking default cutting board status for ${validators.length} validators at block ${lastBlockNumber}...`);
+        
+        // First, fetch the default allocation at the last block (it might have changed)
+        const defaultAllocationAtLastBlock = await getDefaultRewardAllocation(lastBlockNumber);
+        if (!defaultAllocationAtLastBlock) {
+            log(`⚠️  Warning: Could not fetch default allocation at block ${lastBlockNumber}, using provided default allocation`);
+        }
+        const allocationToCompare = defaultAllocationAtLastBlock || defaultAllocation;
+        
+        const concurrency = 50;
+        let checked = 0;
+        
+        for (let i = 0; i < validators.length; i += concurrency) {
+            const batch = validators.slice(i, i + concurrency);
+            const batchPromises = batch.map(async (validator) => {
+                try {
+                    // Check at the last block of the analysis period
+                    const isDefault = await isUsingDefaultAllocation(validator.pubkey, allocationToCompare, lastBlockNumber);
+                    defaultCuttingBoardFlags[validator.proposer] = isDefault;
+                } catch (error) {
+                    defaultCuttingBoardFlags[validator.proposer] = null;
+                }
+            });
+            await Promise.all(batchPromises);
+            checked += batch.length;
+            if (checked % 10 === 0 || checked === validators.length) {
+                log(`  Checked ${checked}/${validators.length} validators...`);
+            }
+        }
+    } else if (defaultAllocation) {
+        log(`⚠️  Warning: lastBlockNumber not provided, using 'latest' for default cutting board check`);
+        // Fallback to latest if block number not provided
+        const concurrency = 50;
+        let checked = 0;
+        
+        for (let i = 0; i < validators.length; i += concurrency) {
+            const batch = validators.slice(i, i + concurrency);
+            const batchPromises = batch.map(async (validator) => {
+                try {
+                    const isDefault = await isUsingDefaultAllocation(validator.pubkey, defaultAllocation, 'latest');
+                    defaultCuttingBoardFlags[validator.proposer] = isDefault;
+                } catch (error) {
+                    defaultCuttingBoardFlags[validator.proposer] = null;
+                }
+            });
+            await Promise.all(batchPromises);
+            checked += batch.length;
+            if (checked % 10 === 0 || checked === validators.length) {
+                log(`  Checked ${checked}/${validators.length} validators...`);
+            }
+        }
+    }
+    
+    for (const validator of validators) {
+        const pk = validator.pubkey.startsWith('0x') ? validator.pubkey : `0x${validator.pubkey}`;
+        const activations = activationsByValidator[pk.toLowerCase()] || [];
+        const activationDates = new Set(activations);
+        
+        // Debug logging for validators with unexpected activations
+        if (validator.name.toLowerCase().includes('figment') && activations.length > 0) {
+            log(`⚠️  DEBUG: ${validator.name} has ${activations.length} activations detected: ${JSON.stringify([...activations].sort())}`);
+            log(`   Pubkey: ${pk}, Lowercase: ${pk.toLowerCase()}`);
+        }
+        
+        // Count weeks with at least one activation
+        let weeksWithActivation = 0;
+        for (const week of weeks) {
+            const weekDates = weekGroups[week];
+            const hasActivation = weekDates.some(date => activationDates.has(date));
+            if (hasActivation) {
+                weeksWithActivation++;
+            }
+        }
+        
+        // Calculate base score: 100 - (10 * weeks without activation)
+        const weeksWithoutActivation = weeks.length - weeksWithActivation;
+        let score = 100 - (weeksWithoutActivation * 10);
+        
+        // Apply 40 point penalty if using default cutting board
+        // If detection failed (null) but validator has 0 activations, assume default
+        const isUsingDefault = defaultCuttingBoardFlags[validator.proposer];
+        const shouldApplyPenalty = isUsingDefault === true || 
+            (isUsingDefault === null && activations.length === 0 && weeksWithActivation === 0);
+        
+        if (shouldApplyPenalty) {
+            score = Math.max(0, score - 40);
+            if (process.env.VERBOSE || activations.length > 0) {
+                const reason = isUsingDefault === true ? 'detected' : 'assumed (0 activations + detection failed)';
+                log(`  ${validator.name}: Using default cutting board (${reason}), activations: ${activations.length}, weeks with activation: ${weeksWithActivation}/${weeks.length}, final score: ${score.toFixed(2)}`);
+            }
+        } else if (process.env.VERBOSE && activations.length === 0) {
+            log(`  ${validator.name}: No activations detected, but not using default cutting board (detected: ${isUsingDefault}), score: ${score.toFixed(2)}`);
+        }
+        
+        score = Math.max(0, score); // Clamp to 0 minimum
+        
+        scores[validator.proposer] = {
+            score,
+            isUsingDefault: shouldApplyPenalty ? true : (isUsingDefault === false ? false : null)
+        };
+    }
+    
+    return scores;
+}
+
+/**
  * Computes USD valuations for all validator incentive earnings
  * 
  * This function builds USD-denominated valuations by taking the raw BigInt token amounts
@@ -951,29 +1718,38 @@ async function computeUsdValuations(dailyAgg, validators, dayRanges) {
         }
     }
     
-    // fetch decimals, names, and rates
-    log(`Fetching decimals for ${tokenSet.size} unique tokens...`);
-    for (const token of tokenSet) {
+    // Fetch decimals, names, and rates in parallel using pipeline
+    const tokenList = Array.from(tokenSet);
+    
+    log(`Fetching decimals for ${tokenList.length} unique tokens...`);
+    const decimalsWorkerFn = async (token, index, provider) => {
         await getTokenDecimals(provider, token);
-    }
+        return token;
+    };
+    const decimalsPipeline = new Pipeline(MAX_WORKER_COUNT, decimalsWorkerFn, 'Fetching token decimals');
+    await decimalsPipeline.process(tokenList, () => provider, false);
     
-    log(`Fetching names for ${tokenSet.size} unique tokens...`);
-    for (const token of tokenSet) {
+    log(`Fetching names for ${tokenList.length} unique tokens...`);
+    const namesWorkerFn = async (token, index, provider) => {
         await getTokenName(provider, token);
-    }
+        return token;
+    };
+    const namesPipeline = new Pipeline(MAX_WORKER_COUNT, namesWorkerFn, 'Fetching token names');
+    await namesPipeline.process(tokenList, () => provider, false);
     
-    log(`Fetching USD rates for ${tokenSet.size} unique tokens...`);
-    let tokenCount = 0;
-    for (const token of tokenSet) {
-        tokenCount++;
+    log(`Fetching USD rates for ${tokenList.length} unique tokens...`);
+    // For API rate limiting, use smaller concurrency for USD rates
+    const rateWorkerFn = async (token, index, provider) => {
         const tokenName = tokenNameCache.get(token) || token.substring(0, 8) + '...';
-        log(`Fetching rate for token ${tokenCount}/${tokenSet.size}: ${tokenName} (${token})`);
+        log(`Fetching rate for token ${index + 1}/${tokenList.length}: ${tokenName} (${token})`);
         await getUsdRatePerToken(token);
-        // Add small delay between API calls to be respectful to the API
-        if (tokenCount < tokenSet.size) {
-            await new Promise(resolve => setTimeout(resolve, 100));
-        }
-    }
+        // Small delay to be respectful to the API (done per worker)
+        await new Promise(resolve => setTimeout(resolve, 50));
+        return token;
+    };
+    // Use smaller concurrency for API calls (rate limiting)
+    const ratesPipeline = new Pipeline(Math.min(MAX_WORKER_COUNT, 6), rateWorkerFn, 'Fetching USD rates');
+    await ratesPipeline.process(tokenList, null, true);
     
     const bgtDecimals = tokenDecimalsCache.get(BGT_CONTRACT.toLowerCase()) ?? 18;
     const bgtRate = tokenUsdRateCache.get(BGT_CONTRACT.toLowerCase()) ?? 0;
@@ -1197,38 +1973,76 @@ Memory Requirements:
 async function collectStakeAndBoost(validators, dayBoundaries) {
     log('Collecting stake and boost data...');
     const stakeBoostData = {};
-    const progress = createProgressBar(Object.keys(dayBoundaries).length, 'Collecting stake/boost');
-    let completed = 0;
+    const totalVotingPowerByDate = {};
     
-    for (const [date, blockNumber] of Object.entries(dayBoundaries)) {
+    // Create work items for each date
+    const dateWorkItems = Object.entries(dayBoundaries).map(([date, blockNumber]) => ({
+        date,
+        blockNumber
+    }));
+    
+    // Worker function that processes a single date
+    const dateWorkerFn = async (workItem, index, provider) => {
+        const { date, blockNumber } = workItem;
         stakeBoostData[date] = {};
         
         try {
             // Get voting power for all validators at this block
             const votingPowerData = await getValidatorVotingPower(blockNumber);
             
+            // Calculate total voting power across ALL validators (not just the ones we're tracking)
+            let totalVotingPower = 0;
+            if (votingPowerData) {
+                totalVotingPower = Object.values(votingPowerData).reduce((sum, v) => sum + (v.voting_power || 0), 0);
+                totalVotingPowerByDate[date] = totalVotingPower;
+            } else {
+                totalVotingPowerByDate[date] = 0;
+            }
+            
             if (votingPowerData && process.env.VERBOSE) {
                 log(`Collected voting power data for ${Object.keys(votingPowerData).length} validators at block ${blockNumber}`);
-                
-                // Calculate total stake for debugging
-                const totalStake = Object.values(votingPowerData).reduce((sum, v) => sum + v.voting_power, 0);
-                log(`Total stake at block ${blockNumber}: ${totalStake.toLocaleString()} BERA`);
+                log(`Total stake at block ${blockNumber}: ${totalVotingPower.toLocaleString()} BERA`);
             } else if (!votingPowerData) {
                 log(`No voting power data collected for block ${blockNumber}`);
             }
             
-            // Get boost data for each validator
-            for (const validator of validators) {
-                stakeBoostData[date][validator.proposer] = await collectValidatorData(validator, blockNumber, votingPowerData);
+            // Get boost data for all validators in parallel for this date
+            const validatorWorkItems = validators.map(validator => ({
+                validator,
+                blockNumber,
+                votingPowerData,
+                date
+            }));
+            
+            const validatorWorkerFn = async (validatorWorkItem, idx, provider) => {
+                const { validator, blockNumber: bn, votingPowerData: vpd } = validatorWorkItem;
+                return {
+                    proposer: validator.proposer,
+                    data: await collectValidatorData(validator, bn, vpd)
+                };
+            };
+            
+            // Use pipeline to process validators in parallel for this date
+            const pipeline = new Pipeline(MAX_WORKER_COUNT, validatorWorkerFn, `Collecting boost for ${date}`);
+            const validatorResults = await pipeline.process(validatorWorkItems, null, false);
+            
+            // Store results
+            validatorResults.forEach(result => {
+                if (result && result.proposer) {
+                    stakeBoostData[date][result.proposer] = result.data;
+                }
+            });
+            
+            // Log collected stake data summary (only in verbose mode)
+            if (process.env.VERBOSE) {
+                const totalStake = Object.values(stakeBoostData[date]).reduce((sum, data) => sum + data.stake, 0);
+                log(`Stake data collected for ${date}: total stake = ${totalStake.toLocaleString()} BERA`);
             }
             
-                    // Log collected stake data summary (only in verbose mode)
-        if (process.env.VERBOSE) {
-            const totalStake = Object.values(stakeBoostData[date]).reduce((sum, data) => sum + data.stake, 0);
-            log(`Stake data collected for ${date}: total stake = ${totalStake.toLocaleString()} BERA`);
-        }
+            return { success: true };
         } catch (error) {
             log(`Error collecting voting power data for ${date}: ${error.message}`);
+            totalVotingPowerByDate[date] = 0;
             // Set default values for all validators on this date
             for (const validator of validators) {
                 stakeBoostData[date][validator.proposer] = {
@@ -1237,14 +2051,15 @@ async function collectStakeAndBoost(validators, dayBoundaries) {
                     ratio: 0
                 };
             }
+            return { success: false };
         }
-        
-        completed++;
-        progress.update(completed);
-    }
+    };
     
-    progress.finish();
-    return stakeBoostData;
+    // Process all dates in parallel using pipeline
+    const pipeline = new Pipeline(MAX_WORKER_COUNT, dateWorkerFn, 'Collecting stake/boost');
+    await pipeline.process(dateWorkItems, null, true);
+    
+    return { stakeBoostData, totalVotingPowerByDate };
 }
 
     /**
@@ -1294,15 +2109,6 @@ function calculateStatistics(blockResults, stakeBoostData, dayBoundaries, valida
             // Get economic data for this day
             const dayUsd = global.__DAILY_USD__?.[date] || {};
             
-            // Calculate max stake-scaled BGT vault returns for normalization
-            // IMPORTANT: Consider ALL validators, not just those with economic data
-            const dayStakeScaledBgtReturns = validators.map(validator => {
-                const stake = stakeBoostData[date]?.[validator.proposer]?.stake || 0;
-                const bgtValue = dayUsd[validator.proposer]?.vaultsUSD || 0;
-                return stake > 0 ? bgtValue / stake : 0;
-            });
-            const maxStakeScaledBgtReturns = Math.max(...dayStakeScaledBgtReturns, 0);
-            
             // Calculate max stake-scaled booster incentive returns for normalization
             // IMPORTANT: Consider ALL validators, not just those with economic data
             const dayStakeScaledBoosterReturns = validators.map(validator => {
@@ -1332,13 +2138,9 @@ function calculateStatistics(blockResults, stakeBoostData, dayBoundaries, valida
             const polRatio = stakeBoostData[date]?.[proposer]?.ratio || 0;
             const polScore = maxRatio > 0 ? (polRatio / maxRatio) * 100 : 0;
                 
-                // Stake-scaled BGT vault scoring
+                // Stake-scaled booster incentive scoring
                 const economicData = dayUsd[proposer] || { vaultsUSD: 0, boostersUSD: 0 };
                 const stake = stakeBoostData[date]?.[proposer]?.stake || 0;
-                const stakeScaledBgtValue = stake > 0 ? economicData.vaultsUSD / stake : 0;
-                const stakeScaledBgtScore = maxStakeScaledBgtReturns > 0 ? (stakeScaledBgtValue / maxStakeScaledBgtReturns) * 100 : 0;
-                
-                // Stake-scaled booster incentive scoring
                 const stakeScaledBoosterValue = stake > 0 ? economicData.boostersUSD / stake : 0;
                 const stakeScaledBoosterScore = maxStakeScaledBoosterReturns > 0 ? (stakeScaledBoosterValue / maxStakeScaledBoosterReturns) * 100 : 0;
             
@@ -1348,14 +2150,12 @@ function calculateStatistics(blockResults, stakeBoostData, dayBoundaries, valida
                 emptyBlockPercentage,
                 uptimeScore,
                 polScore,
-                    stakeScaledBgtScore,
                     stakeScaledBoosterScore,
                 stake: stakeBoostData[date]?.[proposer]?.stake || 0,
                 boost: stakeBoostData[date]?.[proposer]?.boost || 0,
                     polRatio,
                     vaultsUSD: economicData.vaultsUSD,
                     boostersUSD: economicData.boostersUSD,
-                    stakeScaledBgtValue,
                     stakeScaledBoosterValue
             };
         }
@@ -1368,9 +2168,6 @@ function calculateStatistics(blockResults, stakeBoostData, dayBoundaries, valida
                     
                     const economicData = dayUsd[validator.proposer] || { vaultsUSD: 0, boostersUSD: 0 };
                     const stake = stakeBoostData[date]?.[validator.proposer]?.stake || 0;
-                    const stakeScaledBgtValue = stake > 0 ? economicData.vaultsUSD / stake : 0;
-                    const stakeScaledBgtScore = maxStakeScaledBgtReturns > 0 ? (stakeScaledBgtValue / maxStakeScaledBgtReturns) * 100 : 0;
-                    
                     const stakeScaledBoosterValue = stake > 0 ? economicData.boostersUSD / stake : 0;
                     const stakeScaledBoosterScore = maxStakeScaledBoosterReturns > 0 ? (stakeScaledBoosterValue / maxStakeScaledBoosterReturns) * 100 : 0;
                 
@@ -1380,14 +2177,12 @@ function calculateStatistics(blockResults, stakeBoostData, dayBoundaries, valida
                     emptyBlockPercentage: 0,
                     uptimeScore: 100, // Perfect uptime if no blocks
                     polScore,
-                        stakeScaledBgtScore,
                         stakeScaledBoosterScore,
                     stake: stakeBoostData[date]?.[validator.proposer]?.stake || 0,
                     boost: stakeBoostData[date]?.[validator.proposer]?.boost || 0,
                         polRatio,
                         vaultsUSD: economicData.vaultsUSD,
                         boostersUSD: economicData.boostersUSD,
-                        stakeScaledBgtValue,
                         stakeScaledBoosterValue
                 };
             }
@@ -1414,12 +2209,15 @@ function calculateStatistics(blockResults, stakeBoostData, dayBoundaries, valida
      * @param {Object} statistics - Daily statistics from calculateStatistics
      * @param {Array<Object>} validators - Array of validator objects with metadata
      * @param {Object} dayBoundaries - Day boundary blocks for date processing
+     * @param {Object} polParticipationScores - Map of proposer -> POL Participation score
      * @returns {Array<Object>} Compiled validator rankings sorted by total score
      * @returns {Object} rankings - Array of validator objects with averaged scores:
      *   - name, addresses, pubkey, all averaged scores, stake, daily breakdowns
      */
-function generateReport(statistics, validators, dayBoundaries) {
+function generateReport(statistics, validators, dayBoundaries, polParticipationScores) {
     const sortedDates = Object.keys(dayBoundaries).sort();
+    // Only process dates that were actually analyzed (exclude boundary date)
+    const datesToAnalyze = sortedDates.slice(0, sortedDates.length - 1);
     const validatorMap = new Map(validators.map(v => [v.proposer, v]));
     
     // Calculate averages for each validator
@@ -1428,15 +2226,13 @@ function generateReport(statistics, validators, dayBoundaries) {
     for (const validator of validators) {
         const uptimeScores = [];
         const polScores = [];
-            const stakeScaledBgtScores = [];
             const stakeScaledBoosterScores = [];
         
-        for (const date of sortedDates) {
+        for (const date of datesToAnalyze) {
             const dayStats = statistics[date]?.[validator.proposer];
             if (dayStats) {
                 uptimeScores.push(dayStats.uptimeScore);
                 polScores.push(dayStats.polScore);
-                    stakeScaledBgtScores.push(dayStats.stakeScaledBgtScore);
                     stakeScaledBoosterScores.push(dayStats.stakeScaledBoosterScore);
             }
         }
@@ -1445,16 +2241,17 @@ function generateReport(statistics, validators, dayBoundaries) {
             uptimeScores.reduce((sum, score) => sum + score, 0) / uptimeScores.length : 0;
         const avgPolScore = polScores.length > 0 ? 
             polScores.reduce((sum, score) => sum + score, 0) / polScores.length : 0;
-            const avgStakeScaledBgtScore = stakeScaledBgtScores.length > 0 ? 
-            stakeScaledBgtScores.reduce((sum, score) => sum + score, 0) / stakeScaledBgtScores.length : 0;
             const avgStakeScaledBoosterScore = stakeScaledBoosterScores.length > 0 ? 
             stakeScaledBoosterScores.reduce((sum, score) => sum + score, 0) / stakeScaledBoosterScores.length : 0;
+            const polParticipationData = polParticipationScores[validator.proposer] || { score: 0, isUsingDefault: null };
+            const polParticipationScore = typeof polParticipationData === 'object' ? polParticipationData.score : polParticipationData;
+            const isUsingDefaultCuttingBoard = typeof polParticipationData === 'object' ? polParticipationData.isUsingDefault : null;
             
             // Equal weighting of all 4 metrics
-            const totalScore = (avgUptimeScore + avgPolScore + avgStakeScaledBgtScore + avgStakeScaledBoosterScore) / 4;
+            const totalScore = (avgUptimeScore + avgPolScore + polParticipationScore + avgStakeScaledBoosterScore) / 4;
         
-        // Get most recent stake from the last analyzed date (not the boundary date)
-        const lastAnalyzedDate = sortedDates[sortedDates.length - 2]; // -2 because -1 is the boundary date
+        // Get most recent stake from the last analyzed date
+        const lastAnalyzedDate = datesToAnalyze[datesToAnalyze.length - 1];
         const mostRecentStake = statistics[lastAnalyzedDate]?.[validator.proposer]?.stake || 0;
         
         validatorAverages[validator.proposer] = {
@@ -1464,11 +2261,11 @@ function generateReport(statistics, validators, dayBoundaries) {
             pubkey: validator.pubkey,
             avgUptimeScore,
             avgPolScore,
-                avgStakeScaledBgtScore,
+                polParticipationScore,
                 avgStakeScaledBoosterScore,
             totalScore,
             stake: mostRecentStake,
-            days: sortedDates.map(date => ({
+            days: datesToAnalyze.map(date => ({
                 date,
                 ...statistics[date]?.[validator.proposer]
             }))
@@ -1487,25 +2284,22 @@ function generateReport(statistics, validators, dayBoundaries) {
             'Total'.padEnd(8) +
             'Uptime'.padEnd(8) +
             'Boost/Stake'.padEnd(12) +
-            'BGT→Vault/Stake'.padEnd(15) +
+            'POL Part.'.padEnd(12) +
             'Incentive/Stake'.padEnd(16) +
         'Stake (BERA)'
     );
         log('-'.repeat(140));
     
     rankings.forEach((validator, index) => {
-            const line = `${(index + 1).toString().padEnd(6)}${validator.name.padEnd(30)}${validator.totalScore.toFixed(2).padEnd(8)}${validator.avgUptimeScore.toFixed(2).padEnd(8)}${validator.avgPolScore.toFixed(2).padEnd(12)}${validator.avgStakeScaledBgtScore.toFixed(2).padEnd(15)}${validator.avgStakeScaledBoosterScore.toFixed(2).padEnd(16)}${validator.stake.toLocaleString()}`;
+            const line = `${(index + 1).toString().padEnd(6)}${validator.name.padEnd(30)}${validator.totalScore.toFixed(2).padEnd(8)}${validator.avgUptimeScore.toFixed(2).padEnd(8)}${validator.avgPolScore.toFixed(2).padEnd(12)}${validator.polParticipationScore.toFixed(2).padEnd(12)}${validator.avgStakeScaledBoosterScore.toFixed(2).padEnd(16)}${validator.stake.toLocaleString()}`;
         log(line);
     });
         log('='.repeat(140));
     
     // CSV output
-        let csvHeader = 'Validator name,Pubkey,Proposer,Operator,Stake,Uptime Score,Boost/Stake Ratio Score,BGT→Vault/Stake Score,Incentive→User/Stake Score,Total Score';
+        let csvHeader = 'Validator name,Pubkey,Proposer,Operator,Stake,Uptime Score,Boost/Stake Ratio Score,Incentive→User/Stake Score,POL Participation Score,Total Score';
     
         if (showFullDetail) {
-            // Only add columns for dates that were actually analyzed (exclude boundary date)
-            const datesToAnalyze = sortedDates.slice(0, sortedDates.length - 1);
-            
             // Group columns by data type across all days
             datesToAnalyze.forEach(date => csvHeader += `,${date} BGT boost`);
             datesToAnalyze.forEach(date => csvHeader += `,${date} stake`);
@@ -1517,12 +2311,9 @@ function generateReport(statistics, validators, dayBoundaries) {
         }
     
     const csvRows = rankings.map(validator => {
-            let row = `${validator.name},${validator.pubkey},${validator.validatorAddress},${validator.operatorAddress},${validator.stake.toFixed(6)},${validator.avgUptimeScore.toFixed(2)},${validator.avgPolScore.toFixed(2)},${validator.avgStakeScaledBgtScore.toFixed(2)},${validator.avgStakeScaledBoosterScore.toFixed(2)},${validator.totalScore.toFixed(2)}`;
+            let row = `${validator.name},${validator.pubkey},${validator.validatorAddress},${validator.operatorAddress},${validator.stake.toFixed(6)},${validator.avgUptimeScore.toFixed(2)},${validator.avgPolScore.toFixed(2)},${validator.avgStakeScaledBoosterScore.toFixed(2)},${validator.polParticipationScore.toFixed(2)},${validator.totalScore.toFixed(2)}`;
         
             if (showFullDetail) {
-                // Only include data for dates that were actually analyzed (exclude boundary date)
-                const datesToAnalyze = sortedDates.slice(0, sortedDates.length - 1);
-                
                 // Group data by type across all days (matching header order)
                 datesToAnalyze.forEach(date => {
                     const day = validator.days.find(d => d.date === date);
@@ -1850,10 +2641,25 @@ async function main() {
         const blockResults = allBlockResults;
         
         // Collect stake and boost data
-        const stakeBoostData = await collectStakeAndBoost(validators, dayBoundaries);
+        const { stakeBoostData, totalVotingPowerByDate } = await collectStakeAndBoost(validators, dayBoundaries);
         
         // Index POL events per day (BGT to vaults, booster tokens)
         const { daily: polDaily } = await indexPolEvents(validators, dayRanges);
+        
+        // Scan BeraChef activations for POL Participation scoring
+        log('\nScanning BeraChef activations for POL Participation...');
+        const activationsByValidator = await scanBeraChefActivations(validators, dayRanges);
+        
+        // Get dates to analyze for POL Participation
+        const datesForPolParticipation = Object.keys(dayRanges).sort();
+        
+        // Get the last block of the analysis period (last day's end block)
+        const lastDate = datesForPolParticipation[datesForPolParticipation.length - 1];
+        const lastBlockNumber = dayRanges[lastDate]?.endBlock || 'latest';
+        
+        // Fetch default allocation at the last block to compare against validators' current allocations
+        const defaultAllocation = await getDefaultRewardAllocation(lastBlockNumber);
+        const polParticipationScores = await calculatePolParticipationScores(activationsByValidator, datesForPolParticipation, validators, defaultAllocation, lastBlockNumber);
         
         // Force garbage collection after large data processing
         if (global.gc) {
@@ -1871,7 +2677,20 @@ async function main() {
         
         // Generate report
         log('\nGenerating report...');
-        const rankings = generateReport(statistics, validators, dayBoundaries);
+        const rankings = generateReport(statistics, validators, dayBoundaries, polParticipationScores);
+        
+        // Write scores to database
+        log('\nWriting scores to database...');
+        try {
+            await initializeScoringSchema();
+            const firstDay = dates[0].toISOString().split('T')[0];
+            const lastDay = dates[dates.length - 2].toISOString().split('T')[0]; // -2 because last date is boundary
+            await writeScoresToDatabase(rankings, firstDay, lastDay, daysToAnalyze, statistics, totalVotingPowerByDate, sortedDates);
+        } catch (error) {
+            log(`⚠️  Warning: Failed to write to database: ${error.message}`);
+            log(`Stack trace: ${error.stack}`);
+            // Don't fail the entire script if DB write fails
+        }
         
         // Generate incentive summary CSV
         log('\nGenerating incentive summary...');
