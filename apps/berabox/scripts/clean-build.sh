@@ -38,7 +38,7 @@ clean_installation_artifacts() {
     
     # Clean Go artifacts  
     local go_bins=($(find "$installation_dir/src" -name "bin" -type d 2>/dev/null || true))
-    local go_binaries=($(find "$installation_dir/src" \( -name "*-debug" -o -name "*-release" \) -type f 2>/dev/null || true))
+    local go_binaries=($(find "$installation_dir/src" -name "*-debug" -type f 2>/dev/null || true))
     
     local go_cleaned=0
     if [[ ${#go_bins[@]} -gt 0 ]]; then
@@ -62,16 +62,23 @@ clean_installation_artifacts() {
     fi
     
     # Clean logs for this installation
-    if [[ -d "$installation_dir/logs" ]]; then
-        local log_files=($(find "$installation_dir/logs" -name "*.log" -type f 2>/dev/null || true))
-        if [[ ${#log_files[@]} -gt 0 ]]; then
-            find "$installation_dir/logs" -name "*.log" -type f -delete 2>/dev/null || true
-            log_substep "✓ Cleaned ${#log_files[@]} log files"
-        else
-            log_info "- No log files found"
-        fi
+    local installation_toml="$installation_dir/installation.toml"
+    local cl_logs_dir=$(bb_get_installation_path "$installation_toml" "cl_logs_dir" 2>/dev/null || echo "")
+    local el_logs_dir=$(bb_get_installation_path "$installation_toml" "el_logs_dir" 2>/dev/null || echo "")
+    local log_files=()
+    if [[ -n "$cl_logs_dir" ]] && [[ -d "$cl_logs_dir" ]]; then
+        log_files+=($(find "$cl_logs_dir" -name "*.log" -type f 2>/dev/null || true))
+    fi
+    if [[ -n "$el_logs_dir" ]] && [[ -d "$el_logs_dir" ]]; then
+        log_files+=($(find "$el_logs_dir" -name "*.log" -type f 2>/dev/null || true))
+    fi
+    if [[ ${#log_files[@]} -gt 0 ]]; then
+        for log_file in "${log_files[@]}"; do
+            rm -f "$log_file" 2>/dev/null || true
+        done
+        log_substep "✓ Cleaned ${#log_files[@]} log files"
     else
-        log_info "- No logs directory found"
+        log_info "- No log files found"
     fi
     
     # Note: Installed binaries in $installation_dir/bin/ are preserved

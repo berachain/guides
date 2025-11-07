@@ -13,22 +13,14 @@ get_el_binary_path() {
 
     case "$el_client" in
         "reth")
-            # Check for release binary first, then debug
-            if [[ -f "$installation_dir/src/bera-reth/reth" ]]; then
-                echo "$installation_dir/src/bera-reth/reth"
-            elif [[ -f "$installation_dir/src/bera-reth/reth-debug" ]]; then
+            if [[ -f "$installation_dir/src/bera-reth/reth-debug" ]]; then
                 echo "$installation_dir/src/bera-reth/reth-debug"
             else
                 echo "$installation_dir/src/bera-reth/target/debug/bera-reth"
             fi
             ;;
         "geth")
-            # Check for release binary first, then debug
-            if [[ -f "$installation_dir/src/bera-geth/geth" ]]; then
-                echo "$installation_dir/src/bera-geth/geth"
-            else
-                echo "$installation_dir/src/bera-geth/geth-debug"
-            fi
+            echo "$installation_dir/src/bera-geth/geth-debug"
             ;;
         *)
             echo "";
@@ -40,12 +32,7 @@ get_el_binary_path() {
 # Return the absolute path to the CL binary
 get_cl_binary_path() {
     local installation_dir="$1"
-    # Check for release binary first, then debug
-    if [[ -f "$installation_dir/src/beacon-kit/beacond" ]]; then
-        echo "$installation_dir/src/beacon-kit/beacond"
-    else
-        echo "$installation_dir/src/beacon-kit/beacond-debug"
-    fi
+    echo "$installation_dir/src/beacon-kit/beacond-debug"
 }
 
 # Build EL arguments - core function with optional binary path inclusion
