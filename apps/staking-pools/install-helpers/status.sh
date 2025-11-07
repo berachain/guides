@@ -19,7 +19,7 @@ print_usage() {
 status.sh
 
 Verifies staking pool deployment and checks activation status. 
-Automatically detects network, validator pubkey, and delegation handler.
+Automatically detects chain, validator pubkey, and delegation handler.
 
 Usage:
   status.sh
@@ -50,29 +50,29 @@ main() {
     exit 1
   fi
 
-  local NETWORK
-  NETWORK=$(get_network_from_genesis "$BEACOND_BIN" "$BEACOND_HOME")
+  local CHAIN
+  CHAIN=$(get_network_from_genesis "$BEACOND_BIN" "$BEACOND_HOME")
 
   local PUBKEY
   if ! PUBKEY=$(get_validator_pubkey "$BEACOND_BIN" "$BEACOND_HOME"); then
     exit 1
   fi
 
-  log_info "Network: $NETWORK"
+  log_info "Chain: $CHAIN"
   log_info "Validator pubkey: $PUBKEY"
 
   # Resolve RPC URL
   local RPC_URL
-  RPC_URL=$(get_rpc_url_for_network "$NETWORK")
+  RPC_URL=$(get_rpc_url_for_network "$CHAIN")
   if [[ -z "$RPC_URL" ]]; then
-    log_error "Unknown network: $NETWORK"
+    log_error "Unknown chain: $CHAIN"
     exit 1
   fi
   
   # Check if this is a delegated pool
   local DELEGATION_HANDLER=""
   local DELEGATION_HANDLER_FACTORY
-  DELEGATION_HANDLER_FACTORY=$(get_delegation_handler_factory_for_network "$NETWORK")
+  DELEGATION_HANDLER_FACTORY=$(get_delegation_handler_factory_for_network "$CHAIN")
   
   if [[ -n "$DELEGATION_HANDLER_FACTORY" && "$DELEGATION_HANDLER_FACTORY" != "0x0000000000000000000000000000000000000000" ]]; then
     DELEGATION_HANDLER=$(get_delegation_handler "$DELEGATION_HANDLER_FACTORY" "$PUBKEY" "$RPC_URL")
@@ -112,9 +112,9 @@ main() {
 
   # Resolve factory address
   local FACTORY_ADDR
-  FACTORY_ADDR=$(get_factory_address_for_network "$NETWORK")
+  FACTORY_ADDR=$(get_factory_address_for_network "$CHAIN")
   if [[ -z "$FACTORY_ADDR" ]]; then
-    log_error "Factory address not available for network: $NETWORK"
+    log_error "Factory address not available for chain: $CHAIN"
     exit 1
   fi
   
@@ -332,13 +332,18 @@ main() {
   local rc_fee_state=$?
   set -e
   
-  if [[ $rc_rebaseable -eq 0 && -n "$rebaseable_bgt" ]]; then
+  if [[ $rc_rebaseable -eq 0 && -n "$rebaseable_bgt" && ! "$rebaseable_bgt" =~ (error|revert|panic|Error) ]]; then
     rebaseable_bgt=$(echo "$rebaseable_bgt" | awk '{print $1}')
     local rebaseable_bgt_eth
     rebaseable_bgt_eth=$(cast_from_wei_safe "$rebaseable_bgt")
     log_info "Rebaseable BGT (in pool assets): $rebaseable_bgt_eth BGT"
   else
-    log_warn "Could not get rebaseable BGT: $rebaseable_bgt"
+    # Check if it's an arithmetic underflow/overflow (common when BGT balance is zero or very small)
+    if [[ "$rebaseable_bgt" =~ (arithmetic|underflow|overflow|panic) ]]; then
+      log_info "Rebaseable BGT (in pool assets): 0.000000000000000000 BGT (calculation underflow - likely no rebaseable BGT)"
+    else
+      log_warn "Could not get rebaseable BGT (this may be normal if there's no rebaseable BGT)"
+    fi
   fi
   
   if [[ $rc_unboosted -eq 0 && -n "$unboosted_bgt" ]]; then
@@ -405,9 +410,9 @@ main() {
 
       # Withdrawal Vault NFTs owned by wallet
       local withdrawal_vault
-      withdrawal_vault=$(get_withdrawal_vault_for_network "$NETWORK")
+      withdrawal_vault=$(get_withdrawal_vault_for_network "$CHAIN")
       if [[ -z "$withdrawal_vault" ]]; then
-        log_warn "Withdrawal vault not found for network: $NETWORK"
+        log_warn "Withdrawal vault not found for chain: $CHAIN"
       else
         local nft_count
         set +e
@@ -423,23 +428,102 @@ main() {
             set -e
             if [[ -z "$token_id" ]]; then continue; fi
 
-            # Fetch request details
-            local req_tuple
+            # Fetch request details using JSON format for proper parsing
+            local req_json
             set +e
-            req_tuple=$(cast call "$withdrawal_vault" "getWithdrawalRequest(uint256)((bytes,uint256,uint256,address,uint256))" "$token_id" -r "$RPC_URL" 2>/dev/null)
+            req_json=$(cast call "$withdrawal_vault" "getWithdrawalRequest(uint256)((bytes,uint256,uint256,address,uint256))" "$token_id" -r "$RPC_URL" --json 2>/dev/null)
             set -e
-            if [[ -n "$req_tuple" ]]; then
-              local cleaned
-              cleaned=$(echo "$req_tuple" | tr -d '()' | tr ',\n\r\t' ' ' | tr -s ' ')
-              # fields: pubkey assetsRequested sharesBurnt user requestBlock
-              local _pubkey assets shares user req_block
-              read -r _pubkey assets shares user req_block <<< "$cleaned"
-              assets=$(echo "$assets" | awk '{print $1}')
-              shares=$(echo "$shares" | awk '{print $1}')
+            if [[ -n "$req_json" && "$req_json" != "null" && "$req_json" != "[]" ]]; then
+              # Cast returns tuple as JSON array: ["(field1, field2, field3, field4, field5)"]
+              # Extract the tuple string from the array, then parse it
+              local tuple_str
+              tuple_str=$(echo "$req_json" | jq -r '.[0] // empty' 2>/dev/null || echo "")
+              
+              if [[ -n "$tuple_str" && "$tuple_str" != "null" ]]; then
+                # Parse the tuple string: (pubkey, assetsRequested, sharesBurnt, user, requestBlock)
+                # Remove parentheses and split by comma+space pattern
+                local cleaned
+                cleaned=$(echo "$tuple_str" | sed 's/^(//; s/)$//' | tr -d '\n\r')
+                
+                if [[ -n "$cleaned" ]]; then
+                  # Extract fields: index 1=assets, 2=shares, 4=requestBlock (0-indexed from comma-separated)
+                  # Use explicit error handling to ensure variables are set
+                  local assets_raw shares_raw req_block_raw
+                  set +e
+                  assets_raw=$(echo "$cleaned" | awk -F', ' '{print $2}')
+                  shares_raw=$(echo "$cleaned" | awk -F', ' '{print $3}')
+                  req_block_raw=$(echo "$cleaned" | awk -F', ' '{print $5}')
+                  set -e
+                  
+                  # Strip scientific notation and validate
+                  local assets shares req_block
+                  if [[ -n "$assets_raw" ]]; then
+                    assets=$(strip_scientific_notation "$assets_raw")
+                  else
+                    assets="0"
+                  fi
+                  if [[ -n "$shares_raw" ]]; then
+                    shares=$(strip_scientific_notation "$shares_raw")
+                  else
+                    shares="0"
+                  fi
+                  if [[ -n "$req_block_raw" ]]; then
+                    req_block=$(strip_scientific_notation "$req_block_raw")
+                  else
+                    req_block="0"
+                  fi
+                  
+                  # Final validation
+                  if [[ -z "$assets" || "$assets" == "null" ]]; then assets="0"; fi
+                  if [[ -z "$shares" || "$shares" == "null" ]]; then shares="0"; fi
+                  if [[ -z "$req_block" || "$req_block" == "null" ]]; then req_block="0"; fi
+                else
+                  assets="0"
+                  shares="0"
+                  req_block="0"
+                fi
+              else
+                assets="0"
+                shares="0"
+                req_block="0"
+              fi
+              
+              # Strip scientific notation if present (fallback protection)
+              # Ensure variables are non-empty before processing
+              if [[ -n "$assets" && "$assets" != "null" ]]; then
+                assets=$(strip_scientific_notation "$assets")
+              else
+                assets="0"
+              fi
+              if [[ -n "$shares" && "$shares" != "null" ]]; then
+                shares=$(strip_scientific_notation "$shares")
+              else
+                shares="0"
+              fi
+              if [[ -n "$req_block" && "$req_block" != "null" ]]; then
+                req_block=$(strip_scientific_notation "$req_block")
+              else
+                req_block="0"
+              fi
+              
               local assets_bera shares_stbera
               assets_bera=$(cast_from_wei_safe "$assets")
               shares_stbera=$(cast_from_wei_safe "$shares")
-              log_info "  NFT #$token_id: assets=$assets_bera BERA, sharesBurnt=$shares_stbera stBERA, block=$req_block"
+              
+              # Check if ready for redemption
+              local ready_status
+              set +e
+              if cast call "$withdrawal_vault" 'finalizeWithdrawalRequest(uint256)' "$token_id" -r "$RPC_URL" >/dev/null 2>&1; then
+                ready_status="✅ Ready"
+              else
+                local ready_time
+                ready_time=$(calculate_withdrawal_ready_time "$req_block" "$RPC_URL")
+                ready_status="⏳ Redeemable $ready_time"
+              fi
+              set -e
+              
+              log_info "  NFT #$token_id: assets=$assets_bera BERA, sharesBurnt=$shares_stbera stBERA, requestBlock=$req_block"
+              log_info "    Status: $ready_status"
             else
               log_info "  NFT #$token_id"
             fi
