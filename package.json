@@ -16,7 +16,6 @@
     "url": "https://github.com/codingwithmanny"
   },
   "scripts": {
-    "preinstall": "npx only-allow pnpm",
     "clean": "turbo clean; rm -rf node_modules; rm -rf .turbo;",
     "build": "turbo build",
     "dev": "turbo dev",
@@ -35,7 +34,6 @@
     "tsup": "^8.5.0",
     "turbo": "latest"
   },
-  "packageManager": "pnpm@10.0.0",
   "engines": {
     "node": ">=20"
   },
