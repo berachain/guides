@@ -87,7 +87,11 @@ _build_el_args_core() {
             if [[ "$archive_mode" != "true" ]]; then
                 archive_option="--full"
             fi
-            local args="node -vvv --datadir $installation_dir/data/el/chain --chain $installation_dir/data/el/config/genesis.json $archive_option $bootnodes_option --authrpc.addr 127.0.0.1 --authrpc.port $el_authrpc_port --authrpc.jwtsecret $installation_dir/data/cl/config/jwt.hex --port $el_p2p_port --rpc.max-logs-per-response 1000000 --metrics $el_prometheus_port --http --http.addr 0.0.0.0 --http.port $el_rpc_port --ws --ws.addr 0.0.0.0 --ws.port $el_ws_port --ipcpath $installation_dir/runtime/admin.ipc --discovery.port $el_p2p_port --http.corsdomain '*' --log.file.max-files 0 $ip_option --max-inbound-peers 300"
+            # Logging filter: transaction pool, propagation, and blocks only; suppress RPC noise
+            # Keep: txpool (transaction pool), net::tx::propagation (propagation), reth_node_events (blocks)
+            # Suppress: jsonrpsee (RPC HTTP), rpc::eth (RPC serving), libp2p (peer churn)
+            local log_filter="warn,txpool=trace,net::tx::propagation=trace,reth_node_events=info,jsonrpsee=off,rpc::eth=off,libp2p=off,libp2p_swarm=off,discv5=off,reth_network::peers=off"
+            local args="node -vvvvv --datadir $installation_dir/data/el/chain --chain $installation_dir/data/el/config/genesis.json $archive_option $bootnodes_option --authrpc.addr 127.0.0.1 --authrpc.port $el_authrpc_port --authrpc.jwtsecret $installation_dir/data/cl/config/jwt.hex --port $el_p2p_port --rpc.max-logs-per-response 1000000 --metrics $el_prometheus_port --http --http.addr 0.0.0.0 --http.port $el_rpc_port --ws --ws.addr 0.0.0.0 --ws.port $el_ws_port --ipcpath $installation_dir/runtime/admin.ipc --discovery.port $el_p2p_port --http.corsdomain '*' --log.file.max-files 0 --log.stdout.filter '$log_filter' $ip_option --max-inbound-peers 300"
             if [[ "$include_binary_path" == "true" ]]; then
                 echo "$(get_el_binary_path reth "$installation_dir") $args"
             else
@@ -98,7 +102,7 @@ _build_el_args_core() {
             # For geth: archive mode adds history parameters
             local archive_option=""
             if [[ "$archive_mode" == "true" ]]; then
-                archive_option="--history.logs 0 --history.state 0 --history.transactions 0"
+                archive_option="--history.logs 0 --history.state 0 --history.transactions 0 --gcmode archive"
             fi
             local args="--verbosity 3 --datadir $installation_dir/data/el/chain --syncmode full --state.scheme path --ipcpath $installation_dir/runtime/admin.ipc --rpc.batch-response-max-size 100000000 --miner.gasprice 1 $archive_option $bootnodes_option --metrics --metrics.addr 127.0.0.1 --metrics.port $el_prometheus_port --http --http.addr 0.0.0.0 --http.port $el_rpc_port --ws --ws.addr 0.0.0.0 --ws.port $el_ws_port --port $el_p2p_port --discovery.port $el_p2p_port --authrpc.addr 127.0.0.1 --authrpc.port $el_authrpc_port --authrpc.jwtsecret $installation_dir/data/cl/config/jwt.hex --authrpc.vhosts localhost $ip_option"
             if [[ "$include_binary_path" == "true" ]]; then
