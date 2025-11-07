@@ -8,14 +8,36 @@ log_info() { echo "[info] $*"; }
 log_success() { echo "[success] $*"; }
 log_warn() { echo "[warn] $*"; }
 
-# Deprecated aliases for backward compatibility
 err() { log_error "$@"; }
 
 # === CAST OUTPUT HANDLING ===
 strip_scientific_notation() {
-  # Cast returns "240000000000000000000000 [2.4e23]" for large numbers
-  # This extracts just the decimal number
-  echo "$1" | awk '{print $1}'
+  # Handles both cast format "240000000000000000000000 [2.4e23]" and pure scientific notation "2.4e23"
+  # Returns the full decimal number as a string
+  local input="${1:-}"
+  
+  # If it contains scientific notation in brackets or as a separate field, extract the first field
+  input=$(echo "$input" | awk '{print $1}')
+  
+  # If it's pure scientific notation (contains 'e' or 'E'), convert it
+  if [[ "$input" =~ [eE] ]]; then
+    # Use awk to convert scientific notation - more reliable than bc for this
+    # awk can handle both e and E notation
+    echo "$input" | awk '{
+      if ($1 ~ /[eE]/) {
+        # Parse scientific notation: split on e/E
+        split(toupper($1), parts, "E")
+        base = parts[1]
+        exp = parts[2]
+        # Calculate: base * 10^exp using awk
+        printf "%.0f", $1
+      } else {
+        print $1
+      }
+    }' 2>/dev/null || echo "$input"
+  else
+    echo "$input"
+  fi
 }
 
 cast_from_wei_safe() {
@@ -351,9 +373,9 @@ load_env() {
   fi
 }
 
-# === NETWORK CONSTANTS ===
+# === CHAIN CONSTANTS ===
 
-# Genesis validator roots for network detection
+# Genesis validator roots for chain detection
 readonly MAINNET_VALIDATOR_ROOT="0xdf609e3b062842c6425ff716aec2d2092c46455d9b2e1a2c9e32c6ba63ff0bda"
 readonly BEPOLIA_VALIDATOR_ROOT="0x3cbcf75b02fe4750c592f1c1ff8b5500a74406f80f038e9ff250e2e294c5615e"
 
@@ -365,13 +387,13 @@ readonly STAKING_POOL_FACTORY_BEPOLIA="0x176c081E95C82CA68DEa20CA419C7506Aa063C2
 readonly DELEGATION_HANDLER_FACTORY_MAINNET="0x0000000000000000000000000000000000000000"  # TBD
 readonly DELEGATION_HANDLER_FACTORY_BEPOLIA="0x8b472791aC2f9e9Bd85f8919401b8Ce3bdFd464c"
 
-# Beacon deposit contract (same on both networks)
+# Beacon deposit contract (same on both chains)
 readonly BEACON_DEPOSIT_CONTRACT="0x4242424242424242424242424242424242424242"
 
-# BGT (Berachain Governance Token) addresses (same on both networks)
+# BGT (Berachain Governance Token) addresses (same on both chains)
 readonly BGT_ADDRESS="0x656b95E550C07a9ffe548bd4085c72418Ceb1dba"
 
-# === NETWORK DETECTION & DEFAULTS ===
+# === CHAIN DETECTION & DEFAULTS ===
 get_rpc_url_for_network() {
   local network="$1"
   
@@ -442,44 +464,116 @@ get_cast_wallet_args() {
   fi
 }
 
-detect_network_and_rpc() {
-  # Returns: network rpc_url (space separated)
-  # Priority: ENV vars -> beacond detection -> defaults
+calculate_withdrawal_ready_time() {
+  # Calculate when a withdrawal request will be ready for redemption
+  # Args: request_block rpc_url
+  # Returns: human-readable time estimate or "ready" if already ready
+  local request_block="$1"; local rpc_url="$2"
+  local cooldown_blocks=129600
   
-  local network="${NETWORK:-}"
+  # Validate and normalize request_block (handle null, empty, or invalid values)
+  if [[ -z "$request_block" || "$request_block" == "null" || "$request_block" == "0" ]]; then
+    echo "unknown (invalid request block)"
+    return 1
+  fi
+  
+  # Get current block number
+  local current_block
+  current_block=$(cast block-number -r "$rpc_url" 2>/dev/null || echo "0")
+  
+  if [[ "$current_block" == "0" || -z "$current_block" ]]; then
+    echo "unknown (could not get current block)"
+    return 1
+  fi
+  
+  # Ensure both are valid numbers before arithmetic
+  if ! [[ "$request_block" =~ ^[0-9]+$ ]] || ! [[ "$current_block" =~ ^[0-9]+$ ]]; then
+    echo "unknown (invalid block numbers)"
+    return 1
+  fi
+  
+  local ready_block
+  ready_block=$((request_block + cooldown_blocks))
+  
+  if (( ready_block <= current_block )); then
+    echo "ready"
+    return 0
+  fi
+  
+  local blocks_remaining
+  blocks_remaining=$((ready_block - current_block))
+  
+  # Estimate time remaining (assuming ~2 seconds per block)
+  local seconds_remaining
+  seconds_remaining=$((blocks_remaining * 2))
+  
+  # Format as human-readable time
+  local days hours minutes
+  days=$((seconds_remaining / 86400))
+  hours=$(((seconds_remaining % 86400) / 3600))
+  minutes=$(((seconds_remaining % 3600) / 60))
+  
+  local time_str=""
+  if [[ $days -gt 0 ]]; then
+    time_str="${days}d "
+  fi
+  if [[ $hours -gt 0 ]]; then
+    time_str="${time_str}${hours}h "
+  fi
+  if [[ $minutes -gt 0 ]]; then
+    time_str="${time_str}${minutes}m"
+  fi
+  time_str=$(echo "$time_str" | sed 's/ $//')
+  
+  if [[ -z "$time_str" ]]; then
+    time_str="< 1 minute"
+  fi
+  
+  echo "in ~$time_str (block $ready_block, $blocks_remaining blocks remaining)"
+  return 0
+}
+
+detect_network_and_rpc() {
+  # Returns: chain rpc_url (space separated)
+  # Priority: CLI_CHAIN -> CHAIN env var -> beacond detection -> defaults
+  
+  local chain="${CLI_CHAIN:-${CHAIN:-}}"
   local rpc_url="${RPC_URL:-}"
   
-  # If both set, use them
-  if [[ -n "$network" && -n "$rpc_url" ]]; then
-    echo "$network $rpc_url"
+  # If chain is set, use it (even if rpc_url not set, we'll derive it)
+  if [[ -n "$chain" ]]; then
+    if [[ -z "$rpc_url" ]]; then
+      rpc_url=$(get_rpc_url_for_network "$chain")
+    fi
+    echo "$chain $rpc_url"
     return 0
   fi
   
   # Try to detect from beacond
   if [[ -n "${BEACOND_HOME:-}" && -n "${BEACOND_BIN:-beacond}" ]]; then
     if have_cmd "${BEACOND_BIN:-beacond}"; then
-      network=$(get_network_from_genesis "${BEACOND_BIN:-beacond}" "$BEACOND_HOME" 2>/dev/null || echo "")
+      chain=$(get_network_from_genesis "${BEACOND_BIN:-beacond}" "$BEACOND_HOME" 2>/dev/null || echo "")
       
-      if [[ -n "$network" && "$network" != "unknown" ]]; then
+      if [[ -n "$chain" && "$chain" != "unknown" ]]; then
         if [[ -z "$rpc_url" ]]; then
-          rpc_url=$(get_rpc_url_for_network "$network")
+          rpc_url=$(get_rpc_url_for_network "$chain")
         fi
-        echo "$network $rpc_url"
+        echo "$chain $rpc_url"
         return 0
       fi
     fi
   fi
   
   # Default to mainnet
-  if [[ -z "$network" ]]; then
-    network="mainnet"
+  if [[ -z "$chain" ]]; then
+    chain="mainnet"
   fi
   
   if [[ -z "$rpc_url" ]]; then
-    rpc_url=$(get_rpc_url_for_network "$network")
+    rpc_url=$(get_rpc_url_for_network "$chain")
   fi
   
-  echo "$network $rpc_url"
+  echo "$chain $rpc_url"
 }
 
 
