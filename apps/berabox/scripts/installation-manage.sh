@@ -84,8 +84,8 @@ list_installations() {
         return
     fi
     
-    printf "%-25s %-12s %-12s %-25s %-15s\n" "NAME" "CHAIN" "EL CLIENT" "STATUS" "OWNERSHIP"
-    printf "%-25s %-12s %-12s %-25s %-15s\n" "----" "-----" "---------" "------" "----------"
+    printf "%-25s %-12s %-12s %-25s\n" "NAME" "CHAIN" "EL CLIENT" "STATUS"
+    printf "%-25s %-12s %-12s %-25s\n" "----" "-----" "---------" "------"
     
     local found_any=false
     for installation_dir in "$BB_CONFIG_INSTALLATIONS_DIR"/*; do
@@ -115,21 +115,7 @@ list_installations() {
                     ;;
             esac
             
-            # Check ownership
-            local owner=$(bb_get_installation_owner "$name")
-            local current_user=$(whoami)
-            local ownership_status=""
-            local ownership_color=""
-            
-            if [[ "$owner" == "$current_user" ]]; then
-                ownership_status="Owned"
-                ownership_color="${GREEN}Owned${NC}"
-            else
-                ownership_status="Other User"
-                ownership_color="${YELLOW}Other User${NC}"
-            fi
-            
-            printf "%-25s %-12s %-12s %-25s %-15s\n" "$name" "$chain" "$el_client" "$(echo -e "$status_color")" "$(echo -e "$ownership_color")"
+            printf "%-25s %-12s %-12s %-25s\n" "$name" "$chain" "$el_client" "$(echo -e "$status_color")"
             found_any=true
         fi
     done
@@ -198,7 +184,7 @@ reset_installation() {
     rm -rf "$installation_dir/logs"/* || true
     rm -rf "$installation_dir/runtime"/* || true
     
-            log_info "✓ Installation '$installation' reset"
+    log_info "✓ Installation '$installation' reset"
 }
 
 # Installation info command
@@ -341,10 +327,6 @@ reset_all_installations() {
     bb_iterate_all_installations_with_errors "reset" "reset_installation" "$@"
 }
 
-remove_all_installations() {
-    bb_iterate_all_installations_with_errors "remove" "remove_installation" "$@"
-}
-
 show_usage() {
     echo "Berabox Installation Management"
     echo ""
@@ -354,10 +336,9 @@ show_usage() {
     echo "  create <chain> <el-client> [name] [--port-base <port>]  Create new installation"
     echo "  list                                                      List all installations"
     echo "  info <installation>                                       Show installation details"
-    echo "  reset <installation> [--force]                           Reset installation data"
-    echo "  remove <installation> [--force]                          Remove installation completely"
+    echo "  reset <installation> [--force]                            Reset installation data"
+    echo "  remove <installation> [--force]                           Remove installation completely"
     echo "  reset-all [--force]                                       Reset all installations"
-    echo "  remove-all [--force]                                      Remove all installations"
     echo ""
     echo "Examples:"
     echo "  $0 create testnet reth my-testnet"
@@ -413,9 +394,6 @@ main() {
             ;;
         "reset-all")
             reset_all_installations "$@"
-            ;;
-        "remove-all")
-            remove_all_installations "$@"
             ;;
         "help"|"--help"|"-h")
             show_usage

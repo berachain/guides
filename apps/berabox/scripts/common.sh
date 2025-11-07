@@ -18,19 +18,16 @@ PURPLE='\033[0;35m'
 CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
-# Standardized logging functions with debug control
 log_info() {
-    if [[ "${DEBUG:-}" == "1" ]] || [[ "${BB_DEBUG:-false}" == "true" ]]; then
+    if [[ "${BB_DEBUG:-false}" == "true" ]]; then
         echo -e "${GREEN}[BB-INFO]\t\t${NC}$1"
     fi
 }
 
-# Always shows important operational results (success, failures, key actions)
 log_result() {
     echo -e "${GREEN}[BB-RESULT]\t${NC}$1"
 }
 
-# Always shows important operational information
 log_operation() {
     echo -e "${BLUE}[BB-OP]\t\t${NC}$1"
 }
@@ -44,7 +41,7 @@ log_error() {
 }
 
 log_debug() {
-    if [[ "${DEBUG:-}" == "1" ]] || [[ "${BB_DEBUG:-false}" == "true" ]]; then
+    if [[ "${BB_DEBUG:-false}" == "true" ]]; then
         echo -e "${CYAN}[BB-DEBUG]\t\t${NC}$1"
     fi
 }
@@ -55,15 +52,15 @@ log_step() {
 
 # Detailed sub-steps (debug only)
 log_substep() {
-    if [[ "${DEBUG:-}" == "1" ]] || [[ "${BB_DEBUG:-false}" == "true" ]]; then
+    if [[ "${BB_DEBUG:-false}" == "true" ]]; then
         echo -e "${CYAN}[BB-SUBSTEP]\t${NC}$1"
     fi
 }
 
-# Quiet execution functions that respect DEBUG environment variable
+# Quiet execution functions that respect BB_DEBUG environment variable
 run_quiet() {
     local temp_file=$(mktemp)
-    if [[ "${DEBUG:-}" == "1" ]]; then
+    if [[ "${BB_DEBUG:-false}" == "true" ]]; then
         "$@" 2>&1 | tee "$temp_file"
         local exit_code=${PIPESTATUS[0]}
     else
@@ -81,9 +78,9 @@ run_quiet() {
     return $exit_code
 }
 
-# Echo function that respects DEBUG mode
+# Echo function that respects BB_DEBUG mode
 debug_echo() {
-    if [[ "${DEBUG:-}" == "1" ]]; then
+    if [[ "${BB_DEBUG:-false}" == "true" ]]; then
         echo "$@"
     fi
 }
@@ -405,7 +402,7 @@ bb_git_refresh_refs() {
     fi
 
     pushd "$repo_dir" >/dev/null || return 1
-    # Fetch branches and tags quietly; show details only in DEBUG
+    # Fetch branches and tags quietly; show details only in BB_DEBUG
     if run_quiet git fetch "$remote_name" --prune --tags; then
         log_info "✓ Refreshed git refs (branches and tags) in $repo_dir"
     else

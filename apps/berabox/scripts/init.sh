@@ -151,7 +151,7 @@ if [[ -n "$EL_KEY_NAME" && "$EL_KEY_NAME" != "" ]]; then
         fi
         
         # Ensure target directory exists
-        mkdir -p "$EL_KEY_DIR"
+        bb_ensure_directory "$EL_KEY_DIR"
         
         # Backup generated key if it exists and deploy custom key
         if [[ -f "$EL_KEY_TARGET" ]]; then
@@ -263,7 +263,7 @@ case "$el_client" in
             temp_file=$(mktemp)
             if "$EL_CLIENT_BIN" init --datadir ./chain/ --chain ./config/genesis.json >"$temp_file" 2>&1; then
                 log_info "✓ Reth initialized, database at $EL_DATA_DIR/chain/db/"
-                if [[ "${DEBUG:-}" == "1" ]]; then
+                if [[ "${BB_DEBUG:-false}" == "true" ]]; then
                     cat "$temp_file"
                 fi
             else
@@ -279,7 +279,7 @@ case "$el_client" in
             temp_file=$(mktemp)
             if "$EL_CLIENT_BIN" init --datadir "$EL_DATA_DIR/chain" "$EL_DATA_DIR/config/genesis.json" >"$temp_file" 2>&1; then
                 log_info "✓ Geth initialized, database at $EL_DATA_DIR/chain/bera-geth/"
-                if [[ "${DEBUG:-}" == "1" ]]; then
+                if [[ "${BB_DEBUG:-false}" == "true" ]]; then
                     cat "$temp_file"
                 fi
             else

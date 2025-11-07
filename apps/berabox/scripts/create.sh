@@ -159,6 +159,9 @@ bb_ensure_directory "$INSTALLATION_DIR/data/el/chain"
 bb_ensure_directory "$INSTALLATION_DIR/logs/cl"
 bb_ensure_directory "$INSTALLATION_DIR/logs/el"
 
+# Create runtime directory for IPC sockets
+bb_ensure_directory "$INSTALLATION_DIR/runtime"
+
 chown -R $(id -u):$(id -g) "$INSTALLATION_DIR"
 
 log_step "Setting up CL data at $INSTALLATION_DIR/data/cl and EL data at $INSTALLATION_DIR/data/el..."

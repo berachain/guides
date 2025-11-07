@@ -91,10 +91,9 @@ bb start
 
 Displays detailed information about an installation including versions, service status, port allocations, validator keys (if CL is initialized), and the execution layer enode (if EL is running). The validator keys include the CometBFT validator address and public key along with the Ethereum/Beacon pubkey used for block proposals. The enode is retrieved directly from the running execution layer via IPC and can be shared for P2P peering.
 
-**`[installation] build [--no-pull] [--quiet] [--release] [clean]`** - Build binaries
+**`[installation] build [--no-pull] [--quiet] [clean]`** - Build binaries
 
 - `--no-pull`: Skip git pull before switching branches (default: always pull)
-- `--release`: Build optimized release binaries instead of debug binaries
 - `--quiet`: Silence compiler output while keeping operational logging
 - `clean`: Remove build artifacts (preserves installed binaries)
 
@@ -191,7 +190,7 @@ lease_time = 86400
 
 Berabox is designed debug-first with full VS Code integration and automatic configuration generation.
 
-**Debug builds include full symbols**: Go (`-gcflags="all=-N"`), Rust (unoptimized debug). Use `--release` flag for optimized production builds without debug symbols.
+**Debug builds include full symbols**: Go (`-gcflags="all=-N"`), Rust (unoptimized debug).
 
 ### VS Code/Cursor Debugging
 

@@ -46,12 +46,12 @@ setup_upnp_forwarding() {
     local temp_file=$(mktemp)
     if upnpc -a $(hostname -I | awk '{print $1}') "$CL_P2P_PORT" "$CL_P2P_PORT" TCP "$lease_time" >"$temp_file" 2>&1; then
         log_result "✓ UPnP: CL P2P port $CL_P2P_PORT TCP forwarded"
-        if [[ "${DEBUG:-}" == "1" ]]; then
+        if [[ "${BB_DEBUG:-false}" == "true" ]]; then
             cat "$temp_file"
         fi
     else
         log_warn "✗ UPnP: Failed to forward CL P2P port $CL_P2P_PORT TCP"
-        if [[ "${DEBUG:-}" == "1" ]]; then
+        if [[ "${BB_DEBUG:-false}" == "true" ]]; then
             cat "$temp_file" >&2
         fi
         success=false
@@ -63,12 +63,12 @@ setup_upnp_forwarding() {
     local temp_file=$(mktemp)
     if upnpc -a $(hostname -I | awk '{print $1}') "$CL_P2P_PORT" "$CL_P2P_PORT" UDP "$lease_time" >"$temp_file" 2>&1; then
         log_result "✓ UPnP: CL P2P port $CL_P2P_PORT UDP forwarded"
-        if [[ "${DEBUG:-}" == "1" ]]; then
+        if [[ "${BB_DEBUG:-false}" == "true" ]]; then
             cat "$temp_file"
         fi
     else
         log_warn "✗ UPnP: Failed to forward CL P2P port $CL_P2P_PORT UDP"
-        if [[ "${DEBUG:-}" == "1" ]]; then
+        if [[ "${BB_DEBUG:-false}" == "true" ]]; then
             cat "$temp_file" >&2
         fi
         success=false
@@ -80,12 +80,12 @@ setup_upnp_forwarding() {
     local temp_file=$(mktemp)
     if upnpc -a $(hostname -I | awk '{print $1}') "$EL_P2P_PORT" "$EL_P2P_PORT" TCP "$lease_time" >"$temp_file" 2>&1; then
         log_result "✓ UPnP: EL P2P port $EL_P2P_PORT TCP forwarded"
-        if [[ "${DEBUG:-}" == "1" ]]; then
+        if [[ "${BB_DEBUG:-false}" == "true" ]]; then
             cat "$temp_file"
         fi
     else
         log_warn "✗ UPnP: Failed to forward EL P2P port $EL_P2P_PORT TCP"
-        if [[ "${DEBUG:-}" == "1" ]]; then
+        if [[ "${BB_DEBUG:-false}" == "true" ]]; then
             cat "$temp_file" >&2
         fi
         success=false
@@ -97,12 +97,12 @@ setup_upnp_forwarding() {
     local temp_file=$(mktemp)
     if upnpc -a $(hostname -I | awk '{print $1}') "$EL_P2P_PORT" "$EL_P2P_PORT" UDP "$lease_time" >"$temp_file" 2>&1; then
         log_result "✓ UPnP: EL P2P port $EL_P2P_PORT UDP forwarded"
-        if [[ "${DEBUG:-}" == "1" ]]; then
+        if [[ "${BB_DEBUG:-false}" == "true" ]]; then
             cat "$temp_file"
         fi
     else
         log_warn "✗ UPnP: Failed to forward EL P2P port $EL_P2P_PORT UDP"
-        if [[ "${DEBUG:-}" == "1" ]]; then
+        if [[ "${BB_DEBUG:-false}" == "true" ]]; then
             cat "$temp_file" >&2
         fi
         success=false

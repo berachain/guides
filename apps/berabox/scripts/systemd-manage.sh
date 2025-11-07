@@ -282,12 +282,12 @@ cleanup_upnp_forwarding() {
     local temp_file=$(mktemp)
     if upnpc -d "$CL_P2P_PORT" TCP >"$temp_file" 2>&1; then
         log_info "✓ CL P2P port $CL_P2P_PORT → $CL_P2P_PORT TCP forwarding removed"
-        if [[ "${DEBUG:-}" == "1" ]]; then
+        if [[ "${BB_DEBUG:-false}" == "true" ]]; then
             cat "$temp_file"
         fi
     else
         log_warn "✗ Failed to remove CL P2P port $CL_P2P_PORT → $CL_P2P_PORT TCP forwarding (may not exist)"
-        if [[ "${DEBUG:-}" == "1" ]]; then
+        if [[ "${BB_DEBUG:-false}" == "true" ]]; then
             cat "$temp_file" >&2
         fi
     fi
@@ -298,12 +298,12 @@ cleanup_upnp_forwarding() {
     local temp_file=$(mktemp)
     if upnpc -d "$CL_P2P_PORT" UDP >"$temp_file" 2>&1; then
         log_info "✓ CL P2P port $CL_P2P_PORT → $CL_P2P_PORT UDP forwarding removed"
-        if [[ "${DEBUG:-}" == "1" ]]; then
+        if [[ "${BB_DEBUG:-false}" == "true" ]]; then
             cat "$temp_file"
         fi
     else
         log_warn "✗ Failed to remove CL P2P port $CL_P2P_PORT → $CL_P2P_PORT UDP forwarding (may not exist)"
-        if [[ "${DEBUG:-}" == "1" ]]; then
+        if [[ "${BB_DEBUG:-false}" == "true" ]]; then
             cat "$temp_file" >&2
         fi
     fi
@@ -314,12 +314,12 @@ cleanup_upnp_forwarding() {
     local temp_file=$(mktemp)
     if upnpc -d "$EL_P2P_PORT" TCP >"$temp_file" 2>&1; then
         log_info "✓ EL P2P port $EL_P2P_PORT → $EL_P2P_PORT TCP forwarding removed"
-        if [[ "${DEBUG:-}" == "1" ]]; then
+        if [[ "${BB_DEBUG:-false}" == "true" ]]; then
             cat "$temp_file"
         fi
     else
         log_warn "✗ Failed to remove EL P2P port $EL_P2P_PORT → $EL_P2P_PORT TCP forwarding (may not exist)"
-        if [[ "${DEBUG:-}" == "1" ]]; then
+        if [[ "${BB_DEBUG:-false}" == "true" ]]; then
             cat "$temp_file" >&2
         fi
     fi
@@ -330,12 +330,12 @@ cleanup_upnp_forwarding() {
     local temp_file=$(mktemp)
     if upnpc -d "$EL_P2P_PORT" UDP >"$temp_file" 2>&1; then
         log_info "✓ EL P2P port $EL_P2P_PORT → $EL_P2P_PORT UDP forwarding removed"
-        if [[ "${DEBUG:-}" == "1" ]]; then
+        if [[ "${BB_DEBUG:-false}" == "true" ]]; then
             cat "$temp_file"
         fi
     else
         log_warn "✗ Failed to remove EL P2P port $EL_P2P_PORT → $EL_P2P_PORT UDP forwarding (may not exist)"
-        if [[ "${DEBUG:-}" == "1" ]]; then
+        if [[ "${BB_DEBUG:-false}" == "true" ]]; then
             cat "$temp_file" >&2
         fi
     fi
@@ -494,6 +494,10 @@ logs_services() {
     local installation_toml="$installation_dir/installation.toml"
     local cl_logs_dir=$(bb_get_installation_path "$installation_toml" "cl_logs_dir")
     local el_logs_dir=$(bb_get_installation_path "$installation_toml" "el_logs_dir")
+
+    # Ensure log directories exist before searching for log files
+    bb_ensure_directory "$cl_logs_dir"
+    bb_ensure_directory "$el_logs_dir"
 
     # Always reload daemon before operations
     systemctl --user daemon-reload 2>/dev/null || true

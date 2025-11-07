@@ -135,7 +135,7 @@ else
     export CARGO_HOME=/opt/rust/.cargo
     temp_file=$(mktemp)
     curl -sSf https://sh.rustup.rs | sudo RUSTUP_HOME=/opt/rust/.rustup CARGO_HOME=/opt/rust/.cargo sh -s -- -y --default-toolchain stable --profile default --no-modify-path >"$temp_file" 2>&1
-    if [[ $? -ne 0 && "${DEBUG:-}" != "1" ]]; then
+    if [[ $? -ne 0 && "${BB_DEBUG:-false}" != "true" ]]; then
         echo "Rust installation failed:" >&2
         cat "$temp_file" >&2
     fi
