@@ -31,6 +31,7 @@ const { ValidatorNameDB, BlockFetcher, StatUtils, ProgressReporter, ConfigHelper
 function classifyClient(clientString) {
     const lower = clientString.toLowerCase();
     
+    if (lower === 'empty') return 'Empty/Not Set';
     if (lower.includes('besu')) return 'Besu';
     if (lower.includes('geth')) return 'Geth';
     if (lower.includes('nethermind')) return 'Nethermind';
@@ -475,8 +476,8 @@ async function analyzeVotingPower(networkName = 'mainnet', maxBlocksToScan = 100
     if (detailedMode || verboseMode) {
         console.log('\n🧾 VALIDATOR VERSIONS:');
         const validatorTable = new Table({
-            head: ['Validator', 'Address', 'Client', 'Version', 'Voting Power'],
-            colWidths: [28, 18, 12, 12, 18]
+            head: ['Validator', 'Address', 'Client', 'Version', 'Sample Block', 'extraData', 'Voting Power'],
+            colWidths: [28, 18, 12, 12, 14, 25, 18]
         });
 
         const entries = await Promise.all(Array.from(proposerClients.entries()).map(async ([address, info]) => {
@@ -487,6 +488,8 @@ async function analyzeVotingPower(networkName = 'mainnet', maxBlocksToScan = 100
                 shortAddress: address.substring(0, 12) + '...',
                 client: info.clientType,
                 version: info.clientVersion,
+                sampleBlock: info.sampleBlock,
+                extraData: info.extraData,
                 votingPower: vp
             };
         }));
@@ -499,6 +502,8 @@ async function analyzeVotingPower(networkName = 'mainnet', maxBlocksToScan = 100
                 e.shortAddress,
                 e.client,
                 e.version,
+                e.sampleBlock.toString(),
+                e.extraData,
                 e.votingPower.toLocaleString()
             ]);
         }
