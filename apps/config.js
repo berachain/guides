@@ -51,7 +51,7 @@ const config = {
     }
     return path.join(__dirname, 'doc-abis');
   })(),
-  VALIDATOR_DB_PATH: process.env.VALIDATOR_DB_PATH || path.join(__dirname, '../cometbft-decoder/validators_correlated.db'),
+  VALIDATOR_DB_PATH: process.env.VALIDATOR_DB_PATH || path.join(__dirname, 'var', 'db', 'validator.sqlite'),
 
   // 3) Other settings
   DEFAULT_BLOCK_COUNT: parseInt(process.env.DEFAULT_BLOCK_COUNT) || 1000,

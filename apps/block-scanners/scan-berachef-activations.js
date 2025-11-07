@@ -33,8 +33,8 @@ const fs = require('fs');
 const path = require('path');
 const { spawn } = require('child_process');
 
-// Database path for validator data
-const VALIDATOR_DB_PATH = path.join(__dirname, '..', 'var', 'db', 'validator.sqlite');
+// Database path for validator data - use shared config
+const VALIDATOR_DB_PATH = ConfigHelper.getValidatorDbPath();
 
 // Configuration
 const CONFIG = {
@@ -1059,6 +1059,16 @@ function parseArgs() {
       default: false,
       description: 'Output validator table as CSV'
     })
+    .option('to-block', {
+      alias: 'b',
+      type: 'number',
+      description: 'Final block number to scan up to (default: latest block)'
+    })
+    .option('to-date', {
+      alias: 'e',
+      type: 'string',
+      description: 'Final date to scan up to (YYYY-MM-DD format, default: latest block)'
+    })
     .option('help', {
       alias: 'h',
       type: 'boolean',
@@ -1082,6 +1092,8 @@ function parseArgs() {
     chain: argv.chain,
     verbose: argv.verbose,
     csv: argv.csv,
+    toBlock: argv['to-block'],
+    toDate: argv['to-date'],
     help: argv.help
   };
 }
@@ -1105,6 +1117,8 @@ Options:
   -d, --days <number>     Maximum days to scan backwards (default: 180)
   -r, --rpc <url>         RPC endpoint URL
   -c, --chain <name>      Chain name: mainnet, bepolia (default: mainnet)
+  -b, --to-block <number> Final block number to scan up to (default: latest block)
+  -e, --to-date <date>    Final date to scan up to (YYYY-MM-DD format, default: latest block)
   -v, --verbose           Verbose output
   --csv                   Output validator table as CSV
   -h, --help              Show this help
@@ -1113,6 +1127,8 @@ Examples:
   node scan-berachef-activations.js --chain mainnet
   node scan-berachef-activations.js --days 60 --verbose
   node scan-berachef-activations.js --days 120 --rpc https://bepolia.rpc.berachain.com
+  node scan-berachef-activations.js --to-date 2025-01-20
+  node scan-berachef-activations.js --to-block 12345678
   node scan-berachef-activations.js --csv > validators.csv
 `);
     process.exit(0);
@@ -1126,43 +1142,36 @@ Examples:
     
     const contractAddress = CONFIG.contracts[config.chain];
     
-    // Get final block number - try to get from evaluation_metadata, otherwise use latest
-    let finalBlockNumber = 'latest';
-    try {
-      // Use executeSQL function to get end_date (avoids shell command construction)
-      const sql = "SELECT end_date FROM evaluation_metadata WHERE id = 1";
-      const result = await executeSQL(sql);
-      const endDateStr = result.output.trim();
-      
-      if (endDateStr && endDateStr.match(/^\d{4}-\d{2}-\d{2}$/)) {
-        // Find block at start of next day (which is the end of the study period)
-        const nextDay = new Date(endDateStr + 'T00:00:00.000Z');
-        nextDay.setUTCDate(nextDay.getUTCDate() + 1);
-        const nextDayTimestamp = Math.floor(nextDay.getTime() / 1000);
-        
-        const latestBlock = await getLatestBlock(config.rpc);
-        const clUrl = ConfigHelper.getBlockScannerUrl(config.chain);
-        const blockFetcher = new BlockFetcher(clUrl);
-        const finalBlock = await blockFetcher.findBlockByTimestamp(nextDayTimestamp, latestBlock);
-        
-        if (finalBlock) {
-          finalBlockNumber = `0x${finalBlock.toString(16)}`;
-          console.log(`📊 Using final block from evaluation period: ${finalBlock} (end of ${endDateStr})`);
-        } else {
-          const latestBlockHex = `0x${latestBlock.toString(16)}`;
-          finalBlockNumber = latestBlockHex;
-          console.log(`⚠️  Could not find block for end_date ${endDateStr}, using latest: ${latestBlock}`);
-        }
-      } else {
-        const latestBlock = await getLatestBlock(config.rpc);
-        finalBlockNumber = `0x${latestBlock.toString(16)}`;
-        console.log(`📊 No valid end_date found, using latest block: ${latestBlock}`);
+    // Get final block number from command line option or use latest from chain
+    let finalBlockNumber;
+    if (config.toBlock) {
+      finalBlockNumber = `0x${config.toBlock.toString(16)}`;
+      console.log(`📊 Using final block from command line option: ${config.toBlock}`);
+    } else if (config.toDate) {
+      // Parse date and find the block at start of that day (00:00:00 UTC)
+      const dateMatch = config.toDate.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+      if (!dateMatch) {
+        throw new Error(`Invalid date format: ${config.toDate}. Expected YYYY-MM-DD`);
       }
-    } catch (e) {
-      // No evaluation_metadata or error reading it - use latest
+      
+      const targetDate = new Date(config.toDate + 'T00:00:00.000Z');
+      const targetTimestamp = Math.floor(targetDate.getTime() / 1000);
+      
+      const latestBlock = await getLatestBlock(config.rpc);
+      const clUrl = ConfigHelper.getBlockScannerUrl(config.chain);
+      const blockFetcher = new BlockFetcher(clUrl);
+      const finalBlock = await blockFetcher.findBlockByTimestamp(targetTimestamp, latestBlock);
+      
+      if (finalBlock) {
+        finalBlockNumber = `0x${finalBlock.toString(16)}`;
+        console.log(`📊 Using final block from date ${config.toDate}: ${finalBlock}`);
+      } else {
+        throw new Error(`Could not find block for date ${config.toDate}`);
+      }
+    } else {
       const latestBlock = await getLatestBlock(config.rpc);
       finalBlockNumber = `0x${latestBlock.toString(16)}`;
-      console.log(`📊 Using latest block as final (error reading metadata: ${e.message}): ${latestBlock}`);
+      console.log(`📊 Using latest block from chain: ${latestBlock}`);
     }
     
     const { activations, validatorCounts, validatorTimestamps } = await scanActivations(config);

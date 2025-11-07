@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
@@ -190,8 +191,34 @@ func main() {
 		apiURL = "http://37.27.231.195:59820"
 	}
 
+	// Get database path from environment variable or use default
+	dbPath := os.Getenv("VALIDATOR_DB_PATH")
+	if dbPath == "" {
+		// Default to ../var/db/validator.sqlite relative to current working directory
+		// This assumes the script is run from apps/cometbft-decoder/ directory
+		cwd, err := os.Getwd()
+		if err != nil {
+			fmt.Printf("Error getting current directory: %v\n", err)
+			return
+		}
+		// If we're in cometbft-decoder, go up one level to apps, then into var/db
+		dbPath = filepath.Join(cwd, "..", "var", "db", "validator.sqlite")
+		dbPath, err = filepath.Abs(dbPath)
+		if err != nil {
+			fmt.Printf("Error resolving database path: %v\n", err)
+			return
+		}
+	}
+
+	// Ensure the database directory exists
+	dbDir := filepath.Dir(dbPath)
+	if err := os.MkdirAll(dbDir, 0755); err != nil {
+		fmt.Printf("Error creating database directory: %v\n", err)
+		return
+	}
+
 	// Initialize SQLite database
-	db, err := sql.Open("sqlite3", "validators.db")
+	db, err := sql.Open("sqlite3", dbPath)
 	if err != nil {
 		fmt.Printf("Error opening database: %v\n", err)
 		return
@@ -306,5 +333,5 @@ func main() {
 
 	fmt.Printf("\nSuccessfully matched: %d out of %d validators\n", matchedCount, len(response.Result.Validators))
 	fmt.Printf("Match rate: %.1f%%\n", float64(matchedCount)/float64(len(response.Result.Validators))*100)
-	fmt.Println("Data has been saved to validators.db")
+	fmt.Printf("Data has been saved to %s\n", dbPath)
 }
