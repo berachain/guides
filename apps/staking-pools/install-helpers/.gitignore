@@ -1,0 +1,22 @@
+# User configuration
+env.sh
+
+# Generated command files
+*-command.sh
+*-1-*.sh
+*-2-*.sh
+*-3-*.sh
+*-4-*.sh
+deployment-command.sh
+activation-command.sh
+stake-command.sh
+
+# Backup files
+*.bak
+*.old
+
+# State/history files (if any scripts generate them)
+*-history.json
+*-state.json
+
+

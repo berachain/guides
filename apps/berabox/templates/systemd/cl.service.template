@@ -1,0 +1,22 @@
+[Unit]
+Description=Berabox Consensus Layer - {INSTALLATION_NAME}
+
+[Service]
+Type=simple
+WorkingDirectory={INSTALLATION_DIR}/src/beacon-kit
+ExecStartPre=/bin/mkdir -p {INSTALLATION_DIR}/runtime
+ExecStartPre=/bin/mkdir -p {CL_LOGS_DIR}
+ExecStart={CL_BIN} start --home {CL_DATA_DIR} --beacon-kit.node-api.enabled=true --beacon-kit.node-api.address=0.0.0.0:{NODE_API_PORT}
+Restart=always
+RestartSec=3
+KillSignal=SIGINT
+TimeoutStopSec=60s
+StandardOutput=append:{CL_LOGS_DIR}/beacond.log
+StandardError=append:{CL_LOGS_DIR}/beacond.log
+SyslogIdentifier=bb-{INSTALLATION_NAME}-cl
+
+# Debug-friendly settings
+Environment=GOTRACEBACK=all
+
+[Install]
+WantedBy=default.target
