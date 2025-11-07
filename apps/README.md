@@ -11,6 +11,7 @@ Many scripts and tools use shared configuration from `config.js` which provides:
 - Common helper functions for accessing chain configurations
 
 The configuration file is shared from the parent repository's `exp/config.js`. If you're running scripts that reference `config.js`, you'll need to either:
+
 - Copy `../exp/config.js` to `apps/config.js`, or
 - Symlink it: `ln -s ../exp/config.js config.js`
 
@@ -157,5 +158,3 @@ WalletConnect integration for React Native Expo apps.
 ### walletconnect-nextjs/
 
 WalletConnect integration for Next.js applications.
-
-

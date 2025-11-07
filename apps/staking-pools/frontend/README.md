@@ -23,6 +23,7 @@ This app loads `/config.json` at runtime. Serve or edit `config.json` to set:
 ## Features
 
 ### User Page (👤)
+
 - Connect wallet (MetaMask)
 - Select configured pool
 - Deposit BERA via `submit(receiver)`
@@ -56,8 +57,3 @@ Then access at: `http://YOUR_IP:3000`
 - `npm run dev` - Start development server
 - `npm run build` - Build for production
 - `npm run preview` - Preview production build
-
-
-
-
-

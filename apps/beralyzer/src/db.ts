@@ -14,7 +14,10 @@ export function getPool(dsn: string, maxConnections: number = 50): Pool {
   return globalPool;
 }
 
-export async function connectPg(dsn: string, maxConnections?: number): Promise<Pool | Client> {
+export async function connectPg(
+  dsn: string,
+  maxConnections?: number,
+): Promise<Pool | Client> {
   // For backward compatibility, return Pool (which has same query interface)
   return getPool(dsn, maxConnections);
 }

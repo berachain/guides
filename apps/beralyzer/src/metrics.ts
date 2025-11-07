@@ -133,4 +133,3 @@ export const queueDepth = new Gauge({
   labelNames: ["type"], // blocks, transactions
   registers: [register],
 });
-

@@ -5,13 +5,12 @@ export interface DaySnapshotConfig {
   clRpcUrls: string[]; // Multiple CL RPC URLs for load balancing
 }
 
-
 export async function snapshotTodayIfMissing(
   pg: Pool | Client,
   cfg: DaySnapshotConfig,
 ): Promise<void> {
   const clClient = new RoundRobinClClient(cfg.clRpcUrls);
-  
+
   // Determine today UTC
   const today = new Date();
   today.setUTCHours(0, 0, 0, 0);
@@ -23,7 +22,7 @@ export async function snapshotTodayIfMissing(
   if (exists.rowCount && exists.rowCount > 0) return; // already snapshotted
 
   const latest = await clClient.getLatestHeight();
-  
+
   // Find boundary block for today using binary search
   const targetTs = Math.floor(today.getTime() / 1000);
   let l = 1;
@@ -46,9 +45,9 @@ export async function snapshotTodayIfMissing(
     else l = mid + 1;
   }
   boundary = l;
-  
+
   if (!boundary) return;
-  
+
   const validatorsRaw = await clClient.getValidators(boundary);
   if (!validatorsRaw) return;
   const validators = validatorsRaw.map((v: any, i: number) => ({
