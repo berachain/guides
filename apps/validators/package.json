@@ -13,6 +13,7 @@
     "pubkeys": "tsx src/pubkeys.ts",
     "allocations": "tsx src/allocations.ts",
     "rewards": "tsx src/rewards.ts",
+    "stakes": "tsx src/stakes.ts",
     "timestamp": "TZ=America/New_York date '+%Y-%m-%d %H:%M:00 %Z' > files/_lastupdated.txt",
     "clean": "rm -rf node_modules; rm -rf .turbo; rm -rf out;"
   },
