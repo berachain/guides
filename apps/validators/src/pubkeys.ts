@@ -14,7 +14,8 @@ import path from "path";
 // Constants
 // -----------------------------------------------------------------
 const CONTRACT_BEACONDEPOSIT = "0x4242424242424242424242424242424242424242";
-const CONTRACT_BLOCKREWARDCONTROLLER = "0x1AE7dD7AE06F6C58B4524d9c1f816094B1bcCD8e";
+const CONTRACT_BLOCKREWARDCONTROLLER =
+  "0x1AE7dD7AE06F6C58B4524d9c1f816094B1bcCD8e";
 const DEPOSITS_FILE = path.join(process.cwd(), "files", "deposits.csv");
 const GENESIS_FILE =
   "https://github.com/berachain/beacon-kit/blob/main/testing/networks/80094/genesis.json";
@@ -59,7 +60,14 @@ const main = async () => {
     console.log("Using default RPC URL.");
   }
 
-  const validators: { [pubkey: string]: { name: string; pubkey: string; operatorAddress: string, stake: number } } = {};
+  const validators: {
+    [pubkey: string]: {
+      name: string;
+      pubkey: string;
+      operatorAddress: string;
+      stake: number;
+    };
+  } = {};
 
   // Ensure the out directory exists
   if (!fs.existsSync(OUT_DIR)) {
@@ -140,7 +148,11 @@ const main = async () => {
     validators[deposit.pubkey]!.stake += parseInt(deposit.amount, 16);
     return deposit.pubkey;
   });
-  console.log("Found", Object.keys(validators).length, "validators to process.");
+  console.log(
+    "Found",
+    Object.keys(validators).length,
+    "validators to process.",
+  );
 
   const validatorsCSV = [
     ...Object.keys(validators).map((pubkey) => ({
@@ -188,30 +200,34 @@ const main = async () => {
   // Get base rate in BGT
   const baseRate = await client.readContract({
     address: CONTRACT_BLOCKREWARDCONTROLLER,
-    abi: [
-      parseAbiItem(
-        "function baseRate() view returns (uint256)",
-      ),
-    ],
+    abi: [parseAbiItem("function baseRate() view returns (uint256)")],
     functionName: "baseRate",
   });
   const baseRateBGT = Number(baseRate) / 1000000000000000000;
-  console.log("Base rate validator reward:", `${baseRateBGT.toFixed(2)} BGT per block`);
+  console.log(
+    "Base rate validator reward:",
+    `${baseRateBGT.toFixed(2)} BGT per block`,
+  );
 
   // Output operator pubkey mappings to CSV: name,pubkey,operatorAddress,stake,chance
-  const blocksPer24h = 86400/2; // 2 seconds per block
-  const totalStake = validatorsCSV.reduce((acc, validator) => acc + validator.stake, 0);
+  const blocksPer24h = 86400 / 2; // 2 seconds per block
+  const totalStake = validatorsCSV.reduce(
+    (acc, validator) => acc + validator.stake,
+    0,
+  );
   const outputRows = [
     "name,pubKey,operatorAddress,stake,blockProposal,estBGTPer24h",
     ...validatorsCSV
-    .sort((a, b) => b.stake - a.stake)
-    .map((validator) => {
-      const blockProposal = (validator.stake / totalStake);
-      const bgtPer24h = (blockProposal * Number(baseRate) * blocksPer24h) / 1000000000000000000;
-      // Escape name for CSV formatting: wrap with double quotes, escape inner quotes by doubling them
-      const escapedName = `"${String(validator.name).replace(/"/g, '""')}"`;
-      return `${escapedName},${validator.pubkey},${validator.operatorAddress},${validator.stake},${(blockProposal * 100).toFixed(2)}%,${(bgtPer24h).toFixed(2)} BGT`;
-    }),
+      .sort((a, b) => b.stake - a.stake)
+      .map((validator) => {
+        const blockProposal = validator.stake / totalStake;
+        const bgtPer24h =
+          (blockProposal * Number(baseRate) * blocksPer24h) /
+          1000000000000000000;
+        // Escape name for CSV formatting: wrap with double quotes, escape inner quotes by doubling them
+        const escapedName = `"${String(validator.name).replace(/"/g, '""')}"`;
+        return `${escapedName},${validator.pubkey},${validator.operatorAddress},${validator.stake},${(blockProposal * 100).toFixed(2)}%,${bgtPer24h.toFixed(2)} BGT`;
+      }),
   ];
 
   const outputFile = path.join(process.cwd(), "files", "validators.csv");
