@@ -14,12 +14,21 @@ import path from "path";
 // Constants
 // -----------------------------------------------------------------
 const CONTRACT_BEACONDEPOSIT = "0x4242424242424242424242424242424242424242";
+const CONTRACT_BLOCKREWARDCONTROLLER =
+  "0x1AE7dD7AE06F6C58B4524d9c1f816094B1bcCD8e";
 const DEPOSITS_FILE = path.join(process.cwd(), "files", "deposits.csv");
 const GENESIS_FILE =
   "https://github.com/berachain/beacon-kit/blob/main/testing/networks/80094/genesis.json";
 const VALIDATORS_METADATA_FILE =
   "https://github.com/berachain/metadata/blob/main/src/validators/mainnet.json";
 const DELAY_MS = 1000;
+// Download eth-genesis.json to the out folder
+const OUT_DIR = path.resolve(process.cwd(), "out");
+const GENESIS_OUT_FILE = path.join(OUT_DIR, "genesis.json");
+const VALIDATORS_METADATA_OUT_FILE = path.join(
+  OUT_DIR,
+  "validators_metadata.json",
+);
 
 // Config
 // -----------------------------------------------------------------
@@ -51,19 +60,19 @@ const main = async () => {
     console.log("Using default RPC URL.");
   }
 
-  // Download eth-genesis.json to the out folder
-  const OUT_DIR = path.resolve(process.cwd(), "out");
-  const GENESIS_OUT_FILE = path.join(OUT_DIR, "genesis.json");
-  const VALIDATORS_METADATA_OUT_FILE = path.join(
-    OUT_DIR,
-    "validators_metadata.json",
-  );
+  const validators: {
+    [pubkey: string]: {
+      name: string;
+      pubkey: string;
+      operatorAddress: string;
+      stake: number;
+    };
+  } = {};
 
   // Ensure the out directory exists
   if (!fs.existsSync(OUT_DIR)) {
     fs.mkdirSync(OUT_DIR, { recursive: true });
   }
-
   console.log(
     `Downloading genesis.json from ${GENESIS_FILE} and validators metadata from ${VALIDATORS_METADATA_FILE} ...`,
   );
@@ -105,9 +114,17 @@ const main = async () => {
   console.log("Found", deposits.length, "deposits to process.");
   const pubkeysSet = new Set<string>();
   for (const deposit of deposits) {
-    const [pubkey] = deposit.split(",");
-    if (pubkey) {
-      pubkeysSet.add(pubkey);
+    const [pubkey, _, amount] = deposit.split(",");
+    if (pubkey && amount) {
+      if (!validators[pubkey]) {
+        validators[pubkey] = {
+          name: "",
+          pubkey,
+          operatorAddress: "",
+          stake: 0,
+        };
+      }
+      validators[pubkey].stake += Number(amount);
     }
   }
 
@@ -120,17 +137,29 @@ const main = async () => {
     "pubkeys in genesis.json.",
   );
   genesis.app_state.beacon.deposits.map((deposit: any) => {
-    pubkeysSet.add(deposit.pubkey);
+    if (!validators[deposit.pubkey]) {
+      validators[deposit.pubkey] = {
+        name: "",
+        pubkey: deposit.pubkey,
+        operatorAddress: "",
+        stake: 0,
+      };
+    }
+    validators[deposit.pubkey]!.stake += parseInt(deposit.amount, 16);
     return deposit.pubkey;
   });
-  const pubkeys = Array.from(pubkeysSet);
-  console.log("Found", pubkeys.length, "pubkeys to process.");
+  console.log(
+    "Found",
+    Object.keys(validators).length,
+    "validators to process.",
+  );
 
-  const validators = [
-    ...pubkeys.map((pubkey) => ({
-      name: "",
+  const validatorsCSV = [
+    ...Object.keys(validators).map((pubkey) => ({
+      name: validators[pubkey]!.name,
       pubkey,
-      operatorAddress: "",
+      operatorAddress: validators[pubkey]!.operatorAddress,
+      stake: validators[pubkey]!.stake,
     })),
   ];
 
@@ -139,7 +168,7 @@ const main = async () => {
     fs.readFileSync(VALIDATORS_METADATA_OUT_FILE, "utf8"),
   );
 
-  for (const validator of validators) {
+  for (const validator of validatorsCSV) {
     const operatorAddress = await client.readContract({
       address: CONTRACT_BEACONDEPOSIT,
       abi: [
@@ -168,14 +197,37 @@ const main = async () => {
     await new Promise((resolve) => setTimeout(resolve, DELAY_MS));
   }
 
-  // Output operator pubkey mappings to CSV: name,pubkeys,operatorAddress
+  // Get base rate in BGT
+  const baseRate = await client.readContract({
+    address: CONTRACT_BLOCKREWARDCONTROLLER,
+    abi: [parseAbiItem("function baseRate() view returns (uint256)")],
+    functionName: "baseRate",
+  });
+  const baseRateBGT = Number(baseRate) / 1000000000000000000;
+  console.log(
+    "Base rate validator reward:",
+    `${baseRateBGT.toFixed(2)} BGT per block`,
+  );
+
+  // Output operator pubkey mappings to CSV: name,pubkey,operatorAddress,stake,chance
+  const blocksPer24h = 86400 / 2; // 2 seconds per block
+  const totalStake = validatorsCSV.reduce(
+    (acc, validator) => acc + validator.stake,
+    0,
+  );
   const outputRows = [
-    "name,pubkeys,operatorAddress",
-    ...validators.map((validator) => {
-      // Escape name for CSV formatting: wrap with double quotes, escape inner quotes by doubling them
-      const escapedName = `"${String(validator.name).replace(/"/g, '""')}"`;
-      return `${escapedName},${validator.pubkey},${validator.operatorAddress}`;
-    }),
+    "name,pubKey,operatorAddress,stake,blockProposal,estBGTPer24h",
+    ...validatorsCSV
+      .sort((a, b) => b.stake - a.stake)
+      .map((validator) => {
+        const blockProposal = validator.stake / totalStake;
+        const bgtPer24h =
+          (blockProposal * Number(baseRate) * blocksPer24h) /
+          1000000000000000000;
+        // Escape name for CSV formatting: wrap with double quotes, escape inner quotes by doubling them
+        const escapedName = `"${String(validator.name).replace(/"/g, '""')}"`;
+        return `${escapedName},${validator.pubkey},${validator.operatorAddress},${validator.stake},${(blockProposal * 100).toFixed(2)}%,${bgtPer24h.toFixed(2)} BGT`;
+      }),
   ];
 
   const outputFile = path.join(process.cwd(), "files", "validators.csv");
