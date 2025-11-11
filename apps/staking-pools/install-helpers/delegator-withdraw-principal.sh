@@ -166,8 +166,6 @@ main() {
     exit 1
   fi
   
-  log_info "DelegationHandler: $HANDLER"
-  
   local CLI_FEE_WEI
   CLI_FEE_WEI=$(cast to-wei "$CLI_FEE" 2>/dev/null)
   
