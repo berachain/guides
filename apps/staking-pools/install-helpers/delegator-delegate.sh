@@ -213,7 +213,7 @@ main() {
   
   # Calculate role hash
   local role_hash
-  role_hash=$(cast keccak "VALIDATOR_ADMIN_ROLE()")
+  role_hash=$(cast keccak "VALIDATOR_ADMIN_ROLE")
   
   # Generate single command script
   local cmd_file="delegator-delegate-command.sh"
