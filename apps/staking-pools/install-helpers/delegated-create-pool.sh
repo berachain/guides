@@ -165,9 +165,9 @@ main() {
   
   # Get withdrawal vault address from network
   local withdrawal_vault
-  withdrawal_vault=$(get_withdrawal_vault_for_network "$NETWORK")
+  withdrawal_vault=$(get_withdrawal_vault_for_network "$network")
   if [[ -z "$withdrawal_vault" || "$withdrawal_vault" == "0x0000000000000000000000000000000000000000" ]]; then
-    log_error "WithdrawalVault not available for network: $NETWORK"
+    log_error "WithdrawalVault not available for network: $network"
     exit 1
   fi
   
