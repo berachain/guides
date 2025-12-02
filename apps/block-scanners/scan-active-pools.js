@@ -42,6 +42,7 @@ const argv = yargs(hideBin(process.argv))
     type: 'number',
     default: 50000
   })
+  .strict()
   .help()
   .alias('help', 'h')
   .argv;

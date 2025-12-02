@@ -15,22 +15,65 @@ const fs = require('fs');
 const http = require('http');
 const https = require('https');
 const { ConfigHelper } = require('./lib/shared-utils');
+const yargs = require('yargs/yargs');
+const { hideBin } = require('yargs/helpers');
 
 // CLI
-const args = process.argv.slice(2);
-const showHelp = args.includes('--help') || args.includes('-h');
-const fromArg = args.find(a => a.startsWith('--from-day='));
-const toArg = args.find(a => a.startsWith('--to-day='));
-const startArg = args.find(a => a.startsWith('--start='));
-const endArg = args.find(a => a.startsWith('--end='));
-const blocksArg = args.find(a => a.startsWith('--blocks='));
-const networkArg = args.find(a => a.startsWith('--network=')) || args.find(a => a.startsWith('--chain=')) || (args.includes('-c') ? args[args.indexOf('-c') + 1] : null);
-const chainName = networkArg ? (networkArg.includes('=') ? networkArg.split('=')[1] : networkArg) : 'mainnet';
-const concArg = args.find(a => a.startsWith('--concurrency='));
-const outArg = args.find(a => a.startsWith('--out=')) || args.find(a => a.startsWith('--output='));
-const OUTPUT_PATH = outArg ? (outArg.includes('=') ? outArg.split('=')[1] : null) : null;
-const CONCURRENCY = Math.max(1, parseInt(concArg?.split('=')[1] || '12', 10));
-const progressEnabled = args.includes('--progress') || Boolean(OUTPUT_PATH);
+const argv = yargs(hideBin(process.argv))
+    .option('from-day', {
+        type: 'string',
+        description: 'Start day (UTC). If only --to-day, defaults to 20 days before to-day.'
+    })
+    .option('to-day', {
+        type: 'string',
+        description: 'End day (UTC). If only --from-day, defaults to today (UTC).'
+    })
+    .option('start', {
+        type: 'number',
+        description: 'Start block (inclusive)'
+    })
+    .option('end', {
+        type: 'number',
+        description: 'End block (inclusive). Requires --start'
+    })
+    .option('blocks', {
+        type: 'number',
+        description: 'Analyze last N blocks from head (default if no other range flags)'
+    })
+    .option('chain', {
+        alias: 'c',
+        type: 'string',
+        default: 'mainnet',
+        choices: ['mainnet', 'bepolia'],
+        description: 'Network: mainnet|bepolia'
+    })
+    .option('concurrency', {
+        type: 'number',
+        default: 12,
+        description: 'Parallel request concurrency'
+    })
+    .option('out', {
+        alias: 'output',
+        type: 'string',
+        description: 'Write CSV output to FILE (progress shown on stderr)'
+    })
+    .option('progress', {
+        type: 'boolean',
+        description: 'Show a progress meter on stderr (enabled by default when --out is set)'
+    })
+    .option('help', {
+        alias: 'h',
+        type: 'boolean',
+        description: 'Show help'
+    })
+    .strict()
+    .help()
+    .argv;
+
+const chainName = argv.chain;
+const OUTPUT_PATH = argv.out || null;
+const CONCURRENCY = Math.max(1, argv.concurrency);
+const progressEnabled = argv.progress || Boolean(OUTPUT_PATH);
 
 function printHelp() {
   console.log(`
@@ -57,10 +100,17 @@ Output CSV columns:
 `);
 }
 
-if (showHelp) {
+if (argv.help) {
   printHelp();
   process.exit(0);
 }
+
+// Extract values from argv for use in main function
+const fromDay = argv['from-day'] || null;
+const toDay = argv['to-day'] || null;
+const startBlockArg = argv.start;
+const endBlockArg = argv.end;
+const blocksCount = argv.blocks;
 
 // RPC helpers (EL)
 const EL_URL = ConfigHelper.getRpcUrl('el', chainName);
@@ -128,24 +178,24 @@ function format6(val) {
     let startBlock = null;
     let endBlock = null;
 
-    if (startArg && endArg) {
-      startBlock = parseInt(startArg.split('=')[1], 10);
-      endBlock = parseInt(endArg.split('=')[1], 10);
+    if (startBlockArg !== undefined && endBlockArg !== undefined) {
+      startBlock = startBlockArg;
+      endBlock = endBlockArg;
       if (!(startBlock >= 1 && endBlock >= startBlock)) throw new Error('Invalid --start/--end');
-    } else if (fromArg || toArg) {
-      const toDay = toArg ? parseYmdToUtcDate(toArg.split('=')[1]) : (d => { d.setUTCHours(0,0,0,0); return d; })(new Date());
-      if (!toDay) throw new Error('Invalid --to-day (YYYY-MM-DD)');
-      let fromDay = fromArg ? parseYmdToUtcDate(fromArg.split('=')[1]) : new Date(toDay);
-      if (!fromArg) fromDay.setUTCDate(fromDay.getUTCDate() - 19);
-      if (fromDay > toDay) throw new Error('--from-day must be <= --to-day');
-      const fromTs = Math.floor(fromDay.getTime() / 1000);
-      const toPlusOne = new Date(toDay); toPlusOne.setUTCDate(toPlusOne.getUTCDate() + 1);
+    } else if (fromDay || toDay) {
+      const toDayParsed = toDay ? parseYmdToUtcDate(toDay) : (d => { d.setUTCHours(0,0,0,0); return d; })(new Date());
+      if (!toDayParsed) throw new Error('Invalid --to-day (YYYY-MM-DD)');
+      let fromDayParsed = fromDay ? parseYmdToUtcDate(fromDay) : new Date(toDayParsed);
+      if (!fromDay) fromDayParsed.setUTCDate(fromDayParsed.getUTCDate() - 19);
+      if (fromDayParsed > toDayParsed) throw new Error('--from-day must be <= --to-day');
+      const fromTs = Math.floor(fromDayParsed.getTime() / 1000);
+      const toPlusOne = new Date(toDayParsed); toPlusOne.setUTCDate(toPlusOne.getUTCDate() + 1);
       const toPlusOneTs = Math.floor(toPlusOne.getTime() / 1000);
       startBlock = await findFirstBlockAtOrAfter(fromTs, latest);
       const endPlusOne = await findFirstBlockAtOrAfter(toPlusOneTs, latest);
       endBlock = Math.max(startBlock, endPlusOne - 1);
-    } else if (blocksArg) {
-      const count = parseInt(blocksArg.split('=')[1], 10) || 1000;
+    } else if (blocksCount !== undefined) {
+      const count = blocksCount || 1000;
       endBlock = latest;
       startBlock = Math.max(1, latest - count + 1);
     } else {

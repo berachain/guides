@@ -25,7 +25,6 @@ const EL_ETHRPC_URL_ALT = process.env.EL_ETHRPC_URL_ALT || 'http://37.27.231.195
 const CL_ETHRPC_URL_ALT = process.env.CL_ETHRPC_URL_ALT || 'http://37.27.231.195:59800';
 const HAS_ALTERNATE_RPCS = Boolean(EL_ETHRPC_URL_ALT && CL_ETHRPC_URL_ALT && (EL_ETHRPC_URL_ALT !== EL_ETHRPC_URL || CL_ETHRPC_URL_ALT !== CL_ETHRPC_URL));
 const HONEY_TOKEN = process.env.HONEY_TOKEN || '0xFCBD14DC51f0A4d49d5E53C2E0950e0bC26d0Dce';
-const DISTRIBUTOR_ADDRESS = process.env.DISTRIBUTOR_ADDRESS || '0xD2f19a79b026Fb636A7c300bF5947df113940761';
 
 // Configuration constants
 const CHUNK_SIZE = 2000; // Block scanning chunk size
@@ -268,7 +267,6 @@ class MultiProviderPipeline {
 }
 
 // Event signatures
-const DISTRIBUTED_SIG = 'Distributed(bytes,uint64,address,uint256)';
 const BOOSTER_PROCESSED_SIG = 'BGTBoosterIncentivesProcessed(bytes,address,uint256,uint256)';
 
 // Minimal ERC20 ABI fragments
@@ -342,24 +340,30 @@ function logProgress(current, total, description = '') {
 * @returns {Promise<any>} Result of the operation
 * @throws {Error} Last error if all retries fail
 */
-async function withRetry(operation, maxRetries = 3, initialDelay = 1000) {
+async function withRetry(operation, maxRetries = 3, initialDelay = 1000, timeoutMs = 30000) {
     let lastError;
     let delay = initialDelay;
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
         try {
-            return await operation();
+            // Wrap operation with timeout to prevent indefinite hangs
+            const timeoutPromise = new Promise((_, reject) => {
+                setTimeout(() => reject(new Error(`Operation timed out after ${timeoutMs}ms`)), timeoutMs);
+            });
+            
+            return await Promise.race([operation(), timeoutPromise]);
         } catch (error) {
             lastError = error;
             const errorMsg = error.message.toLowerCase();
-            // Retry network-related errors including "aborted"
+            // Retry network-related errors including "aborted" and timeouts
             const isRetryable = errorMsg.includes('fetch failed') || 
                               errorMsg.includes('etimedout') || 
                               errorMsg.includes('econnreset') ||
                               errorMsg.includes('aborted') ||
                               errorMsg.includes('network') ||
                               errorMsg.includes('timeout') ||
-                              errorMsg.includes('econnrefused');
+                              errorMsg.includes('econnrefused') ||
+                              errorMsg.includes('timed out');
             
             if (isRetryable) {
                 if (attempt < maxRetries) {
@@ -630,8 +634,9 @@ async function getValidatorBoost(validatorPubkey, blockNumber) {
         );
         
         if (result && result !== '0x' && result !== '0x0') {
-            const rawValue = parseInt(result, 16); // Parse hex result
-            const boostAmount = rawValue / 1e18; // Convert wei to BGT (18 decimals)
+            // Use BigInt to handle large values without precision loss
+            const rawValue = BigInt(result); // Parse hex result as BigInt
+            const boostAmount = Number(rawValue) / 1e18; // Convert wei to BGT (18 decimals)
             if (process.env.VERBOSE && boostAmount > 0) {
                 log(`  Validator ${normalizedPubkey.substring(0, 20)}... has boost: ${boostAmount.toFixed(2)} BGT`);
             }
@@ -800,13 +805,15 @@ async function scanBlockChunk(chunkStart, chunkEnd, validators, validatorMap, el
     // Scan each block in the chunk
     for (let blockNum = chunkStart; blockNum <= chunkEnd; blockNum++) {
         try {
-            // Get the proposer of this block from consensus layer
+            // Get the proposer of this block from consensus layer (already has retry logic)
             const proposer = await getBlockProposer(blockNum, clRpcUrl);
             
             // Only process blocks from validators we're tracking
             if (validatorMap.has(proposer)) {
-                // Get block data from execution layer to check if empty
-                const block = await provider.getBlock(blockNum);
+                // Get block data from execution layer to check if empty (wrap in retry)
+                const block = await withRetry(async () => {
+                    return await provider.getBlock(blockNum);
+                });
                 const isEmpty = !block.transactions || block.transactions.length <= EMPTY_BLOCK_THRESHOLD;
                 
                 // Initialize proposer data if first time seeing them
@@ -916,9 +923,8 @@ function buildPubkeyTopicSet(validators) {
  * Indexes POL (Proof of Liquidity) events from the blockchain for validator incentives
  * 
  * This function builds a comprehensive map of validator incentive earnings by scanning
- * blockchain events across specified day ranges. It compiles two types of POL events:
- * 1. Distributed events: BGT emissions from the protocol to validator vaults
- * 2. BGTBoosterIncentivesProcessed events: Booster token incentives from validators to users
+ * BGTBoosterIncentivesProcessed events across specified day ranges. These events represent
+ * booster token incentives distributed by validators to users.
  * 
  * The function processes events in chunks to prevent memory issues, then aggregates
  * all token amounts (stored as BigInt for precision) by validator and date.
@@ -927,17 +933,15 @@ function buildPubkeyTopicSet(validators) {
  * @param {Object} dayRanges - Object mapping dates to {startBlock, endBlock} ranges
  * @returns {Promise<Object>} Object with compiled daily aggregated data
  * @returns {Object} daily - Structure: date -> proposer -> {vaultBgtBI: BigInt, boosters: {token: BigInt}}
- *   - vaultBgtBI: Total BGT emissions to validator vaults (in wei)
+ *   - vaultBgtBI: Always 0n (kept for compatibility, Distributed events not scanned)
  *   - boosters: Map of token addresses to BigInt amounts of booster incentives
  */
 async function indexPolEvents(validators, dayRanges) {
     const providerPrimary = new ethers.JsonRpcProvider(EL_ETHRPC_URL);
     const providerAlternate = HAS_ALTERNATE_RPCS ? new ethers.JsonRpcProvider(EL_ETHRPC_URL_ALT) : null;
     const iface = new ethers.Interface([
-        'event Distributed(bytes indexed valPubkey, uint64 indexed nextTimestamp, address indexed receiver, uint256 amount)',
         'event BGTBoosterIncentivesProcessed(bytes indexed pubkey, address indexed token, uint256 bgtEmitted, uint256 amount)'
     ]);
-    const distributedTopic0 = ethers.id(DISTRIBUTED_SIG);
     const boosterTopic0 = ethers.id(BOOSTER_PROCESSED_SIG);
     
     const { set: pubTopicSet, topicToProposer } = buildPubkeyTopicSet(validators);
@@ -997,10 +1001,8 @@ async function indexPolEvents(validators, dayRanges) {
                     if (!date) continue;
                     const parsed = iface.parseLog(log);
                     if (!daily[date][proposer]) daily[date][proposer] = { vaultBgtBI: 0n, boosters: {} };
-                    if (eventType === 'Distributed') {
-                        const amount = BigInt(parsed.args.amount.toString());
-                        daily[date][proposer].vaultBgtBI += amount;
-                    } else if (eventType === 'BGTBoosterIncentivesProcessed') {
+                    // Only process BGTBoosterIncentivesProcessed events (Distributed events not used in scoring)
+                    if (eventType === 'BGTBoosterIncentivesProcessed') {
                         const token = parsed.args.token.toLowerCase();
                         const amount = BigInt(parsed.args.amount.toString());
                         daily[date][proposer].boosters[token] = (daily[date][proposer].boosters[token] || 0n) + amount;
@@ -1053,19 +1055,9 @@ async function indexPolEvents(validators, dayRanges) {
         return null;
     }
     
-    // Process both event types with memory-efficient parallel processing
+    // Process BGTBoosterIncentivesProcessed events (used for stake-scaled booster scoring)
+    // Note: Distributed events (vault BGT emissions) are not used in scoring, only in reporting
     try {
-        // Process Distributed events from the specific distributor address
-        await processLogsChunked(overallStartBlock, overallEndBlock, {
-            address: DISTRIBUTOR_ADDRESS,
-            topics: [distributedTopic0]
-        }, 'Distributed');
-    } catch (e) {
-        log(`Error processing Distributed events: ${e.message}`);
-    }
-    
-    try {
-        // Process BGTBoosterIncentivesProcessed events from any address
         await processLogsChunked(overallStartBlock, overallEndBlock, {
             topics: [boosterTopic0]
         }, 'BGTBoosterIncentivesProcessed');
@@ -1417,6 +1409,37 @@ async function initializeScoringSchema() {
         VALUES (1, CURRENT_TIMESTAMP, NULL, NULL, 0)
     `);
     
+    // Create validator_daily_stats table for VERBOSE daily breakdown data
+    await executeSQL(`
+        CREATE TABLE IF NOT EXISTS validator_daily_stats (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            validator_pubkey TEXT NOT NULL,
+            proposer_address TEXT NOT NULL,
+            date TEXT NOT NULL,
+            total_blocks INTEGER,
+            empty_blocks INTEGER,
+            empty_block_percentage REAL,
+            uptime_score REAL,
+            pol_score REAL,
+            stake_scaled_booster_score REAL,
+            stake REAL,
+            boost REAL,
+            pol_ratio REAL,
+            vaults_usd REAL,
+            boosters_usd REAL,
+            stake_scaled_booster_value REAL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (validator_pubkey) REFERENCES validator_scores(pubkey),
+            UNIQUE(validator_pubkey, date)
+        )
+    `);
+    
+    // Create index for faster queries
+    await executeSQL(`
+        CREATE INDEX IF NOT EXISTS idx_validator_daily_stats_pubkey_date 
+        ON validator_daily_stats(validator_pubkey, date)
+    `);
+    
     log('✅ Scoring schema initialized');
 }
 
@@ -1500,12 +1523,22 @@ function generateValidatorNotes(validator, statistics, totalVotingPowerByDate, s
 async function writeScoresToDatabase(rankings, startDate, endDate, daysAnalyzed, statistics, totalVotingPowerByDate, sortedDates) {
     log('💾 Writing scores to database...');
     
+    const isVerbose = process.env.VERBOSE === 'true' || process.env.VERBOSE === '1';
+    
     // Clear existing scores and notes
     await executeSQL('DELETE FROM validator_scores');
     await executeSQL('DELETE FROM validator_notes');
     
+    // Clear daily stats if storing new ones
+    if (isVerbose) {
+        await executeSQL('DELETE FROM validator_daily_stats');
+    }
+    
     // Insert new scores
     let inserted = 0;
+    let dailyStatsInserted = 0;
+    const datesToAnalyze = sortedDates.slice(0, sortedDates.length - 1); // Exclude boundary date
+    
     for (const validator of rankings) {
         try {
                     // Ensure pubkey has 0x prefix to match validators table format
@@ -1530,6 +1563,44 @@ async function writeScoresToDatabase(rankings, startDate, endDate, daysAnalyzed,
                         ]
                     );
             inserted++;
+            
+            // Store daily stats if VERBOSE
+            if (isVerbose) {
+                for (const date of datesToAnalyze) {
+                    const dayStats = statistics[date]?.[validator.validatorAddress];
+                    if (dayStats) {
+                        try {
+                            await executeSQL(
+                                `INSERT INTO validator_daily_stats 
+                                (validator_pubkey, proposer_address, date, total_blocks, empty_blocks, empty_block_percentage, 
+                                 uptime_score, pol_score, stake_scaled_booster_score, stake, boost, pol_ratio, 
+                                 vaults_usd, boosters_usd, stake_scaled_booster_value)
+                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                                [
+                                    normalizedPubkey,
+                                    validator.validatorAddress,
+                                    date,
+                                    dayStats.totalBlocks || 0,
+                                    dayStats.emptyBlocks || 0,
+                                    dayStats.emptyBlockPercentage || 0,
+                                    dayStats.uptimeScore || 0,
+                                    dayStats.polScore || 0,
+                                    dayStats.stakeScaledBoosterScore || 0,
+                                    dayStats.stake || 0,
+                                    dayStats.boost || 0,
+                                    dayStats.polRatio || 0,
+                                    dayStats.vaultsUSD || 0,
+                                    dayStats.boostersUSD || 0,
+                                    dayStats.stakeScaledBoosterValue || 0
+                                ]
+                            );
+                            dailyStatsInserted++;
+                        } catch (error) {
+                            log(`⚠️  Failed to insert daily stats for ${validator.name} on ${date}: ${error.message}`);
+                        }
+                    }
+                }
+            }
             
             // Generate and insert notes for this validator
             const notes = generateValidatorNotes(validator, statistics, totalVotingPowerByDate, sortedDates);
@@ -1565,6 +1636,9 @@ async function writeScoresToDatabase(rankings, startDate, endDate, daysAnalyzed,
     );
     
     log(`✅ Written scores for ${inserted} validators to database`);
+    if (isVerbose) {
+        log(`✅ Written ${dailyStatsInserted} daily stat records to database`);
+    }
 }
 
 /**
@@ -1719,9 +1793,8 @@ async function calculatePolParticipationScores(activationsByValidator, datesToAn
  */
 async function computeUsdValuations(dailyAgg, validators, dayRanges) {
     const provider = new ethers.JsonRpcProvider(EL_ETHRPC_URL);
-    // collect tokens
+    // collect tokens (only booster tokens, BGT vault emissions not used in scoring)
     const tokenSet = new Set();
-    tokenSet.add(BGT_CONTRACT.toLowerCase());
     for (const date of Object.keys(dayRanges)) {
         const perDate = dailyAgg[date] || {};
         for (const proposer of Object.keys(perDate)) {
@@ -1763,25 +1836,19 @@ async function computeUsdValuations(dailyAgg, validators, dayRanges) {
     const ratesPipeline = new Pipeline(Math.min(MAX_WORKER_COUNT, 6), rateWorkerFn, 'Fetching USD rates');
     await ratesPipeline.process(tokenList, null, true);
     
-    const bgtDecimals = tokenDecimalsCache.get(BGT_CONTRACT.toLowerCase()) ?? 18;
-    const bgtRate = tokenUsdRateCache.get(BGT_CONTRACT.toLowerCase()) ?? 0;
-    
     const perTokenRates = {};
     for (const token of tokenSet) perTokenRates[token] = tokenUsdRateCache.get(token) ?? 0;
     
     // compute per day per validator USD using BigInt math
+    // Note: vaultsUSD is always 0 since Distributed events are not scanned (not used in scoring)
     const dailyUsd = {}; // date -> proposer -> { vaultsUSD, boostersUSD, totalUSD }
     for (const [date, perDate] of Object.entries(dailyAgg)) {
         dailyUsd[date] = {};
         for (const [proposer, data] of Object.entries(perDate)) {
-            const vaultBgtBI = data.vaultBgtBI || 0n;
             const boosters = data.boosters || {};
             
-            // Calculate vault USD using BigInt math
-            // vaultBgtBI is in wei, we need to multiply by rate and divide by 1e18
-            const bgtRateBI = BigInt(Math.floor(bgtRate * 1e18)); // Convert rate to wei precision
-            const vaultsUSDWei = (vaultBgtBI * bgtRateBI) / (10n ** BigInt(bgtDecimals));
-            const vaultsUSD = parseFloat(vaultsUSDWei.toString()) / 1e18; // Convert back to USD
+            // vaultsUSD is always 0 (Distributed events not scanned)
+            const vaultsUSD = 0;
             
             let boostersUSD = 0;
             for (const [token, amountBI] of Object.entries(boosters)) {
@@ -1868,6 +1935,8 @@ Memory Requirements:
         let numGuesses = 0;
         const provider = new ethers.JsonRpcProvider(EL_ETHRPC_URL);
         const latestBlock = await provider.getBlockNumber();
+        const latestBlockInfo = await provider.getBlock(latestBlock);
+        const latestTimestamp = latestBlockInfo.timestamp;
         const boundaries = {};
         const progress = createProgressBar(dates.length, 'Finding boundaries');
         
@@ -1877,11 +1946,26 @@ Memory Requirements:
             midnight.setUTCHours(0, 0, 0, 0);
             const targetTimestamp = Math.floor(midnight.getTime() / 1000);
             
+            // Check if target date is in the future relative to latest block
+            if (targetTimestamp > latestTimestamp) {
+                log(`Warning: Date ${date.toISOString().split('T')[0]} is in the future (target: ${targetTimestamp}, latest: ${latestTimestamp}). Using latest block as boundary.`);
+                boundaries[date.toISOString().split('T')[0]] = latestBlock;
+                progress.update(i + 1);
+                continue;
+            }
+            
             // Use iterative approach like find_day_boundaries.js
             let estimatedBlock;
             if (i === 0) {
                 // For the first date, calculate from genesis using block time
                 const secondsSinceGenesis = targetTimestamp - GENESIS_TIMESTAMP;
+                if (secondsSinceGenesis < 0) {
+                    // Date is before genesis, use block 1
+                    log(`Warning: Date ${date.toISOString().split('T')[0]} is before genesis. Using block 1 as boundary.`);
+                    boundaries[date.toISOString().split('T')[0]] = 1;
+                    progress.update(i + 1);
+                    continue;
+                }
                 const estimatedBlocks = Math.floor(secondsSinceGenesis / 2); // 2 second block time
                 estimatedBlock = Math.max(1, estimatedBlocks);
             } else {
@@ -1893,30 +1977,76 @@ Memory Requirements:
                 estimatedBlock = previousBoundary + BLOCKS_PER_DAY; // Daily block guess
             }
             
-            // If estimated block is beyond latest block, adjust it
+            // If estimated block is beyond latest block, recalculate from latest block
             if (estimatedBlock > latestBlock) {
-                log(`Estimated block ${estimatedBlock} is beyond latest block ${latestBlock}, adjusting...`);
-                estimatedBlock = latestBlock - 1000; // Start from a reasonable point before latest
+                log(`Estimated block ${estimatedBlock} is beyond latest block ${latestBlock}, recalculating from latest block...`);
+                // Calculate how many seconds before latest block the target is
+                const secondsBeforeLatest = latestTimestamp - targetTimestamp;
+                if (secondsBeforeLatest < 0) {
+                    // Target is after latest block (shouldn't happen due to earlier check, but handle it)
+                    boundaries[date.toISOString().split('T')[0]] = latestBlock;
+                    progress.update(i + 1);
+                    continue;
+                }
+                // Estimate blocks before latest (2 second block time)
+                const blocksBeforeLatest = Math.floor(secondsBeforeLatest / 2);
+                estimatedBlock = Math.max(1, latestBlock - blocksBeforeLatest);
             }
             
+            // Use binary search with proper bounds tracking
+            let low = 1;
+            let high = latestBlock;
             let candidateBlock = estimatedBlock;
             let attempts = 0;
-            const maxAttempts = 200; // Prevent infinite loops, but give more attempts
+            const maxAttempts = 100; // Binary search should converge much faster
             
-            while (attempts < maxAttempts) {            attempts++;
+            // Clamp initial estimate to valid range
+            candidateBlock = Math.max(1, Math.min(latestBlock, candidateBlock));
+            
+            while (attempts < maxAttempts && low <= high) {
+                attempts++;
                 numGuesses++;
+                
                 try {
+                    // Use binary search midpoint if we haven't found a good candidate yet
+                    if (candidateBlock < low || candidateBlock > high) {
+                        candidateBlock = Math.floor((low + high) / 2);
+                    }
+                    
+                    // Ensure candidateBlock is within current bounds
+                    candidateBlock = Math.max(low, Math.min(high, candidateBlock));
+                    
                     // Get current block and previous block timestamps
                     const currentBlock = await provider.getBlock(candidateBlock);
-                    const prevBlock = await provider.getBlock(candidateBlock - 1);
-                    
-                    if (!currentBlock || !prevBlock) {
-                        log(`Cannot get blocks ${candidateBlock} or ${candidateBlock - 1}, trying next block`);
-                        candidateBlock += 1;
+                    if (!currentBlock) {
+                        // If we can't get this block, narrow the search range
+                        low = candidateBlock + 1;
+                        candidateBlock = Math.floor((low + high) / 2);
                         continue;
                     }
                     
                     const currentTimestamp = currentBlock.timestamp;
+                    
+                    // Handle edge case where candidateBlock is 1
+                    if (candidateBlock === 1) {
+                        if (currentTimestamp >= targetTimestamp) {
+                            boundaries[date.toISOString().split('T')[0]] = 1;
+                            break;
+                        }
+                        // Block 1 is before target, so we need to search forward
+                        low = 2;
+                        candidateBlock = Math.floor((low + high) / 2);
+                        continue;
+                    }
+                    
+                    // Get previous block
+                    const prevBlock = await provider.getBlock(candidateBlock - 1);
+                    if (!prevBlock) {
+                        low = candidateBlock + 1;
+                        candidateBlock = Math.floor((low + high) / 2);
+                        continue;
+                    }
+                    
                     const prevTimestamp = prevBlock.timestamp;
                     
                     // Check if we have the correct boundary
@@ -1925,33 +2055,56 @@ Memory Requirements:
                         break;
                     }
                     
-                    // Calculate how far off we are and adjust
+                    // Update binary search bounds
                     if (currentTimestamp < targetTimestamp) {
-                        // Current block is before target, need to go forward
-                        const blocksToAdd = Math.ceil((targetTimestamp - currentTimestamp) / 2);
-                        candidateBlock += Math.max(1, blocksToAdd);
-                    } else if (prevTimestamp >= targetTimestamp) {
-                        // Previous block is after target, need to go backward
-                        const blocksToSubtract = Math.ceil((prevTimestamp - targetTimestamp) / 2);
-                        candidateBlock -= Math.max(1, blocksToSubtract);
+                        // Current block is before target, need to search higher
+                        low = candidateBlock + 1;
                     } else {
-                        // We're in the right range but not at the boundary
-                        candidateBlock += 1;
+                        // Current block is at or after target, need to search lower
+                        high = candidateBlock - 1;
                     }
                     
-                    // Safety check
-                    if (candidateBlock <= 0 || candidateBlock > latestBlock) {
-                        log(`Candidate block ${candidateBlock} out of range, stopping`);
-                        break;
-                    }
+                    // Calculate next candidate using binary search
+                    candidateBlock = Math.floor((low + high) / 2);
+                    
                 } catch (error) {
                     log(`Error getting block ${candidateBlock}: ${error.message}`);
-                    candidateBlock += 1;
+                    // On error, try to narrow the search range
+                    if (candidateBlock > 1) {
+                        high = candidateBlock - 1;
+                        candidateBlock = Math.floor((low + high) / 2);
+                    } else {
+                        low = candidateBlock + 1;
+                        candidateBlock = Math.floor((low + high) / 2);
+                    }
+                }
+            }
+            
+            // If binary search didn't find it, try a linear search in the narrowed range
+            if (!boundaries[date.toISOString().split('T')[0]] && low <= high) {
+                log(`Binary search didn't find boundary, trying linear search from block ${low} to ${high}...`);
+                for (let block = low; block <= high && block <= latestBlock; block++) {
+                    try {
+                        const currentBlock = await provider.getBlock(block);
+                        const prevBlock = block > 1 ? await provider.getBlock(block - 1) : null;
+                        
+                        if (currentBlock && prevBlock) {
+                            if (currentBlock.timestamp >= targetTimestamp && prevBlock.timestamp < targetTimestamp) {
+                                boundaries[date.toISOString().split('T')[0]] = block;
+                                break;
+                            }
+                        }
+                    } catch (error) {
+                        // Continue to next block
+                    }
                 }
             }
             
             if (!boundaries[date.toISOString().split('T')[0]]) {
-                throw new Error(`No boundary block found for date: ${date.toISOString().split('T')[0]}`);
+                // Provide more diagnostic information
+                const dateStr = date.toISOString().split('T')[0];
+                log(`Failed to find boundary for ${dateStr} after ${attempts} attempts. Target timestamp: ${targetTimestamp}, Latest block: ${latestBlock}, Latest timestamp: ${latestTimestamp}`);
+                throw new Error(`No boundary block found for date: ${dateStr} after ${attempts} attempts. Target timestamp: ${targetTimestamp}, latest block timestamp: ${latestTimestamp}`);
             }
             progress.update(i + 1);
         }
@@ -2107,32 +2260,42 @@ function calculateStatistics(blockResults, stakeBoostData, dayBoundaries, valida
     // Only process the analyzed dates (excluding the boundary date)
     const datesToProcess = sortedDates.slice(0, sortedDates.length - 1);
     
-    // Calculate GLOBAL maximums across all days for proper normalization
-    // This ensures the best overall performer gets close to 100%
-    let globalMaxRatio = 0;
-    let globalMaxStakeScaledBoosterReturns = 0;
+    // Create a set of study validator proposers for fast lookup
+    const studyValidatorProposers = new Set(validators.map(v => v.proposer));
     
-    // First pass: find global maximums
-    for (const date of datesToProcess) {
-        const dayRatios = Object.values(stakeBoostData[date] || {}).map(data => data.ratio);
-        const dayMaxRatio = Math.max(...dayRatios, 0);
-        if (dayMaxRatio > globalMaxRatio) {
-            globalMaxRatio = dayMaxRatio;
+    // Filter blockResults to only include study validators
+    const filteredBlockResults = new Map();
+    for (const [proposer, validatorData] of blockResults) {
+        if (studyValidatorProposers.has(proposer)) {
+            filteredBlockResults.set(proposer, validatorData);
         }
+    }
+    
+    // Calculate PER-DAY maximums for proper normalization
+    // Each day is normalized independently so the best validator each day gets 100%
+    // IMPORTANT: Only consider study validators (genesis or all, depending on --ignore-genesis flag)
+    const dayMaxRatios = {}; // date -> max ratio for that day
+    const dayMaxStakeScaledBoosterReturns = {}; // date -> max stake-scaled booster returns for that day
+    
+    // First pass: find per-day maximums (only among study validators)
+    for (const date of datesToProcess) {
+        // Filter ratios to only study validators
+        const dayRatios = validators.map(validator => {
+            const data = stakeBoostData[date]?.[validator.proposer];
+            return data?.ratio || 0;
+        });
+        dayMaxRatios[date] = Math.max(...dayRatios, 0);
         
         const dayUsd = global.__DAILY_USD__?.[date] || {};
-        const dayStakeScaledBoosterReturns = validators.map(validator => {
+        const dayStakeScaledBoosterReturnsList = validators.map(validator => {
             const stake = stakeBoostData[date]?.[validator.proposer]?.stake || 0;
             const boosterValue = dayUsd[validator.proposer]?.boostersUSD || 0;
             return stake > 0 ? boosterValue / stake : 0;
         });
-        const dayMaxStakeScaledBoosterReturns = Math.max(...dayStakeScaledBoosterReturns, 0);
-        if (dayMaxStakeScaledBoosterReturns > globalMaxStakeScaledBoosterReturns) {
-            globalMaxStakeScaledBoosterReturns = dayMaxStakeScaledBoosterReturns;
-        }
+        dayMaxStakeScaledBoosterReturns[date] = Math.max(...dayStakeScaledBoosterReturnsList, 0);
     }
     
-    // Second pass: calculate per-day statistics using global maximums
+    // Second pass: calculate per-day statistics using per-day maximums
     for (let i = 0; i < datesToProcess.length; i++) {
         const date = datesToProcess[i];
         const nextDate = sortedDates[i + 1];
@@ -2147,8 +2310,8 @@ function calculateStatistics(blockResults, stakeBoostData, dayBoundaries, valida
         
         statistics[date] = {};
         
-        // Process each validator's data for this day
-        for (const [proposer, validatorData] of blockResults) {
+        // Process each validator's data for this day (only study validators)
+        for (const [proposer, validatorData] of filteredBlockResults) {
             const dayBlocks = validatorData.blocks.filter(blockNum => 
                 blockNum >= dayStartBlock && blockNum <= dayEndBlock
             );
@@ -2163,13 +2326,15 @@ function calculateStatistics(blockResults, stakeBoostData, dayBoundaries, valida
             const emptyBlockPercentage = calculateEmptyBlockPercentage(dayEmptyBlocks, totalBlocks);
             
             const polRatio = stakeBoostData[date]?.[proposer]?.ratio || 0;
-            const polScore = globalMaxRatio > 0 ? (polRatio / globalMaxRatio) * 100 : 0;
+            const dayMaxRatio = dayMaxRatios[date] || 0;
+            const polScore = dayMaxRatio > 0 ? (polRatio / dayMaxRatio) * 100 : 0;
                 
                 // Stake-scaled booster incentive scoring
                 const economicData = dayUsd[proposer] || { vaultsUSD: 0, boostersUSD: 0 };
                 const stake = stakeBoostData[date]?.[proposer]?.stake || 0;
                 const stakeScaledBoosterValue = stake > 0 ? economicData.boostersUSD / stake : 0;
-                const stakeScaledBoosterScore = globalMaxStakeScaledBoosterReturns > 0 ? (stakeScaledBoosterValue / globalMaxStakeScaledBoosterReturns) * 100 : 0;
+                const dayMaxStakeScaledBooster = dayMaxStakeScaledBoosterReturns[date] || 0;
+                const stakeScaledBoosterScore = dayMaxStakeScaledBooster > 0 ? (stakeScaledBoosterValue / dayMaxStakeScaledBooster) * 100 : 0;
             
             statistics[date][proposer] = {
                 totalBlocks,
@@ -2191,12 +2356,14 @@ function calculateStatistics(blockResults, stakeBoostData, dayBoundaries, valida
         for (const validator of validators) {
             if (!statistics[date][validator.proposer]) {
                 const polRatio = stakeBoostData[date]?.[validator.proposer]?.ratio || 0;
-                const polScore = globalMaxRatio > 0 ? (polRatio / globalMaxRatio) * 100 : 0;
+                const dayMaxRatio = dayMaxRatios[date] || 0;
+                const polScore = dayMaxRatio > 0 ? (polRatio / dayMaxRatio) * 100 : 0;
                     
                     const economicData = dayUsd[validator.proposer] || { vaultsUSD: 0, boostersUSD: 0 };
                     const stake = stakeBoostData[date]?.[validator.proposer]?.stake || 0;
                     const stakeScaledBoosterValue = stake > 0 ? economicData.boostersUSD / stake : 0;
-                    const stakeScaledBoosterScore = globalMaxStakeScaledBoosterReturns > 0 ? (stakeScaledBoosterValue / globalMaxStakeScaledBoosterReturns) * 100 : 0;
+                    const dayMaxStakeScaledBooster = dayMaxStakeScaledBoosterReturns[date] || 0;
+                    const stakeScaledBoosterScore = dayMaxStakeScaledBooster > 0 ? (stakeScaledBoosterValue / dayMaxStakeScaledBooster) * 100 : 0;
                 
                 statistics[date][validator.proposer] = {
                     totalBlocks: 0,
@@ -2421,11 +2588,7 @@ function generateReport(statistics, validators, dayBoundaries, polParticipationS
             for (const proposer of Object.keys(dayData)) {
                 const proposerData = dayData[proposer];
                 if (proposerData) {
-                    // Add BGT vault emissions
-                    if (proposerData.vaultBgtBI && proposerData.vaultBgtBI > 0n) {
-                        allTokens.add('BGT_Vaults');
-                    }
-                    // Add booster tokens
+                    // Add booster tokens (BGT vault emissions not scanned, so vaultBgtBI is always 0)
                     if (proposerData.boosters) {
                         Object.keys(proposerData.boosters).forEach(token => {
                             if (proposerData.boosters[token] > 0n) {
@@ -2451,12 +2614,7 @@ function generateReport(statistics, validators, dayBoundaries, polParticipationS
         // Create second header row with exchange rates
         let exchangeRateHeader = 'USD per token,,';
         tokenList.forEach(token => {
-            let rate = 0;
-            if (token === 'BGT_Vaults') {
-                rate = tokenUsdRateCache.get(BGT_CONTRACT.toLowerCase()) || 0;
-            } else {
-                rate = tokenUsdRateCache.get(token) || 0;
-            }
+            const rate = tokenUsdRateCache.get(token) || 0;
             exchangeRateHeader += `,${rate.toFixed(8)}`;
         });
         exchangeRateHeader += ',Total';
@@ -2473,20 +2631,7 @@ function generateReport(statistics, validators, dayBoundaries, polParticipationS
             tokenList.forEach(token => {
                 let tokenAmount = 0;
                 try {
-                    
-                    if (token === 'BGT_Vaults') {
-                        // Sum up vault BGT across all days using BigInt math
-                        let totalBgtBI = 0n;
-                        for (const date of datesToAnalyze) {
-                            const dayData = polDaily[date]?.[validator.proposer];
-                            if (dayData?.vaultBgtBI) {
-                                totalBgtBI += dayData.vaultBgtBI;
-                            }
-                        }
-                        // Convert to number safely using string conversion
-                        tokenAmount = parseFloat(totalBgtBI.toString()) / 1e18;
-                    } else {
-                        // Sum up booster tokens across all days using BigInt math
+                    // Sum up booster tokens across all days using BigInt math
                         let totalTokenBI = 0n;
                         const decimals = Number(tokenDecimalsCache.get(token) || 18);
                         for (const date of datesToAnalyze) {
@@ -2506,7 +2651,6 @@ function generateReport(statistics, validators, dayBoundaries, polParticipationS
                         const divisor = Math.pow(10, decimals);
                         const parsedFloat = parseFloat(totalTokenStr);
                         tokenAmount = parsedFloat / divisor;
-                    }
                 } catch (error) {
                     log(`Error processing token ${token} for validator ${validator.name}: ${error.message}`);
                     tokenAmount = 0; // Set to 0 on error

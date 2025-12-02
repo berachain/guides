@@ -25,6 +25,8 @@
 const { ValidatorNameDB, BlockFetcher, StatUtils, ProgressReporter, ConfigHelper } = require('./lib/shared-utils');
 const Table = require('cli-table3');
 const axios = require('axios');
+const yargs = require('yargs/yargs');
+const { hideBin } = require('yargs/helpers');
 
 // Fetch voting power data for a specific block height
 async function getVotingPowerData(height, baseUrl) {
@@ -117,19 +119,84 @@ function calculatePercentiles(values, percentiles = [25, 50, 75, 90, 95, 99]) {
     return result;
 }
 
-// Track validator absences (BlockIDFlagAbsent = 1) to identify frequently absent validators
-function trackValidatorAbsences(signatures, votingPowerData, validatorAbsenceData) {
-    if (!Array.isArray(signatures) || !votingPowerData) {
-        return;
+// Format voting power with readable units (Kbera, Mbera, BERA)
+// Takes value in wei (smallest unit) and returns formatted string
+function formatVotingPower(valueInWei) {
+    const bera = valueInWei / 1e9;
+    
+    if (bera >= 1e6) {
+        return `${(bera / 1e6).toFixed(2)} Mbera`;
+    } else if (bera >= 1e3) {
+        return `${(bera / 1e3).toFixed(2)} Kbera`;
+    } else {
+        return `${bera.toFixed(2)} BERA`;
+    }
+}
+
+// Fetch blocks in parallel with controlled concurrency
+async function fetchBlocksParallel(blockFetcher, startBlock, blockCount, concurrency = 20, progressCallback = null) {
+    const blocks = [];
+    const blockHeights = [];
+    
+    // Generate all block heights we need to fetch
+    for (let i = 0; i < blockCount; i++) {
+        blockHeights.push(startBlock - i);
     }
     
-    for (let i = 0; i < signatures.length; i++) {
-        const sig = signatures[i];
-        const validatorAddress = votingPowerData.addressByPosition.get(i);
+    // Process blocks in batches with controlled concurrency
+    for (let i = 0; i < blockHeights.length; i += concurrency) {
+        const batch = blockHeights.slice(i, i + concurrency);
+        const batchPromises = batch.map(async (blockHeight) => {
+            const blockData = await blockFetcher.getBlock(blockHeight);
+            if (!blockData || !blockData.result || !blockData.result.block) {
+                return null;
+            }
+            
+            const block = blockData.result.block;
+            const signatures = block.last_commit?.signatures || [];
+            const proposer = block.header?.proposer_address;
+            const timestamp = block.header?.time;
+            
+            return {
+                height: blockHeight,
+                proposer: proposer || 'unknown',
+                timestamp: timestamp,
+                signatureCount: signatures.filter(sig => sig && sig.block_id_flag !== 5).length,
+                totalValidators: signatures.length,
+                timestampMs: timestamp ? new Date(timestamp).getTime() : null,
+                raw: block
+            };
+        });
         
+        const batchResults = await Promise.all(batchPromises);
+        
+        // Add results in order (null results are filtered out)
+        for (const result of batchResults) {
+            if (result) {
+                blocks.push(result);
+            }
+        }
+        
+        // Progress callback
+        if (progressCallback) {
+            progressCallback(blocks.length, blockCount, batch[batch.length - 1]);
+        }
+    }
+    
+    // Sort blocks by height descending (to maintain order)
+    blocks.sort((a, b) => b.height - a.height);
+    
+    return blocks;
+}
+
+// Track validator absences (BlockIDFlagAbsent = 1) to identify frequently absent validators
+function trackValidatorAbsences(signatures, votingPowerData, validatorAbsenceData) {
+    if (!Array.isArray(signatures) || !votingPowerData) return;
+    
+    for (let i = 0; i < signatures.length; i++) {
+        const validatorAddress = votingPowerData.addressByPosition.get(i);
         if (!validatorAddress) continue;
         
-        // Initialize validator tracking if not exists
         if (!validatorAbsenceData.has(validatorAddress)) {
             validatorAbsenceData.set(validatorAddress, {
                 totalOpportunities: 0,
@@ -140,14 +207,69 @@ function trackValidatorAbsences(signatures, votingPowerData, validatorAbsenceDat
         
         const data = validatorAbsenceData.get(validatorAddress);
         data.totalOpportunities++;
-        
-        if (sig?.block_id_flag === 1) { // Missing validator
-            data.absences++;
-        }
-        
-        // Update voting power (may change over time)
+        if (signatures[i]?.block_id_flag === 1) data.absences++;
         data.votingPower = votingPowerData.votingPowerByAddress.get(validatorAddress) || 0;
     }
+}
+
+// Fetch validator names in parallel
+async function fetchValidatorNames(validatorDB, addresses) {
+    const nameMap = new Map();
+    await Promise.all(addresses.map(async (addr) => {
+        const name = await validatorDB.getValidatorName(addr);
+        if (name) nameMap.set(addr, name);
+    }));
+    return nameMap;
+}
+
+// Filter items by threshold but show at least minCount
+function filterWithMinCount(items, filterFn, minCount = 3, showAll = false) {
+    if (showAll) return { items, skipped: 0 };
+    const filtered = items.filter(filterFn);
+    const result = filtered.length >= minCount ? filtered : items.slice(0, minCount);
+    return { items: result, skipped: items.length - result.length };
+}
+
+// Display histogram from count map
+function displayHistogram(title, countMap, labelFn = (k) => k.toString()) {
+    if (countMap.size === 0) return;
+    console.log(`\n${title}:`);
+    const entries = Array.from(countMap.entries()).sort((a, b) => a[0] - b[0]);
+    const maxCount = entries.reduce((m, [, c]) => Math.max(m, c), 0);
+    const barMaxWidth = 40;
+    for (const [key, count] of entries) {
+        const barLength = maxCount > 0 ? Math.max(1, Math.round((count / maxCount) * barMaxWidth)) : 0;
+        console.log(`  ${labelFn(key).padStart(2, ' ')} | ${'#'.repeat(barLength)} (${count.toLocaleString()})`);
+    }
+}
+
+// Calculate block range from options
+async function calculateBlockRange(blockFetcher, blockCount, startHeight, endHeight) {
+    if (Number.isFinite(startHeight) && Number.isFinite(endHeight)) {
+        if (startHeight < endHeight) {
+            ProgressReporter.logError('Invalid range: --start must be >= --end');
+            process.exit(1);
+        }
+        return { startBlock: startHeight, endBlock: endHeight, effectiveBlockCount: startHeight - endHeight + 1 };
+    }
+    
+    const currentBlock = await blockFetcher.getCurrentBlock();
+    if (!currentBlock) {
+        ProgressReporter.logError('Failed to get current block height');
+        process.exit(1);
+    }
+    
+    if (Number.isFinite(endHeight)) {
+        const startBlock = Math.min(endHeight + blockCount - 1, currentBlock);
+        return { startBlock, endBlock: endHeight, effectiveBlockCount: startBlock - endHeight + 1 };
+    }
+    
+    if (Number.isFinite(startHeight)) {
+        const endBlock = Math.max(startHeight - blockCount + 1, 1);
+        return { startBlock: startHeight, endBlock, effectiveBlockCount: startHeight - endBlock + 1 };
+    }
+    
+    return { startBlock: currentBlock, endBlock: currentBlock - blockCount + 1, effectiveBlockCount: blockCount };
 }
 
 
@@ -160,7 +282,8 @@ async function analyzeMissingValidators(blockCount = ConfigHelper.getDefaultBloc
         analyzeProposers = true,
         minValidatorOpportunities = 10, // Minimum opportunities for meaningful validator stats
         startHeight = null,
-        endHeight = null
+        endHeight = null,
+        showAll = false // Force output of all entries, bypassing thresholds
     } = options;
     
     // Initialize components with consolidated config
@@ -168,54 +291,66 @@ async function analyzeMissingValidators(blockCount = ConfigHelper.getDefaultBloc
     const blockFetcher = new BlockFetcher(baseUrl);
     const validatorDB = new ValidatorNameDB();
     
-    let startBlock;
-    let endBlock;
-    let effectiveBlockCount;
-
-    if (Number.isFinite(startHeight) && Number.isFinite(endHeight)) {
-        startBlock = startHeight;
-        endBlock = endHeight;
-        if (startBlock < endBlock) {
-            ProgressReporter.logError('Invalid range: --start must be >= --end');
-            process.exit(1);
-        }
-        effectiveBlockCount = (startBlock - endBlock + 1);
+    // Verify database exists and log path for debugging
+    const dbPath = ConfigHelper.getValidatorDbPath();
+    const fs = require('fs');
+    if (fs.existsSync(dbPath)) {
+        ProgressReporter.logStep(`Using validator database: ${dbPath}`);
     } else {
-        ProgressReporter.logStep('Fetching current block height');
-        const currentBlock = await blockFetcher.getCurrentBlock();
-        if (!currentBlock) {
-            ProgressReporter.logError('Failed to get current block height');
-            process.exit(1);
-        }
-        startBlock = currentBlock;
-        endBlock = startBlock - blockCount + 1;
-        effectiveBlockCount = blockCount;
+        ProgressReporter.logError(`Validator database not found at: ${dbPath}`);
+        ProgressReporter.logError('Validator names will not be available. Set VALIDATOR_DB_PATH environment variable if database is elsewhere.');
     }
+    
+    const { startBlock, endBlock, effectiveBlockCount } = await calculateBlockRange(blockFetcher, blockCount, startHeight, endHeight);
     
     console.log(`📊 Current block: ${startBlock.toLocaleString()}`);
     console.log(`📊 Analyzing ${effectiveBlockCount.toLocaleString()} blocks backwards from ${startBlock.toLocaleString()} to ${endBlock.toLocaleString()}`);
     console.log('=' .repeat(80));
     
-    // Fetch all blocks efficiently
+    // Fetch all blocks efficiently in parallel
     ProgressReporter.logStep('Fetching blocks');
-    const blocks = await blockFetcher.fetchBlockRange(startBlock, effectiveBlockCount, (current, total, blockHeight) => {
+    const BLOCK_FETCH_CONCURRENCY = 20; // Parallel block fetches
+    const blocks = await fetchBlocksParallel(blockFetcher, startBlock, effectiveBlockCount, BLOCK_FETCH_CONCURRENCY, (current, total, blockHeight) => {
         ProgressReporter.showProgress(current, total, blockHeight);
     });
     
     ProgressReporter.clearProgress();
     ProgressReporter.logSuccess(`Fetched ${blocks.length.toLocaleString()} blocks`);
     
-    ProgressReporter.logStep('Analyzing missing voting power per proposer');
-    
     // Cache for voting power data
     const votingPowerCache = new Map();
     
-    // Get initial voting power data
-    let currentVotingPowerData = await getVotingPowerData(startBlock, baseUrl);
-    if (currentVotingPowerData) {
-        votingPowerCache.set(startBlock, currentVotingPowerData);
-        console.log(`📊 Initial voting power: ${(currentVotingPowerData.totalVotingPower / 1e9).toFixed(2)} BERA total power, ${currentVotingPowerData.validatorCount} validators`);
+    // Pre-fetch all voting power data points in parallel (every 500 blocks)
+    // This is much faster than fetching sequentially during block processing
+    ProgressReporter.logStep('Pre-fetching voting power data');
+    const votingPowerHeights = [];
+    for (let i = 0; i < blocks.length; i += 500) {
+        votingPowerHeights.push(blocks[i].height);
     }
+    // Also ensure we have the start block
+    if (!votingPowerHeights.includes(startBlock)) {
+        votingPowerHeights.unshift(startBlock);
+    }
+    
+    // Fetch all voting power data in parallel with controlled concurrency
+    const VOTING_POWER_CONCURRENCY = 10;
+    for (let i = 0; i < votingPowerHeights.length; i += VOTING_POWER_CONCURRENCY) {
+        const batch = votingPowerHeights.slice(i, i + VOTING_POWER_CONCURRENCY);
+        const results = await Promise.all(batch.map(height => getVotingPowerData(height, baseUrl)));
+        results.forEach((data, idx) => {
+            if (data) {
+                votingPowerCache.set(batch[idx], data);
+            }
+        });
+    }
+    
+    // Get initial voting power data (use cached if available)
+    let currentVotingPowerData = votingPowerCache.get(startBlock) || await getVotingPowerData(startBlock, baseUrl);
+    if (currentVotingPowerData && !votingPowerCache.has(startBlock)) {
+        votingPowerCache.set(startBlock, currentVotingPowerData);
+    }
+    
+    ProgressReporter.logSuccess(`Pre-fetched voting power data for ${votingPowerCache.size} block heights`);
     
     // Map to store missing voting power data for each proposer
     const proposerData = new Map();
@@ -230,18 +365,21 @@ async function analyzeMissingValidators(blockCount = ConfigHelper.getDefaultBloc
     const globalRounds = [];
     const roundCounts = new Map();
     
-    console.log('\n📊 Processing blocks (voting power updates every 500 blocks)...');
-    
     for (let i = 0; i < blocks.length; i++) {
         const block = blocks[i];
         
-        // Update voting power data every 500 blocks
+        // Use cached voting power data (pre-fetched in parallel) or fetch if missing
         if (i > 0 && i % 500 === 0) {
-            const newVotingPowerData = await getVotingPowerData(block.height, baseUrl);
-            if (newVotingPowerData) {
-                currentVotingPowerData = newVotingPowerData;
-                votingPowerCache.set(block.height, newVotingPowerData);
-                console.log(`  📊 Updated voting power at block ${block.height.toLocaleString()}: ${(newVotingPowerData.totalVotingPower / 1e9).toFixed(2)} BERA total power`);
+            const cachedData = votingPowerCache.get(block.height);
+            if (cachedData) {
+                currentVotingPowerData = cachedData;
+            } else {
+                // Fallback: fetch if not in cache (shouldn't happen with pre-fetch)
+                const newVotingPowerData = await getVotingPowerData(block.height, baseUrl);
+                if (newVotingPowerData) {
+                    currentVotingPowerData = newVotingPowerData;
+                    votingPowerCache.set(block.height, newVotingPowerData);
+                }
             }
         }
         
@@ -300,119 +438,50 @@ async function analyzeMissingValidators(blockCount = ConfigHelper.getDefaultBloc
                 });
             }
         }
-        
-        // Progress indicator
-        if (i % 100 === 0) {
-            console.log(`  Processed ${i + 1}/${blocks.length} blocks (${((i + 1) / blocks.length * 100).toFixed(1)}%)`);
-        }
     }
     
     console.log('\n' + '=' .repeat(80));
     console.log('🎯 MISSING VOTING POWER ANALYSIS COMPLETE');
     console.log('=' .repeat(80));
     
-    // Show observed flag distribution for transparency
-    if (globalFlagCounts.size > 0) {
-        console.log('\n🔎 Observed block_id_flag distribution:');
-        const flags = Array.from(globalFlagCounts.entries()).sort((a, b) => a[0] - b[0]);
-        for (const [flag, cnt] of flags) {
-            console.log(`  flag ${flag}: ${cnt.toLocaleString()}`);
-        }
-    }
-
-    // Show observed consensus rounds as textual histogram
-    if (globalRounds.length > 0) {
-        console.log('\n🔁 Consensus rounds (last_commit.round):');
-        const rounds = Array.from(roundCounts.entries()).sort((a, b) => a[0] - b[0]);
-        const maxCount = rounds.reduce((m, [, c]) => Math.max(m, c), 0);
-        const barMaxWidth = 40;
-        for (const [round, count] of rounds) {
-            const barLength = maxCount > 0 ? Math.max(1, Math.round((count / maxCount) * barMaxWidth)) : 0;
-            const bar = '#'.repeat(barLength);
-            console.log(`  ${round.toString().padStart(2, ' ')} | ${bar} (${count.toLocaleString()})`);
-        }
-    }
-    
-    // Show histogram of number of missed rounds (round > 0)
-    if (globalRounds.length > 0) {
-        console.log('\n⏱️ Missed rounds (round > 0):');
-        const missed = Array.from(roundCounts.entries())
-            .filter(([round]) => round > 0)
-            .sort((a, b) => a[0] - b[0]);
-        const totalBlocks = globalRounds.length;
-        const totalMissedBlocks = missed.reduce((sum, [, count]) => sum + count, 0);
-        const maxMissedCount = missed.reduce((m, [, c]) => Math.max(m, c), 0);
-        const barMaxWidthMissed = 40;
-        for (const [round, count] of missed) {
-            const barLength = maxMissedCount > 0 ? Math.max(1, Math.round((count / maxMissedCount) * barMaxWidthMissed)) : 0;
-            const bar = '#'.repeat(barLength);
-            console.log(`  ${round.toString().padStart(2, ' ')} | ${bar} (${count.toLocaleString()})`);
-        }
-        console.log(`  Blocks with missed rounds: ${totalMissedBlocks.toLocaleString()} of ${totalBlocks.toLocaleString()} (${((totalMissedBlocks / totalBlocks) * 100).toFixed(1)}%)`);
-    }
+    displayHistogram('🔎 Observed block_id_flag distribution', globalFlagCounts, k => `flag ${k}`);
+    displayHistogram('🔁 Consensus rounds (last_commit.round)', roundCounts);
     
     // Calculate statistics for each proposer (unlucky proposers analysis)
-    const proposerAnalysis = [];
-    
-    if (analyzeProposers) {
-        for (const [proposer, data] of proposerData.entries()) {
-            if (data.blocks >= 3) { // Minimum blocks for meaningful stats
-                const votingPowerStats = StatUtils.calculateStats(data.missingVotingPowerSamples);
-                const percentageStats = StatUtils.calculateStats(data.missingPercentageSamples);
-                const votingPowerPercentiles = calculatePercentiles(data.missingVotingPowerSamples);
-                const percentagePercentiles = calculatePercentiles(data.missingPercentageSamples);
-                
-                // Find block with max missing voting power
-                const maxMissingBlock = data.missingByBlock.reduce(
-                    (max, curr) => curr.missingVotingPower > max.missingVotingPower ? curr : max, 
-                    data.missingByBlock[0]
-                );
-                
-                proposerAnalysis.push({
-                    proposer,
-                    blockCount: data.blocks,
-                    votingPowerStats,
-                    percentageStats,
-                    votingPowerPercentiles,
-                    percentagePercentiles,
-                    maxMissingBlock
-                });
-            }
-        }
-    }
+    const proposerAnalysis = analyzeProposers ? Array.from(proposerData.entries())
+        .filter(([, data]) => data.blocks >= 3)
+        .map(([proposer, data]) => ({
+            proposer,
+            blockCount: data.blocks,
+            votingPowerStats: StatUtils.calculateStats(data.missingVotingPowerSamples),
+            percentageStats: StatUtils.calculateStats(data.missingPercentageSamples),
+            votingPowerPercentiles: calculatePercentiles(data.missingVotingPowerSamples),
+            percentagePercentiles: calculatePercentiles(data.missingPercentageSamples),
+            maxMissingBlock: data.missingByBlock.reduce((max, curr) => 
+                curr.missingVotingPower > max.missingVotingPower ? curr : max, data.missingByBlock[0])
+        })) : [];
     
     // Calculate statistics for each validator (frequently absent validators analysis)
-    const validatorAnalysis = [];
+    const validatorAnalysis = analyzeValidators ? Array.from(validatorAbsenceData.entries())
+        .filter(([, data]) => data.totalOpportunities >= minValidatorOpportunities)
+        .map(([validatorAddress, data]) => ({
+            validatorAddress,
+            totalOpportunities: data.totalOpportunities,
+            absences: data.absences,
+            absenceRate: (data.absences / data.totalOpportunities) * 100,
+            votingPower: data.votingPower
+        }))
+        .sort((a, b) => b.absenceRate - a.absenceRate) : [];
     
-    if (analyzeValidators) {
-        for (const [validatorAddress, data] of validatorAbsenceData.entries()) {
-            if (data.totalOpportunities >= minValidatorOpportunities) { // Minimum opportunities for meaningful stats
-                const absenceRate = (data.absences / data.totalOpportunities) * 100;
-                
-                // Calculate missed voting power (total power that was absent)
-                const missedVotingPower = data.absences * data.votingPower;
-                
-                validatorAnalysis.push({
-                    validatorAddress,
-                    totalOpportunities: data.totalOpportunities,
-                    absences: data.absences,
-                    absenceRate,
-                    votingPower: data.votingPower,
-                    missedVotingPower
-                });
-            }
-        }
-        
-        // Sort by absence rate (descending) - most problematic validators first
-        validatorAnalysis.sort((a, b) => b.absenceRate - a.absenceRate);
+    let filteredAnalysis = proposerAnalysis;
+    if (filterProposer) {
+        const proposerNameMap = await fetchValidatorNames(validatorDB, proposerAnalysis.map(a => a.proposer));
+        const filterLower = filterProposer.toLowerCase();
+        filteredAnalysis = proposerAnalysis.filter(a => 
+            a.proposer.toLowerCase().includes(filterLower) || 
+            proposerNameMap.get(a.proposer)?.toLowerCase().includes(filterLower)
+        );
     }
-    
-    // Filter by proposer if specified
-    const filteredAnalysis = filterProposer 
-        ? proposerAnalysis.filter(a => a.proposer === filterProposer || 
-            (validatorDB.getValidatorName(a.proposer) && 
-             validatorDB.getValidatorName(a.proposer).toLowerCase().includes(filterProposer.toLowerCase())))
-        : proposerAnalysis;
     
     if (filterProposer && filteredAnalysis.length === 0) {
         console.log(`\n⚠️ No data found for proposer: ${filterProposer}`);
@@ -420,6 +489,13 @@ async function analyzeMissingValidators(blockCount = ConfigHelper.getDefaultBloc
     
     // Sort by average missing voting power percentage (descending)
     filteredAnalysis.sort((a, b) => (b.percentageStats?.avg ?? 0) - (a.percentageStats?.avg ?? 0));
+    
+    const { items: proposersToShow, skipped: skippedProposers } = filterWithMinCount(
+        filteredAnalysis,
+        a => (a.percentageStats?.avg ?? 0) > 2.0 || (a.percentageStats?.median ?? 0) > 2.0,
+        3,
+        showAll
+    );
     
     // Display unlucky proposers analysis
     if (analyzeProposers && proposerAnalysis.length > 0) {
@@ -432,12 +508,19 @@ async function analyzeMissingValidators(blockCount = ConfigHelper.getDefaultBloc
             wordWrap: true
         });
         
-        for (const analysis of filteredAnalysis) {
-            const proposerName = await validatorDB.getValidatorName(analysis.proposer);
+        const proposerNames = await fetchValidatorNames(validatorDB, proposersToShow.map(a => a.proposer));
+        if (proposerNames.size === 0 && proposersToShow.length > 0) {
+            ProgressReporter.logError(`Warning: No validator names found in database. Check database path: ${dbPath}`);
+        } else if (proposerNames.size > 0) {
+            ProgressReporter.logSuccess(`Resolved ${proposerNames.size} of ${proposersToShow.length} proposer names`);
+        }
+        
+        for (const analysis of proposersToShow) {
+            const proposerName = proposerNames.get(analysis.proposer);
             const proposerDisplay = showAddresses ? analysis.proposer : (proposerName || analysis.proposer);
             
                     const maxMissingDisplay = analysis.maxMissingBlock
-            ? `${(analysis.maxMissingBlock.missingVotingPower / 1e9).toFixed(2)} BERA (#${analysis.maxMissingBlock.blockNumber})`
+            ? `${formatVotingPower(analysis.maxMissingBlock.missingVotingPower)} (#${analysis.maxMissingBlock.blockNumber})`
             : 'n/a';
             
             proposerTable.push([
@@ -447,12 +530,16 @@ async function analyzeMissingValidators(blockCount = ConfigHelper.getDefaultBloc
                 analysis.percentageStats.median.toFixed(2),
                 (analysis.percentagePercentiles.p90 || 0).toFixed(1),
                 (analysis.percentagePercentiles.p99 || 0).toFixed(1),
-                (analysis.votingPowerStats.avg / 1e9).toFixed(2) + ' BERA',
+                formatVotingPower(analysis.votingPowerStats.avg),
                 maxMissingDisplay
             ]);
         }
         
         console.log(proposerTable.toString());
+        
+        if (!showAll && skippedProposers > 0) {
+            console.log(`\n(Showing ${proposersToShow.length} of ${filteredAnalysis.length} proposers. ${skippedProposers} skipped below threshold)`);
+        }
     }
     
     // Display frequently absent validators analysis  
@@ -460,16 +547,25 @@ async function analyzeMissingValidators(blockCount = ConfigHelper.getDefaultBloc
         console.log('\n🚨 FREQUENTLY ABSENT VALIDATORS - Chronically Missing from Consensus:');
         
         const validatorTable = new Table({
-            head: ['Validator', 'Opportunities', 'Absences', 'Absence Rate %', 'Voting Power', 'Total Missed Power'],
-            colWidths: [30, 12, 10, 12, 12, 15],
+            head: ['Validator', 'Opportunities', 'Absences', 'Absence Rate %', 'Voting Power'],
+            colWidths: [30, 12, 10, 12, 15],
             wordWrap: true
         });
         
-        // Show top 20 most frequently absent validators
-        const topAbsentValidators = validatorAnalysis.slice(0, 20);
+        const { items: topAbsentValidators, skipped: skippedValidators } = filterWithMinCount(
+            validatorAnalysis,
+            v => v.absenceRate > 1.0,
+            3,
+            showAll
+        );
+        
+        const validatorNames = await fetchValidatorNames(validatorDB, topAbsentValidators.map(a => a.validatorAddress));
+        if (validatorNames.size === 0 && topAbsentValidators.length > 0) {
+            ProgressReporter.logError(`Warning: No validator names found in database (validators exist but names are N/A). Database: ${dbPath}`);
+        }
         
         for (const analysis of topAbsentValidators) {
-            const validatorName = await validatorDB.getValidatorName(analysis.validatorAddress);
+            const validatorName = validatorNames.get(analysis.validatorAddress);
             const validatorDisplay = showAddresses ? analysis.validatorAddress : (validatorName || analysis.validatorAddress);
             
             validatorTable.push([
@@ -477,15 +573,14 @@ async function analyzeMissingValidators(blockCount = ConfigHelper.getDefaultBloc
                 analysis.totalOpportunities,
                 analysis.absences,
                 analysis.absenceRate.toFixed(2),
-                (analysis.votingPower / 1e9).toFixed(2) + ' BERA',
-                (analysis.missedVotingPower / 1e9).toFixed(2) + ' BERA'
+                formatVotingPower(analysis.votingPower)
             ]);
         }
         
         console.log(validatorTable.toString());
         
-        if (validatorAnalysis.length > 20) {
-            console.log(`\n(Showing top 20 of ${validatorAnalysis.length} validators with absence data)`);
+        if (!showAll && skippedValidators > 0) {
+            console.log(`\n(Showing ${topAbsentValidators.length} of ${validatorAnalysis.length} validators. ${skippedValidators} skipped below threshold)`);
         }
     }
     
@@ -504,29 +599,31 @@ async function analyzeMissingValidators(blockCount = ConfigHelper.getDefaultBloc
         console.log(`Validators with sufficient data (${minValidatorOpportunities}+ opportunities): ${validatorAnalysis.length.toLocaleString()}`);
     }
     console.log(`\nMissing Voting Power (flag=1):`);
-    console.log(`  Average missing: ${(overallVotingPowerStats.avg / 1e9).toFixed(2)} BERA (${overallPercentageStats.avg.toFixed(2)}%)`);
-    console.log(`  Median missing: ${(overallVotingPowerStats.median / 1e9).toFixed(2)} BERA (${overallPercentageStats.median.toFixed(2)}%)`);
+    console.log(`  Average missing: ${formatVotingPower(overallVotingPowerStats.avg)} (${overallPercentageStats.avg.toFixed(2)}%)`);
+    console.log(`  Median missing: ${formatVotingPower(overallVotingPowerStats.median)} (${overallPercentageStats.median.toFixed(2)}%)`);
     console.log(`  90th percentile: ${(overallPercentagePercentiles.p90 || 0).toFixed(2)}%`);
     console.log(`  99th percentile: ${(overallPercentagePercentiles.p99 || 0).toFixed(2)}%`);
-    console.log(`  Range: ${(overallVotingPowerStats.min / 1e9).toFixed(2)} - ${(overallVotingPowerStats.max / 1e9).toFixed(2)} BERA`);
+    console.log(`  Range: ${formatVotingPower(overallVotingPowerStats.min)} - ${formatVotingPower(overallVotingPowerStats.max)}`);
     if (currentVotingPowerData) {
-        console.log(`  Total network voting power: ${(currentVotingPowerData.totalVotingPower / 1e9).toFixed(2)} BERA`);
+        console.log(`  Total network voting power: ${formatVotingPower(currentVotingPowerData.totalVotingPower)}`);
     }
     
     // Summary insights
     if (analyzeValidators && validatorAnalysis.length > 0) {
-        const highAbsenceValidators = validatorAnalysis.filter(v => v.absenceRate > 5.0);
-        if (highAbsenceValidators.length > 0) {
-            console.log(`\n🚨 HIGH ABSENCE VALIDATORS: ${highAbsenceValidators.length} validators with >5% absence rate`);
-            const totalMissedPower = highAbsenceValidators.reduce((sum, v) => sum + v.missedVotingPower, 0);
-            console.log(`  Total voting power lost due to high-absence validators: ${(totalMissedPower / 1e9).toFixed(2)} BERA`);
+        const highAbsence = validatorAnalysis.filter(v => v.absenceRate > 25.0);
+        if (highAbsence.length > 0) {
+            console.log(`\n🚨 HIGH ABSENCE VALIDATORS: ${highAbsence.length} validators with >25% absence rate`);
         }
     }
     
     if (analyzeProposers && proposerAnalysis.length > 0) {
-        const unluckyProposers = proposerAnalysis.filter(p => p.percentageStats.avg > overallPercentageStats.avg * 1.5);
-        if (unluckyProposers.length > 0) {
-            console.log(`\n📊 UNLUCKY PROPOSERS: ${unluckyProposers.length} proposers see 50%+ more missing power than average`);
+        const highMissing = proposerAnalysis.filter(p => p.percentageStats.avg > 10.0);
+        if (highMissing.length > 0) {
+            console.log(`\n📊 HIGH MISSING POWER PROPOSERS: ${highMissing.length} proposers with >10% average missing voting power`);
+        }
+        const unlucky = proposerAnalysis.filter(p => p.percentageStats.avg > overallPercentageStats.avg * 1.5);
+        if (unlucky.length > 0) {
+            console.log(`\n📊 UNLUCKY PROPOSERS: ${unlucky.length} proposers see 50%+ more missing power than average`);
         }
     }
     
@@ -566,6 +663,7 @@ Options:
   --validators-only      Only analyze frequently absent validators (skip proposer analysis)
   --proposers-only       Only analyze unlucky proposers (skip validator analysis)
   --min-opportunities=N  Minimum opportunities for validator analysis (default: 10)
+  --show-all             Show all entries, bypassing threshold filters
   -h, --help             Show this help message
 
 Examples:
@@ -578,58 +676,91 @@ Examples:
   node analyze-missing-validators.js --min-opportunities=20  # Require 20+ opportunities for validator stats
   node analyze-missing-validators.js --addresses             # Show validator addresses instead of names
   node analyze-missing-validators.js --proposer=0x123        # Filter to specific proposer address
+  node analyze-missing-validators.js --show-all              # Show all entries, bypassing thresholds
     `);
 }
 
 // CLI handling
 if (require.main === module) {
-    const args = process.argv.slice(2);
-    const blockCountArg = args.find(arg => arg.startsWith('--blocks='));
-    const startArg = args.find(arg => arg.startsWith('--start='));
-    const endArg = args.find(arg => arg.startsWith('--end='));
-    const networkArg = args.find(arg => arg.startsWith('--network=')) || 
-                      args.find(arg => arg.startsWith('--chain=')) || 
-                      args.find(arg => arg === '-c' && args[args.indexOf(arg) + 1]);
-    const proposerArg = args.find(arg => arg.startsWith('--proposer=')) || 
-                       args.find(arg => arg === '-p' && args[args.indexOf(arg) + 1]);
-    const minOpportunitiesArg = args.find(arg => arg.startsWith('--min-opportunities='));
+    const argv = yargs(hideBin(process.argv))
+        .option('blocks', {
+            alias: 'b',
+            type: 'number',
+            default: ConfigHelper.getDefaultBlockCount(),
+            description: 'Number of blocks to analyze'
+        })
+        .option('start', {
+            type: 'number',
+            description: 'Start block height (analyze from this block downward)'
+        })
+        .option('end', {
+            type: 'number',
+            description: 'End block height (inclusive). Requires --start. start >= end.'
+        })
+        .option('chain', {
+            alias: 'c',
+            type: 'string',
+            default: 'mainnet',
+            choices: ['mainnet', 'bepolia'],
+            description: 'Chain to use'
+        })
+        .option('addresses', {
+            alias: 'a',
+            type: 'boolean',
+            default: false,
+            description: 'Show validator addresses instead of names'
+        })
+        .option('proposer', {
+            alias: 'p',
+            type: 'string',
+            description: 'Filter analysis to a specific proposer (address or name substring)'
+        })
+        .option('validators-only', {
+            type: 'boolean',
+            default: false,
+            description: 'Only analyze frequently absent validators (skip proposer analysis)'
+        })
+        .option('proposers-only', {
+            type: 'boolean',
+            default: false,
+            description: 'Only analyze unlucky proposers (skip validator analysis)'
+        })
+        .option('min-opportunities', {
+            type: 'number',
+            default: 10,
+            description: 'Minimum opportunities for validator analysis'
+        })
+        .option('show-all', {
+            type: 'boolean',
+            default: false,
+            description: 'Show all entries, bypassing threshold filters'
+        })
+        .option('help', {
+            alias: 'h',
+            type: 'boolean',
+            description: 'Show help message'
+        })
+        .strict()
+        .help()
+        .argv;
     
-    const blockCount = blockCountArg ? parseInt(blockCountArg.split('=')[1]) : ConfigHelper.getDefaultBlockCount();
-    const startHeight = startArg ? parseInt(startArg.split('=')[1]) : null;
-    const endHeight = endArg ? parseInt(endArg.split('=')[1]) : null;
-    const network = networkArg ? 
-        (networkArg.includes('=') ? networkArg.split('=')[1] : args[args.indexOf(networkArg) + 1]) : 
-        'mainnet';
-    const showAddresses = args.includes('--addresses') || args.includes('-a');
-    const filterProposer = proposerArg ? 
-        (proposerArg.includes('=') ? proposerArg.split('=')[1] : args[args.indexOf(proposerArg) + 1]) : 
-        null;
-    const minValidatorOpportunities = minOpportunitiesArg ? parseInt(minOpportunitiesArg.split('=')[1]) : 10;
-    
-    // Determine analysis modes
-    const validatorsOnly = args.includes('--validators-only');
-    const proposersOnly = args.includes('--proposers-only');
-    
-    // Default to both if neither specified, otherwise respect the flags
-    const analyzeValidators = !proposersOnly;
-    const analyzeProposers = !validatorsOnly;
-    
-    if (args.includes('--help') || args.includes('-h')) {
+    if (argv.help) {
         showHelp();
         process.exit(0);
     }
     
     const options = {
-        showAddresses,
-        filterProposer,
-        analyzeValidators,
-        analyzeProposers,
-        minValidatorOpportunities,
-        startHeight,
-        endHeight
+        showAddresses: argv.addresses,
+        filterProposer: argv.proposer || null,
+        analyzeValidators: !argv['proposers-only'],
+        analyzeProposers: !argv['validators-only'],
+        minValidatorOpportunities: argv['min-opportunities'],
+        startHeight: argv.start !== undefined ? argv.start : null,
+        endHeight: argv.end !== undefined ? argv.end : null,
+        showAll: argv['show-all']
     };
     
-    analyzeMissingValidators(blockCount, network, options)
+    analyzeMissingValidators(argv.blocks, argv.chain, options)
         .then(() => {
             process.exit(0);
         })

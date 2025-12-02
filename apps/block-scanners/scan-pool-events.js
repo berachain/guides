@@ -143,31 +143,67 @@ const EVENT_DECODERS = {
 // shown by the user (Ownership*, Paused/Unpaused, SharesMinted, TotalDepositsUpdated).
 
 function parseArgs() {
-  const args = process.argv.slice(2);
+  const yargs = require('yargs/yargs');
+  const { hideBin } = require('yargs/helpers');
+  
+  const argv = yargs(hideBin(process.argv))
+    .option('pool', {
+      type: 'string',
+      demandOption: true,
+      description: 'Pool address (required)'
+    })
+    .option('start', {
+      type: 'number',
+      demandOption: true,
+      description: 'Start block number (required)'
+    })
+    .option('end', {
+      type: 'number',
+      description: 'End block number'
+    })
+    .option('chain', {
+      type: 'string',
+      default: 'bepolia',
+      choices: ['mainnet', 'bepolia'],
+      description: 'Chain to use'
+    })
+    .option('rpc', {
+      type: 'string',
+      description: 'RPC endpoint URL'
+    })
+    .option('pubkey', {
+      type: 'string',
+      description: 'Validator pubkey'
+    })
+    .option('include-delegated', {
+      type: 'boolean',
+      default: false,
+      description: 'Include delegated pool events'
+    })
+    .option('help', {
+      alias: 'h',
+      type: 'boolean',
+      description: 'Show help'
+    })
+    .strict()
+    .help()
+    .argv;
+  
+  if (argv.help) {
+    return { help: true };
+  }
+  
   const cfg = {
-    pool: null,
-    start: null,
-    end: null,
-    chain: 'bepolia',
-    rpc: null,
-    pubkey: null,
-    includeDelegated: false
+    pool: argv.pool,
+    start: argv.start,
+    end: argv.end !== undefined ? argv.end : null,
+    chain: argv.chain,
+    rpc: argv.rpc || null,
+    pubkey: argv.pubkey || null,
+    includeDelegated: argv['include-delegated']
   };
-  for (let i = 0; i < args.length; i++) {
-    const k = args[i];
-    if (k === '--pool') cfg.pool = args[++i];
-    else if (k === '--start') cfg.start = parseInt(args[++i]);
-    else if (k === '--end') cfg.end = parseInt(args[++i]);
-    else if (k === '--chain') cfg.chain = args[++i];
-    else if (k === '--rpc') cfg.rpc = args[++i];
-    else if (k === '--pubkey') cfg.pubkey = args[++i];
-    else if (k === '--include-delegated') cfg.includeDelegated = true;
-    else if (k === '--help' || k === '-h') return { help: true };
-  }
-  if (!cfg.pool || cfg.start == null) {
-    return { help: true, error: 'Missing required --pool and/or --start' };
-  }
-  cfg.rpc = cfg.rpc || RPC_BY_CHAIN[cfg.chain] || RPC_BY_CHAIN.bepolia;
+  
+  cfg.rpc = cfg.rpc || RPC_BY_CHAIN[cfg.chain];
   return cfg;
 }
 

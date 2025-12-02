@@ -17,7 +17,7 @@ const config = require('../../config');
 const { ConfigHelper } = config;
 
 // Common defaults and helpers shared across scanners
-const DEFAULT_LOG_CHUNK_SIZE = parseInt(process.env.DEFAULT_LOG_CHUNK_SIZE || config.DEFAULT_LOG_CHUNK_SIZE || '50000', 10);
+const DEFAULT_LOG_CHUNK_SIZE = ConfigHelper.getDefaultLogChunkSize();
 
 function hashEvent(signature) {
   return ethers.id(signature);
@@ -78,14 +78,9 @@ class ValidatorNameDB {
 
   getCandidateDbPaths() {
     const candidates = [];
-    // 1) Explicit path from config/env
+    // Use explicit path from config/env only
     if (this.explicitDbPath) candidates.push(this.explicitDbPath);
-    // 2) Common relative paths from this lib directory: exp/block-scanners/lib → exp/cometbft-decoder/*.db
-    const base = path.resolve(__dirname, '..', '..', 'cometbft-decoder');
-    candidates.push(path.join(base, 'validators_correlated.db'));
-    candidates.push(path.join(base, 'validators.db'));
-    // De-duplicate
-    return Array.from(new Set(candidates));
+    return candidates;
   }
 
   async queryAgainst(dbPath, sql, params = []) {
