@@ -23,49 +23,53 @@ const { ConfigHelper, config, withRetry, hashEvent, decodeEventData, scanLogsInC
 // -----------------------------
 function printHelp() {
     console.log(`
-Usage: node scan-deposits.js [--chain <name>] [--rpc <url>] [--start <n>] [--address <0x...>] [--help]
+Usage: node scan-deposits.js [--chain <name>] [--rpc <url>] [--start <n>] [--help]
 
 Options:
   --help                 Show this help and exit
   --chain <name>         Chain to use for RPC defaults (mainnet, bepolia)
   --rpc <url>            RPC URL (overrides --chain)
   --start <n>            Starting block (default: 0)
-  --address <0x...>      BeaconDeposit contract address (default: placeholder)
 `);
 }
 
-function parseArgs(argv) {
-    const args = { chain: undefined, rpc: undefined, startBlock: undefined, address: undefined, help: false };
-    for (let i = 2; i < argv.length; i++) {
-        const arg = argv[i];
-        switch (arg) {
-            case '--help':
-            case '-h':
-                args.help = true;
-                break;
-            case '--chain':
-                args.chain = argv[++i];
-                break;
-            case '--rpc':
-                args.rpc = argv[++i];
-                break;
-            case '--start':
-                args.startBlock = Number(argv[++i]);
-                break;
-            case '--address':
-                args.address = argv[++i];
-                break;
-            default:
-                if (arg.startsWith('-')) {
-                    console.error(`Unknown option: ${arg}`);
-                    process.exit(1);
-                }
-        }
-    }
-    return args;
+function parseArgs() {
+    const yargs = require('yargs/yargs');
+    const { hideBin } = require('yargs/helpers');
+    
+    const argv = yargs(hideBin(process.argv))
+        .option('chain', {
+            type: 'string',
+            choices: ['mainnet', 'bepolia'],
+            description: 'Chain to use for RPC defaults'
+        })
+        .option('rpc', {
+            type: 'string',
+            description: 'RPC URL (overrides --chain)'
+        })
+        .option('start', {
+            type: 'number',
+            default: 0,
+            description: 'Starting block'
+        })
+        .option('help', {
+            alias: 'h',
+            type: 'boolean',
+            description: 'Show help'
+        })
+        .strict()
+        .help()
+        .argv;
+    
+    return {
+        help: argv.help || false,
+        chain: argv.chain || undefined,
+        rpc: argv.rpc || undefined,
+        startBlock: argv.start !== undefined ? argv.start : undefined
+    };
 }
 
-const args = parseArgs(process.argv);
+const args = parseArgs();
 if (args.help) {
     printHelp();
     process.exit(0);
@@ -78,8 +82,8 @@ if (args.chain && !SUPPORTED_CHAINS.includes(args.chain)) {
     console.error(`Unknown --chain value: ${args.chain}. Supported: ${SUPPORTED_CHAINS.join(', ')}`);
     process.exit(1);
 }
-// Precedence: --rpc > environment > config default for chain
-let resolvedRpcUrl = args.rpc || process.env.EL_ETHRPC_URL || ConfigHelper.getRpcUrl('el', chainName);
+// Precedence: --rpc > config default for chain
+let resolvedRpcUrl = args.rpc || ConfigHelper.getRpcUrl('el', chainName);
 
 // Event signature/topic and ABI decoding (no external ABI files required)
 const DEPOSIT_EVENT_SIGNATURE = 'Deposit(bytes,bytes,uint64,bytes,uint64)';
@@ -87,7 +91,7 @@ const DEPOSIT_TOPIC = hashEvent(DEPOSIT_EVENT_SIGNATURE);
 
 // Configuration
 const RPC_URL = resolvedRpcUrl;
-const CONTRACT_ADDRESS = args.address || ConfigHelper.getBeaconDepositAddress() || config.BEACON_DEPOSIT_ADDRESS;
+const CONTRACT_ADDRESS = ConfigHelper.getBeaconDepositAddress();
 const START_BLOCK = Number.isFinite(args.startBlock) ? args.startBlock : 0; 
 const BLOCK_CHUNK_SIZE = ConfigHelper.getDefaultLogChunkSize();
 const GENESIS_FORK_VERSION = '0xdf609e3b062842c6425ff716aec2d2092c46455d9b2e1a2c9e32c6ba63ff0bda';

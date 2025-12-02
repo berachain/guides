@@ -18,6 +18,8 @@
 
 const { ValidatorNameDB, BlockFetcher, StatUtils, ProgressReporter, ConfigHelper } = require('./lib/shared-utils');
 const Table = require('cli-table3');
+const yargs = require('yargs/yargs');
+const { hideBin } = require('yargs/helpers');
 
 // Calculate percentiles for an array of numbers
 function calculatePercentiles(values, percentiles = [25, 50, 75, 90, 95, 99]) {
@@ -409,34 +411,51 @@ Examples:
 
 // CLI handling
 if (require.main === module) {
-    const args = process.argv.slice(2);
-    const blockCountArg = args.find(arg => arg.startsWith('--blocks='));
-    const networkArg = args.find(arg => arg.startsWith('--network=')) || 
-                      args.find(arg => arg.startsWith('--chain=')) || 
-                      args.find(arg => arg === '-c' && args[args.indexOf(arg) + 1]);
-    const proposerArg = args.find(arg => arg.startsWith('--proposer=')) || 
-                       args.find(arg => arg === '-p' && args[args.indexOf(arg) + 1]);
+    const argv = yargs(hideBin(process.argv))
+        .option('blocks', {
+            alias: 'b',
+            type: 'number',
+            default: ConfigHelper.getDefaultBlockCount(),
+            description: 'Number of blocks to analyze'
+        })
+        .option('chain', {
+            alias: 'c',
+            type: 'string',
+            default: 'mainnet',
+            choices: ['mainnet', 'bepolia'],
+            description: 'Chain to use'
+        })
+        .option('addresses', {
+            alias: 'a',
+            type: 'boolean',
+            default: false,
+            description: 'Show validator addresses instead of names'
+        })
+        .option('proposer', {
+            alias: 'p',
+            type: 'string',
+            description: 'Filter analysis to a specific proposer (address or name substring)'
+        })
+        .option('help', {
+            alias: 'h',
+            type: 'boolean',
+            description: 'Show help message'
+        })
+        .strict()
+        .help()
+        .argv;
     
-    const blockCount = blockCountArg ? parseInt(blockCountArg.split('=')[1]) : ConfigHelper.getDefaultBlockCount();
-    const network = networkArg ? 
-        (networkArg.includes('=') ? networkArg.split('=')[1] : args[args.indexOf(networkArg) + 1]) : 
-        'mainnet';
-    const showAddresses = args.includes('--addresses') || args.includes('-a');
-    const filterProposer = proposerArg ? 
-        (proposerArg.includes('=') ? proposerArg.split('=')[1] : args[args.indexOf(proposerArg) + 1]) : 
-        null;
-    
-    if (args.includes('--help') || args.includes('-h')) {
+    if (argv.help) {
         showHelp();
         process.exit(0);
     }
     
     const options = {
-        showAddresses,
-        filterProposer
+        showAddresses: argv.addresses,
+        filterProposer: argv.proposer || null
     };
     
-    analyzeBlockDelays(blockCount, network, options)
+    analyzeBlockDelays(argv.blocks, argv.chain, options)
         .then(results => {
             process.exit(0);
         })

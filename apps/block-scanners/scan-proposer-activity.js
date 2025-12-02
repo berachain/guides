@@ -241,6 +241,7 @@ const argv = yargs(process.argv.slice(2))
     .example('$0 -p 0x1234...ABCD', 'Scan for specific proposer')
     .example('$0 -c bepolia -m 5000', 'Scan bepolia testnet with custom limit')
     .example('$0 -m 0', 'Unlimited scan until both activities found')
+    .strict()
     .help()
     .argv;
 

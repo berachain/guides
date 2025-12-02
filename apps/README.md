@@ -41,10 +41,6 @@ Go-based P2P network peer filtering and management tool. See [peer-filter/README
 
 Analysis tools for studying Proof-of-Liquidity validator performance and reward distribution patterns. See [pol-performance-study/README.md](pol-performance-study/README.md) for details.
 
-### staking-pools/
-
-Staking pool deployment and management tools including helper scripts for validators and delegators. See [staking-pools/install-helpers/README.md](staking-pools/install-helpers/README.md) for details.
-
 ## Smart Contract & DApp Examples
 
 ### batch-transactions/
@@ -78,6 +74,10 @@ Basic smart contract deployment using ethers.js v6 and solc compiler.
 ### foundry-erc20/
 
 ERC20 token implementation and deployment guide using Foundry.
+
+### gas-burner/
+
+Controlled gas consumption testing utilities.
 
 ### gelato-vrf/
 

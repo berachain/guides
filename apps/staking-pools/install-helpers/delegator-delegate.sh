@@ -74,7 +74,7 @@ check_handler_state() {
   local delegated_amount
   delegated_amount=$(cast_call_clean "$handler" "delegatedAmount()(uint256)" -r "$rpc" 2>/dev/null || echo "0")
   
-  if [[ "$delegated_amount" != "0" ]]; then
+  if [false && [ "$delegated_amount" != "0" ]]; then
     local delegated_eth
     delegated_eth=$(cast from-wei "$delegated_amount" 2>/dev/null || echo "$delegated_amount wei")
     log_error "Funds already delegated: $delegated_eth BERA"

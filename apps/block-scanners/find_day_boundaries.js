@@ -15,17 +15,43 @@
 
 const axios = require('axios');
 const { ConfigHelper, BlockFetcher, ProgressReporter } = require('./lib/shared-utils');
+const yargs = require('yargs/yargs');
+const { hideBin } = require('yargs/helpers');
 
 // Configuration via shared ConfigHelper (consistent with analyze-missing-validators)
-const args = process.argv.slice(2);
-const showHelp = args.includes('--help') || args.includes('-h');
-const daysArg = args.find(arg => arg.startsWith('--days=')); // backwards-compat, optional
-const fromArg = args.find(arg => arg.startsWith('--from-day='));
-const toArg = args.find(arg => arg.startsWith('--to-day='));
-const networkArg = args.find(arg => arg.startsWith('--network=')) ||
-                   args.find(arg => arg.startsWith('--chain=')) ||
-                   (args.includes('-c') ? args[args.indexOf('-c') + 1] : null);
-const chainName = networkArg ? (networkArg.includes('=') ? networkArg.split('=')[1] : networkArg) : 'mainnet';
+const argv = yargs(hideBin(process.argv))
+    .option('days', {
+        type: 'number',
+        description: 'Number of days to scan backwards (backwards-compat, optional)'
+    })
+    .option('from-day', {
+        type: 'string',
+        description: 'Start day (YYYY-MM-DD format)'
+    })
+    .option('to-day', {
+        type: 'string',
+        description: 'End day (YYYY-MM-DD format)'
+    })
+    .option('chain', {
+        alias: 'c',
+        type: 'string',
+        default: 'mainnet',
+        choices: ['mainnet', 'bepolia'],
+        description: 'Chain to use'
+    })
+    .option('help', {
+        alias: 'h',
+        type: 'boolean',
+        description: 'Show help'
+    })
+    .strict()
+    .help()
+    .argv;
+
+const chainName = argv.chain;
+const daysArg = argv.days !== undefined ? argv.days : null;
+const fromArg = argv['from-day'] ? `--from-day=${argv['from-day']}` : null;
+const toArg = argv['to-day'] ? `--to-day=${argv['to-day']}` : null;
 const BASE_URL = ConfigHelper.getBlockScannerUrl(chainName);
 const blockFetcher = new BlockFetcher(BASE_URL);
 const START_BLOCK = 933558;
@@ -163,7 +189,7 @@ Examples:
 
 // Main function
 async function findDayBoundaries() {
-    if (showHelp) {
+    if (argv.help) {
         printHelp();
         return;
     }

@@ -1074,6 +1074,7 @@ function parseArgs() {
       type: 'boolean',
       description: 'Show help'
     })
+    .strict()
     .help()
     .argv;
   

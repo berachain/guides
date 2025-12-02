@@ -584,6 +584,7 @@ if (require.main === module) {
             type: 'boolean',
             description: 'Show help message'
         })
+        .strict()
         .help()
         .argv;
     
