@@ -150,7 +150,7 @@ forge script script/SetBaseReceiveConfig.s.sol --rpc-url https://mainnet.base.or
 ```
 
 This script configures:
-- **ULN Config**: Receive confirmations (15 blocks) and required DVNs (LayerZero + Nethermind from Berachain)
+- **ULN Config**: Receive confirmations (20 blocks) and required DVNs (LayerZero + Nethermind from Berachain)
 
 **Configure Berachain Send Settings (Berachain → Base):**
 ```bash
@@ -171,7 +171,7 @@ forge script script/SetBerachainReceiveConfig.s.sol --rpc-url https://rpc.berach
 ```
 
 This script configures:
-- **ULN Config**: Receive confirmations (15 blocks), required DVNs (LayerZero + Nethermind from Berachain), and optional BERA DVN
+- **ULN Config**: Receive confirmations (20 blocks), required DVNs (LayerZero + Nethermind from Berachain), and optional BERA DVN
 
 **Note**: The `--via-ir` flag is required for Berachain scripts due to Solidity compiler stack depth limitations.
 
