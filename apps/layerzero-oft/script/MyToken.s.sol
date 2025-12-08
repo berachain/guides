@@ -15,7 +15,7 @@ contract MyTokenScript is Script {
         MyToken token = new MyToken(
             "My Custom Token",
             "MCT",
-            1000000 * 10**18, // 1M tokens with 18 decimals
+            1000000 * 10 ** 18, // 1M tokens with 18 decimals
             vm.addr(privateKey) // Owner address
         );
 

@@ -2,3 +2,7 @@
 src = "src"
 out = "out"
 libs = ["lib", "node_modules"]
+
+# Remappings are handled via remappings.txt file
+# This ensures compatibility with both npm packages and git submodules
+# The remappings support both npm packages (current) and git submodules (LayerZero docs style)
