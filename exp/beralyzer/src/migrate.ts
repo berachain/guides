@@ -21,12 +21,12 @@ async function main() {
   try {
     // No schema management; DSN governs the database
     await pg.query(
-      `CREATE TABLE IF NOT EXISTS schema_migrations (filename TEXT PRIMARY KEY, applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW())`,
+      `CREATE TABLE IF NOT EXISTS schema_migrations (filename TEXT PRIMARY KEY, applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW())`
     );
     const appliedSet = new Set<string>(
       (await pg.query("SELECT filename FROM schema_migrations")).rows.map(
-        (r) => r.filename,
-      ),
+        (r) => r.filename
+      )
     );
     for (const f of files) {
       if (appliedSet.has(f)) continue;
@@ -34,7 +34,7 @@ async function main() {
       await pg.query(sql);
       await pg.query(
         "INSERT INTO schema_migrations(filename) VALUES($1) ON CONFLICT DO NOTHING",
-        [f],
+        [f]
       );
       console.log(`Applied ${f}`);
     }

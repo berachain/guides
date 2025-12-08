@@ -33,7 +33,7 @@ const App = () => {
 
   const customProvider = new ethers.providers.Web3Provider(
     new AAWrapProvider(smartAccount, SendTransactionMode.Gasless),
-    "any",
+    "any"
   );
 
   useEffect(() => {
@@ -91,12 +91,12 @@ const App = () => {
     const tokenContract = new ethers.Contract(
       "0x7EeCA4205fF31f947EdBd49195a7A88E6A91161B",
       ["function transfer(address to, uint256 amount)"],
-      signer,
+      signer
     );
 
     const txResponse = await tokenContract.transfer(
       "0x000000000000000000000000000000000000dEaD",
-      ethers.utils.parseEther("1"),
+      ethers.utils.parseEther("1")
     );
     const txReceipt = await txResponse.wait();
 

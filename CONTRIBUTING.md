@@ -38,11 +38,13 @@ apps/your-guide-name/
 ## Code Standards
 
 1. **Dependencies**
+
    - Use `@branch/rpc-config` for network configuration
    - Keep dependencies up to date
    - Document any special requirements
 
 2. **Scripts**
+
    - Include clear error handling
    - Add helpful console output
    - Document all environment variables

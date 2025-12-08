@@ -49,7 +49,7 @@ export default function Deploy() {
       // encodes the function name and the input of `Hello World!`
       const encodedData = encodeAbiParameters(
         [{ name: "_greeting", type: "string" }],
-        ["Hello World!"],
+        ["Hello World!"]
       );
 
       // Need slide(2) to remove 0x from encodedData at the beginning
@@ -83,7 +83,7 @@ export default function Deploy() {
    */
   const onPressSeeTransaction = () => {
     openURL(
-      `${process.env.EXPO_PUBLIC_CHAIN_BLOCKEXPLORER_URL}/tx/${txResult?.data?.transactionHash}`,
+      `${process.env.EXPO_PUBLIC_CHAIN_BLOCKEXPLORER_URL}/tx/${txResult?.data?.transactionHash}`
     );
   };
 

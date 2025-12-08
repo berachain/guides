@@ -6,7 +6,7 @@ declare module "solc" {
     setupMethods(soljson: any): any;
     loadRemoteVersion(
       version: string,
-      callback: (err: Error | null, solc: any) => void,
+      callback: (err: Error | null, solc: any) => void
     ): void;
   }
 

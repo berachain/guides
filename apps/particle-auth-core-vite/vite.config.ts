@@ -11,7 +11,7 @@ const particleWasmPlugin: Plugin | undefined = {
   buildStart: () => {
     const copiedPath = path.join(
       __dirname,
-      "node_modules/@particle-network/thresh-sig/wasm/thresh_sig_wasm_bg.wasm",
+      "node_modules/@particle-network/thresh-sig/wasm/thresh_sig_wasm_bg.wasm"
     );
     const dir = path.join(__dirname, "node_modules/.vite/wasm");
     const resultPath = path.join(dir, "thresh_sig_wasm_bg.wasm");

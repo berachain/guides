@@ -23,16 +23,19 @@ go build -o enode-tester main.go
 ## Usage
 
 ### Test enodes from a file:
+
 ```bash
 ./enode-tester enode-list.txt
 ```
 
 ### Test with the included enode list:
+
 ```bash
 ./test-enodes.sh
 ```
 
 ### Test a single enode:
+
 ```bash
 ./enode-tester "enode://089782dab36fddcb9decf27c51bef7ef1980490e6f830718eb918236efb553d7de95302fa4fc87aae6623b7f6087697b5eb5e943039c43d7f6417d8aaee2b0e9@5.9.112.59:30303"
 ```
@@ -40,6 +43,7 @@ go build -o enode-tester main.go
 ## Input Format
 
 The tool expects enode URLs in the standard format:
+
 ```
 enode://<node-id>@<ip>:<port>
 ```
@@ -49,6 +53,7 @@ For file input, one enode per line, empty lines are ignored.
 ## Output
 
 The tool provides:
+
 - Real-time status for each enode being tested
 - Detailed error messages for failed connections
 - Node information (name, version, capabilities) for successful handshakes
@@ -58,12 +63,14 @@ The tool provides:
 ## Test Results
 
 Each enode is tested for:
+
 1. **Reachability**: Can we establish a TCP connection?
 2. **Valid Node ID**: Does the node ID match the public key?
 3. **Owns Node ID**: Does the connected node actually own the private key?
 4. **Handshake OK**: Can we complete the RLPx handshake?
 
 Status indicators:
+
 - ✅ **PASS**: All tests passed
 - ⚠️ **PARTIAL**: Reachable with valid ID and ownership but handshake failed
 - ❌ **FAIL**: One or more tests failed
@@ -71,6 +78,7 @@ Status indicators:
 ## Configuration
 
 The tool uses these default settings:
+
 - Timeout: 10 seconds per connection
 - Concurrent connections: 5
 - RLPx handshake timeout: 10 seconds

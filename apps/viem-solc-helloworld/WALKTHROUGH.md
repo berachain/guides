@@ -13,7 +13,7 @@ First, we need to compile your Solidity contract into bytecode that the blockcha
 const baseContractPath = path.join(
   __dirname,
   `../contracts/`,
-  `${CONTRACT_NAME}.sol`,
+  `${CONTRACT_NAME}.sol`
 );
 const content = await fs.readFileSync(baseContractPath).toString();
 
@@ -71,7 +71,7 @@ Before deploying, we need to estimate how much gas the deployment will cost:
 // Encode constructor arguments
 const encodedData = encodeAbiParameters(
   [{ name: "_greeting", type: "string" }],
-  [INITIAL_GREETING],
+  [INITIAL_GREETING]
 );
 
 // Estimate gas
@@ -143,6 +143,7 @@ When everything works, you'll see something like this:
 - Look for missing semicolons or brackets
 
 2. **Transaction Failures**
+
    - Ensure sufficient gas (check the estimate)
    - Verify your private key has enough tokens
    - Check network connectivity

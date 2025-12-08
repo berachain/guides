@@ -30,11 +30,11 @@ async function getBlock(clUrl: string, height: number): Promise<any | null> {
 
 async function getValidators(
   clUrl: string,
-  height: number,
+  height: number
 ): Promise<ValidatorsAtHeight | null> {
   try {
     const res = await axios.get(
-      `${clUrl}/validators?per_page=99&height=${height}`,
+      `${clUrl}/validators?per_page=99&height=${height}`
     );
     const vals = res.data.result.validators as any[];
     const votingPowerByAddress = new Map<string, bigint>();
@@ -60,12 +60,12 @@ async function getValidators(
 
 export async function ingestClAbsences(
   pg: Client,
-  cfg: ClWorkerConfig & { log?: boolean },
+  cfg: ClWorkerConfig & { log?: boolean }
 ): Promise<void> {
   const latest = await getLatestHeight(cfg.clRpcUrl);
   const curRes = await pg.query(
     "SELECT last_processed_height FROM ingest_cursors WHERE module=$1",
-    ["cl_absences"],
+    ["cl_absences"]
   );
   // We ingest stats for block H using last_commit from H+1, so our max H is latest-1
   const start = (() => {
@@ -109,8 +109,8 @@ export async function ingestClAbsences(
         typeof roundRaw === "string"
           ? parseInt(roundRaw, 10)
           : typeof roundRaw === "number"
-            ? roundRaw
-            : null;
+          ? roundRaw
+          : null;
 
       let missingCount = 0;
       let missingVotingPower = 0n;
@@ -147,20 +147,20 @@ export async function ingestClAbsences(
           missingPct,
           round,
           JSON.stringify(absentees),
-        ],
+        ]
       );
 
       // Backfill proposer on blocks table if null
       if (proposer) {
         await pg.query(
           `UPDATE blocks SET proposer_address = COALESCE(proposer_address, $2) WHERE height=$1`,
-          [h, proposer],
+          [h, proposer]
         );
         await pg.query(
           `INSERT INTO validators(address, first_seen_block, last_proposed_block)
            VALUES($1,$2,$2)
            ON CONFLICT (address) DO UPDATE SET last_proposed_block=GREATEST(COALESCE(validators.last_proposed_block,0), EXCLUDED.last_proposed_block)`,
-          [proposer, h],
+          [proposer, h]
         );
       }
 
@@ -170,7 +170,7 @@ export async function ingestClAbsences(
     await pg.query(
       `INSERT INTO ingest_cursors(module,last_processed_height) VALUES($1,$2)
        ON CONFLICT (module) DO UPDATE SET last_processed_height=EXCLUDED.last_processed_height, updated_at=NOW()`,
-      ["cl_absences", nextCursor],
+      ["cl_absences", nextCursor]
     );
     if (cfg.log)
       console.log(`CL: absences ${from}-${to} in ${Date.now() - t0}ms`);

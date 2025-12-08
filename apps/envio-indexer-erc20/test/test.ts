@@ -46,7 +46,7 @@ describe("Transfers", () => {
     assert.equal(
       2n,
       account1Balance,
-      "Should have subtracted transfer amount 3 from userAddress1 balance 5",
+      "Should have subtracted transfer amount 3 from userAddress1 balance 5"
     );
 
     //Get the balance of userAddress2 after the transfer
@@ -57,7 +57,7 @@ describe("Transfers", () => {
     assert.equal(
       3n,
       account2Balance,
-      "Should have added transfer amount 3 to userAddress2 balance 0",
+      "Should have added transfer amount 3 to userAddress2 balance 0"
     );
   });
 });

@@ -8,11 +8,11 @@ export async function connectPg(dsn: string): Promise<Client> {
 
 export async function getCursor(
   pg: Client,
-  module: string,
+  module: string
 ): Promise<number | null> {
   const { rows } = await pg.query(
     "SELECT last_processed_height FROM ingest_cursors WHERE module=$1",
-    [module],
+    [module]
   );
   if (!rows[0]) return null;
   const v = rows[0].last_processed_height;
@@ -24,11 +24,11 @@ export async function getCursor(
 export async function upsertCursor(
   pg: Client,
   module: string,
-  height: number,
+  height: number
 ): Promise<void> {
   await pg.query(
     `INSERT INTO ingest_cursors(module,last_processed_height) VALUES($1,$2)
      ON CONFLICT (module) DO UPDATE SET last_processed_height=EXCLUDED.last_processed_height, updated_at=NOW()`,
-    [module, height],
+    [module, height]
   );
 }

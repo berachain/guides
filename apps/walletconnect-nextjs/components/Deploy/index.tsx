@@ -119,12 +119,12 @@ export default function Deploy() {
       // Based on constructor - constructor(string memory _greeting) {
       const encodedData = encodeAbiParameters(
         [{ name: "_greeting", type: "string" }],
-        [`${greeting}`],
+        [`${greeting}`]
       );
 
       // Need slide(2) to remove 0x from encodedData at the beginning
       const fullByteCode = `${CONTRACT_BYTECODE}${encodedData.slice(
-        2,
+        2
       )}` as `0x${string}`;
 
       // Process trasaction

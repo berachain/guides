@@ -15,14 +15,14 @@ const ERC20_IFACE = new ethers.Interface([
 
 export async function ingestErc20Registry(
   pg: Client,
-  cfg: Erc20WorkerConfig,
+  cfg: Erc20WorkerConfig
 ): Promise<void> {
   const provider = new ethers.JsonRpcProvider(cfg.elRpcUrl);
 
   // Cursor
   const curRes = await pg.query(
     "SELECT last_processed_height FROM ingest_cursors WHERE module=$1",
-    ["erc20_registry"],
+    ["erc20_registry"]
   );
   const last = curRes.rows[0]
     ? Number(curRes.rows[0].last_processed_height)
@@ -32,7 +32,7 @@ export async function ingestErc20Registry(
      WHERE created_at_block > $1
      ORDER BY created_at_block ASC
      LIMIT $2`,
-    [last, cfg.batchSize],
+    [last, cfg.batchSize]
   );
   if (q.rowCount === 0) return;
 
@@ -45,7 +45,7 @@ export async function ingestErc20Registry(
     // Skip if already registered
     const exists = await pg.query(
       "SELECT 1 FROM erc20_tokens WHERE address=$1",
-      [addr],
+      [addr]
     );
     if (Number(exists.rowCount) > 0) continue;
 
@@ -63,7 +63,7 @@ export async function ingestErc20Registry(
         `INSERT INTO erc20_tokens(address, detected_by_tx, detected_at_block, name, symbol, decimals)
          VALUES($1,$2,$3,$4,$5,$6)
          ON CONFLICT (address) DO NOTHING`,
-        [addr, row.created_by_tx, block, name, symbol, decimals],
+        [addr, row.created_by_tx, block, name, symbol, decimals]
       );
     } catch {
       // ignore
@@ -73,6 +73,6 @@ export async function ingestErc20Registry(
   await pg.query(
     `INSERT INTO ingest_cursors(module,last_processed_height) VALUES($1,$2)
      ON CONFLICT (module) DO UPDATE SET last_processed_height=EXCLUDED.last_processed_height, updated_at=NOW()`,
-    ["erc20_registry", maxHeight],
+    ["erc20_registry", maxHeight]
   );
 }

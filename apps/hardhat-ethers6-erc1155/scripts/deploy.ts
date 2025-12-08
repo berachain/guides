@@ -12,7 +12,7 @@ dotenv.config();
 async function main() {
   const walletAddress = new ethers.Wallet(`${process.env.WALLET_PRIVATE_KEY}`);
   const Contract = await ethers.getContractFactory(
-    `${process.env.CONTRACT_NAME}`,
+    `${process.env.CONTRACT_NAME}`
   );
   const contract = await Contract.deploy(
     `${process.env.BASE_URL}`,
@@ -20,13 +20,13 @@ async function main() {
     // Needs to be set to fix for chains
     {
       gasLimit: 10000000,
-    },
+    }
   );
 
   await contract.waitForDeployment();
 
   console.log(
-    `${`${process.env.CONTRACT_NAME}`} deployed to ${contract.target}`,
+    `${`${process.env.CONTRACT_NAME}`} deployed to ${contract.target}`
   );
 }
 
