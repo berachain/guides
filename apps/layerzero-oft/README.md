@@ -82,7 +82,56 @@ Update `BERACHAIN_OFT_ADDRESS` in your `.env` file with the address of your `MyO
 - **Berachain Explorer**: [View Contract](https://berascan.com/address/0x6cb0268387baefaace08b2368f21e8983ec05988)
 - **Verification GUID**: `aglxnljk3fxvqejt18xsgxzqvp4cvdehrpdrmkjk8bgbh7kcpb`
 
-### Step 5 - Bridge Tokens from Base to Berachain
+### Step 4.5 - Discover Library Addresses
+
+Before configuring libraries, you need to discover the default library addresses for each chain. Run the library discovery scripts:
+
+**Discover Base Libraries:**
+```bash
+# FROM: ./layerzero-oft
+
+forge script script/GetBaseLibraries.s.sol --rpc-url https://mainnet.base.org
+```
+
+**Discover Berachain Libraries:**
+```bash
+# FROM: ./layerzero-oft
+
+forge script script/GetBerachainLibraries.s.sol --rpc-url https://rpc.berachain.com/
+```
+
+Copy the output values into your `.env` file. The discovered library addresses are:
+
+#### Library Addresses
+
+| Chain | Library Type | Address | Usage |
+|-------|-------------|---------|-------|
+| **Base** | Send Library | `0xB5320B0B3a13cC860893E2Bd79FCd7e13484Dda2` | Used by Base adapter to send messages |
+| **Base** | Receive Library | `0xc70AB6f32772f59fBfc23889Caf4Ba3376C84bAf` | Used by Base adapter to receive messages |
+| **Berachain** | Send Library | `0xC39161c743D0307EB9BCc9FEF03eeb9Dc4802de7` | Used by Berachain OFT to send messages |
+| **Berachain** | Receive Library | `0xe1844c5D63a9543023008D332Bd3d2e6f1FE1043` | Used by Berachain OFT to receive messages |
+
+**Note**: These are the default libraries discovered from the LayerZero endpoints. Always verify current library addresses by running the discovery scripts, as they may change.
+
+### Step 5 - Configure Libraries
+
+After discovering the library addresses, configure them for your contracts:
+
+**Configure Base Adapter Libraries:**
+```bash
+# FROM: ./layerzero-oft
+
+forge script script/SetBaseLibraries.s.sol --rpc-url https://mainnet.base.org --broadcast
+```
+
+**Configure Berachain OFT Libraries:**
+```bash
+# FROM: ./layerzero-oft
+
+forge script script/SetBerachainLibraries.s.sol --rpc-url https://rpc.berachain.com/ --broadcast
+```
+
+### Step 6 - Bridge Tokens from Base to Berachain
 
 Finally, run the `Bridge.s.sol` script to bridge your custom tokens from Base to Berachain:
 
@@ -98,24 +147,32 @@ forge script script/Bridge.s.sol --rpc-url https://mainnet.base.org --broadcast
 - **Amount Bridged**: `100 MCT` (100 tokens)
 - **BaseScan**: [View Transaction](https://basescan.org/tx/0x97839ee1064b61d7ac6acf339a9e7e985ed8dee7c809bc5c62a56a40b50bb063)
 
-## Step 6 - Configure DVN Settings (IMPORTANT: Prevents DVN Mismatch Errors)
+## Step 7 - Configure DVN Settings (IMPORTANT: Prevents DVN Mismatch Errors)
 
 **Critical**: You must configure DVNs for receive operations on both chains to prevent "DVN mismatch" errors. This is often missed but essential for proper cross-chain functionality.
 
-### DVN Addresses (From LayerZero Team Feedback)
+### DVN Addresses
 
-These are the verified DVN addresses for Base and Berachain:
+These are the verified DVN addresses for Base and Berachain. **Important**: DVN addresses are chain-specific and depend on the direction of message flow.
 
-**Base DVNs:**
-- Base LayerZero DVN: `0x9e059a54699a285714207b43b055483e78faac25`
-- Base Nethermind DVN: `0xcd37ca043f8479064e10635020c65ffc005d36f6`
+#### DVN Addresses Table
 
-**Berachain DVNs:**
-- Berachain LayerZero DVN: `0x282b3386571f7f794450d5789911a9804fa346b4`
-- Berachain Nethermind DVN: `0xdd7b5e1db4aafd5c8ec3b764efb8ed265aa5445b`
-- Optional Berachain BERA DVN: `0x10473bd2f7320476b5e5e59649e3dc129d9d0029`
+| Chain | DVN Type | Address | Usage | Required |
+|-------|----------|---------|-------|----------|
+| **Base** | LayerZero DVN | `0x9e059a54699a285714207b43b055483e78faac25` | Verifies messages sent FROM Base | ✅ Required |
+| **Base** | Nethermind DVN | `0xcd37ca043f8479064e10635020c65ffc005d36f6` | Verifies messages sent FROM Base | ✅ Required |
+| **Berachain** | LayerZero DVN | `0x282b3386571f7f794450d5789911a9804fa346b4` | Verifies messages sent FROM Berachain | ✅ Required |
+| **Berachain** | Nethermind DVN | `0xdd7b5e1db4aafd5c8ec3b764efb8ed265aa5445b` | Verifies messages sent FROM Berachain | ✅ Required |
+| **Berachain** | BERA DVN | `0x10473bd2f7320476b5e5e59649e3dc129d9d0029` | Additional verification for Berachain | ⚪ Optional |
 
-### Configure DVNs After Deployment
+**Configuration Notes:**
+- **Base → Berachain**: Configure Berachain OFT with **Base DVNs** (LayerZero + Nethermind from Base)
+- **Berachain → Base**: Configure Base Adapter with **Berachain DVNs** (LayerZero + Nethermind from Berachain)
+- The BERA DVN is optional and can be added for additional verification on Berachain
+
+**Source**: These addresses are from [LayerZero DVN Providers](https://docs.layerzero.network/v2/deployments/dvn-addresses). Always verify current addresses as they may change.
+
+### Configure DVNs After Library Setup
 
 1. **Configure Base Adapter (for receiving from Berachain)**:
 

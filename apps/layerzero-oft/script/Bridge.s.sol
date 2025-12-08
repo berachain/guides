@@ -2,9 +2,9 @@
 pragma solidity ^0.8.22;
 
 import {Script, console} from "forge-std/Script.sol";
-import {IOFT, SendParam} from "@layerzerolabs/lz-evm-oapp-v2/contracts/oft/interfaces/IOFT.sol";
+import {IOFT, SendParam, OFTReceipt} from "@layerzerolabs/lz-evm-oapp-v2/contracts/oft/interfaces/IOFT.sol";
 import {IOAppCore} from "@layerzerolabs/lz-evm-oapp-v2/contracts/oapp/interfaces/IOAppCore.sol";
-import {MessagingFee} from "@layerzerolabs/lz-evm-oapp-v2/contracts/oft/OFTCore.sol";
+import {MessagingFee, MessagingReceipt} from "@layerzerolabs/lz-evm-oapp-v2/contracts/oapp/OAppSender.sol";
 import {OptionsBuilder} from "@layerzerolabs/lz-evm-oapp-v2/contracts/oapp/libs/OptionsBuilder.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
@@ -39,23 +39,20 @@ contract SendOFTScript is Script {
         if (currentPeer == bytes32(0)) {
             console.log("Setting peer connection...");
             // Hook up Base Adapter to Berachain's OFT
-            baseAdapter.setPeer(
-                BERACHAIN_ENDPOINT_ID,
-                bytes32(uint256(uint160(berachainOftAddress)))
-            );
+            baseAdapter.setPeer(BERACHAIN_ENDPOINT_ID, bytes32(uint256(uint160(berachainOftAddress))));
             console.log("Peer connection established");
         } else {
             console.log("Peer already set:", uint256(currentPeer));
         }
 
         // Define the send parameters
-        uint256 tokensToSend = 100 * 10**18; // 100 tokens (assuming 18 decimals)
+        uint256 tokensToSend = 100 * 10 ** 18; // 100 tokens (assuming 18 decimals)
         console.log("Amount to bridge:", tokensToSend);
 
         // Check token balance
         uint256 balance = IERC20(baseTokenAddress).balanceOf(signer);
         console.log("Current token balance:", balance);
-        
+
         if (balance < tokensToSend) {
             console.log("ERROR: Insufficient token balance");
             vm.stopBroadcast();
@@ -63,18 +60,10 @@ contract SendOFTScript is Script {
         }
 
         // Create options with gas limit
-        bytes memory options = OptionsBuilder
-            .newOptions()
-            .addExecutorLzReceiveOption(200000, 0);
+        bytes memory options = OptionsBuilder.newOptions().addExecutorLzReceiveOption(200000, 0);
 
         SendParam memory sendParam = SendParam(
-            BERACHAIN_ENDPOINT_ID,
-            bytes32(uint256(uint160(signer))),
-            tokensToSend,
-            tokensToSend,
-            options,
-            "",
-            ""
+            BERACHAIN_ENDPOINT_ID, bytes32(uint256(uint160(signer))), tokensToSend, tokensToSend, options, "", ""
         );
 
         // Quote the send fee
@@ -85,7 +74,7 @@ contract SendOFTScript is Script {
         // Check ETH balance for fees
         uint256 ethBalance = signer.balance;
         console.log("Current ETH balance:", ethBalance);
-        
+
         if (ethBalance < fee.nativeFee) {
             console.log("ERROR: Insufficient ETH for fees");
             vm.stopBroadcast();
@@ -94,17 +83,18 @@ contract SendOFTScript is Script {
 
         // Approve the OFT contract to spend custom tokens
         console.log("Approving tokens...");
-        IERC20(baseTokenAddress).approve(
-            baseAdapterAddress,
-            tokensToSend
-        );
+        IERC20(baseTokenAddress).approve(baseAdapterAddress, tokensToSend);
 
         // Send the tokens
         console.log("Sending tokens...");
-        baseAdapter.send{value: fee.nativeFee}(sendParam, fee, signer);
+        (MessagingReceipt memory receipt, OFTReceipt memory oftReceipt) =
+            baseAdapter.send{value: fee.nativeFee}(sendParam, fee, signer);
 
         console.log("Tokens bridged successfully from Base to Berachain!");
-        console.log("Amount sent:", tokensToSend);
+        console.log("Message GUID:", uint256(receipt.guid));
+        console.log("Message Nonce:", receipt.nonce);
+        console.log("Amount sent (LD):", oftReceipt.amountSentLD);
+        console.log("Amount received (LD):", oftReceipt.amountReceivedLD);
         console.log("Fee paid:", fee.nativeFee);
     }
 }
