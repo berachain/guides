@@ -26,14 +26,23 @@ npm install;
 
 ### Step 2 - Deploy Custom Token to Base
 
-Create a `.env` file at the root of `./layerzero-oft` with the following and populate it with your `PRIVATE_KEY`:
+Create a `.env` file at the root of `./layerzero-oft` with the following and populate it with your values:
 
 ```toml
+# Required for all operations
 PRIVATE_KEY=
+
+# Contract addresses (populated after deployment)
 BASE_TOKEN_ADDRESS=
 BASE_ADAPTER_ADDRESS=
 BERACHAIN_OFT_ADDRESS=
+
+# Optional: Bridge configuration
+TO_ADDRESS=          # Recipient address (defaults to signer if not set)
+TOKENS_TO_SEND=      # Amount to bridge in wei (defaults to 100 tokens if not set)
 ```
+
+**Note**: Library addresses and DVN addresses are already configured in `.env.example`. Copy those values to your `.env` file or reference the `.env.example` file for the complete configuration.
 
 Deploy your custom ERC20 token to Base Mainnet:
 
@@ -82,58 +91,123 @@ Update `BERACHAIN_OFT_ADDRESS` in your `.env` file with the address of your `MyO
 - **Berachain Explorer**: [View Contract](https://berascan.com/address/0x6cb0268387baefaace08b2368f21e8983ec05988)
 - **Verification GUID**: `aglxnljk3fxvqejt18xsgxzqvp4cvdehrpdrmkjk8bgbh7kcpb`
 
-### Step 4.5 - Discover Library Addresses
+### Step 5 - Wire Messaging Libraries and Configurations
 
-Before configuring libraries, you need to discover the default library addresses for each chain. Run the library discovery scripts:
+Configure your contracts for cross-chain messaging. This step includes setting up peers and messaging configurations.
 
-**Discover Base Libraries:**
+**Note**: Library addresses and DVN addresses are pre-configured in `.env.example`. Copy those values to your `.env` file.
+
+#### 5.1 - Set Peer Connections
+
+Configure peer connections so your contracts know where to send messages:
+
+**Set Base Adapter Peer (Base → Berachain):**
 ```bash
 # FROM: ./layerzero-oft
 
-forge script script/GetBaseLibraries.s.sol --rpc-url https://mainnet.base.org
+forge script script/SetPeersBase.s.sol --rpc-url https://mainnet.base.org --broadcast
 ```
 
-**Discover Berachain Libraries:**
+**Set Berachain OFT Peer (Berachain → Base):**
 ```bash
 # FROM: ./layerzero-oft
 
-forge script script/GetBerachainLibraries.s.sol --rpc-url https://rpc.berachain.com/
+forge script script/SetPeersBerachain.s.sol --rpc-url https://rpc.berachain.com/ --broadcast
 ```
 
-Copy the output values into your `.env` file. The discovered library addresses are:
+**Verify Peer Configuration:**
 
-#### Library Addresses
+You can verify that peers are set correctly using `cast`:
 
-| Chain | Library Type | Address | Usage |
-|-------|-------------|---------|-------|
-| **Base** | Send Library | `0xB5320B0B3a13cC860893E2Bd79FCd7e13484Dda2` | Used by Base adapter to send messages |
-| **Base** | Receive Library | `0xc70AB6f32772f59fBfc23889Caf4Ba3376C84bAf` | Used by Base adapter to receive messages |
-| **Berachain** | Send Library | `0xC39161c743D0307EB9BCc9FEF03eeb9Dc4802de7` | Used by Berachain OFT to send messages |
-| **Berachain** | Receive Library | `0xe1844c5D63a9543023008D332Bd3d2e6f1FE1043` | Used by Berachain OFT to receive messages |
+```bash
+# Verify Base Adapter peer (should return Berachain OFT address)
+cast call <BASE_ADAPTER_ADDRESS> "peers(uint32)(bytes32)" 30362 --rpc-url https://mainnet.base.org
 
-**Note**: These are the default libraries discovered from the LayerZero endpoints. Always verify current library addresses by running the discovery scripts, as they may change.
+# Verify Berachain OFT peer (should return Base Adapter address)
+cast call <BERACHAIN_OFT_ADDRESS> "peers(uint32)(bytes32)" 30184 --rpc-url https://rpc.berachain.com/
+```
 
-### Step 5 - Configure Libraries
+#### 5.2 - Configure Send and Receive Settings
 
-After discovering the library addresses, configure them for your contracts:
+Configure the executor and ULN (DVN) settings for both send and receive operations:
 
-**Configure Base Adapter Libraries:**
+**Configure Base Send Settings (Base → Berachain):**
 ```bash
 # FROM: ./layerzero-oft
 
-forge script script/SetBaseLibraries.s.sol --rpc-url https://mainnet.base.org --broadcast
+forge script script/SetBaseSendConfig.s.sol --rpc-url https://mainnet.base.org --broadcast
 ```
 
-**Configure Berachain OFT Libraries:**
+This script configures:
+- **Executor Config**: Max message size (100,000 bytes) and executor address
+- **ULN Config**: Send confirmations (20 blocks) and required DVNs (LayerZero + Nethermind from Base)
+
+**Configure Base Receive Settings (Base ← Berachain):**
 ```bash
 # FROM: ./layerzero-oft
 
-forge script script/SetBerachainLibraries.s.sol --rpc-url https://rpc.berachain.com/ --broadcast
+forge script script/SetBaseReceiveConfig.s.sol --rpc-url https://mainnet.base.org --broadcast
 ```
 
-### Step 6 - Bridge Tokens from Base to Berachain
+This script configures:
+- **ULN Config**: Receive confirmations (15 blocks) and required DVNs (LayerZero + Nethermind from Berachain)
 
-Finally, run the `Bridge.s.sol` script to bridge your custom tokens from Base to Berachain:
+**Configure Berachain Send Settings (Berachain → Base):**
+```bash
+# FROM: ./layerzero-oft
+
+forge script script/SetBerachainSendConfig.s.sol --rpc-url https://rpc.berachain.com/ --broadcast --via-ir
+```
+
+This script configures:
+- **Executor Config**: Max message size (100,000 bytes) and executor address
+- **ULN Config**: Send confirmations (20 blocks), required DVNs (LayerZero + Nethermind from Berachain), and optional BERA DVN
+
+**Configure Berachain Receive Settings (Berachain ← Base):**
+```bash
+# FROM: ./layerzero-oft
+
+forge script script/SetBerachainReceiveConfig.s.sol --rpc-url https://rpc.berachain.com/ --broadcast --via-ir
+```
+
+This script configures:
+- **ULN Config**: Receive confirmations (15 blocks), required DVNs (LayerZero + Nethermind from Berachain), and optional BERA DVN
+
+**Note**: The `--via-ir` flag is required for Berachain scripts due to Solidity compiler stack depth limitations.
+
+#### 5.3 - Bera DVN Availability Limitation
+
+**Important**: The optional Bera DVN can only be configured on chains where the Bera DVN is deployed. If the Bera DVN is not available on a destination chain, you cannot use it as an optional DVN in your configuration.
+
+This limitation exists because:
+- DVNs must be paid on the source chain for providing verification services
+- If a DVN is not deployed on the source chain, it cannot receive payment
+- Without payment, the DVN will not deliver verification services
+
+**Bera DVN Supported Chains:**
+
+The Bera DVN is currently deployed on the following chains:
+
+| Chain | DVN Address |
+|-------|-------------|
+| Arbitrum Mainnet | `0xf2e8...ccb3` |
+| Avalanche Mainnet | `0xf18f...0d3d` |
+| Berachain Mainnet | `0x1047...0029` |
+| BNB Smart Chain (BSC) Mainnet | `0x8ed0...4d76` |
+| Ethereum Mainnet | `0xe2e5...2538` |
+| Fantom Mainnet | `0x1a53...8b6b` |
+| Optimism Mainnet | `0x5f55...6ee0` |
+| Polygon Mainnet | `0xcf46...fedd` |
+
+**Note**: Base Mainnet is **not** in the list above, which means the Bera DVN cannot be used as an optional DVN when bridging from Berachain to Base. The configuration scripts in this repository reflect this limitation and do not include the Bera DVN for Base destinations.
+
+### Step 6 - Send Tokens
+
+Now that your contracts are fully configured, you can bridge tokens between chains.
+
+#### 6.1 - Bridge Tokens from Base to Berachain
+
+Run the `Bridge.s.sol` script to bridge your custom tokens from Base to Berachain:
 
 ```bash
 # FROM: ./layerzero-oft
@@ -141,84 +215,24 @@ Finally, run the `Bridge.s.sol` script to bridge your custom tokens from Base to
 forge script script/Bridge.s.sol --rpc-url https://mainnet.base.org --broadcast
 ```
 
+**Configuration Options:**
+
+The bridge script supports the following environment variables (all optional with defaults):
+
+- `TO_ADDRESS`: Recipient address on Berachain (defaults to signer address if not set)
+- `TOKENS_TO_SEND`: Amount to bridge in wei (defaults to 100 tokens if not set)
+
 **Example Bridge Transaction:**
 - **Transaction Hash**: `0x97839ee1064b61d7ac6acf339a9e7e985ed8dee7c809bc5c62a56a40b50bb063`
 - **Block Number**: `36269727`
 - **Amount Bridged**: `100 MCT` (100 tokens)
-- **BaseScan**: [View Transaction](https://basescan.org/tx/0x97839ee1064b61d7ac6acf339a9e7e985ed8dee7c809bc5c62a56a40b50bb063)
+- **BaseScan**: [View Transaction](https://basescan.org/tx/0x97839ee1064b61d7ac6acf339a9e7e985ed8dee7c809bc5c62a56a50bb063)
 
-## Step 7 - Configure DVN Settings (IMPORTANT: Prevents DVN Mismatch Errors)
+**Bridge Script Features:**
 
-**Critical**: You must configure DVNs for receive operations on both chains to prevent "DVN mismatch" errors. This is often missed but essential for proper cross-chain functionality.
+- Automatic token approval
+- Fee calculation and validation
+- 5% slippage tolerance
+- Balance checks before sending
+- Detailed transaction logging
 
-### DVN Addresses
-
-These are the verified DVN addresses for Base and Berachain. **Important**: DVN addresses are chain-specific and depend on the direction of message flow.
-
-#### DVN Addresses Table
-
-| Chain | DVN Type | Address | Usage | Required |
-|-------|----------|---------|-------|----------|
-| **Base** | LayerZero DVN | `0x9e059a54699a285714207b43b055483e78faac25` | Verifies messages sent FROM Base | ✅ Required |
-| **Base** | Nethermind DVN | `0xcd37ca043f8479064e10635020c65ffc005d36f6` | Verifies messages sent FROM Base | ✅ Required |
-| **Berachain** | LayerZero DVN | `0x282b3386571f7f794450d5789911a9804fa346b4` | Verifies messages sent FROM Berachain | ✅ Required |
-| **Berachain** | Nethermind DVN | `0xdd7b5e1db4aafd5c8ec3b764efb8ed265aa5445b` | Verifies messages sent FROM Berachain | ✅ Required |
-| **Berachain** | BERA DVN | `0x10473bd2f7320476b5e5e59649e3dc129d9d0029` | Additional verification for Berachain | ⚪ Optional |
-
-**Configuration Notes:**
-- **Base → Berachain**: Configure Berachain OFT with **Base DVNs** (LayerZero + Nethermind from Base)
-- **Berachain → Base**: Configure Base Adapter with **Berachain DVNs** (LayerZero + Nethermind from Berachain)
-- The BERA DVN is optional and can be added for additional verification on Berachain
-
-**Source**: These addresses are from [LayerZero DVN Providers](https://docs.layerzero.network/v2/deployments/dvn-addresses). Always verify current addresses as they may change.
-
-### Configure DVNs After Library Setup
-
-1. **Configure Base Adapter (for receiving from Berachain)**:
-
-```bash
-# FROM: ./layerzero-oft
-
-forge script script/ConfigureBaseDVNs.s.sol --rpc-url https://mainnet.base.org --broadcast
-```
-
-2. **Configure Berachain OFT (for receiving from Base)**:
-
-```bash
-# FROM: ./layerzero-oft
-
-forge script script/ConfigureBerachainDVNs.s.sol --rpc-url https://rpc.berachain.com/ --broadcast
-```
-
-### Alternative: Complete Configuration Script
-
-If you prefer to configure both chains at once:
-
-```bash
-# FROM: ./layerzero-oft
-
-# This script configures both Base and Berachain DVNs
-forge script script/ConfigureDVNs.s.sol --rpc-url https://mainnet.base.org --broadcast
-```
-
-### Troubleshooting DVN Mismatch
-
-If you encounter a "DVN mismatch" error when bridging, it means:
-
-1. **Receive DVNs are not configured** - The receiving contract doesn't know which DVNs to trust
-2. **Incorrect DVN addresses** - The DVNs you configured don't match the actual DVN addresses for the chains
-3. **Missing DVNs in receive config** - You may have configured send DVNs but not receive DVNs
-
-### DVN Configuration Explained
-
-The scripts configure **receive ULN configs** which tell your contracts:
-- Which DVNs are required to verify incoming messages
-- Which DVNs are optional 
-- How many confirmations are needed
-
-This is different from send configurations and must be done for **both directions** of the bridge:
-
-- **Base → Berachain**: Configure BERACHAIN OFT receive DVNs
-- **Berachain → Base**: Configure BASE ADAPTER receive DVNs
-
-**Note**: Always verify current DVN addresses at the [LayerZero DVN Providers](https://docs.layerzero.network/v2/deployments/dvn-addresses) as they may change.

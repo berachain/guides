@@ -10,91 +10,90 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 interface IAdapter is IOAppCore, IOFT {}
 
-// Bridge tokens from Base to Berachain
 contract SendOFTScript is Script {
     using OptionsBuilder for bytes;
 
     uint32 constant BERACHAIN_ENDPOINT_ID = 30362; // Berachain mainnet endpoint ID
 
+    function addressToBytes32(address _addr) internal pure returns (bytes32) {
+        return bytes32(uint256(uint160(_addr)));
+    }
+
     function run() external {
         address baseTokenAddress = vm.envAddress("BASE_TOKEN_ADDRESS");
         address baseAdapterAddress = vm.envAddress("BASE_ADAPTER_ADDRESS");
-        address berachainOftAddress = vm.envAddress("BERACHAIN_OFT_ADDRESS");
-
         uint256 privateKey = vm.envUint("PRIVATE_KEY");
         vm.startBroadcast(privateKey);
         address signer = vm.addr(privateKey);
 
-        console.log("Starting bridge from Base to Berachain...");
-        console.log("Signer:", signer);
-        console.log("Base Token:", baseTokenAddress);
-        console.log("Base Adapter:", baseAdapterAddress);
-        console.log("Berachain OFT:", berachainOftAddress);
+        address toAddress;
+        try vm.envAddress("TO_ADDRESS") returns (address addr) {
+            toAddress = addr;
+        } catch {
+            toAddress = signer;
+        }
 
-        // Get the Adapter contract instance
+        uint256 tokensToSend;
+        try vm.envUint("TOKENS_TO_SEND") returns (uint256 amount) {
+            tokensToSend = amount;
+        } catch {
+            tokensToSend = 100 * 10 ** 18;
+        }
+
+        console.log("Bridging tokens from Base to Berachain");
+        console.log("Signer:", signer);
+        console.log("Token:", baseTokenAddress);
+        console.log("Adapter:", baseAdapterAddress);
+        console.log("Recipient:", toAddress);
+        console.log("Amount:", tokensToSend);
+
         IAdapter baseAdapter = IAdapter(baseAdapterAddress);
 
-        // Check if peer is already set
-        bytes32 currentPeer = baseAdapter.peers(BERACHAIN_ENDPOINT_ID);
-        if (currentPeer == bytes32(0)) {
-            console.log("Setting peer connection...");
-            // Hook up Base Adapter to Berachain's OFT
-            baseAdapter.setPeer(BERACHAIN_ENDPOINT_ID, bytes32(uint256(uint160(berachainOftAddress))));
-            console.log("Peer connection established");
-        } else {
-            console.log("Peer already set:", uint256(currentPeer));
-        }
-
-        // Define the send parameters
-        uint256 tokensToSend = 100 * 10 ** 18; // 100 tokens (assuming 18 decimals)
-        console.log("Amount to bridge:", tokensToSend);
-
-        // Check token balance
         uint256 balance = IERC20(baseTokenAddress).balanceOf(signer);
-        console.log("Current token balance:", balance);
+        console.log("Token balance:", balance);
 
         if (balance < tokensToSend) {
-            console.log("ERROR: Insufficient token balance");
+            console.log("Insufficient token balance");
             vm.stopBroadcast();
             return;
         }
 
-        // Create options with gas limit
-        bytes memory options = OptionsBuilder.newOptions().addExecutorLzReceiveOption(200000, 0);
+        bytes memory extraOptions = OptionsBuilder.newOptions().addExecutorLzReceiveOption(200000, 0);
 
-        SendParam memory sendParam = SendParam(
-            BERACHAIN_ENDPOINT_ID, bytes32(uint256(uint160(signer))), tokensToSend, tokensToSend, options, "", ""
-        );
+        SendParam memory sendParam = SendParam({
+            dstEid: BERACHAIN_ENDPOINT_ID,
+            to: addressToBytes32(toAddress),
+            amountLD: tokensToSend,
+            minAmountLD: tokensToSend * 95 / 100,
+            extraOptions: extraOptions,
+            composeMsg: "",
+            oftCmd: ""
+        });
 
-        // Quote the send fee
         MessagingFee memory fee = baseAdapter.quoteSend(sendParam, false);
-        console.log("Native fee required:", fee.nativeFee);
-        console.log("LZ token fee:", fee.lzTokenFee);
+        console.log("Fee estimate:", fee.nativeFee);
 
-        // Check ETH balance for fees
         uint256 ethBalance = signer.balance;
-        console.log("Current ETH balance:", ethBalance);
+        console.log("ETH balance:", ethBalance);
 
         if (ethBalance < fee.nativeFee) {
-            console.log("ERROR: Insufficient ETH for fees");
+            console.log("Insufficient ETH for fees");
             vm.stopBroadcast();
             return;
         }
 
-        // Approve the OFT contract to spend custom tokens
         console.log("Approving tokens...");
         IERC20(baseTokenAddress).approve(baseAdapterAddress, tokensToSend);
 
-        // Send the tokens
-        console.log("Sending tokens...");
+        console.log("Sending...");
         (MessagingReceipt memory receipt, OFTReceipt memory oftReceipt) =
             baseAdapter.send{value: fee.nativeFee}(sendParam, fee, signer);
 
-        console.log("Tokens bridged successfully from Base to Berachain!");
-        console.log("Message GUID:", uint256(receipt.guid));
-        console.log("Message Nonce:", receipt.nonce);
-        console.log("Amount sent (LD):", oftReceipt.amountSentLD);
-        console.log("Amount received (LD):", oftReceipt.amountReceivedLD);
-        console.log("Fee paid:", fee.nativeFee);
+        console.log("Bridge successful!");
+        console.log("GUID:", uint256(receipt.guid));
+        console.log("Nonce:", receipt.nonce);
+        console.log("Sent:", oftReceipt.amountSentLD);
+        console.log("Received:", oftReceipt.amountReceivedLD);
+        console.log("Fee:", fee.nativeFee);
     }
 }
