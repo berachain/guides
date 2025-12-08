@@ -43,7 +43,7 @@ contract SetBaseReceiveConfig is Script {
         console.log("  Nethermind:", requiredDVNs[1]);
 
         UlnConfig memory uln = UlnConfig({
-            confirmations: 15,
+            confirmations: 20,
             requiredDVNCount: 2,
             optionalDVNCount: 0,
             optionalDVNThreshold: 0,
@@ -57,7 +57,7 @@ contract SetBaseReceiveConfig is Script {
         params[0] = SetConfigParam({eid: BERACHAIN_EID, configType: RECEIVE_CONFIG_TYPE, config: encodedUln});
 
         console.log("ULN config:");
-        console.log("  Confirmations: 15");
+        console.log("  Confirmations: 20");
         console.log("  Required DVNs: 2");
 
         endpoint.setConfig(oapp, receiveLib, params);
@@ -73,7 +73,7 @@ contract SetBaseReceiveConfig is Script {
             console.log("  Optional DVNs:", retrievedUln.optionalDVNCount);
 
             if (
-                retrievedUln.requiredDVNCount == 2 && retrievedUln.confirmations == 15
+                retrievedUln.requiredDVNCount == 2 && retrievedUln.confirmations == 20
                     && retrievedUln.requiredDVNs[0] == requiredDVNs[0] && retrievedUln.requiredDVNs[1] == requiredDVNs[1]
             ) {
                 console.log("Configuration verified");
