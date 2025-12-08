@@ -5,45 +5,47 @@ import { classifyClient, decodeExtraDataAscii } from "../decoders.js";
 // Transaction type classification
 function classifyTransactionType(tx: any): string {
   const type = tx.type;
-  if (type === 0) return 'legacy';
-  if (type === 1) return 'access_list';
-  if (type === 2) return 'eip1559';
-  if (type === 3) return 'blob';
-  if (type === 4) return 'eip7702';
-  return 'unknown';
+  if (type === 0) return "legacy";
+  if (type === 1) return "access_list";
+  if (type === 2) return "eip1559";
+  if (type === 3) return "blob";
+  if (type === 4) return "eip7702";
+  return "unknown";
 }
 
 // Parse EIP-7702 transaction data
 function parseEIP7702Transaction(tx: any) {
   if (tx.type !== 4) return null;
-  
+
   const contractCode = tx.contract_code || null;
   const codeHash = contractCode ? ethers.keccak256(contractCode) : null;
-  
+
   return {
     authorization: tx.authorization || null,
     contractCodeHash: codeHash,
-    delegationAddress: tx.delegation_address || null
+    delegationAddress: tx.delegation_address || null,
   };
 }
 
 // Parse blob transaction data
 function parseBlobTransaction(tx: any) {
   if (tx.type !== 3) return null;
-  
+
   return {
     blobVersionedHashes: tx.blob_versioned_hashes || null,
-    maxFeePerBlobGas: tx.max_fee_per_blob_gas ? BigInt(tx.max_fee_per_blob_gas).toString() : null,
-    blobGasUsed: tx.blob_gas_used ? BigInt(tx.blob_gas_used).toString() : null
+    maxFeePerBlobGas: tx.max_fee_per_blob_gas
+      ? BigInt(tx.max_fee_per_blob_gas).toString()
+      : null,
+    blobGasUsed: tx.blob_gas_used ? BigInt(tx.blob_gas_used).toString() : null,
   };
 }
 
 // Parse access list transaction data
 function parseAccessListTransaction(tx: any) {
   if (tx.type !== 1) return null;
-  
+
   return {
-    accessList: tx.access_list || null
+    accessList: tx.access_list || null,
   };
 }
 
@@ -59,14 +61,14 @@ const TRANSFER_TOPIC =
 
 export async function ingestEl(
   pg: Client,
-  cfg: ElWorkerConfig & { log?: boolean },
+  cfg: ElWorkerConfig & { log?: boolean }
 ): Promise<void> {
   const provider = new ethers.JsonRpcProvider(cfg.elRpcUrl);
 
   // Load cursor
   const curRes = await pg.query(
     "SELECT last_processed_height FROM ingest_cursors WHERE module=$1",
-    ["blocks_el"],
+    ["blocks_el"]
   );
   const latest = await provider.getBlockNumber();
   const start = (() => {
@@ -98,7 +100,7 @@ export async function ingestEl(
         } catch (e) {
           return { bn, blk: null } as const;
         }
-      }),
+      })
     );
 
     // Insert blocks
@@ -126,7 +128,7 @@ export async function ingestEl(
           chainClientInfo.full,
           chainClientInfo.type,
           chainClientInfo.version,
-        ],
+        ]
       );
     }
     if (cfg.log)
@@ -156,7 +158,7 @@ export async function ingestEl(
             } catch (e) {
               return null;
             }
-          }),
+          })
         );
 
         for (const item of items) {
@@ -280,7 +282,7 @@ export async function ingestEl(
               eip7702Data?.authorization || null,
               eip7702Data?.contractCodeHash || null,
               eip7702Data?.delegationAddress || null,
-            ],
+            ]
           );
 
           if (createsContract && createdAddress) {
@@ -288,7 +290,7 @@ export async function ingestEl(
               `INSERT INTO contracts(address, created_by_tx, created_at_block, bytecode_hash, is_proxy, implementation_address)
                VALUES($1,$2,$3,NULL,NULL,NULL)
                ON CONFLICT (address) DO NOTHING`,
-              [createdAddress.toLowerCase(), tx.hash, bn],
+              [createdAddress.toLowerCase(), tx.hash, bn]
             );
           }
         }
@@ -306,19 +308,19 @@ export async function ingestEl(
             totalPriorityFees.toString(),
             avgEff.toString(),
             avgPrio.toString(),
-          ],
+          ]
         );
       }
     }
 
     nextCursor = to;
-    
+
     // Only advance cursor if explicitly allowed
     if (cfg.advanceCursor !== false) {
       await pg.query(
         `INSERT INTO ingest_cursors(module,last_processed_height) VALUES($1,$2)
          ON CONFLICT (module) DO UPDATE SET last_processed_height=EXCLUDED.last_processed_height, updated_at=NOW()`,
-        ["blocks_el", nextCursor],
+        ["blocks_el", nextCursor]
       );
     } else {
       console.log("Cursor advancement disabled, staying at current position");
@@ -326,6 +328,6 @@ export async function ingestEl(
   }
   if (cfg.log)
     console.log(
-      `EL: window ${start}-${end} completed in ${Date.now() - t0All}ms`,
+      `EL: window ${start}-${end} completed in ${Date.now() - t0All}ms`
     );
 }

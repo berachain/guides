@@ -17,7 +17,7 @@ export function classifyClient(clientString: string): {
 }
 
 export function decodeExtraDataAscii(
-  extraDataHex: string | null | undefined,
+  extraDataHex: string | null | undefined
 ): string {
   if (!extraDataHex || extraDataHex === "0x") return "";
   const hex = extraDataHex.startsWith("0x")

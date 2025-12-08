@@ -15,30 +15,39 @@ The economic analysis involves fetching real-time token prices from the Kyberswa
 The script calculates four distinct scores for each validator, each normalized to a 0-100% scale where 100% represents the best performer for that metric on that day.
 
 **Uptime Score** measures technical reliability using the formula:
+
 ```
 Uptime Score = 100 - (empty_blocks / total_blocks × 100)
 ```
+
 This inverted empty block percentage rewards validators who consistently include transactions in their blocks rather than producing empty ones.
 
 **Boost/Stake Ratio Score** evaluates participation in the Proof of Liquidity system:
+
 ```
 Boost/Stake Ratio Score = (validator_boost_stake_ratio / daily_max_boost_stake_ratio) × 100
 ```
+
 This measures how effectively a validator leverages BGT boost relative to their stake, normalized against the day's best performer.
 
 **BGT→Vault/Stake Score** measures stake-scaled BGT vault earnings:
+
 ```
 BGT→Vault/Stake Score = (validator_bgt_vault_usd_per_stake / daily_max_bgt_vault_usd_per_stake) × 100
 ```
+
 This reflects how effectively a validator generates BGT vault emissions relative to their stake size, measuring the flow of BGT from the protocol to validator vaults.
 
 **Incentive→User/Stake Score** measures stake-scaled booster incentive distribution:
+
 ```
 Incentive→User/Stake Score = (validator_booster_incentive_usd_per_stake / daily_max_booster_incentive_usd_per_stake) × 100
 ```
+
 This captures how well a validator attracts and distributes booster token incentives to users relative to their stake, indicating success in driving user engagement in the POL ecosystem.
 
 The final score combines all four metrics with equal weighting:
+
 ```
 Total Score = (Uptime + Boost/Stake Ratio + BGT→Vault/Stake + Incentive→User/Stake) / 4
 ```
@@ -72,6 +81,7 @@ The analysis produces two complementary reports with detailed column structures.
 ### validator_stats.csv
 
 **Main Columns:**
+
 - `Validator name` - Validator display name
 - `Pubkey` - Validator public key
 - `Proposer` - Consensus layer address
@@ -85,6 +95,7 @@ The analysis produces two complementary reports with detailed column structures.
 
 **VERBOSE Mode Additional Columns (per analyzed date):**
 When `VERBOSE=true` or `VERBOSE=1`, 7 additional columns are added for each day:
+
 - `{date} BGT boost` - BGT boost amount for that day
 - `{date} stake` - Validator stake for that day
 - `{date} empty blocks` - Number of empty blocks proposed

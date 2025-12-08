@@ -22,7 +22,7 @@ async function main() {
   // Connect to the contract using the signer
   const vrfContract = SimpleVRFContract__factory.connect(
     contractAddress,
-    signer,
+    signer
   );
 
   // Request randomness

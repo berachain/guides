@@ -12,7 +12,7 @@ async function getLatestHeight(clUrl: string): Promise<number> {
 
 async function getBlockTimestamp(
   clUrl: string,
-  height: number,
+  height: number
 ): Promise<number | null> {
   try {
     const res = await axios.get(`${clUrl}/block?height=${height}`);
@@ -26,7 +26,7 @@ async function getBlockTimestamp(
 
 async function getBlockInfo(
   clUrl: string,
-  height: number,
+  height: number
 ): Promise<{ ts: number; proposer: string | null } | null> {
   try {
     const res = await axios.get(`${clUrl}/block?height=${height}`);
@@ -45,7 +45,7 @@ async function binarySearchBoundary(
   clUrl: string,
   low: number,
   high: number,
-  targetTs: number,
+  targetTs: number
 ): Promise<number | null> {
   // Find first height with timestamp >= targetTs
   let l = low;
@@ -63,7 +63,7 @@ async function binarySearchBoundary(
 async function findBoundaryBlockForDay(
   clUrl: string,
   dayUtc: Date,
-  latest: number,
+  latest: number
 ): Promise<number | null> {
   const targetTs = Math.floor(dayUtc.getTime() / 1000);
   // Bracket: naive low=1, high=latest
@@ -72,11 +72,11 @@ async function findBoundaryBlockForDay(
 
 async function getValidatorsAt(
   clUrl: string,
-  height: number,
+  height: number
 ): Promise<{ idx: number; address: string; voting_power: string }[] | null> {
   try {
     const res = await axios.get(
-      `${clUrl}/validators?per_page=99&height=${height}`,
+      `${clUrl}/validators?per_page=99&height=${height}`
     );
     const vals = res.data.result.validators as any[];
     return vals.map((v: any, i: number) => ({
@@ -91,7 +91,7 @@ async function getValidatorsAt(
 
 export async function snapshotTodayIfMissing(
   pg: Client,
-  cfg: DaySnapshotConfig,
+  cfg: DaySnapshotConfig
 ): Promise<void> {
   // Determine today UTC
   const today = new Date();
@@ -99,7 +99,7 @@ export async function snapshotTodayIfMissing(
   const dayStr = today.toISOString().split("T")[0];
   const exists = await pg.query(
     `SELECT 1 FROM validator_set_daily_snapshots WHERE day=$1 LIMIT 1`,
-    [dayStr],
+    [dayStr]
   );
   if (exists.rowCount && exists.rowCount > 0) return; // already snapshotted
 
@@ -120,7 +120,7 @@ export async function snapshotTodayIfMissing(
         `INSERT INTO blocks(height, timestamp, proposer_address)
          VALUES($1, to_timestamp($2), $3)
          ON CONFLICT (height) DO NOTHING`,
-        [boundary, info.ts, info.proposer],
+        [boundary, info.ts, info.proposer]
       );
     }
   }
@@ -131,7 +131,7 @@ export async function snapshotTodayIfMissing(
       `INSERT INTO validator_set_daily_snapshots(day, boundary_block, validator_index, address, voting_power)
        VALUES($1,$2,$3,$4,$5)
        ON CONFLICT DO NOTHING`,
-      [dayStr, boundary, v.idx, v.address, v.voting_power],
+      [dayStr, boundary, v.idx, v.address, v.voting_power]
     );
   }
 }

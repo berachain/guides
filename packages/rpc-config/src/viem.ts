@@ -22,7 +22,7 @@ import { berachainMainnet, berachainBepolia, type Chain } from "./index";
  * Create a viem public client for Berachain
  */
 export function createBerachainPublicClient(
-  chain: Chain = berachainMainnet,
+  chain: Chain = berachainMainnet
 ): PublicClient {
   return createPublicClient({
     chain,
@@ -39,7 +39,7 @@ export function createBerachainPublicClient(
 export function createBerachainWalletClient(
   privateKey: `0x${string}`,
   chain: Chain = berachainMainnet,
-  transport: Transport = http(),
+  transport: Transport = http()
 ): WalletClient {
   const account = privateKeyToAccount(privateKey);
   return createWalletClient({
@@ -56,11 +56,11 @@ export function createBerachainWalletClient(
  */
 export function createBrowserWalletClient(
   chain: Chain = berachainMainnet,
-  account?: Account,
+  account?: Account
 ): WalletClient {
   if (typeof window === "undefined") {
     throw new Error(
-      "Browser wallet client can only be created in browser environment",
+      "Browser wallet client can only be created in browser environment"
     );
   }
   if (!window.ethereum) {

@@ -126,7 +126,7 @@ export class Erc20 extends ethereum.SmartContract {
         ethereum.Value.fromAddress(_from),
         ethereum.Value.fromAddress(_to),
         ethereum.Value.fromUnsignedBigInt(_value),
-      ],
+      ]
     );
 
     return result[0].toBoolean();
@@ -135,7 +135,7 @@ export class Erc20 extends ethereum.SmartContract {
   try_transferFrom(
     _from: Address,
     _to: Address,
-    _value: BigInt,
+    _value: BigInt
   ): ethereum.CallResult<boolean> {
     let result = super.tryCall(
       "transferFrom",
@@ -144,7 +144,7 @@ export class Erc20 extends ethereum.SmartContract {
         ethereum.Value.fromAddress(_from),
         ethereum.Value.fromAddress(_to),
         ethereum.Value.fromUnsignedBigInt(_value),
-      ],
+      ]
     );
     if (result.reverted) {
       return new ethereum.CallResult();
@@ -227,10 +227,7 @@ export class Erc20 extends ethereum.SmartContract {
     let result = super.call(
       "allowance",
       "allowance(address,address):(uint256)",
-      [
-        ethereum.Value.fromAddress(_owner),
-        ethereum.Value.fromAddress(_spender),
-      ],
+      [ethereum.Value.fromAddress(_owner), ethereum.Value.fromAddress(_spender)]
     );
 
     return result[0].toBigInt();
@@ -238,15 +235,12 @@ export class Erc20 extends ethereum.SmartContract {
 
   try_allowance(
     _owner: Address,
-    _spender: Address,
+    _spender: Address
   ): ethereum.CallResult<BigInt> {
     let result = super.tryCall(
       "allowance",
       "allowance(address,address):(uint256)",
-      [
-        ethereum.Value.fromAddress(_owner),
-        ethereum.Value.fromAddress(_spender),
-      ],
+      [ethereum.Value.fromAddress(_owner), ethereum.Value.fromAddress(_spender)]
     );
     if (result.reverted) {
       return new ethereum.CallResult();

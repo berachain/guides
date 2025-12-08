@@ -28,7 +28,7 @@ export default function SignMessage() {
    * @param event
    */
   const onSubmitSignMessage = async (
-    event: React.FormEvent<HTMLFormElement>,
+    event: React.FormEvent<HTMLFormElement>
   ) => {
     event.preventDefault();
     console.group("onSubmitSignMessage");

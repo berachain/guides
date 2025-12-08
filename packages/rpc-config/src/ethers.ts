@@ -5,7 +5,7 @@ import { berachainMainnet, type Chain } from "./index";
  * Create an ethers provider for Berachain
  */
 export function createBerachainProvider(
-  chain: Chain = berachainMainnet,
+  chain: Chain = berachainMainnet
 ): JsonRpcProvider {
   return new JsonRpcProvider(chain.rpcUrls.default.http[0]);
 }
@@ -15,11 +15,11 @@ export function createBerachainProvider(
  * Only use this in browser environments
  */
 export function createBrowserProvider(
-  chain: Chain = berachainMainnet,
+  chain: Chain = berachainMainnet
 ): BrowserProvider {
   if (typeof window === "undefined") {
     throw new Error(
-      "Browser provider can only be created in browser environment",
+      "Browser provider can only be created in browser environment"
     );
   }
   if (!window.ethereum) {
