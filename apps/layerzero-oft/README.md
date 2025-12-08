@@ -222,7 +222,10 @@ The bridge script supports the following environment variables (all optional wit
 - `TO_ADDRESS`: Recipient address on Berachain (defaults to signer address if not set)
 - `TOKENS_TO_SEND`: Amount to bridge in wei (defaults to 100 tokens if not set)
 
-**Example Bridge Transaction:**
+**Example Bridge Transactions:**
+- **Transaction Hash**: `0x3e67d334cdc456a0d68c6f57166d7b16ec65512daf3904e339e31863878cece7`
+- **LayerZero Scan**: [View Transaction](https://layerzeroscan.com/tx/0x3e67d334cdc456a0d68c6f57166d7b16ec65512daf3904e339e31863878cece7)
+
 - **Transaction Hash**: `0x97839ee1064b61d7ac6acf339a9e7e985ed8dee7c809bc5c62a56a40b50bb063`
 - **Block Number**: `36269727`
 - **Amount Bridged**: `100 MCT` (100 tokens)
