@@ -163,12 +163,35 @@ get_validator_pubkey() {
 
 resolve_beacond_bin() {
   # Resolves the beacond binary path, using BEACOND_BIN env var if set
+  # Handles both absolute paths and PATH-based lookups
+  # Returns the resolved path if found and executable, empty string otherwise
+  # Exit code: 0 if found and executable, 1 otherwise
   local beacond_bin="${BEACOND_BIN:-beacond}"
-  if command -v "$beacond_bin" >/dev/null 2>&1; then 
-    command -v "$beacond_bin"
-    return 0
+  local resolved=""
+  
+  # If it's an absolute path, check if it's executable
+  if [[ "$beacond_bin" == /* ]]; then
+    if [[ -x "$beacond_bin" ]]; then
+      resolved="$beacond_bin"
+    fi
+  else
+    # Otherwise, look in PATH
+    local path_resolved
+    if path_resolved=$(command -v "$beacond_bin" 2>/dev/null); then
+      # Ensure the resolved path is executable
+      if [[ -x "$path_resolved" ]]; then
+        resolved="$path_resolved"
+      fi
+    fi
   fi
-  return 1
+  
+  if [[ -n "$resolved" ]]; then
+    echo "$resolved"
+    return 0
+  else
+    echo ""
+    return 1
+  fi
 }
 
 find_app_toml() {
@@ -550,9 +573,10 @@ detect_network_and_rpc() {
   fi
   
   # Try to detect from beacond
-  if [[ -n "${BEACOND_HOME:-}" && -n "${BEACOND_BIN:-beacond}" ]]; then
-    if have_cmd "${BEACOND_BIN:-beacond}"; then
-      chain=$(get_network_from_genesis "${BEACOND_BIN:-beacond}" "$BEACOND_HOME" 2>/dev/null || echo "")
+  if [[ -n "${BEACOND_HOME:-}" ]]; then
+    local beacond_bin
+    if beacond_bin=$(resolve_beacond_bin 2>/dev/null) && [[ -n "$beacond_bin" ]]; then
+      chain=$(get_network_from_genesis "$beacond_bin" "$BEACOND_HOME" 2>/dev/null || echo "")
       
       if [[ -n "$chain" && "$chain" != "unknown" ]]; then
         if [[ -z "$rpc_url" ]]; then

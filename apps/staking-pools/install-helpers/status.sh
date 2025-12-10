@@ -42,8 +42,9 @@ main() {
   if [[ -z "$BEACOND_HOME" ]]; then log_error "Missing BEACOND_HOME in env.sh"; exit 1; fi
   if [[ ! -d "$BEACOND_HOME" ]]; then log_error "beacond_home not found: $BEACOND_HOME"; exit 1; fi
 
-  local BEACOND_BIN
-  if ! BEACOND_BIN=$(resolve_beacond_bin); then log_error "beacond binary not found (set --beacond-bin or PATH)"; exit 1; fi
+  # Resolve beacond binary (respects BEACOND_BIN env var if set)
+  local beacond_bin
+  if ! beacond_bin=$(resolve_beacond_bin) || [[ -z "$beacond_bin" ]]; then log_error "beacond binary not found (set BEACOND_BIN in env.sh or ensure beacond is in PATH)"; exit 1; fi
 
   if ! have_cmd cast; then log_error "cast not found; install foundry (https://book.getfoundry.sh/)"; exit 1; fi
   if ! ensure_jq; then
@@ -51,10 +52,10 @@ main() {
   fi
 
   local CHAIN
-  CHAIN=$(get_network_from_genesis "$BEACOND_BIN" "$BEACOND_HOME")
+  CHAIN=$(get_network_from_genesis "$beacond_bin" "$BEACOND_HOME")
 
   local PUBKEY
-  if ! PUBKEY=$(get_validator_pubkey "$BEACOND_BIN" "$BEACOND_HOME"); then
+  if ! PUBKEY=$(get_validator_pubkey "$beacond_bin" "$BEACOND_HOME"); then
     exit 1
   fi
 

@@ -104,8 +104,9 @@ main() {
   if [[ -z "$BEACOND_HOME" ]]; then log_error "Missing BEACOND_HOME in env.sh"; exit 1; fi
   if [[ ! -d "$BEACOND_HOME" ]]; then log_error "beacond_home not found: $BEACOND_HOME"; exit 1; fi
 
-  local BEACOND_BIN
-  if ! BEACOND_BIN=$(resolve_beacond_bin); then log_error "beacond binary not found (set in config or --beacond-bin or PATH)"; exit 1; fi
+  # Resolve beacond binary (respects BEACOND_BIN env var if set)
+  local beacond_bin
+  if ! beacond_bin=$(resolve_beacond_bin) || [[ -z "$beacond_bin" ]]; then log_error "beacond binary not found (set BEACOND_BIN in env.sh or ensure beacond is in PATH)"; exit 1; fi
 
   # Attempt auto-detect of node API address from app.toml
   local APP_TOML=""
@@ -144,10 +145,10 @@ main() {
   fi
 
   local NETWORK
-  NETWORK=$(get_network_from_genesis "$BEACOND_BIN" "$BEACOND_HOME")
+  NETWORK=$(get_network_from_genesis "$beacond_bin" "$BEACOND_HOME")
 
   local PUBKEY
-  if ! PUBKEY=$(get_validator_pubkey "$BEACOND_BIN" "$BEACOND_HOME"); then
+  if ! PUBKEY=$(get_validator_pubkey "$beacond_bin" "$BEACOND_HOME"); then
     exit 1
   fi
 
@@ -199,10 +200,10 @@ main() {
   local amount_gwei
   amount_gwei=10000000000000
   local dep_out rc1=0
-  dep_out=$("$BEACOND_BIN" --home "$BEACOND_HOME" deposit create-validator \
+  dep_out=$("$beacond_bin" --home "$BEACOND_HOME" deposit create-validator \
     "$WITHDRAWAL_VAULT" \
     "$amount_gwei" \
-    -g "$(${BEACOND_BIN} --home "$BEACOND_HOME" genesis validator-root "$BEACOND_HOME/config/genesis.json" 2>/dev/null)" 2>&1) || rc1=$?
+    -g "$(${beacond_bin} --home "$BEACOND_HOME" genesis validator-root "$BEACOND_HOME/config/genesis.json" 2>/dev/null)" 2>&1) || rc1=$?
   
   if [[ $rc1 -ne 0 || -z "$dep_out" ]]; then
     log_error "deposit create-validator failed: $dep_out"
@@ -218,7 +219,7 @@ main() {
     exit 1
   fi
   local vout rc2=0
-  vout=$("$BEACOND_BIN" --home "$BEACOND_HOME" deposit validate "$pk_used" "$cred" "$amount_gwei" "$sig" -g "$(${BEACOND_BIN} --home "$BEACOND_HOME" genesis validator-root "$BEACOND_HOME/config/genesis.json" 2>/dev/null)" 2>&1) || rc2=$?
+  vout=$("$beacond_bin" --home "$BEACOND_HOME" deposit validate "$pk_used" "$cred" "$amount_gwei" "$sig" -g "$(${beacond_bin} --home "$BEACOND_HOME" genesis validator-root "$BEACOND_HOME/config/genesis.json" 2>/dev/null)" 2>&1) || rc2=$?
   
   if [[ $rc2 -ne 0 ]]; then
     log_error "deposit validate failed: $vout"

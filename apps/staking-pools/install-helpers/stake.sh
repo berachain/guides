@@ -117,16 +117,16 @@ main() {
     fi
     if [[ ! -d "$BEACOND_HOME" ]]; then log_error "beacond_home not found: $BEACOND_HOME"; exit 1; fi
 
-    local BEACOND_BIN
-    if ! BEACOND_BIN=$(resolve_beacond_bin); then log_error "beacond binary not found"; exit 1; fi
+    local beacond_bin
+    if ! beacond_bin=$(resolve_beacond_bin) || [[ -z "$beacond_bin" ]]; then log_error "beacond binary not found"; exit 1; fi
 
     if ! ensure_jq; then
       exit 1
     fi
 
-    NETWORK=$(get_network_from_genesis "$BEACOND_BIN" "$BEACOND_HOME")
+    NETWORK=$(get_network_from_genesis "$beacond_bin" "$BEACOND_HOME")
     local PUBKEY
-    if ! PUBKEY=$(get_validator_pubkey "$BEACOND_BIN" "$BEACOND_HOME"); then
+    if ! PUBKEY=$(get_validator_pubkey "$beacond_bin" "$BEACOND_HOME"); then
       exit 1
     fi
 
