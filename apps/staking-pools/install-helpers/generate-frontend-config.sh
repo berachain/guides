@@ -48,9 +48,9 @@ done
 ensure_jq
 ensure_cast
 
-BEACOND_BIN="${BEACOND_BIN:-beacond}"
-if ! have_cmd "$BEACOND_BIN"; then
-  log_error "beacond binary not found: $BEACOND_BIN"
+local beacond_bin
+if ! beacond_bin=$(resolve_beacond_bin); then
+  log_error "beacond binary not found (set BEACOND_BIN in env.sh or ensure beacond is in PATH)"
   exit 1
 fi
 
@@ -105,7 +105,7 @@ log_info "RPC: $RPC_URL"
 log_info "Factory: $FACTORY"
 
 # Get validator pubkey using lib-common.sh function
-if ! PUBKEY=$(get_validator_pubkey "$BEACOND_BIN" "$BEACOND_HOME"); then
+if ! PUBKEY=$(get_validator_pubkey "$beacond_bin" "$BEACOND_HOME"); then
   exit 1
 fi
 
