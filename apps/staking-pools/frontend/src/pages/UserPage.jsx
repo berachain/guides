@@ -235,7 +235,7 @@ export default function UserPage({ account, client, walletClient, poolConfig }) 
 
     try {
       setLoading(true)
-      setTxStatus({ type: 'pending: true, message: 'Sending deposit transaction...' })
+      setTxStatus({ type: 'pending', message: 'Sending deposit transaction...' })
       const hash = await walletClient.writeContract({
         address: poolConfig.stakingPool,
         abi: STAKING_POOL_ABI,
