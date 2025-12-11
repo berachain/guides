@@ -549,16 +549,10 @@ async function scanActivations(config) {
 // Analyze current validator allocations
 async function analyzeCurrentAllocations(config, validatorCounts) {
   
-  // Get all active validators from the database
-  const allValidators = await validatorDB.getAllValidators();
+  // Get all active validators from the database (already filtered by status = "active_ongoing")
+  const activeValidators = await validatorDB.getAllValidators();
   
-  // Filter out exited validators (those with no stake)
-  const activeValidators = allValidators.filter(v => {
-    const stake = v.voting_power ? parseFloat(v.voting_power) / 1e9 : 0;
-    return stake > 0;
-  });
-  
-  console.log(`👥 Found ${activeValidators.length} active validators with stake (${allValidators.length - activeValidators.length} exited)`);
+  console.log(`👥 Found ${activeValidators.length} active validators (status = active_ongoing)`);
   
   // Count validators with 0 activations
   let validatorsWithZeroActivations = 0;
@@ -860,6 +854,7 @@ async function displayResults(activations, validatorCounts, validatorTimestamps,
   }
   
   // Get all validators from currentAllocations (already fetched in analyzeCurrentAllocations)
+  // These are already filtered by status = "active_ongoing" from getAllValidators()
   const allValidators = currentAllocations.allValidators;
   const validatorMap = new Map();
   allValidators.forEach(v => {
@@ -868,34 +863,47 @@ async function displayResults(activations, validatorCounts, validatorTimestamps,
     }
   });
   
-  // Create a combined list of all validators with their activation counts
-  const allValidatorData = [];
+  if (!config.csv) {
+    console.log(`📊 Building results from ${allValidators.length} active validators (status = active_ongoing)`);
+  }
   
-  // Add validators with activations (now they should have stake data since we're using address field)
+  // Create a combined list of only active validators with their activation counts
+  const activeValidatorData = [];
+  
+  // Add active validators with activations (only include if they're currently active)
   for (const [address, activationCount] of validatorCounts.entries()) {
     const validator = validatorMap.get(address);
+    // Only include if validator exists in active validators map
+    if (!validator) continue;
+    
+    const stake = validator.voting_power ? parseFloat(validator.voting_power) / 1e9 : 0;
+    // Only include if stake > 0
+    if (stake <= 0) continue;
+    
     const activeStartBlock = currentAllocations.validatorStartBlocks?.get(address);
     const activeStartTimestamp = activeStartBlock ? startBlockTimestamps.get(activeStartBlock) : null;
     
-    allValidatorData.push({ 
+    activeValidatorData.push({ 
       pubkey: address, 
       activationCount, 
-      hasStakeData: !!validator, 
       validator,
       activeStartTimestamp
     });
   }
   
-  // Add validators with 0 activations
+  // Add active validators with 0 activations
   for (const validator of allValidators) {
     if (validator.address && !validatorCounts.has(validator.address)) {
+      const stake = validator.voting_power ? parseFloat(validator.voting_power) / 1e9 : 0;
+      // Only include if stake > 0
+      if (stake <= 0) continue;
+      
       const activeStartBlock = currentAllocations.validatorStartBlocks?.get(validator.address);
       const activeStartTimestamp = activeStartBlock ? startBlockTimestamps.get(activeStartBlock) : null;
       
-      allValidatorData.push({ 
+      activeValidatorData.push({ 
         pubkey: validator.address, 
         activationCount: 0, 
-        hasStakeData: true, 
         validator,
         activeStartTimestamp
       });
@@ -903,7 +911,7 @@ async function displayResults(activations, validatorCounts, validatorTimestamps,
   }
   
   // Sort by active start timestamp (descending - most recent first), then by name
-  allValidatorData.sort((a, b) => {
+  activeValidatorData.sort((a, b) => {
     const timestampA = a.activeStartTimestamp || 0;
     const timestampB = b.activeStartTimestamp || 0;
     
@@ -916,11 +924,15 @@ async function displayResults(activations, validatorCounts, validatorTimestamps,
     return nameA.localeCompare(nameB);
   });
   
+  if (!config.csv) {
+    console.log(`📋 Displaying ${activeValidatorData.length} active validators`);
+  }
+  
   if (config.csv) {
     // Output CSV format
     console.log(`Validator Name,Stake (BERA),Activations since ${earliestDate},Reward Alloc,Avg Gap,Default,Is Genesis`);
     
-    for (const { pubkey, activationCount, hasStakeData, validator } of allValidatorData) {
+    for (const { pubkey, activationCount, validator } of activeValidatorData) {
       const stats = timeStats.get(pubkey);
       let name = await getValidatorName(pubkey);
       
@@ -928,14 +940,8 @@ async function displayResults(activations, validatorCounts, validatorTimestamps,
       const validatorPubkey = validator?.pubkey || pubkey;
       const isGenesis = genesisValidators.has(validatorPubkey.toLowerCase());
       
-      // Get stake
-      const stake = hasStakeData && validator && validator.voting_power ? 
-        (parseFloat(validator.voting_power) / 1e9) : null;
-      
-      // Skip exited validators
-      if (!stake || stake === 0) {
-        continue;
-      }
+      // Get stake (guaranteed to be > 0 due to filtering above)
+      const stake = parseFloat(validator.voting_power) / 1e9;
       
       const stakeStr = formatStake(stake);
       
@@ -974,8 +980,8 @@ async function displayResults(activations, validatorCounts, validatorTimestamps,
       }
     });
     
-    // Populate table rows
-    for (const { pubkey, activationCount, hasStakeData, validator } of allValidatorData) {
+    // Populate table rows (only active validators due to filtering above)
+    for (const { pubkey, activationCount, validator } of activeValidatorData) {
       const stats = timeStats.get(pubkey);
       let name = await getValidatorName(pubkey);
       
@@ -986,14 +992,8 @@ async function displayResults(activations, validatorCounts, validatorTimestamps,
         name = name + ' **';
       }
       
-      // Get stake - only validators with 0 activations have stake data
-      const stake = hasStakeData && validator && validator.voting_power ? 
-        (parseFloat(validator.voting_power) / 1e9) : null; // Convert to BERA
-      
-      // Skip exited validators (those with no current stake)
-      if (!stake || stake === 0) {
-        continue;
-      }
+      // Get stake (guaranteed to be > 0 due to filtering above)
+      const stake = parseFloat(validator.voting_power) / 1e9; // Convert to BERA
       
       const stakeStr = formatStake(stake);
       
