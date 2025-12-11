@@ -34,6 +34,7 @@
     "tsup": "^8.5.0",
     "turbo": "latest"
   },
+  "packageManager": "pnpm@9.0.0",
   "engines": {
     "node": ">=20"
   },
