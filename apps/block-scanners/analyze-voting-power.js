@@ -257,6 +257,11 @@ async function analyzeVotingPower(networkName = 'mainnet', maxBlocksToScan = 100
     const elProvider = new ethers.JsonRpcProvider(networkConfig.el);
     const clRpcUrl = networkConfig.cl;
     
+    // Log network configuration for debugging
+    console.log(`\n🌐 Network: ${networkName} (${networkConfig.name})`);
+    console.log(`   EL RPC: ${networkConfig.el}`);
+    console.log(`   CL RPC: ${clRpcUrl}\n`);
+    
     // Initialize validator name database
     const validatorDB = new ValidatorNameDB();
     
@@ -307,21 +312,18 @@ async function analyzeVotingPower(networkName = 'mainnet', maxBlocksToScan = 100
         try {
             blocksScanned++;
             
-            // Get proposer address from CL first (cheap)
-            const proposerAddress = await getBlockProposer(blockNum, clRpcUrl);
-            if (!proposerAddress) continue;
+            // Get proposer address from CL (consensus layer address - used for voting power lookup)
+            const proposerAddressCL = await getBlockProposer(blockNum, clRpcUrl);
+            if (!proposerAddressCL) continue;
             
             // In normal mode, skip if we already know this proposer's client
-            if (!upgradeMode && seenProposers.has(proposerAddress)) {
+            if (!upgradeMode && seenProposers.has(proposerAddressCL)) {
                 continue;
             }
             
-            // In upgrade mode, if we already have upgrade history for this validator, we can skip
-            if (upgradeMode && validatorsWithUpgrades.has(proposerAddress)) {
-                continue;
-            }
+            // In upgrade mode, we continue tracking to detect all upgrades
             
-            // Only now fetch block from EL to extract extraData (expensive operation)
+            // Fetch block from EL to extract extraData (expensive operation)
             const block = await elProvider.getBlock(blockNum);
             if (!block) continue;
             
@@ -330,23 +332,24 @@ async function analyzeVotingPower(networkName = 'mainnet', maxBlocksToScan = 100
             const clientType = classifyClient(clientString);
             const clientVersion = extractClientVersion(clientString);
             
-            // Set/update proposer client info (always update in upgrade mode for latest sample)
-            if (!proposerClients.has(proposerAddress)) {
-                proposerClients.set(proposerAddress, {
+            // Set/update proposer client info using CL address (for voting power lookup)
+            // Always update in upgrade mode to track latest client version
+            if (!proposerClients.has(proposerAddressCL) || upgradeMode) {
+                proposerClients.set(proposerAddressCL, {
                     clientType,
                     clientString,
                     clientVersion,
                     sampleBlock: blockNum,
                     extraData: block.extraData
                 });
-                seenProposers.add(proposerAddress);
+                seenProposers.add(proposerAddressCL);
             }
             
             // Track upgrades in upgrade mode
             if (upgradeMode) {
-                if (!validatorUpgrades.has(proposerAddress)) {
+                if (!validatorUpgrades.has(proposerAddressCL)) {
                     // First time seeing this validator - record as "first seen"
-                    validatorUpgrades.set(proposerAddress, {
+                    validatorUpgrades.set(proposerAddressCL, {
                         firstSeen: {
                             block: blockNum,
                             timestamp: block.timestamp,
@@ -358,7 +361,7 @@ async function analyzeVotingPower(networkName = 'mainnet', maxBlocksToScan = 100
                     });
                 } else {
                     // Check if this is an upgrade (different client or version)
-                    const history = validatorUpgrades.get(proposerAddress);
+                    const history = validatorUpgrades.get(proposerAddressCL);
                     const lastKnown = history.upgrades.length > 0 ? history.upgrades[history.upgrades.length - 1] : history.firstSeen;
                     
                     if (lastKnown.clientString !== clientString || lastKnown.clientVersion !== clientVersion) {
@@ -372,7 +375,7 @@ async function analyzeVotingPower(networkName = 'mainnet', maxBlocksToScan = 100
                             previousClientType: lastKnown.clientType,
                             previousClientVersion: lastKnown.clientVersion
                         });
-                        validatorsWithUpgrades.add(proposerAddress);
+                        validatorsWithUpgrades.add(proposerAddressCL);
                     }
                 }
             }
@@ -397,8 +400,9 @@ async function analyzeVotingPower(networkName = 'mainnet', maxBlocksToScan = 100
     });
     
     // Analyze identified validators
-    for (const [proposerAddress, clientInfo] of proposerClients.entries()) {
-        const votingPower = validatorMap.get(proposerAddress)/1000000000 || 0;
+    for (const [proposerAddressCL, clientInfo] of proposerClients.entries()) {
+        // Use CL address to look up voting power (validatorMap is keyed by CL addresses)
+        const votingPower = validatorMap.get(proposerAddressCL)/1000000000 || 0;
         analyzedVotingPower += votingPower;
         
         // Client type stats
@@ -480,12 +484,13 @@ async function analyzeVotingPower(networkName = 'mainnet', maxBlocksToScan = 100
             colWidths: [28, 18, 12, 12, 14, 25, 18]
         });
 
-        const entries = await Promise.all(Array.from(proposerClients.entries()).map(async ([address, info]) => {
-            const name = await validatorDB.getValidatorName(address);
-            const vp = (validatorMap.get(address) / 1000000000) || 0;
+        const entries = await Promise.all(Array.from(proposerClients.entries()).map(async ([addressCL, info]) => {
+            // Look up name and voting power using CL address (proposer from CL)
+            const name = await validatorDB.getValidatorName(addressCL);
+            const vp = (validatorMap.get(addressCL) / 1000000000) || 0;
             return {
-                name: name || address.substring(0, 12) + '...',
-                shortAddress: address.substring(0, 12) + '...',
+                name: name || addressCL.substring(0, 12) + '...',
+                shortAddress: addressCL.substring(0, 12) + '...',
                 client: info.clientType,
                 version: info.clientVersion,
                 sampleBlock: info.sampleBlock,

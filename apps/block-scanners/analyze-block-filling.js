@@ -18,8 +18,6 @@ const { ethers } = require('ethers');
 const axios = require('axios');
 const yargs = require('yargs/yargs');
 const { hideBin } = require('yargs/helpers');
-const sqlite3 = require('sqlite3').verbose();
-const path = require('path');
 
 const { ValidatorNameDB, ConfigHelper } = require('./lib/shared-utils');
 
