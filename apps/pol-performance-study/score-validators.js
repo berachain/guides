@@ -1278,6 +1278,88 @@ async function getDefaultRewardAllocation(blockNumber = 'latest') {
 }
 
 /**
+ * Ensure last_activation column exists in validators table
+ */
+async function ensureLastActivationColumn() {
+    try {
+        // Check if column exists by attempting to select it
+        await executeSQL('SELECT last_activation FROM validators LIMIT 1');
+    } catch (error) {
+        // Column doesn't exist, add it
+        log('📝 Adding last_activation column to validators table...');
+        await executeSQL('ALTER TABLE validators ADD COLUMN last_activation INTEGER');
+        log('✅ Column added successfully');
+    }
+}
+
+/**
+ * Update last_activation for validators based on getActiveRewardAllocation at final block
+ * @param {Array<Object>} validators - Array of validator objects with pubkey
+ * @param {number|string} finalBlockNumber - Final block number to query at
+ */
+async function updateLastActivations(validators, finalBlockNumber) {
+    log(`💾 Updating last_activation from getActiveRewardAllocation at block ${finalBlockNumber}...`);
+    
+    let updatedCount = 0;
+    let skippedCount = 0;
+    const provider = new ethers.JsonRpcProvider(EL_ETHRPC_URL);
+    
+    // Process validators in parallel batches
+    const batchSize = 10;
+    for (let i = 0; i < validators.length; i += batchSize) {
+        const batch = validators.slice(i, i + batchSize);
+        await Promise.all(batch.map(async (validator) => {
+            if (!validator.pubkey) return;
+            
+            try {
+                // Normalize pubkey (ensure 0x prefix)
+                const pk = validator.pubkey.startsWith('0x') ? validator.pubkey : `0x${validator.pubkey}`;
+                
+                // Call getActiveRewardAllocation at the final block
+                const data = BERACHEF_IFACE.encodeFunctionData('getActiveRewardAllocation', [pk]);
+                const resultHex = await callContractFunction(BERACHEF_CONTRACT, 'getActiveRewardAllocation(bytes)', [pk], finalBlockNumber);
+                const allocation = decodeRewardAllocation(resultHex);
+                
+                if (allocation && allocation.startBlock) {
+                    // Get the timestamp of the startBlock
+                    const startBlockNumber = allocation.startBlock;
+                    const block = await provider.getBlock(startBlockNumber);
+                    const startBlockTimestamp = block.timestamp;
+                    
+                    // Update last_activation with the startBlock's timestamp
+                    await executeSQL(
+                        'UPDATE validators SET last_activation = ? WHERE pubkey = ?',
+                        [startBlockTimestamp, validator.pubkey]
+                    );
+                    updatedCount++;
+                } else {
+                    // No active allocation or invalid response - set to NULL
+                    await executeSQL(
+                        'UPDATE validators SET last_activation = NULL WHERE pubkey = ?',
+                        [validator.pubkey]
+                    );
+                    skippedCount++;
+                }
+            } catch (error) {
+                log(`⚠️  Failed to update last_activation for validator ${validator.name || validator.pubkey?.substring(0, 20)}: ${error.message}`);
+                // Set to NULL on error
+                try {
+                    await executeSQL(
+                        'UPDATE validators SET last_activation = NULL WHERE pubkey = ?',
+                        [validator.pubkey]
+                    );
+                } catch (e) {
+                    // Ignore update errors
+                }
+                skippedCount++;
+            }
+        }));
+    }
+    
+    log(`✅ Updated last_activation for ${updatedCount} validators (${skippedCount} skipped/failed)`);
+}
+
+/**
  * Checks if validator is using default allocation (requires contract call)
  * Compares the validator's active allocation at the specified block with the default allocation at that same block
  * @param {string} validatorPubkey - Validator pubkey (with or without 0x prefix)
@@ -2833,6 +2915,15 @@ async function main() {
         // Fetch default allocation at the last block to compare against validators' current allocations
         const defaultAllocation = await getDefaultRewardAllocation(lastBlockNumber);
         const polParticipationScores = await calculatePolParticipationScores(activationsByValidator, datesForPolParticipation, validators, defaultAllocation, lastBlockNumber);
+        
+        // Update last_activation for validators based on their current active reward allocation
+        try {
+            await ensureLastActivationColumn();
+            await updateLastActivations(validators, lastBlockNumber);
+        } catch (error) {
+            log(`⚠️  Warning: Failed to update last_activation: ${error.message}`);
+            // Don't fail the entire script if this fails
+        }
         
         // Force garbage collection after large data processing
         if (global.gc) {
