@@ -141,14 +141,16 @@ main() {
   
   # Resolve beacond binary
   local beacond_bin
-  if ! beacond_bin=$(resolve_beacond_bin) || [[ -z "$beacond_bin" ]]; then
+  beacond_bin=$(resolve_beacond_bin)
+  if [[ -z "$beacond_bin" ]]; then
     log_error "beacond binary not found"
     exit 1
   fi
   
   # Get validator pubkey from beacond
   local pubkey
-  if ! pubkey=$(get_validator_pubkey "$beacond_bin" "$BEACOND_HOME"); then
+  pubkey=$(get_validator_pubkey "$beacond_bin" "$BEACOND_HOME")
+  if [[ -z "$pubkey" ]]; then
     log_error "Failed to get validator pubkey from beacond"
     exit 1
   fi

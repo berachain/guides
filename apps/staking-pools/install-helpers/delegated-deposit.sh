@@ -18,6 +18,8 @@ delegated-deposit.sh
 Deposits additional delegated funds from the DelegationHandler to the staking pool.
 This is for validator operators using delegated funds to reach the 250,000 BERA minimum.
 
+The staking pool must be activated before deposits can be made. Run activate.sh first if the pool is paused.
+
 Usage:
   delegated-deposit.sh --amount 240000
   
@@ -126,14 +128,16 @@ main() {
   
   # Resolve beacond binary
   local beacond_bin
-  if ! beacond_bin=$(resolve_beacond_bin) || [[ -z "$beacond_bin" ]]; then
+  beacond_bin=$(resolve_beacond_bin)
+  if [[ -z "$beacond_bin" ]]; then
     log_error "beacond binary not found"
     exit 1
   fi
   
   # Get validator pubkey from beacond
   local pubkey
-  if ! pubkey=$(get_validator_pubkey "$beacond_bin" "$BEACOND_HOME"); then
+  pubkey=$(get_validator_pubkey "$beacond_bin" "$BEACOND_HOME")
+  if [[ -z "$pubkey" ]]; then
     log_error "Failed to get validator pubkey from beacond"
     exit 1
   fi
@@ -178,6 +182,26 @@ main() {
   
   # Check available funds
   check_available_funds "$handler" "$amount_wei" "$rpc_url"
+  
+  # Check if staking pool exists and is activated
+  local staking_pool
+  staking_pool=$(cast_call_clean "$handler" "stakingPool()(address)" -r "$rpc_url" 2>/dev/null || echo "0x0000000000000000000000000000000000000000")
+  
+  if [[ "$staking_pool" == "0x0000000000000000000000000000000000000000" ]]; then
+    log_error "No staking pool found for this handler"
+    log_error "Create the pool first using: delegated-create-pool.sh"
+    exit 1
+  fi
+  
+  local is_paused
+  is_paused=$(cast_call_clean "$staking_pool" "paused()(bool)" -r "$rpc_url" 2>/dev/null || echo "true")
+  
+  if [[ "$is_paused" == "true" ]]; then
+    log_error "Staking pool is paused and must be activated before deposits"
+    log_error "Activate the pool first using: activate.sh --sr <shares_recipient> --op <operator_address>"
+    exit 1
+  fi
+  
   echo ""
   
   # Generate deposit command
@@ -211,8 +235,3 @@ EOF
 }
 
 main "$@"
-
-
-
-
-

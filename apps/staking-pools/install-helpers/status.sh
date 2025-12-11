@@ -10,10 +10,6 @@ source "$SCRIPT_DIR/lib-common.sh"
 # Load configuration if available
 load_env "$SCRIPT_DIR"
 
-# Legacy function names for compatibility
-err() { log_error "$@"; }
-info() { log_info "$@"; }
-
 print_usage() {
   cat <<'USAGE'
 status.sh
@@ -44,7 +40,8 @@ main() {
 
   # Resolve beacond binary (respects BEACOND_BIN env var if set)
   local beacond_bin
-  if ! beacond_bin=$(resolve_beacond_bin) || [[ -z "$beacond_bin" ]]; then log_error "beacond binary not found (set BEACOND_BIN in env.sh or ensure beacond is in PATH)"; exit 1; fi
+  beacond_bin=$(resolve_beacond_bin)
+  if [[ -z "$beacond_bin" ]]; then log_error "beacond binary not found (set BEACOND_BIN in env.sh or ensure beacond is in PATH)"; exit 1; fi
 
   if ! have_cmd cast; then log_error "cast not found; install foundry (https://book.getfoundry.sh/)"; exit 1; fi
   if ! ensure_jq; then
@@ -55,7 +52,8 @@ main() {
   CHAIN=$(get_network_from_genesis "$beacond_bin" "$BEACOND_HOME")
 
   local PUBKEY
-  if ! PUBKEY=$(get_validator_pubkey "$beacond_bin" "$BEACOND_HOME"); then
+  PUBKEY=$(get_validator_pubkey "$beacond_bin" "$BEACOND_HOME")
+  if [[ -z "$PUBKEY" ]]; then
     exit 1
   fi
 
@@ -84,11 +82,9 @@ main() {
       
       # Get delegation handler state
       local delegated_amount delegated_amount_available staking_pool
-      set +e
-      delegated_amount=$(cast_call_clean "$DELEGATION_HANDLER" "delegatedAmount()(uint256)" -r "$RPC_URL" 2>/dev/null)
-      delegated_amount_available=$(cast_call_clean "$DELEGATION_HANDLER" "delegatedAmountAvailable()(uint256)" -r "$RPC_URL" 2>/dev/null)
-      staking_pool=$(cast_call_clean "$DELEGATION_HANDLER" "stakingPool()(address)" -r "$RPC_URL" 2>/dev/null)
-      set -e
+      delegated_amount=$(cast_call_clean "$DELEGATION_HANDLER" "delegatedAmount()(uint256)" -r "$RPC_URL" 2>/dev/null || echo "")
+      delegated_amount_available=$(cast_call_clean "$DELEGATION_HANDLER" "delegatedAmountAvailable()(uint256)" -r "$RPC_URL" 2>/dev/null || echo "")
+      staking_pool=$(cast_call_clean "$DELEGATION_HANDLER" "stakingPool()(address)" -r "$RPC_URL" 2>/dev/null || echo "")
       
       if [[ -n "$delegated_amount" ]]; then
         local delegated_bera delegated_available_bera
@@ -124,10 +120,8 @@ main() {
   BEACON_DEPOSIT_ADDR=$(get_beacon_deposit_address)
   
   local contracts_json
-  set +e
-  contracts_json=$(cast call "$FACTORY_ADDR" "getCoreContracts(bytes)(address,address,address,address)" "$PUBKEY" -r "$RPC_URL" 2>&1)
-   local rc=$?
-  set -e
+  local rc=0
+  contracts_json=$(cast call "$FACTORY_ADDR" "getCoreContracts(bytes)(address,address,address,address)" "$PUBKEY" -r "$RPC_URL" 2>&1) || rc=$?
   
   if [[ $rc -ne 0 ]]; then
     log_error "Failed to get core contracts from factory"
@@ -163,10 +157,8 @@ main() {
     local addr="${contract_info##*:}"
     
     local code
-    set +e
-    code=$(cast code "$addr" -r "$RPC_URL" 2>&1)
-    local rc_code=$?
-    set -e
+    local rc_code=0
+    code=$(cast code "$addr" -r "$RPC_URL" 2>&1) || rc_code=$?
     
     if [[ $rc_code -ne 0 ]]; then
       log_error "  ✗ $contract_name: $addr (failed to check code)"
@@ -188,10 +180,8 @@ main() {
 
   # Step 2: Verify validator registration
   local registered_operator
-  set +e
-  registered_operator=$(cast call "$BEACON_DEPOSIT_ADDR" "getOperator(bytes)(address)" "$PUBKEY" -r "$RPC_URL" 2>&1)
-  local rc2=$?
-  set -e
+  local rc2=0
+  registered_operator=$(cast call "$BEACON_DEPOSIT_ADDR" "getOperator(bytes)(address)" "$PUBKEY" -r "$RPC_URL" 2>&1) || rc2=$?
   
   if [[ $rc2 -ne 0 ]]; then
     log_error "Failed to get operator from beacon deposit contract"
@@ -216,14 +206,10 @@ main() {
   # Step 3: Check staking pool status
 
   local is_active threshold_reached is_fully_exited
-  set +e
-  is_active=$(cast call "$staking_pool" "isActive()(bool)" -r "$RPC_URL" 2>&1)
-  local rc3=$?
-  threshold_reached=$(cast call "$staking_pool" "activeThresholdReached()(bool)" -r "$RPC_URL" 2>&1)
-  local rc_threshold=$?
-  is_fully_exited=$(cast call "$staking_pool" "isFullyExited()(bool)" -r "$RPC_URL" 2>&1)
-  local rc_exited=$?
-  set -e
+  local rc3=0 rc_threshold=0 rc_exited=0
+  is_active=$(cast call "$staking_pool" "isActive()(bool)" -r "$RPC_URL" 2>&1) || rc3=$?
+  threshold_reached=$(cast call "$staking_pool" "activeThresholdReached()(bool)" -r "$RPC_URL" 2>&1) || rc_threshold=$?
+  is_fully_exited=$(cast call "$staking_pool" "isFullyExited()(bool)" -r "$RPC_URL" 2>&1) || rc_exited=$?
   
   if [[ $rc3 -ne 0 ]]; then
     log_error "Failed to check if staking pool is active"
@@ -238,18 +224,15 @@ main() {
     log_info "✓ Staking pool is ACTIVE"
   else
     log_info "⚠ Staking pool is NOT ACTIVE yet"
-    log_info "  Run activate-staking-pool.sh to activate the pool with validator proofs"
+    log_info "  Run activate.sh to activate the pool with validator proofs"
     exit 0
   fi
   
   # Get additional pool information
   local total_assets total_supply
-  set +e
-  total_assets=$(cast call "$staking_pool" "totalAssets()(uint256)" -r "$RPC_URL" 2>&1)
-  local rc_assets=$?
-  total_supply=$(cast call "$staking_pool" "totalSupply()(uint256)" -r "$RPC_URL" 2>&1)
-  local rc_supply=$?
-  set -e
+  local rc_assets=0 rc_supply=0
+  total_assets=$(cast call "$staking_pool" "totalAssets()(uint256)" -r "$RPC_URL" 2>&1) || rc_assets=$?
+  total_supply=$(cast call "$staking_pool" "totalSupply()(uint256)" -r "$RPC_URL" 2>&1) || rc_supply=$?
   
   if [[ $rc_assets -eq 0 && $rc_supply -eq 0 && -n "$total_assets" && -n "$total_supply" ]]; then
     # Strip scientific notation suffix if present (e.g., "10000 [1e4]" -> "10000")
@@ -289,10 +272,8 @@ main() {
   
   # Check buffered assets
   local buffered_assets
-  set +e
-  buffered_assets=$(cast call "$staking_pool" "bufferedAssets()(uint256)" -r "$RPC_URL" 2>&1)
-  local rc_buffered=$?
-  set -e
+  local rc_buffered=0
+  buffered_assets=$(cast call "$staking_pool" "bufferedAssets()(uint256)" -r "$RPC_URL" 2>&1) || rc_buffered=$?
   
   if [[ $rc_buffered -eq 0 && -n "$buffered_assets" ]]; then
     buffered_assets=$(echo "$buffered_assets" | awk '{print $1}')
@@ -305,10 +286,8 @@ main() {
   
   # Check minimum effective balance
   local min_effective_balance
-  set +e
-  min_effective_balance=$(cast call "$staking_pool" "minEffectiveBalance()(uint256)" -r "$RPC_URL" 2>&1)
-  local rc_min_balance=$?
-  set -e
+  local rc_min_balance=0
+  min_effective_balance=$(cast call "$staking_pool" "minEffectiveBalance()(uint256)" -r "$RPC_URL" 2>&1) || rc_min_balance=$?
   
   if [[ $rc_min_balance -eq 0 && -n "$min_effective_balance" ]]; then
     min_effective_balance=$(echo "$min_effective_balance" | awk '{print $1}')
@@ -324,14 +303,10 @@ main() {
   
   # Get BGT information from the smart operator (which the staking pool uses)
   local rebaseable_bgt unboosted_bgt bgt_fee_state
-  set +e
-  rebaseable_bgt=$(cast call "$smart_operator" "rebaseableBgtAmount()(uint256)" -r "$RPC_URL" 2>&1)
-  local rc_rebaseable=$?
-  unboosted_bgt=$(cast call "$smart_operator" "unboostedBalance()(uint256)" -r "$RPC_URL" 2>&1)
-  local rc_unboosted=$?
-  bgt_fee_state=$(cast call "$smart_operator" "getEarnedBGTFeeState()(uint256,uint256,uint256,uint96)" -r "$RPC_URL" 2>&1)
-  local rc_fee_state=$?
-  set -e
+  local rc_rebaseable=0 rc_unboosted=0 rc_fee_state=0
+  rebaseable_bgt=$(cast call "$smart_operator" "rebaseableBgtAmount()(uint256)" -r "$RPC_URL" 2>&1) || rc_rebaseable=$?
+  unboosted_bgt=$(cast call "$smart_operator" "unboostedBalance()(uint256)" -r "$RPC_URL" 2>&1) || rc_unboosted=$?
+  bgt_fee_state=$(cast call "$smart_operator" "getEarnedBGTFeeState()(uint256,uint256,uint256,uint96)" -r "$RPC_URL" 2>&1) || rc_fee_state=$?
   
   if [[ $rc_rebaseable -eq 0 && -n "$rebaseable_bgt" && ! "$rebaseable_bgt" =~ (error|revert|panic|Error) ]]; then
     rebaseable_bgt=$(echo "$rebaseable_bgt" | awk '{print $1}')
@@ -390,10 +365,8 @@ main() {
     echo ""
     log_info "=== Wallet Holdings (PRIVATE_KEY) ==="
     local wallet_addr
-    set +e
-    wallet_addr=$(cast wallet address --private-key "$PRIVATE_KEY" 2>/dev/null)
-    local rc_wallet=$?
-    set -e
+    local rc_wallet=0
+    wallet_addr=$(cast wallet address --private-key "$PRIVATE_KEY" 2>/dev/null) || rc_wallet=$?
     if [[ $rc_wallet -ne 0 || -z "$wallet_addr" ]]; then
       log_warn "Could not derive wallet address from PRIVATE_KEY"
     else
@@ -401,9 +374,7 @@ main() {
 
       # stBERA shares held in staking pool
       local shares_raw
-      set +e
-      shares_raw=$(cast_call_clean "$staking_pool" "balanceOf(address)(uint256)" "$wallet_addr" -r "$RPC_URL" 2>/dev/null)
-      set -e
+      shares_raw=$(cast_call_clean "$staking_pool" "balanceOf(address)(uint256)" "$wallet_addr" -r "$RPC_URL" 2>/dev/null || echo "")
       if [[ -z "$shares_raw" ]]; then shares_raw="0"; fi
       local shares_pretty
       shares_pretty=$(cast_from_wei_safe "$shares_raw")
@@ -416,24 +387,18 @@ main() {
         log_warn "Withdrawal vault not found for chain: $CHAIN"
       else
         local nft_count
-        set +e
-        nft_count=$(cast_call_clean "$withdrawal_vault" "balanceOf(address)(uint256)" "$wallet_addr" -r "$RPC_URL" 2>/dev/null)
-        set -e
+        nft_count=$(cast_call_clean "$withdrawal_vault" "balanceOf(address)(uint256)" "$wallet_addr" -r "$RPC_URL" 2>/dev/null || echo "")
         if [[ -z "$nft_count" ]]; then nft_count="0"; fi
         log_info "Withdrawal NFTs: $nft_count"
         if [[ "$nft_count" != "0" ]]; then
           for (( i=0; i<${nft_count}; i++ )); do
             local token_id
-            set +e
-            token_id=$(cast_call_clean "$withdrawal_vault" "tokenOfOwnerByIndex(address,uint256)(uint256)" "$wallet_addr" "$i" -r "$RPC_URL" 2>/dev/null)
-            set -e
+            token_id=$(cast_call_clean "$withdrawal_vault" "tokenOfOwnerByIndex(address,uint256)(uint256)" "$wallet_addr" "$i" -r "$RPC_URL" 2>/dev/null || echo "")
             if [[ -z "$token_id" ]]; then continue; fi
 
             # Fetch request details using JSON format for proper parsing
             local req_json
-            set +e
-            req_json=$(cast call "$withdrawal_vault" "getWithdrawalRequest(uint256)((bytes,uint256,uint256,address,uint256))" "$token_id" -r "$RPC_URL" --json 2>/dev/null)
-            set -e
+            req_json=$(cast call "$withdrawal_vault" "getWithdrawalRequest(uint256)((bytes,uint256,uint256,address,uint256))" "$token_id" -r "$RPC_URL" --json 2>/dev/null || echo "")
             if [[ -n "$req_json" && "$req_json" != "null" && "$req_json" != "[]" ]]; then
               # Cast returns tuple as JSON array: ["(field1, field2, field3, field4, field5)"]
               # Extract the tuple string from the array, then parse it
@@ -450,11 +415,9 @@ main() {
                   # Extract fields: index 1=assets, 2=shares, 4=requestBlock (0-indexed from comma-separated)
                   # Use explicit error handling to ensure variables are set
                   local assets_raw shares_raw req_block_raw
-                  set +e
-                  assets_raw=$(echo "$cleaned" | awk -F', ' '{print $2}')
-                  shares_raw=$(echo "$cleaned" | awk -F', ' '{print $3}')
-                  req_block_raw=$(echo "$cleaned" | awk -F', ' '{print $5}')
-                  set -e
+                  assets_raw=$(echo "$cleaned" | awk -F', ' '{print $2}' || echo "")
+                  shares_raw=$(echo "$cleaned" | awk -F', ' '{print $3}' || echo "")
+                  req_block_raw=$(echo "$cleaned" | awk -F', ' '{print $5}' || echo "")
                   
                   # Strip scientific notation and validate
                   local assets shares req_block
@@ -513,15 +476,13 @@ main() {
               
               # Check if ready for redemption
               local ready_status
-              set +e
               if cast call "$withdrawal_vault" 'finalizeWithdrawalRequest(uint256)' "$token_id" -r "$RPC_URL" >/dev/null 2>&1; then
                 ready_status="✅ Ready"
               else
                 local ready_time
-                ready_time=$(calculate_withdrawal_ready_time "$req_block" "$RPC_URL")
+                ready_time=$(calculate_withdrawal_ready_time "$req_block" "$RPC_URL" || echo "unknown")
                 ready_status="⏳ Redeemable $ready_time"
               fi
-              set -e
               
               log_info "  NFT #$token_id: assets=$assets_bera BERA, sharesBurnt=$shares_stbera stBERA, requestBlock=$req_block"
               log_info "    Status: $ready_status"
