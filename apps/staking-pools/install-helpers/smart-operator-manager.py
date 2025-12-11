@@ -397,7 +397,6 @@ class SmartOperatorManager:
         factory_address = Web3.to_checksum_address(FACTORY_ADDRESSES[self.network])
         self.factory = self.w3.eth.contract(address=factory_address, abi=FACTORY_ABI)
         
-        console.print(f"[cyan]Factory address:[/cyan] {factory_address}")
         console.print(f"[cyan]Looking up contracts for pubkey:[/cyan] 0x{self.pubkey}")
         
         try:
@@ -416,8 +415,6 @@ class SmartOperatorManager:
                     console.print(f"[red]✗ Factory contract has no code at {factory_address}[/red]")
                     console.print(f"[yellow]Is this the correct network? Detected: {self.network}[/yellow]")
                     sys.exit(1)
-                else:
-                    console.print(f"[green]✓[/green] Factory contract deployed at {factory_address}")
             except Exception as code_error:
                 console.print(f"[red]✗ Could not check factory code: {code_error}[/red]")
                 sys.exit(1)
