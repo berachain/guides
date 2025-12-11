@@ -14,7 +14,7 @@ const config = {
   networks: {
     mainnet: {
       name: 'Berachain Mainnet',
-      el: process.env.MAINNET_EL_URL || 'http://localhost:59850',  // bb-mainnet-reth EL RPC
+      el: process.env.MAINNET_EL_URL || 'http://localhost:59830',  // bb-mainnet-reth EL RPC
       cl: process.env.MAINNET_CL_URL || 'http://localhost:59820',  // bb-mainnet-reth CL RPC
     },
     bepolia: {
