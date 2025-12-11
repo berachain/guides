@@ -12,6 +12,7 @@ import json
 import time
 import subprocess
 import getpass
+import re
 from pathlib import Path
 from typing import Optional, Dict, List, Tuple
 from decimal import Decimal
@@ -292,7 +293,7 @@ class SmartOperatorManager:
         
         # Load env.sh
         env_vars = self.load_env_sh()
-        beacond_home = env_vars.get("BEACOND_HOME")
+        beacond_home = os.environ.get("BEACOND_HOME") or env_vars.get("BEACOND_HOME")
         manual_mode = False
 
         # Enable optional TX simulation logging if SOM_TX_LOG is set (env or env.sh)
@@ -311,9 +312,29 @@ class SmartOperatorManager:
                 with open(self.tx_log_path, "a") as _f:
                     _f.write("")
             except Exception:
+                # Gracefully disable transaction logging if file cannot be created
                 self.tx_log_path = None
 
-        if not beacond_home or not Path(beacond_home).exists():
+        # Check for VALIDATOR_PUBKEY and CHAIN environment variables first
+        validator_pubkey = os.environ.get("VALIDATOR_PUBKEY") or env_vars.get("VALIDATOR_PUBKEY")
+        chain = os.environ.get("CHAIN") or env_vars.get("CHAIN")
+        
+        if validator_pubkey and chain:
+            # Use environment variables
+            self.network = chain
+            console.print(f"[cyan]Network:[/cyan] {self.network}")
+            if self.network not in ("mainnet", "bepolia"):
+                console.print(f"[red]Error: Invalid CHAIN value: {self.network} (must be 'mainnet' or 'bepolia')[/red]")
+                sys.exit(1)
+            # Normalize pubkey: ensure 0x prefix, then strip for internal usage
+            if not validator_pubkey.startswith("0x"):
+                validator_pubkey = "0x" + validator_pubkey
+            # Validate pubkey format (48 bytes = 96 hex chars)
+            if not re.match(r"^0x[0-9a-fA-F]{96}$", validator_pubkey):
+                console.print(f"[red]Error: Invalid VALIDATOR_PUBKEY format (must be 48-byte hex)[/red]")
+                sys.exit(1)
+            self.pubkey = validator_pubkey[2:]  # Strip 0x for internal usage
+        elif not beacond_home or not Path(beacond_home).exists():
             console.print("[yellow]BEACOND_HOME not found. Switching to manual mode.[/yellow]")
             # Manual: choose network and enter pubkey
             self.network = questionary.select("Select network", choices=["bepolia", "mainnet"]).ask()
@@ -434,7 +455,8 @@ class SmartOperatorManager:
                 abi=self.get_staking_pool_abi()
             )
             self.pool_fully_exited = bool(self._staking_pool.functions.isFullyExited().call())
-        except Exception:
+        except Exception as e:
+            # Gracefully handle case where staking pool cannot be fetched (may not exist yet)
             self._staking_pool = None
             self.pool_fully_exited = None
         
@@ -544,10 +566,12 @@ class SmartOperatorManager:
             try:
                 activate_delay = int(self.bgt.functions.activateBoostDelay().call())
             except Exception:
+                # Use default if delay cannot be fetched (non-critical for display)
                 activate_delay = 0
             try:
                 drop_delay = int(self.bgt.functions.dropBoostDelay().call())
             except Exception:
+                # Use default if delay cannot be fetched (non-critical for display)
                 drop_delay = 0
             
             # Get fee state
@@ -696,6 +720,14 @@ class SmartOperatorManager:
                     table.add_row("Threshold Reached", "✅ Yes" if active_threshold_reached else "❌ No")
                     table.add_row("Fully Exited", "✅ Yes" if is_fully_exited else "❌ No")
                     
+                    # Get total supply of shares
+                    try:
+                        total_supply = staking_pool.functions.totalSupply().call()
+                        table.add_row("Total Shares (stBERA)", f"{Web3.from_wei(total_supply, 'ether'):.6f}")
+                    except Exception:
+                        # Total supply may not be available (optional display field)
+                        pass
+                    
             except Exception as e:
                 table.add_row("Pool Status", f"❌ Error: {str(e)[:50]}...")
             
@@ -716,6 +748,7 @@ class SmartOperatorManager:
             try:
                 self.log_sim(func_name, self.operator_address, tx_data['data'], tx_data.get('value', 0), mode="show")
             except Exception:
+                # Logging failures should not block transaction preview
                 pass
             return False
         
@@ -1053,9 +1086,72 @@ class SmartOperatorManager:
 
     def claim_bgt_staker_reward_action(self):
         """Claim BGTStaker HONEY rewards"""
+        console.print("[yellow]Note: Consider using 'Claim Boost Rewards' instead, which handles both HONEY and incentive tokens.[/yellow]")
         console.print("[cyan]Claiming BGTStaker rewards (HONEY)...[/cyan]")
         tx_data = self.operator.functions.claimBgtStakerReward().build_transaction({'from': self.account.address})
         self.execute_or_show_calldata("claimBgtStakerReward", tx_data)
+
+    def claim_boost_rewards_action(self):
+        """Claim boost rewards (HONEY + incentive tokens) and forward to IncentiveCollector"""
+        console.print("[cyan]Claim Boost Rewards[/cyan]")
+        console.print("This function claims HONEY rewards from BGT staking and incentive tokens from the boost program,")
+        console.print("then forwards all tokens to IncentiveCollector.\n")
+        
+        # Get merkle claims (can be empty)
+        console.print("[yellow]Merkle Claims (for incentive program rewards)[/yellow]")
+        console.print("Enter merkle claims in JSON format, or press Enter for empty array.")
+        console.print("Format: [{\"identifier\": \"0x...\", \"account\": \"0x...\", \"amount\": \"0x...\", \"merkleProof\": [\"0x...\", ...]}, ...]")
+        claims_input = Prompt.ask("Merkle claims (JSON array)", default="[]")
+        
+        try:
+            import json
+            claims_data = json.loads(claims_input)
+            if not isinstance(claims_data, list):
+                console.print("[red]Claims must be a JSON array[/red]")
+                return
+            
+            # Convert claims to the proper format
+            claims = []
+            for claim in claims_data:
+                if not all(k in claim for k in ["identifier", "account", "amount", "merkleProof"]):
+                    console.print("[red]Each claim must have identifier, account, amount, and merkleProof[/red]")
+                    return
+                claims.append((
+                    bytes.fromhex(claim["identifier"][2:]) if claim["identifier"].startswith("0x") else bytes.fromhex(claim["identifier"]),
+                    self.w3.to_checksum_address(claim["account"]),
+                    int(claim["amount"], 16) if isinstance(claim["amount"], str) and claim["amount"].startswith("0x") else int(claim["amount"]),
+                    [bytes.fromhex(p[2:]) if p.startswith("0x") else bytes.fromhex(p) for p in claim["merkleProof"]]
+                ))
+        except json.JSONDecodeError:
+            console.print("[red]Invalid JSON format[/red]")
+            return
+        except Exception as e:
+            console.print(f"[red]Error parsing claims: {e}[/red]")
+            return
+        
+        # Get token addresses (can be empty, but should include common tokens)
+        console.print("\n[yellow]Token Addresses[/yellow]")
+        console.print("Enter token addresses to forward (comma-separated), or press Enter to forward all common tokens.")
+        console.print("Common tokens: HONEY, BERA, and any incentive tokens you've received.")
+        tokens_input = Prompt.ask("Token addresses (comma-separated, or Enter for auto-detect)", default="")
+        
+        if tokens_input.strip():
+            token_addresses = [self.w3.to_checksum_address(addr.strip()) for addr in tokens_input.split(",")]
+        else:
+            # Auto-detect: try to get common token addresses
+            # For now, we'll use an empty array and let the contract handle it
+            # In practice, operators should specify tokens they know they have
+            console.print("[yellow]No tokens specified. The function will forward tokens based on merkle claims.[/yellow]")
+            console.print("If you have accumulated tokens, you may want to specify their addresses.")
+            token_addresses = []
+        
+        try:
+            console.print(f"\n[cyan]Preparing transaction with {len(claims)} claim(s) and {len(token_addresses)} token(s)...[/cyan]")
+            tx_data = self.operator.functions.claimBoostRewards(claims, token_addresses).build_transaction({'from': self.account.address})
+            self.execute_or_show_calldata("claimBoostRewards", tx_data)
+        except Exception as e:
+            console.print(f"[red]Error building transaction: {e}[/red]")
+            console.print("[yellow]Tip: Make sure merkle claims are valid and token addresses are correct.[/yellow]")
 
     def set_protocol_fee_action(self):
         """Set protocol fee percentage"""
@@ -1591,7 +1687,8 @@ class SmartOperatorManager:
             menu.append(("queue_commission", "💵 Queue Validator Commission", self.queue_commission_action))
         
         # Claims (anyone can call)
-        menu.append(("claim_honey", "🍯 Claim BGT Staker Rewards (HONEY)", self.claim_bgt_staker_reward_action))
+        menu.append(("claim_boost_rewards", "🎁 Claim Boost Rewards (HONEY + Incentives) [Recommended]", self.claim_boost_rewards_action))
+        menu.append(("claim_honey", "🍯 Claim BGT Staker Rewards (HONEY only)", self.claim_bgt_staker_reward_action))
         
         # Protocol fee management
         if self.roles.get("PROTOCOL_FEE_MANAGER_ROLE"):

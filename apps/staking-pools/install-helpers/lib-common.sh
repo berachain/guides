@@ -3,12 +3,10 @@
 # Source this file in scripts: source "$SCRIPT_DIR/lib-common.sh"
 
 # === LOGGING ===
-log_error() { echo "[error] $*" >&2; }
+log_error() { echo "[error] $*"; }
 log_info() { echo "[info] $*"; }
 log_success() { echo "[success] $*"; }
 log_warn() { echo "[warn] $*"; }
-
-err() { log_error "$@"; }
 
 # === CAST OUTPUT HANDLING ===
 strip_scientific_notation() {
@@ -143,7 +141,8 @@ get_validator_pubkey() {
   if [[ $rc -ne 0 ]]; then
     log_error "$out"
     log_error "beacond deposit validator-keys failed"
-    return 1
+    echo ""
+    return
   fi
   
   local pk
@@ -154,18 +153,17 @@ get_validator_pubkey() {
   
   if [[ -z "$pk" ]]; then
     log_error "Could not parse validator pubkey"
-    return 1
+    echo ""
+    return
   fi
   
   echo "$pk"
-  return 0
 }
 
 resolve_beacond_bin() {
   # Resolves the beacond binary path, using BEACOND_BIN env var if set
   # Handles both absolute paths and PATH-based lookups
   # Returns the resolved path if found and executable, empty string otherwise
-  # Exit code: 0 if found and executable, 1 otherwise
   local beacond_bin="${BEACOND_BIN:-beacond}"
   local resolved=""
   
@@ -185,13 +183,7 @@ resolve_beacond_bin() {
     fi
   fi
   
-  if [[ -n "$resolved" ]]; then
-    echo "$resolved"
-    return 0
-  else
-    echo ""
-    return 1
-  fi
+  echo "$resolved"
 }
 
 find_app_toml() {
@@ -199,16 +191,19 @@ find_app_toml() {
   local home="$1"
   if [[ -f "$home/config/app.toml" ]]; then 
     printf '%s' "$home/config/app.toml"
-    return 0
+    return
   fi
   if [[ -f "$home/app.toml" ]]; then 
     printf '%s' "$home/app.toml"
-    return 0
+    return
   fi
-  return 1
+  echo ""
 }
 
 get_network_from_genesis() {
+  # Detect network (mainnet/bepolia) from beacond genesis validator root
+  # Args: beacond_binary_path beacond_home_directory
+  # Returns: "mainnet", "bepolia", or "unknown"
   local beacond_bin="$1"
   local home="$2"
   
@@ -230,36 +225,35 @@ get_network_from_genesis() {
   esac
 }
 
-get_beacon_api_address() {
-  local beacond_home="$1"
-  local app_toml="$beacond_home/config/app.toml"
-  
-  if [[ ! -f "$app_toml" ]]; then
-    printf ''
-    return 0
-  fi
-  
+normalize_address() {
+  # Normalize a network address string (removes protocol, adds default port if missing)
+  # Args: address string (may include http://, port, etc.)
+  # Returns: normalized address in HOST:PORT format
+  local addr="$1"
+  addr=$(echo "$addr" | sed -E "s~^[[:space:]]*https?://~~I; s~/*$~~; s/^[[:space:]]+//; s/[[:space:]]+$//; s/^[\"']|[\"']$//g")
+  if [[ -z "$addr" ]]; then printf '%s' ""; return; fi
+  if [[ "$addr" =~ ^[0-9]+$ ]]; then printf '127.0.0.1:%s' "$addr"; return; fi
+  if [[ "$addr" != *:* ]]; then printf '%s:3500' "$addr"; return; fi
+  printf '%s' "$addr"
+}
+
+# Extract [beacon-kit.node-api] enabled/address from app.toml
+extract_node_api_from_app_toml() {
+  # Extract node API address from beacond app.toml configuration file
+  # Args: path to app.toml file
+  # Returns: address string from config, or empty string if not found
+  local app_toml="$1"
   local section
   section=$(awk '
     BEGIN{flag=0}
-    /^[[:space:]]*\[beacon\.node-api\][[:space:]]*$/ {flag=1; next}
+    /^[[:space:]]*\[beacon-kit\.node-api\][[:space:]]*$/ {flag=1; next}
     /^[[:space:]]*\[.*\][[:space:]]*$/ {if(flag==1){flag=0}}
     { if(flag==1) print }
   ' "$app_toml" | awk '{gsub(/\r/,"")}; /^[[:space:]]*[#;]/{next}; NF')
-  
-  if [[ -z "$section" ]]; then
-    printf ''
-    return 0
-  fi
-  
+  if [[ -z "$section" ]]; then printf ''; return 0; fi
   local address_line
   address_line=$(printf '%s\n' "$section" | awk 'BEGIN{IGNORECASE=1} $0 ~ /^[[:space:]]*address[[:space:]]*=/ {print}' | tail -n1)
-  
-  if [[ -z "$address_line" ]]; then
-    printf ''
-    return 0
-  fi
-  
+  if [[ -z "$address_line" ]]; then printf ''; return 0; fi
   echo "$address_line" | sed -E 's/^[[:space:]]*address[[:space:]]*=[[:space:]]*//; s/["\x27]//g; s/[#;].*$//; s/[[:space:]]+$//'
 }
 
@@ -285,16 +279,23 @@ maybe_probe_node_api() {
 }
 
 get_validator_index_from_api() {
+  # Get validator index from beacon chain API by pubkey
+  # Args: api_base_url validator_pubkey_hex
+  # Returns: validator index as string, or empty string if not found
   local api_url="$1"
   local pubkey="$2"
   
   ensure_jq
   
   local validators_json
-  validators_json=$(curl -sS "${api_url}/eth/v1/beacon/states/head/validators" 2>/dev/null) || return 1
+  validators_json=$(curl -sS "${api_url}/eth/v1/beacon/states/head/validators" 2>/dev/null) || {
+    echo ""
+    return
+  }
   
   if [[ -z "$validators_json" ]]; then
-    return 1
+    echo ""
+    return
   fi
   
   # Find the validator index by searching for the pubkey in the data array
@@ -306,15 +307,18 @@ get_validator_index_from_api() {
   ' 2>/dev/null)
   
   if [[ -z "$index" || "$index" == "null" ]]; then
-    return 1
+    echo ""
+    return
   fi
   
   echo "$index"
-  return 0
 }
 
 # === CONTRACT QUERIES ===
 get_delegation_handler() {
+  # Get DelegationHandler address for a validator pubkey from factory
+  # Args: factory_address validator_pubkey_hex rpc_url
+  # Returns: handler address, or zero address if not found
   local factory="$1"
   local pubkey="$2"
   local rpc="$3"
@@ -326,20 +330,11 @@ get_delegation_handler() {
   echo "$handler"
 }
 
-get_staking_pool_for_pubkey() {
-  local factory="$1"
-  local pubkey="$2"
-  local rpc="$3"
-  
-  ensure_cast
-  
-  local pool
-  pool=$(cast_call_clean "$factory" "stakingPools(bytes)(address)" "$pubkey" -r "$rpc" 2>/dev/null || echo "0x0000000000000000000000000000000000000000")
-  echo "$pool"
-}
-
 # === AMOUNT VALIDATION ===
 validate_gwei_multiple() {
+  # Check if amount in wei is a multiple of 1 gwei (required by some contracts)
+  # Args: amount_in_wei
+  # Returns: 0 if valid multiple, 1 otherwise
   local amount_wei="$1"
   
   ensure_bc
@@ -439,27 +434,11 @@ get_factory_address_for_network() {
 
 get_withdrawal_vault_for_network() {
   local network="$1"
-  
-  # Get factory address and RPC URL for the network
   local factory_addr rpc_url
   factory_addr=$(get_factory_address_for_network "$network")
   rpc_url=$(get_rpc_url_for_network "$network")
   
-  if [[ -z "$factory_addr" || -z "$rpc_url" ]]; then
-    echo ""
-    return 1
-  fi
-  
-  # Query withdrawalVault() from the factory contract
-  local vault
-  vault=$(cast_call_clean "$factory_addr" "withdrawalVault()(address)" -r "$rpc_url" 2>/dev/null)
-  
-  if [[ -z "$vault" || "$vault" == "0x0000000000000000000000000000000000000000" ]]; then
-    echo ""
-    return 1
-  fi
-  
-  echo "$vault"
+  cast_call_clean "$factory_addr" "withdrawalVault()(address)" -r "$rpc_url" 2>/dev/null || echo ""
 }
 
 get_delegation_handler_factory_for_network() {
@@ -557,7 +536,7 @@ calculate_withdrawal_ready_time() {
 }
 
 detect_network_and_rpc() {
-  # Returns: chain rpc_url (space separated)
+  # Returns: chain rpc_url (space separated), or empty string on failure
   # Priority: CLI_CHAIN -> CHAIN env var -> beacond detection -> defaults
   
   local chain="${CLI_CHAIN:-${CHAIN:-}}"
@@ -569,13 +548,14 @@ detect_network_and_rpc() {
       rpc_url=$(get_rpc_url_for_network "$chain")
     fi
     echo "$chain $rpc_url"
-    return 0
+    return
   fi
   
   # Try to detect from beacond
   if [[ -n "${BEACOND_HOME:-}" ]]; then
     local beacond_bin
-    if beacond_bin=$(resolve_beacond_bin 2>/dev/null) && [[ -n "$beacond_bin" ]]; then
+    beacond_bin=$(resolve_beacond_bin 2>/dev/null)
+    if [[ -n "$beacond_bin" ]]; then
       chain=$(get_network_from_genesis "$beacond_bin" "$BEACOND_HOME" 2>/dev/null || echo "")
       
       if [[ -n "$chain" && "$chain" != "unknown" ]]; then
@@ -583,14 +563,16 @@ detect_network_and_rpc() {
           rpc_url=$(get_rpc_url_for_network "$chain")
         fi
         echo "$chain $rpc_url"
-        return 0
+        return
       fi
     fi
   fi
   
-  # Default to mainnet
+  # Fail if chain cannot be detected
   if [[ -z "$chain" ]]; then
-    chain="mainnet"
+    log_error "Could not detect network chain. Set CLI_CHAIN or CHAIN environment variable, or configure BEACOND_HOME."
+    echo ""
+    return
   fi
   
   if [[ -z "$rpc_url" ]]; then
@@ -598,6 +580,139 @@ detect_network_and_rpc() {
   fi
   
   echo "$chain $rpc_url"
+}
+
+# === STAKING POOL SETUP ===
+setup_staking_pool_env() {
+  # Common setup function for staking pool scripts
+  # Validates environment, resolves beacond binary, network, pubkey, RPC, factory, withdrawal vault, and node API
+  # Sets global variables: network, pubkey, rpc_url, factory_addr, withdrawal_vault, node_api_url, beacond_bin
+  # Returns: 0 on success, 1 on failure
+  
+  if [[ -z "$BEACOND_HOME" ]]; then
+    log_error "Missing BEACOND_HOME in env.sh"
+    return 1
+  fi
+  
+  if [[ ! -d "$BEACOND_HOME" ]]; then
+    log_error "beacond_home not found: $BEACOND_HOME"
+    return 1
+  fi
+
+  # Resolve beacond binary (respects BEACOND_BIN env var if set)
+  if ! beacond_bin=$(resolve_beacond_bin) || [[ -z "$beacond_bin" ]]; then
+    log_error "beacond binary not found (set BEACOND_BIN in env.sh or ensure beacond is in PATH)"
+    return 1
+  fi
+
+  # Attempt auto-detect of node API address from app.toml
+  local app_toml=""
+  local detected_node_api_url=""
+  if app_toml=$(find_app_toml "$BEACOND_HOME"); then
+    detected_node_api_url=$(extract_node_api_from_app_toml "$app_toml")
+  fi
+
+  # Resolve node api address: prefer env -> app.toml
+  node_api_url=""
+  if [[ -n "${NODE_API_ADDRESS:-}" ]]; then
+    node_api_url=$(normalize_address "$NODE_API_ADDRESS")
+  elif [[ -n "$detected_node_api_url" ]]; then
+    node_api_url=$(normalize_address "$detected_node_api_url")
+  fi
+
+  if [[ -z "$node_api_url" ]]; then
+    log_error "Node API address not configured."
+    if [[ -n "$app_toml" ]]; then
+      log_error "Set [beacon-kit.node-api] enabled = true and address = HOST:PORT in: $app_toml"
+    else
+      log_error "Set NODE_API_ADDRESS in env.sh or [beacon-kit.node-api] in app.toml"
+    fi
+    log_error "Example: NODE_API_ADDRESS=\"127.0.0.1:3500\""
+    return 1
+  else
+    if ! maybe_probe_node_api "$node_api_url"; then
+      log_error "Node API not reachable at $node_api_url"
+      if [[ -n "$app_toml" ]]; then
+        log_error "Ensure [beacon-kit.node-api] enabled = true and address is correct in: $app_toml, then restart your node"
+      else
+        log_error "Set correct NODE_API_ADDRESS in env.sh"
+      fi
+      return 1
+    fi
+  fi
+
+  network=$(get_network_from_genesis "$beacond_bin" "$BEACOND_HOME")
+  pubkey=$(get_validator_pubkey "$beacond_bin" "$BEACOND_HOME")
+  if [[ -z "$pubkey" ]]; then
+    return 1
+  fi
+
+  # Resolve RPC URL early (needed for withdrawal vault lookup)
+  rpc_url=$(get_rpc_url_for_network "$network")
+  if [[ -z "$rpc_url" ]]; then
+    log_error "Unknown network: $network"
+    return 1
+  fi
+
+  # Resolve factory address
+  factory_addr=$(get_factory_address_for_network "$network")
+  if [[ -z "$factory_addr" ]]; then
+    log_error "Factory address not available for network: $network"
+    return 1
+  fi
+
+  # Auto-detect withdrawal vault from factory
+  withdrawal_vault=$(get_withdrawal_vault_for_network "$network")
+  if [[ -z "$withdrawal_vault" || "$withdrawal_vault" == "0x0000000000000000000000000000000000000000" ]]; then
+    log_error "WithdrawalVault not available for network: $network"
+    return 1
+  fi
+
+  return 0
+}
+
+predict_and_display_addresses() {
+  # Predict staking pool contract addresses from factory using validator pubkey
+  # Args: factory_address rpc_url validator_pubkey
+  # Returns: staking_pool address, or empty string on failure
+  local factory_addr="$1"
+  local rpc_url="$2"
+  local pubkey="$3"
+  
+  if ! have_cmd cast; then
+    log_error "cast not found; install foundry (https://book.getfoundry.sh/)"
+    echo ""
+    return
+  fi
+  
+  # Get predicted addresses once
+  local predicted_addrs
+  predicted_addrs=$(cast call "$factory_addr" "predictStakingPoolContractsAddresses(bytes)(address,address,address,address)" "$pubkey" -r "$rpc_url" 2>/dev/null)
+  if [[ -z "$predicted_addrs" ]]; then
+    log_error "prediction call failed"
+    echo ""
+    return
+  fi
+  
+  # Parse tuple: (address,address,address,address) -> extract addresses
+  local normalized_addrs
+  normalized_addrs=$(echo "$predicted_addrs" | tr -d '()' | tr ',' ' ' | tr '\n' ' ' | tr -s ' ' ' ')
+  local smart_operator staking_pool staking_rewards_vault incentive_collector
+  read -r smart_operator staking_pool staking_rewards_vault incentive_collector <<< "$normalized_addrs"
+  
+  if [[ -z "$smart_operator" || -z "$staking_pool" || -z "$staking_rewards_vault" || -z "$incentive_collector" ]]; then
+    log_error "prediction call failed"
+    echo ""
+    return
+  fi
+  
+  log_info "Predicted contract addresses:"
+  echo "  SmartOperator:          $smart_operator"
+  echo "  StakingPool:            $staking_pool"
+  echo "  StakingRewardsVault:    $staking_rewards_vault"
+  echo "  IncentiveCollector:     $incentive_collector"
+  
+  echo "$staking_pool"
 }
 
 

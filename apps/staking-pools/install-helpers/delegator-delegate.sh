@@ -220,8 +220,6 @@ main() {
   
   cat > "$cmd_file" <<EOF
 #!/usr/bin/env bash
-set -euo pipefail
-
 # Combined deployment and delegation command
 # Validator pubkey: $PUBKEY
 # Amount: $CLI_AMOUNT BERA

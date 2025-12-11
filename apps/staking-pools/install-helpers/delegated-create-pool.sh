@@ -14,7 +14,7 @@ delegated-create-pool.sh
 Creates a staking pool using delegated funds.
 This is for validator operators who have been granted VALIDATOR_ADMIN_ROLE by a delegator.
 
-This script creates the staking pool contracts and deposits the first 10,000 BERA using delegated funds. It is designed for validator operators who have been granted the VALIDATOR_ADMIN_ROLE by a delegator. After running this script, use delegated-deposit.sh to deposit the remaining funds and reach the required 250,000 BERA.
+This script creates the staking pool contracts and deposits the first 10,000 BERA using delegated funds. It is designed for validator operators who have been granted the VALIDATOR_ADMIN_ROLE by a delegator. After running this script, wait for validator registration on the beacon chain, then activate the pool with activate.sh. After activation, use delegated-deposit.sh to deposit the remaining funds and reach the required 250,000 BERA.
 
 You do not need to provide most configuration manually: the BEACOND_HOME environment variable should point to your beacond home directory, but the script will auto-detect the network from the beacond genesis, auto-detect the validator public key from beacond, and determine the correct DelegationHandler by querying the factory using your public key.
 
@@ -39,8 +39,6 @@ parse_args() {
 check_delegation_state() {
   local handler="$1"
   local rpc="$2"
-  
-  log_info "Checking delegation state..."
   
   # Check delegated amount
   local delegated_amount
@@ -92,7 +90,6 @@ verify_handler_pubkey() {
     exit 1
   fi
   
-  log_success "Handler pubkey matches validator pubkey"
 }
 
 main() {
@@ -101,10 +98,14 @@ main() {
   if ! ensure_cast; then
     exit 1
   fi
+  
+  # Preserve BEACOND_HOME from environment before loading env.sh
+  local env_beacond_home="${BEACOND_HOME:-}"
+  
   load_env "$SCRIPT_DIR"
   
-  # Get BEACOND_HOME from env.sh (which can itself use env var)
-  local beacond_home="${BEACOND_HOME:-}"
+  # Get BEACOND_HOME from env.sh or environment (env.sh takes precedence)
+  local beacond_home="${BEACOND_HOME:-${env_beacond_home:-}}"
   if [[ -z "$beacond_home" ]]; then
     log_error "BEACOND_HOME not set in env.sh or environment"
     print_usage
@@ -118,7 +119,8 @@ main() {
   
   # Resolve beacond binary from env.sh or default
   local beacond_bin
-  if ! beacond_bin=$(resolve_beacond_bin); then
+  beacond_bin=$(resolve_beacond_bin)
+  if [[ -z "$beacond_bin" ]]; then
     log_error "beacond binary not found"
     exit 1
   fi
@@ -126,7 +128,8 @@ main() {
   # Auto-detect network and pubkey from beacond
   local network pubkey
   network=$(get_network_from_genesis "$beacond_bin" "$beacond_home")
-  if ! pubkey=$(get_validator_pubkey "$beacond_bin" "$beacond_home"); then
+  pubkey=$(get_validator_pubkey "$beacond_bin" "$beacond_home")
+  if [[ -z "$pubkey" ]]; then
     exit 1
   fi
   
@@ -155,13 +158,10 @@ main() {
   fi
   
   log_info "DelegationHandler: $handler"
-  log_info "RPC URL: $rpc_url"
-  echo ""
   
   # Verify handler state and pubkey match
   check_delegation_state "$handler" "$rpc_url"
   verify_handler_pubkey "$handler" "$pubkey" "$rpc_url"
-  echo ""
   
   # Get withdrawal vault address from network
   local withdrawal_vault
@@ -171,22 +171,19 @@ main() {
     exit 1
   fi
   
-  log_info "Withdrawal Vault: $withdrawal_vault"
-  
   # Generate deposit data from beacond
-  log_info "Generating deposit credentials and signature..."
-  
   # Use withdrawal vault for withdrawal credentials (all withdrawals go through it)
   local amount_gwei=10000000000000
   
-  set +e
-  local dep_out
+  # Get genesis validator root for deposit command
+  local genesis_root
+  genesis_root=$("$beacond_bin" --home "$beacond_home" genesis validator-root "$beacond_home/config/genesis.json" 2>/dev/null || echo "")
+  
+  local dep_out rc=0
   dep_out=$("$beacond_bin" --home "$beacond_home" deposit create-validator \
     "$withdrawal_vault" \
     "$amount_gwei" \
-    -g "$("$beacond_bin" --home "$beacond_home" genesis validator-root "$beacond_home/config/genesis.json" 2>/dev/null)" 2>&1)
-  local rc=$?
-  set -e
+    -g "$genesis_root" 2>&1) || rc=$?
   
   if [[ $rc -ne 0 || -z "$dep_out" ]]; then
     log_error "deposit create-validator failed: $dep_out"
@@ -204,8 +201,6 @@ main() {
     exit 1
   fi
   
-  log_success "Deposit data generated"
-  log_info "Withdrawal credentials: $cred"
   echo ""
   
   # Generate create pool command
@@ -241,15 +236,11 @@ EOF
   log_info "Next steps:"
   echo "  1. Review the command: cat $cmd_file"
   echo "  2. Execute: ./$cmd_file"
-  echo "  3. After creation, deposit remaining funds:"
-  echo "     delegated-deposit.sh --amount 240000"
-  echo "  4. Then activate your validator:"
+  echo "  3. Activate your validator:"
   echo "     activate.sh --sr 0x... --op 0x..."
+  echo "  4. After activation, deposit remaining funds:"
+  echo "     delegated-deposit.sh --amount 240000"
 }
 
 main "$@"
-
-
-
-
 

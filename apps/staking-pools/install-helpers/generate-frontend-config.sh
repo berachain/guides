@@ -48,8 +48,9 @@ done
 ensure_jq
 ensure_cast
 
-local beacond_bin
-if ! beacond_bin=$(resolve_beacond_bin); then
+beacond_bin=""
+beacond_bin=$(resolve_beacond_bin)
+if [[ -z "$beacond_bin" ]]; then
   log_error "beacond binary not found (set BEACOND_BIN in env.sh or ensure beacond is in PATH)"
   exit 1
 fi
@@ -73,7 +74,7 @@ CHAINID_MAINNET=80094
 CHAINID_BEPOLIA=80069
 
 # Detect network using lib-common.sh functions
-NETWORK=$(get_network_from_genesis "$BEACOND_BIN" "$BEACOND_HOME")
+NETWORK=$(get_network_from_genesis "$beacond_bin" "$BEACOND_HOME")
 if [[ "$NETWORK" == "unknown" ]]; then
   log_error "Could not detect network from beacond genesis"
   exit 1
@@ -105,7 +106,8 @@ log_info "RPC: $RPC_URL"
 log_info "Factory: $FACTORY"
 
 # Get validator pubkey using lib-common.sh function
-if ! PUBKEY=$(get_validator_pubkey "$beacond_bin" "$BEACOND_HOME"); then
+PUBKEY=$(get_validator_pubkey "$beacond_bin" "$BEACOND_HOME")
+if [[ -z "$PUBKEY" ]]; then
   exit 1
 fi
 
