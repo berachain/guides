@@ -706,11 +706,11 @@ predict_and_display_addresses() {
     return
   fi
   
-  log_info "Predicted contract addresses:"
-  echo "  SmartOperator:          $smart_operator"
-  echo "  StakingPool:            $staking_pool"
-  echo "  StakingRewardsVault:    $staking_rewards_vault"
-  echo "  IncentiveCollector:     $incentive_collector"
+  log_info "Predicted contract addresses:" >&2
+  echo "  SmartOperator:          $smart_operator" >&2
+  echo "  StakingPool:            $staking_pool" >&2
+  echo "  StakingRewardsVault:    $staking_rewards_vault" >&2
+  echo "  IncentiveCollector:     $incentive_collector" >&2
   
   echo "$staking_pool"
 }
