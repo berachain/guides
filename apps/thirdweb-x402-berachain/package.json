@@ -1,0 +1,44 @@
+{
+  "name": "@berachain/thirdweb-x402-berachain",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Guide for implementing thirdweb x402 payments on Berachain",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx watch src",
+    "start:client": "tsx src/client/basic-payment.ts",
+    "start:server": "tsx src/server/express-server.ts",
+    "start:facilitator": "tsx src/facilitator/setup.ts",
+    "lint": "eslint src/ --ext .ts --no-ignore",
+    "lint:fix": "eslint src/ --ext .ts --fix --no-ignore",
+    "format": "prettier --write \"src/**/*.ts\"",
+    "clean": "rm -rf node_modules dist"
+  },
+  "keywords": [
+    "thirdweb",
+    "x402",
+    "berachain",
+    "payments",
+    "api",
+    "ethereum"
+  ],
+  "author": "Berachain",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "thirdweb": "^5.0.0",
+    "express": "^4.18.2",
+    "dotenv": "^16.4.7"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/node": "^20.11.0",
+    "eslint": "^8.56.0",
+    "prettier": "^3.0.0",
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.3"
+  }
+}
