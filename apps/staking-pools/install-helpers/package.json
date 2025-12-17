@@ -1,0 +1,24 @@
+{
+  "name": "staking-pools-install-helpers",
+  "version": "1.0.0",
+  "description": "Helper scripts for staking pool installation and delegation",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "submit-bitgo": "tsx submit-bitgo-transaction.ts"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@types/node": "^24",
+    "tsx": "^4"
+  },
+  "dependencies": {
+    "bitgo": "^48",
+    "dotenv": "^17",
+    "ethers": "^6",
+    "viem": "^2"
+  }
+}
+

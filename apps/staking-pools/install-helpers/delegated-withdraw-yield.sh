@@ -35,8 +35,8 @@ Optional arguments:
   --fee BERA                Withdrawal request fee (default: 0.001 BERA)
 
 Output:
-  delegated-withdraw-yield-1-request.sh
-  delegated-withdraw-yield-2-complete.sh
+  generated/delegated-withdraw-yield-1-request.sh
+  generated/delegated-withdraw-yield-2-complete.sh
 
 Withdrawn yield goes to the validator admin's address.
 USAGE
@@ -196,7 +196,8 @@ main() {
   wallet_args=$(get_cast_wallet_args)
   
   # Command 1: Request withdrawal
-  cat > "delegated-withdraw-yield-1-request.sh" <<EOF
+  mkdir -p generated
+  cat > "generated/delegated-withdraw-yield-1-request.sh" <<EOF
 #!/usr/bin/env bash
 # Step 1: Request yield withdrawal
 # Handler: $handler
@@ -222,7 +223,7 @@ if [[ -n "\$request_id" && "\$request_id" != "null" ]]; then
   echo "Cooldown period: ~3 days (129,600 blocks)"
   echo ""
   echo "To complete withdrawal, run:"
-  echo "  ./delegated-withdraw-yield-2-complete.sh"
+  echo "  ./generated/delegated-withdraw-yield-2-complete.sh"
   echo ""
   echo "Update the REQUEST_ID in that script with: \$request_id_dec"
 else
@@ -230,10 +231,10 @@ else
   echo "Check the transaction receipt manually"
 fi
 EOF
-  chmod +x "delegated-withdraw-yield-1-request.sh"
+  chmod +x "generated/delegated-withdraw-yield-1-request.sh"
   
   # Command 2: Complete withdrawal (template - user needs to update with actual request ID)
-  cat > "delegated-withdraw-yield-2-complete.sh" <<EOF
+  cat > "generated/delegated-withdraw-yield-2-complete.sh" <<EOF
 #!/usr/bin/env bash
 # Step 2: Complete yield withdrawal after cooldown
 # Handler: $handler
@@ -256,12 +257,12 @@ cast send $handler \\
 echo ""
 echo "Yield withdrawn to your address"
 EOF
-  chmod +x "delegated-withdraw-yield-2-complete.sh"
+  chmod +x "generated/delegated-withdraw-yield-2-complete.sh"
   
   log_success "Commands generated successfully"
   echo ""
   log_info "Next steps:"
-  echo "  1. Review and execute: ./delegated-withdraw-yield-1-request.sh"
+  echo "  1. Review and execute: ./generated/delegated-withdraw-yield-1-request.sh"
   echo "  2. Wait ~3 days for cooldown period"
   echo "  3. Update REQUEST_ID in step 2 script, then execute it"
 }

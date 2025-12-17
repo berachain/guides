@@ -181,6 +181,17 @@
   border-color: #ff6b35;
 }
 
+/* Hide spinner buttons on number inputs */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+input[type="number"] {
+  -moz-appearance: textfield;
+}
+
 button {
   padding: 0.75rem 1.5rem;
   border: none;
