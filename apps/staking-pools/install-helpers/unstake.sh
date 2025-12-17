@@ -50,7 +50,7 @@ Configuration (via env.sh):
   STAKING_POOL              Alternative to --staking-pool (optional)
 
 Output:
-  unstake-command.sh
+  generated/unstake-command.sh
 
 Note: Withdrawal requests create an NFT that must be used to complete the withdrawal.
 The actual BERA will be available after the withdrawal cooldown period.
@@ -204,7 +204,8 @@ redeem_withdrawal_requests() {
   log_info "Total amount to redeem: $(echo "$total_amount" | xargs cast from-wei) BERA"
   
   # Generate redemption commands
-  local cmd_file="redeem-command.sh"
+  mkdir -p generated
+  local cmd_file="generated/redeem-command.sh"
   cat > "$cmd_file" <<EOF
 #!/usr/bin/env bash
 # Redeem withdrawal request NFTs
@@ -516,7 +517,7 @@ main() {
   fi
 
   # Generate unstake command
-  local cmd_file="unstake-command.sh"
+  local cmd_file="generated/unstake-command.sh"
   local wallet_args
   wallet_args=$(get_cast_wallet_args)
   

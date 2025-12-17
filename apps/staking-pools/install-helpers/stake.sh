@@ -39,7 +39,7 @@ Configuration (via env.sh):
   STAKING_POOL              Alternative to --staking-pool (optional)
 
 Output:
-  stake-command.sh
+  generated/stake-command.sh
 USAGE
 }
 
@@ -172,7 +172,8 @@ main() {
   echo ""
 
   # Generate stake command
-  local cmd_file="stake-command.sh"
+  mkdir -p generated
+  local cmd_file="generated/stake-command.sh"
   local wallet_args
   wallet_args=$(get_cast_wallet_args)
   

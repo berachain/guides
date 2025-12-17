@@ -27,7 +27,7 @@ Required arguments:
   --amount BERA             Amount of BERA to deposit (e.g., 240000)
 
 Output:
-  delegated-deposit-command.sh
+  generated/delegated-deposit-command.sh
 
 The amount must be a multiple of 1 gwei and cannot exceed the available delegated amount.
 USAGE
@@ -205,7 +205,8 @@ main() {
   echo ""
   
   # Generate deposit command
-  local cmd_file="delegated-deposit-command.sh"
+  mkdir -p generated
+  local cmd_file="generated/delegated-deposit-command.sh"
   local wallet_args
   wallet_args=$(get_cast_wallet_args)
   

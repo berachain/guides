@@ -35,7 +35,7 @@ Required arguments:
   --validator-admin 0x...   Address to grant VALIDATOR_ADMIN_ROLE
   
 Output:
-  delegator-delegate-command.sh
+  generated/delegator-delegate-command.sh
 
 Review and execute the generated command script.
 USAGE
@@ -216,7 +216,8 @@ main() {
   role_hash=$(cast keccak "VALIDATOR_ADMIN_ROLE")
   
   # Generate single command script
-  local cmd_file="delegator-delegate-command.sh"
+  mkdir -p generated
+  local cmd_file="generated/delegator-delegate-command.sh"
   
   cat > "$cmd_file" <<EOF
 #!/usr/bin/env bash
