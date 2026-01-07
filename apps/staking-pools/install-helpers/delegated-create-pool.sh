@@ -22,7 +22,7 @@ Usage:
   delegated-create-pool.sh
 
 Output:
-  delegated-create-pool-command.sh
+  generated/delegated-create-pool-command.sh
 
 USAGE
 }
@@ -204,7 +204,8 @@ main() {
   echo ""
   
   # Generate create pool command
-  local cmd_file="delegated-create-pool-command.sh"
+  mkdir -p generated
+  local cmd_file="generated/delegated-create-pool-command.sh"
   local wallet_args
   wallet_args=$(get_cast_wallet_args)
   

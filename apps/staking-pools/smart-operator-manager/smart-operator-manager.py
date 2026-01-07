@@ -207,7 +207,9 @@ class SmartOperatorManager:
 
     def load_env_sh(self) -> Dict[str, str]:
         """Load configuration from env.sh if it exists"""
-        env_path = Path(__file__).parent / "env.sh"
+        # Look for env.sh in the parent install-helpers directory
+        script_dir = Path(__file__).parent
+        env_path = script_dir.parent / "install-helpers" / "env.sh"
         env_vars = {}
         
         if env_path.exists():

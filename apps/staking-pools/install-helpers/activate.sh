@@ -26,7 +26,10 @@ Required arguments:
   --sr 0x...                Shares recipient address  
   --op 0x...                Operator address
 
-Note: Generates cast commands in temporary files for review before execution.
+Output:
+  generated/activation-command.sh
+
+Note: Generates cast command in generated/ directory for review before execution.
 The pool must already be deployed (use register.sh first).
 USAGE
 }
@@ -234,7 +237,8 @@ main() {
   balance_proof_cast=$(echo "$balance_proof_arr" | jq -r '.[]' | tr '\n' ',' | sed 's/,$//')
   
   # Generate activation command
-  local cmd_file="activation-command.sh"
+  mkdir -p generated
+  local cmd_file="generated/activation-command.sh"
   local wallet_args
   wallet_args=$(get_cast_wallet_args)
   

@@ -26,7 +26,10 @@ Required arguments:
   --sr 0x...                Shares recipient address  
   --op 0x...                Operator address
 
-Note: Generates cast commands in temporary files for review before execution.
+Output:
+  generated/deployment-command.sh
+
+Note: Generates cast command in generated/ directory for review before execution.
 USAGE
 }
 
@@ -175,7 +178,8 @@ main() {
   echo ""
 
   # Generate deployment command
-  local deploy_cmd_file="deployment-command.sh"
+  mkdir -p generated
+  local deploy_cmd_file="generated/deployment-command.sh"
   local wallet_args
   wallet_args=$(get_cast_wallet_args)
   
@@ -192,7 +196,7 @@ EOF
   echo ""
   log_success "Deployment command written to: $deploy_cmd_file"
   log_info "Next steps:"
-  echo "  1. Run: ./$deploy_cmd_file"
+  echo "  1. Run: ./generated/deployment-command.sh"
   echo "  2. Wait for deployment transaction to confirm"
   if [[ "$validator_exists" != "true" ]]; then
     echo "  3. Wait for validator to be registered on beacon chain (check with: ./status.sh)"
