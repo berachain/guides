@@ -36,10 +36,10 @@ Optional arguments:
   --fee BERA                Withdrawal request fee (default: 0.001 BERA)
 
 Output:
-  delegator-withdraw-principal-1-request.sh
-  delegator-withdraw-principal-2-complete.sh
-  delegator-withdraw-principal-3-undelegate.sh
-  delegator-withdraw-principal-4-withdraw.sh
+  generated/delegator-withdraw-principal-1-request.sh
+  generated/delegator-withdraw-principal-2-complete.sh
+  generated/delegator-withdraw-principal-3-undelegate.sh
+  generated/delegator-withdraw-principal-4-withdraw.sh
 
 Note: Principal withdrawals are independent of yield withdrawals.
 The validator admin can withdraw yield at any time without affecting principal.
@@ -185,7 +185,8 @@ main() {
   wallet_args=$(get_cast_wallet_args)
   
   # Command 1: Request withdrawal
-  cat > "delegator-withdraw-principal-1-request.sh" <<EOF
+  mkdir -p generated
+  cat > "generated/delegator-withdraw-principal-1-request.sh" <<EOF
 #!/usr/bin/env bash
 # Step 1: Request principal withdrawal
 # Handler: $HANDLER
@@ -211,7 +212,7 @@ if [[ -n "\$request_id" && "\$request_id" != "null" ]]; then
   echo "Cooldown period: ~3 days (129,600 blocks)"
   echo ""
   echo "To complete withdrawal, run:"
-  echo "  ./delegator-withdraw-principal-2-complete.sh"
+  echo "  ./generated/delegator-withdraw-principal-2-complete.sh"
   echo ""
   echo "Update the REQUEST_ID in that script with: \$request_id_dec"
 else
@@ -219,10 +220,10 @@ else
   echo "Check the transaction receipt manually"
 fi
 EOF
-  chmod +x "delegator-withdraw-principal-1-request.sh"
+  chmod +x "generated/delegator-withdraw-principal-1-request.sh"
   
   # Command 2: Complete withdrawal (template - user needs to update with actual request ID)
-  cat > "delegator-withdraw-principal-2-complete.sh" <<EOF
+  cat > "generated/delegator-withdraw-principal-2-complete.sh" <<EOF
 #!/usr/bin/env bash
 # Step 2: Complete principal withdrawal after cooldown
 # Handler: $HANDLER
@@ -247,10 +248,10 @@ echo "Principal withdrawal completed"
 echo "Funds are now in the handler contract"
 echo "Next: Run step 3 to undelegate"
 EOF
-  chmod +x "delegator-withdraw-principal-2-complete.sh"
+  chmod +x "generated/delegator-withdraw-principal-2-complete.sh"
   
   # Command 3: Undelegate
-  cat > "delegator-withdraw-principal-3-undelegate.sh" <<EOF
+  cat > "generated/delegator-withdraw-principal-3-undelegate.sh" <<EOF
 #!/usr/bin/env bash
 # Step 3: Undelegate funds (mark as no longer delegated)
 # Handler: $HANDLER
@@ -264,10 +265,10 @@ echo ""
 echo "Funds undelegated"
 echo "Next: Run step 4 to withdraw BERA to your address"
 EOF
-  chmod +x "delegator-withdraw-principal-3-undelegate.sh"
+  chmod +x "generated/delegator-withdraw-principal-3-undelegate.sh"
   
   # Command 4: Withdraw to receiver
-  cat > "delegator-withdraw-principal-4-withdraw.sh" <<EOF
+  cat > "generated/delegator-withdraw-principal-4-withdraw.sh" <<EOF
 #!/usr/bin/env bash
 # Step 4: Withdraw BERA from handler to your address
 # Handler: $HANDLER
@@ -299,15 +300,15 @@ cast send $HANDLER \\
 echo ""
 echo "BERA withdrawn to \$RECEIVER_ADDRESS"
 EOF
-  chmod +x "delegator-withdraw-principal-4-withdraw.sh"
+  chmod +x "generated/delegator-withdraw-principal-4-withdraw.sh"
   
   log_success "Commands generated successfully"
   echo ""
   log_info "Next steps:"
-  echo "  1. Review and execute: ./delegator-withdraw-principal-1-request.sh"
+  echo "  1. Review and execute: ./generated/delegator-withdraw-principal-1-request.sh"
   echo "  2. Wait ~3 days for cooldown period"
   echo "  3. Update REQUEST_ID in step 2 script, then execute it"
-  echo "  4. Review and execute: ./delegator-withdraw-principal-3-undelegate.sh"
+  echo "  4. Review and execute: ./generated/delegator-withdraw-principal-3-undelegate.sh"
   echo "  5. Update RECEIVER_ADDRESS and AMOUNT_WEI in step 4, then execute it"
 }
 

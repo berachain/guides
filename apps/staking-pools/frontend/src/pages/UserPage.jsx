@@ -24,14 +24,15 @@ export default function UserPage({ account, client, walletClient, poolConfig }) 
   const [isExited, setIsExited] = useState(false)
   const [thresholdReached, setThresholdReached] = useState(false)
   const [validatorActivationBlock, setValidatorActivationBlock] = useState(null)
+  const [withdrawalCooldownActive, setWithdrawalCooldownActive] = useState(false)
   const [errors, setErrors] = useState({})
   const [requests, setRequests] = useState([])
   const [selectedRequests, setSelectedRequests] = useState(new Set())
-  const [redeemShares, setRedeemShares] = useState('')
+  const [withdrawAmount, setWithdrawAmount] = useState('')
+  const [withdrawMode, setWithdrawMode] = useState('assets') // 'assets' or 'shares'
   const [previewRedeemAmount, setPreviewRedeemAmount] = useState(null)
-  const [withdrawAssets, setWithdrawAssets] = useState('')
   const [previewWithdrawShares, setPreviewWithdrawShares] = useState(null)
-  const [maxFee, setMaxFee] = useState('1000000000000000') // 0.001 BERA default
+  const [maxFee, setMaxFee] = useState('1') // 1 wei default
   const [loading, setLoading] = useState(false)
   const [currentBlock, setCurrentBlock] = useState(null)
   const [txStatus, setTxStatus] = useState(null)
@@ -104,6 +105,42 @@ export default function UserPage({ account, client, walletClient, poolConfig }) 
     return () => clearInterval(interval)
   }, [client, poolConfig, account])
 
+  // Check cooldown status by simulating a withdrawal
+  useEffect(() => {
+    const checkCooldown = async () => {
+      if (!client || !poolConfig || !account || !thresholdReached || !balance || parseFloat(balance) === 0) {
+        setWithdrawalCooldownActive(false)
+        return
+      }
+      
+      try {
+        // Simulate withdrawing a small amount (1 BERA) to check if cooldown is active
+        await client.simulateContract({
+          address: poolConfig.withdrawalVault,
+          abi: WITHDRAWAL_VAULT_ABI,
+          functionName: 'requestWithdrawal',
+          args: [poolConfig.validatorPubkey, BigInt(parseGwei('1')), BigInt(maxFee)],
+          account,
+          value: BigInt(maxFee)
+        })
+        setWithdrawalCooldownActive(false)
+      } catch (simError) {
+        const errorStr = String(simError)
+        const errorMessage = simError?.message || simError?.cause?.message || simError?.shortMessage || ''
+        const isWithdrawalNotAllowed = 
+          errorMessage.includes('WithdrawalNotAllowed') || 
+          errorStr.includes('WithdrawalNotAllowed') ||
+          errorStr.includes('0x4134ed3a')
+        
+        setWithdrawalCooldownActive(isWithdrawalNotAllowed)
+      }
+    }
+    
+    checkCooldown()
+    const interval = setInterval(checkCooldown, 30000) // Check every 30 seconds
+    return () => clearInterval(interval)
+  }, [client, poolConfig, account, thresholdReached, balance, maxFee])
+
   // Fetch outstanding requests with readiness calculation
   useEffect(() => {
     const fetchRequests = async () => {
@@ -169,51 +206,49 @@ export default function UserPage({ account, client, walletClient, poolConfig }) 
     fetchRequests()
   }, [client, poolConfig, account, currentBlock])
 
-  // Preview redeem amount when shares change
+  // Preview based on withdraw mode and amount
   useEffect(() => {
-    const updatePreviewRedeem = async () => {
-      if (!client || !poolConfig || !redeemShares || Number(redeemShares) <= 0) {
+    const updatePreview = async () => {
+      if (!client || !poolConfig || !withdrawAmount || Number(withdrawAmount) <= 0) {
         setPreviewRedeemAmount(null)
-        return
-      }
-      try {
-        const preview = await client.readContract({
-          address: poolConfig.stakingPool,
-          abi: STAKING_POOL_ABI,
-          functionName: 'previewRedeem',
-          args: [parseEther(redeemShares)]
-        })
-        setPreviewRedeemAmount(formatEther(preview))
-      } catch (error) {
-        console.error('Preview redeem error:', error)
-        setPreviewRedeemAmount(null)
-      }
-    }
-    updatePreviewRedeem()
-  }, [client, poolConfig, redeemShares])
-
-  // Preview withdraw shares when assets change
-  useEffect(() => {
-    const updatePreviewWithdraw = async () => {
-      if (!client || !poolConfig || !withdrawAssets || Number(withdrawAssets) <= 0) {
         setPreviewWithdrawShares(null)
         return
       }
-      try {
-        const preview = await client.readContract({
-          address: poolConfig.stakingPool,
-          abi: STAKING_POOL_ABI,
-          functionName: 'previewWithdraw',
-          args: [parseEther(withdrawAssets)]
-        })
-        setPreviewWithdrawShares(formatEther(preview))
-      } catch (error) {
-        console.error('Preview withdraw error:', error)
-        setPreviewWithdrawShares(null)
+      
+      if (withdrawMode === 'shares') {
+        // Preview redeem: shares -> BERA
+        try {
+          const preview = await client.readContract({
+            address: poolConfig.stakingPool,
+            abi: STAKING_POOL_ABI,
+            functionName: 'previewRedeem',
+            args: [parseEther(withdrawAmount)]
+          })
+          setPreviewRedeemAmount(formatEther(preview))
+          setPreviewWithdrawShares(null)
+        } catch (error) {
+          console.error('Preview redeem error:', error)
+          setPreviewRedeemAmount(null)
+        }
+      } else {
+        // Preview withdraw: BERA -> shares
+        try {
+          const preview = await client.readContract({
+            address: poolConfig.stakingPool,
+            abi: STAKING_POOL_ABI,
+            functionName: 'previewWithdraw',
+            args: [parseEther(withdrawAmount)]
+          })
+          setPreviewWithdrawShares(formatEther(preview))
+          setPreviewRedeemAmount(null)
+        } catch (error) {
+          console.error('Preview withdraw error:', error)
+          setPreviewWithdrawShares(null)
+        }
       }
     }
-    updatePreviewWithdraw()
-  }, [client, poolConfig, withdrawAssets])
+    updatePreview()
+  }, [client, poolConfig, withdrawAmount, withdrawMode])
 
   const checkWithdrawalCooldown = () => {
     if (!thresholdReached || !validatorActivationBlock || !currentBlock) return null
@@ -270,16 +305,38 @@ export default function UserPage({ account, client, walletClient, poolConfig }) 
   const handleRequestRedeem = async () => {
     const errs = {}
     if (!walletClient) errs.wallet = 'Connect wallet'
-    if (!redeemShares || Number(redeemShares) <= 0) errs.redeemShares = 'Enter shares > 0'
+    if (!withdrawAmount || Number(withdrawAmount) <= 0) errs.withdraw = 'Enter amount > 0'
+    if (!previewRedeemAmount) errs.withdraw = 'Please wait for preview to load'
+    
+    // Check cooldown by simulating
+    if (thresholdReached && !errs.withdraw && !errs.wallet && previewRedeemAmount) {
+      try {
+        await client.simulateContract({
+          address: poolConfig.withdrawalVault,
+          abi: WITHDRAWAL_VAULT_ABI,
+          functionName: 'requestRedeem',
+          args: [poolConfig.validatorPubkey, parseEther(withdrawAmount), BigInt(maxFee)],
+          account,
+          value: BigInt(maxFee)
+        })
+      } catch (simError) {
+        const errorStr = String(simError)
+        const errorMessage = simError?.message || simError?.cause?.message || simError?.shortMessage || ''
+        const isWithdrawalNotAllowed = 
+          errorMessage.includes('WithdrawalNotAllowed') || 
+          errorStr.includes('WithdrawalNotAllowed') ||
+          errorStr.includes('0x4134ed3a')
+        
+        if (isWithdrawalNotAllowed) {
+          errs.cooldown = 'Withdrawals are currently disabled (cooldown period active)'
+        }
+      }
+    }
+    
     const cooldownError = checkWithdrawalCooldown()
     if (cooldownError) errs.cooldown = cooldownError
     setErrors(errs)
     if (Object.keys(errs).length) return
-    
-    if (!previewRedeemAmount) {
-      setErrors({ redeemShares: 'Please wait for preview to load' })
-      return
-    }
 
     try {
       setLoading(true)
@@ -288,14 +345,14 @@ export default function UserPage({ account, client, walletClient, poolConfig }) 
         address: poolConfig.withdrawalVault,
         abi: WITHDRAWAL_VAULT_ABI,
         functionName: 'requestRedeem',
-        args: [poolConfig.validatorPubkey, parseEther(redeemShares), maxFee ? BigInt(maxFee) : 0n],
+        args: [poolConfig.validatorPubkey, parseEther(withdrawAmount), BigInt(maxFee)],
         account,
-        value: maxFee ? BigInt(maxFee) : 0n
+        value: BigInt(maxFee)
       })
       setTxStatus({ type: 'pending', message: 'Redeem requested', hash })
       const receipt = await client.waitForTransactionReceipt({ hash })
       setTxStatus({ type: 'success', message: 'Redeem request confirmed!', hash })
-      setRedeemShares('')
+      setWithdrawAmount('')
       setPreviewRedeemAmount(null)
       setTimeout(() => {
         loadData()
@@ -310,7 +367,7 @@ export default function UserPage({ account, client, walletClient, poolConfig }) 
         errorMsg = 'Previous withdrawal request not yet ready'
       }
       setTxStatus({ type: 'error', message: errorMsg })
-      setErrors({ redeem: errorMsg })
+      setErrors({ withdraw: errorMsg })
     } finally {
       setLoading(false)
     }
@@ -319,7 +376,50 @@ export default function UserPage({ account, client, walletClient, poolConfig }) 
   const handleRequestWithdrawal = async () => {
     const errs = {}
     if (!walletClient) errs.wallet = 'Connect wallet'
-    if (!withdrawAssets || Number(withdrawAssets) <= 0) errs.withdrawAssets = 'Enter assets > 0'
+    if (!withdrawAmount || Number(withdrawAmount) <= 0) errs.withdraw = 'Enter amount > 0'
+    if (!previewWithdrawShares) errs.withdraw = 'Please wait for preview to load'
+    if (previewWithdrawShares) {
+      try {
+        const sharesNeeded = parseEther(previewWithdrawShares)
+        const userBalance = parseEther(balance)
+        if (sharesNeeded > userBalance) {
+          errs.withdraw = 'Insufficient shares. You have ' + balance + ' stBERA shares'
+        }
+      } catch (error) {
+        console.error('Error comparing shares:', error)
+        errs.withdraw = 'Error calculating shares needed'
+      }
+    }
+    
+    // Detect cooldown by simulating the withdrawal request
+    if (thresholdReached && !errs.withdraw && !errs.wallet && previewWithdrawShares) {
+      try {
+        await client.simulateContract({
+          address: poolConfig.withdrawalVault,
+          abi: WITHDRAWAL_VAULT_ABI,
+          functionName: 'requestWithdrawal',
+          args: [poolConfig.validatorPubkey, BigInt(parseGwei(withdrawAmount)), BigInt(maxFee)],
+          account,
+          value: BigInt(maxFee)
+        })
+        setWithdrawalCooldownActive(false)
+      } catch (simError) {
+        const errorStr = String(simError)
+        const errorMessage = simError?.message || simError?.cause?.message || simError?.shortMessage || ''
+        const isWithdrawalNotAllowed = 
+          errorMessage.includes('WithdrawalNotAllowed') || 
+          errorStr.includes('WithdrawalNotAllowed') ||
+          errorStr.includes('0x4134ed3a')
+        
+        if (isWithdrawalNotAllowed) {
+          setWithdrawalCooldownActive(true)
+          errs.cooldown = 'Withdrawals are currently disabled (cooldown period active)'
+        } else {
+          setWithdrawalCooldownActive(false)
+        }
+      }
+    }
+    
     const cooldownError = checkWithdrawalCooldown()
     if (cooldownError) errs.cooldown = cooldownError
     setErrors(errs)
@@ -332,14 +432,14 @@ export default function UserPage({ account, client, walletClient, poolConfig }) 
         address: poolConfig.withdrawalVault,
         abi: WITHDRAWAL_VAULT_ABI,
         functionName: 'requestWithdrawal',
-        args: [poolConfig.validatorPubkey, BigInt(parseGwei(withdrawAssets)), maxFee ? BigInt(maxFee) : 0n],
+        args: [poolConfig.validatorPubkey, BigInt(parseGwei(withdrawAmount)), BigInt(maxFee)],
         account,
-        value: maxFee ? BigInt(maxFee) : 0n
+        value: BigInt(maxFee)
       })
       setTxStatus({ type: 'pending', message: 'Withdrawal requested', hash })
       const receipt = await client.waitForTransactionReceipt({ hash })
       setTxStatus({ type: 'success', message: 'Withdrawal request confirmed!', hash })
-      setWithdrawAssets('')
+      setWithdrawAmount('')
       setPreviewWithdrawShares(null)
       setTimeout(() => {
         loadData()
@@ -356,7 +456,7 @@ export default function UserPage({ account, client, walletClient, poolConfig }) 
         errorMsg = 'Insufficient funds in withdrawal vault'
       }
       setTxStatus({ type: 'error', message: errorMsg })
-      setErrors({ withdrawal: errorMsg })
+      setErrors({ withdraw: errorMsg })
     } finally {
       setLoading(false)
     }
@@ -489,19 +589,35 @@ export default function UserPage({ account, client, walletClient, poolConfig }) 
       )}
 
       <div className="card">
-        <h3>Your Position</h3>
+        <h3>Pool Status</h3>
         <div className="stat-grid">
           <div className="stat">
-            <div className="stat-label">Your stBERA Balance</div>
-            <div className="stat-value">{parseFloat(balance).toFixed(4)}</div>
+            <div className="stat-label">Pool Status</div>
+            <div className="stat-value">{poolActive ? (isExited ? 'Fully Exited' : 'Active') : 'Inactive'}</div>
           </div>
           <div className="stat">
             <div className="stat-label">Pool Total Assets</div>
             <div className="stat-value">{parseFloat(totalAssets).toFixed(2)} BERA</div>
           </div>
           <div className="stat">
-            <div className="stat-label">Pool Status</div>
-            <div className="stat-value">{isExited ? 'exited' : (poolActive ? 'active' : 'pending')}</div>
+            <div className="stat-label">Activation Threshold</div>
+            <div className="stat-value">{thresholdReached ? 'Reached' : 'Not Reached'}</div>
+          </div>
+          {thresholdReached && (
+            <div className="stat">
+              <div className="stat-label">Withdrawal Cooldown</div>
+              <div className="stat-value">{withdrawalCooldownActive ? 'Active' : 'None'}</div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="card">
+        <h3>Your Position</h3>
+        <div className="stat-grid">
+          <div className="stat">
+            <div className="stat-label">Your Shares Balance</div>
+            <div className="stat-value">{parseFloat(balance).toFixed(4)}</div>
           </div>
           <div className="stat">
             <div className="stat-label">Your Position Value</div>
@@ -523,11 +639,6 @@ export default function UserPage({ account, client, walletClient, poolConfig }) 
                 placeholder="0.0"
                 step="0.000000001"
               />
-              {depositAmount && depositRoundedAmount !== depositAmount && (
-                <div style={{ fontSize: '0.85rem', color: '#888', marginTop: '0.25rem' }}>
-                  Note: When staked to consensus layer, amounts are rounded down to nearest 1 gwei ({depositRoundedAmount} BERA). Any remainder stays in the pool buffer.
-                </div>
-              )}
               {errors.amount && <div className="error">{errors.amount}</div>}
               {errors.pool && <div className="error">{errors.pool}</div>}
             </div>
@@ -542,58 +653,77 @@ export default function UserPage({ account, client, walletClient, poolConfig }) 
         <h3>Withdrawals</h3>
         <div className="form">
           <div className="form-group">
-            <label>Max Fee to Pay (BERA) [optional]</label>
-            <input 
-              type="number" 
-              value={maxFee ? formatEther(BigInt(maxFee)) : ''} 
-              onChange={(e) => setMaxFee(e.target.value ? parseEther(e.target.value).toString() : '0')} 
-              placeholder="0.001" 
-              step="0.0001"
-            />
-            <div style={{ fontSize: '0.85rem', color: '#888', marginTop: '0.25rem' }}>
-              Fee can be as little as 1 wei. Higher fees prioritize your withdrawal when multiple withdrawals are pending.
+            <label>Amount</label>
+            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', gap: '0.25rem' }}>
+                <button 
+                  type="button"
+                  onClick={() => setWithdrawMode('assets')}
+                  style={{ 
+                    padding: '0.5rem 1rem',
+                    backgroundColor: withdrawMode === 'assets' ? '#ff6b35' : '#333',
+                    color: 'white',
+                    border: '1px solid #ff6b35',
+                    cursor: 'pointer',
+                    borderRadius: '4px'
+                  }}
+                >
+                  BERA
+                </button>
+                <button 
+                  type="button"
+                  onClick={() => setWithdrawMode('shares')}
+                  style={{ 
+                    padding: '0.5rem 1rem',
+                    backgroundColor: withdrawMode === 'shares' ? '#ff6b35' : '#333',
+                    color: 'white',
+                    border: '1px solid #ff6b35',
+                    cursor: 'pointer',
+                    borderRadius: '4px'
+                  }}
+                >
+                  Shares
+                </button>
+              </div>
+              <input 
+                type="number" 
+                value={withdrawAmount} 
+                onChange={(e) => setWithdrawAmount(e.target.value)} 
+                placeholder="0.0" 
+                step={withdrawMode === 'assets' ? "0.000000001" : "0.0001"}
+                style={{ flex: 1, minWidth: '120px' }}
+              />
+              {withdrawMode === 'shares' && withdrawAmount && (
+                <button 
+                  onClick={handleRequestRedeem} 
+                  disabled={loading || !previewRedeemAmount}
+                  style={{ padding: '0.5rem 1rem' }}
+                >
+                  {loading ? 'Requesting...' : 'Withdraw Shares'}
+                </button>
+              )}
+              {withdrawMode === 'assets' && withdrawAmount && (
+                <button 
+                  onClick={handleRequestWithdrawal} 
+                  disabled={loading || !previewWithdrawShares}
+                  style={{ padding: '0.5rem 1rem' }}
+                >
+                  {loading ? 'Requesting...' : 'Withdraw BERA'}
+                </button>
+              )}
             </div>
-          </div>
-          <div className="form-group">
-            <label>Redeem by Shares (stBERA)</label>
-            <input 
-              type="number" 
-              value={redeemShares} 
-              onChange={(e) => setRedeemShares(e.target.value)} 
-              placeholder="0.0" 
-              step="0.0001" 
-            />
-            {previewRedeemAmount && (
+            {withdrawMode === 'shares' && previewRedeemAmount && (
               <div style={{ fontSize: '0.85rem', color: '#888', marginTop: '0.25rem' }}>
                 You will receive approximately {parseFloat(previewRedeemAmount).toFixed(6)} BERA
               </div>
             )}
-            {errors.redeemShares && <div className="error">{errors.redeemShares}</div>}
-            {errors.redeem && <div className="error">{errors.redeem}</div>}
-            {errors.cooldown && <div className="error">{errors.cooldown}</div>}
-            <button onClick={handleRequestRedeem} disabled={loading || !redeemShares || !previewRedeemAmount}>
-              {loading ? 'Requesting...' : 'Request Redeem'}
-            </button>
-          </div>
-          <div className="form-group">
-            <label>Withdraw by Assets (BERA)</label>
-            <input 
-              type="number" 
-              value={withdrawAssets} 
-              onChange={(e) => setWithdrawAssets(e.target.value)} 
-              placeholder="0.0" 
-              step="0.000000001" 
-            />
-            {previewWithdrawShares && (
+            {withdrawMode === 'assets' && previewWithdrawShares && (
               <div style={{ fontSize: '0.85rem', color: '#888', marginTop: '0.25rem' }}>
-                This will burn approximately {parseFloat(previewWithdrawShares).toFixed(6)} stBERA shares. Amount will be rounded down to nearest gwei.
+                This will burn approximately {parseFloat(previewWithdrawShares).toFixed(6)} shares
               </div>
             )}
-            {errors.withdrawAssets && <div className="error">{errors.withdrawAssets}</div>}
-            {errors.withdrawal && <div className="error">{errors.withdrawal}</div>}
-            <button onClick={handleRequestWithdrawal} disabled={loading || !withdrawAssets || !previewWithdrawShares}>
-              {loading ? 'Requesting...' : 'Request Withdrawal'}
-            </button>
+            {errors.withdraw && <div className="error">{errors.withdraw}</div>}
+            {errors.cooldown && <div className="error">{errors.cooldown}</div>}
           </div>
         </div>
       </div>
@@ -620,7 +750,7 @@ export default function UserPage({ account, client, walletClient, poolConfig }) 
                   {readyRequests.length > 1 && <th style={{ textAlign: 'left', padding: '6px 8px' }}>Select</th>}
                   <th style={{ textAlign: 'left', padding: '6px 8px' }}>ID</th>
                   <th style={{ textAlign: 'left', padding: '6px 8px' }}>Assets (BERA)</th>
-                  <th style={{ textAlign: 'left', padding: '6px 8px' }}>Shares (stBERA)</th>
+                  <th style={{ textAlign: 'left', padding: '6px 8px' }}>Shares</th>
                   <th style={{ textAlign: 'left', padding: '6px 8px' }}>Status</th>
                   <th style={{ textAlign: 'left', padding: '6px 8px' }}>Actions</th>
                 </tr>
@@ -641,7 +771,7 @@ export default function UserPage({ account, client, walletClient, poolConfig }) 
                     )}
                     <td style={{ padding: '6px 8px' }}>{r.requestId}</td>
                     <td style={{ padding: '6px 8px' }}>{formatEther(r.assetsRequested)} BERA</td>
-                    <td style={{ padding: '6px 8px' }}>{formatEther(r.sharesBurnt)} stBERA</td>
+                    <td style={{ padding: '6px 8px' }}>{formatEther(r.sharesBurnt)} shares</td>
                     <td style={{ padding: '6px 8px' }}>
                       {r.isReady ? (
                         <span style={{ color: '#35ff35', fontWeight: 'bold' }}>Ready</span>
