@@ -40,8 +40,9 @@ MAINNET_VALIDATOR_ROOT = "0xdf609e3b062842c6425ff716aec2d2092c46455d9b2e1a2c9e32
 BEPOLIA_VALIDATOR_ROOT = "0x3cbcf75b02fe4750c592f1c1ff8b5500a74406f80f038e9ff250e2e294c5615e"
 
 # Berachain contract addresses (mainnet/bepolia) - will be checksummed when used
+# These match the constants in lib-common.sh
 FACTORY_ADDRESSES = {
-    "mainnet": "0xa4Fd7E7771e5a752e6e05d4905843519E1df0885",
+    "mainnet": "0xb79b43dBA821Cb67751276Ce050fF4111445fB99",
     "bepolia": "0x176c081E95C82CA68DEa20CA419C7506Aa063C24"
 }
 
