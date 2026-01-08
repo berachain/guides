@@ -14,8 +14,220 @@ const { ethers } = require('ethers');
 const yargs = require('yargs/yargs');
 const { hideBin } = require('yargs/helpers');
 const fs = require('fs');
+const path = require('path');
+const axios = require('axios');
+const { spawn } = require('child_process');
 
-const { BlockFetcher, ConfigHelper, ValidatorFetcher, ValidatorNameDB } = require('./lib/shared-utils');
+// Embedded utilities
+class BlockFetcher {
+  constructor(baseUrl, delayMs = 0) {
+    this.baseUrl = baseUrl;
+    this.delayMs = delayMs;
+  }
+
+  async getCurrentBlock() {
+    try {
+      const response = await axios.get(`${this.baseUrl}/status`);
+      return parseInt(response.data.result.sync_info.latest_block_height);
+    } catch (error) {
+      console.error('Error fetching current block height:', error.message);
+      return null;
+    }
+  }
+
+  async getBlockTimestamp(blockHeight) {
+    try {
+      const response = await axios.get(`${this.baseUrl}/block?height=${blockHeight}`);
+      const isoTime = response?.data?.result?.block?.header?.time;
+      if (!isoTime) return null;
+      return Math.floor(new Date(isoTime).getTime() / 1000);
+    } catch (error) {
+      console.error(`Error fetching block ${blockHeight}:`, error.message);
+      return null;
+    }
+  }
+
+  async binarySearchBoundary(lowHeight, highHeight, targetTimestamp) {
+    while (lowHeight + 1 < highHeight) {
+      const mid = Math.floor((lowHeight + highHeight) / 2);
+      const midTs = await this.getBlockTimestamp(mid);
+      if (midTs === null) {
+        break;
+      }
+      if (midTs >= targetTimestamp) {
+        highHeight = mid;
+      } else {
+        lowHeight = mid;
+      }
+    }
+    return highHeight;
+  }
+
+  async findBlockByTimestamp(targetTimestamp, latestBlock, estimatedBlock = null) {
+    const START_BLOCK = 933558;
+    const START_TIMESTAMP = 1739205914;
+    const BLOCK_TIME = 2;
+    
+    let estimate = estimatedBlock;
+    if (!estimate) {
+      const estimatedBlocks = Math.floor((targetTimestamp - START_TIMESTAMP) / BLOCK_TIME);
+      estimate = Math.min(Math.max(START_BLOCK + estimatedBlocks, 2), latestBlock);
+    }
+
+    const estimateTs = await this.getBlockTimestamp(estimate);
+    if (estimateTs === null) return null;
+
+    let step = 1024;
+    if (estimateTs < targetTimestamp) {
+      let lowH = estimate;
+      let lowTs = estimateTs;
+      let highH = Math.min(lowH + step, latestBlock);
+      let highTs = await this.getBlockTimestamp(highH);
+      while (highTs !== null && highTs < targetTimestamp && highH < latestBlock) {
+        lowH = highH;
+        lowTs = highTs;
+        step *= 2;
+        highH = Math.min(highH + step, latestBlock);
+        highTs = await this.getBlockTimestamp(highH);
+      }
+      if (highTs === null) return null;
+      if (highTs < targetTimestamp) return null;
+      return await this.binarySearchBoundary(lowH, highH, targetTimestamp);
+    }
+
+    let highH = estimate;
+    let highTs = estimateTs;
+    let lowH = Math.max(highH - step, 1);
+    let lowTs = await this.getBlockTimestamp(lowH);
+    while (lowTs !== null && lowTs >= targetTimestamp && lowH > 1) {
+      highH = lowH;
+      highTs = lowTs;
+      step *= 2;
+      lowH = Math.max(lowH - step, 1);
+      lowTs = await this.getBlockTimestamp(lowH);
+    }
+    if (lowTs === null) return null;
+    if (lowTs >= targetTimestamp) return null;
+    return await this.binarySearchBoundary(lowH, highH, targetTimestamp);
+  }
+}
+
+class ValidatorFetcher {
+  constructor(clUrl) {
+    this.clUrl = clUrl;
+  }
+
+  async getValidators(blockHeight, perPage = 99999) {
+    try {
+      const validators = {};
+      let page = 1;
+      
+      while (true) {
+        const response = await axios.get(`${this.clUrl}/validators?height=${blockHeight}&per_page=${perPage}&page=${page}`);
+        
+        if (response.data.error) {
+          console.error(`RPC error for block ${blockHeight} page ${page}: ${response.data.error.message}`);
+          break;
+        }
+        
+        if (!response.data.result?.validators || response.data.result.validators.length === 0) {
+          break;
+        }
+        
+        response.data.result.validators.forEach(validator => {
+          validators[validator.address] = {
+            address: validator.address,
+            voting_power: validator.voting_power / 1e9,
+            pub_key: validator.pub_key.value
+          };
+        });
+        
+        if (response.data.result.validators.length < perPage) {
+          break;
+        }
+        
+        page++;
+      }
+      
+      if (Object.keys(validators).length === 0) {
+        console.error(`No validators found for block ${blockHeight}`);
+        return null;
+      }
+      
+      return validators;
+    } catch (error) {
+      console.error(`Error fetching validators at block ${blockHeight}:`, error.message);
+      return null;
+    }
+  }
+}
+
+class ValidatorNameDB {
+  constructor(dbPath) {
+    this.explicitDbPath = dbPath;
+  }
+
+  getCandidateDbPaths() {
+    const candidates = [];
+    if (this.explicitDbPath) candidates.push(this.explicitDbPath);
+    return candidates;
+  }
+
+  async queryAgainst(dbPath, sql, params = []) {
+    return new Promise((resolve) => {
+      let finalSql = sql;
+      if (params.length > 0) {
+        for (let i = 0; i < params.length; i++) {
+          const param = params[i] == null ? '' : params[i].toString().replace(/'/g, "''");
+          finalSql = finalSql.replace('?', `'${param}'`);
+        }
+      }
+
+      const sqlite = spawn('sqlite3', [dbPath, finalSql, '-json']);
+      let output = '';
+      let error = '';
+
+      sqlite.stdout.on('data', (data) => { output += data.toString(); });
+      sqlite.stderr.on('data', (data) => { error += data.toString(); });
+
+      sqlite.on('close', (code) => {
+        if (code === 0) {
+          try {
+            const result = output.trim() ? JSON.parse(output.trim()) : [];
+            resolve({ ok: true, result });
+          } catch {
+            resolve({ ok: true, result: [] });
+          }
+        } else {
+          resolve({ ok: false, error });
+        }
+      });
+    });
+  }
+
+  async query(sql, params = []) {
+    const candidates = this.getCandidateDbPaths();
+    for (const dbPath of candidates) {
+      try {
+        if (!fs.existsSync(dbPath)) continue;
+      } catch { /* ignore */ }
+      const { ok, result } = await this.queryAgainst(dbPath, sql, params);
+      if (ok) return result;
+    }
+    return [];
+  }
+
+  async getAllValidators() {
+    try {
+      const sql = 'SELECT proposer_address, name, address, pubkey, voting_power, operator, status FROM validators WHERE status = "active_ongoing" ORDER BY name';
+      const res = await this.query(sql, []);
+      return res || [];
+    } catch (error) {
+      console.error('Error getting all validators:', error);
+      return [];
+    }
+  }
+}
 
 // Configuration
 const CONFIG = {
@@ -23,9 +235,19 @@ const CONFIG = {
   BGT_CONTRACT: '0x656b95E550C07a9ffe548bd4085c72418Ceb1dba',
   ACTIVATE_EVENT_SIG: 'ActivateRewardAllocation(bytes,uint64,(address,uint96)[])',
   BOOSTER_EVENT_SIG: 'BGTBoosterIncentivesProcessed(bytes,address,uint256,uint256)',
-  AUTOMATED_CUTTING_BOARD_BLOCKS: 7 * 43200, // 302,400 blocks (7 days)
+  AUTOMATED_CUTTING_BOARD_BLOCKS: 7 * 43200,
   KYBER_ROUTE_URL: 'https://gateway.mainnet.berachain.com/proxy/kyberswap/berachain/api/v1/routes',
-  HONEY_TOKEN: '0xFCBD14DC51f0A4d49d5E53C2E0950e0bC26d0Dce'
+  HONEY_TOKEN: '0xFCBD14DC51f0A4d49d5E53C2E0950e0bC26d0Dce',
+  NETWORKS: {
+    mainnet: {
+      el: 'https://rpc.berachain.com/',
+      cl: 'https://consensus.berachain.com/'
+    },
+    bepolia: {
+      el: 'https://bepolia.rpc.berachain.com/',
+      cl: 'https://bepolia.consensus.berachain.com/'
+    }
+  }
 };
 
 // Caches
@@ -54,13 +276,11 @@ async function getUsdRatePerToken(tokenIn) {
     return tokenUsdRateCache.get(tokenIn);
   }
   
-  // HONEY is 1:1 USD
   if (tokenIn.toLowerCase() === CONFIG.HONEY_TOKEN.toLowerCase()) {
     tokenUsdRateCache.set(tokenIn, 1.0);
     return 1.0;
   }
   
-  // BGT -> use WBERA for pricing
   const WBERA_ADDRESS = '0x6969696969696969696969696969696969696969';
   const actualTokenIn = (tokenIn.toLowerCase() === CONFIG.BGT_CONTRACT.toLowerCase()) ? WBERA_ADDRESS : tokenIn;
   
@@ -96,27 +316,26 @@ async function getUsdRatePerToken(tokenIn) {
   }
 }
 
-// Load validators from database (requires cometbft-decoder to be run first)
-async function loadValidators() {
+// Load validators from database
+async function loadValidators(validatorDbPath) {
   console.log('📥 Loading validators from database...');
   
-  const validatorDB = new ValidatorNameDB();
+  const validatorDB = new ValidatorNameDB(validatorDbPath);
   const dbValidators = await validatorDB.getAllValidators();
   
   if (!dbValidators || dbValidators.length === 0) {
-    throw new Error('No validators found in database. Please run cometbft-decoder first to populate the validator database.');
+    throw new Error('No validators found in database. Please ensure the validator database path is correct.');
   }
   
   console.log(`📊 Found ${dbValidators.length} validators in database`);
   
-  // Convert database format to our format
   const validators = dbValidators.map(v => ({
     name: v.name || 'Unknown',
     pubkey: v.pubkey || '',
     proposer: v.proposer_address || v.address || '',
     operator: v.operator || v.address || v.proposer_address || '',
     votingPower: v.voting_power ? parseFloat(v.voting_power) / 1e9 : 0
-  })).filter(v => v.pubkey && v.proposer); // Only include validators with both pubkey and proposer
+  })).filter(v => v.pubkey && v.proposer);
   
   if (validators.length === 0) {
     throw new Error('No validators with both pubkey and proposer address found in database.');
@@ -126,11 +345,10 @@ async function loadValidators() {
   return validators;
 }
 
-// Find day boundaries using shared BlockFetcher utility
-async function findDayBoundaries(dates, chain) {
+// Find day boundaries
+async function findDayBoundaries(dates, clUrl) {
   console.log('🔍 Finding day boundary blocks...');
   
-  const clUrl = ConfigHelper.getBlockScannerUrl(chain);
   const blockFetcher = new BlockFetcher(clUrl);
   const latestBlock = await blockFetcher.getCurrentBlock();
   
@@ -148,7 +366,6 @@ async function findDayBoundaries(dates, chain) {
     if (boundaryBlock) {
       const dateStr = date.toISOString().split('T')[0];
       boundaries[dateStr] = boundaryBlock;
-      // Use this boundary as estimate for next day (approximately 43200 blocks later)
       estimatedBlock = boundaryBlock + 43200;
     } else {
       console.warn(`⚠️  Could not find boundary for ${date.toISOString().split('T')[0]}`);
@@ -187,7 +404,6 @@ async function scanBeraChefActivations(validators, dayRanges, rpcUrl) {
   const provider = new ethers.JsonRpcProvider(rpcUrl);
   const activateTopic0 = ethers.id(CONFIG.ACTIVATE_EVENT_SIG);
   
-  // Build pubkey topic set for filtering
   const pubkeyTopics = new Set();
   const topicToPubkey = new Map();
   
@@ -198,19 +414,16 @@ async function scanBeraChefActivations(validators, dayRanges, rpcUrl) {
     topicToPubkey.set(topic, pk.toLowerCase());
   }
   
-  // Calculate overall block range
   const allRanges = Object.values(dayRanges);
   const overallStartBlock = Math.min(...allRanges.map(r => r.startBlock));
   const overallEndBlock = Math.max(...allRanges.map(r => r.endBlock));
   
-  // Map: pubkey -> array of activation block numbers
   const activationsByValidator = {};
   for (const v of validators) {
     const pk = v.pubkey.toLowerCase();
     activationsByValidator[pk] = [];
   }
   
-  // Scan in chunks
   const chunkSize = 2000;
   let allLogs = [];
   
@@ -231,7 +444,6 @@ async function scanBeraChefActivations(validators, dayRanges, rpcUrl) {
     }
   }
   
-  // Process logs
   for (const log of allLogs) {
     const topicPub = (log.topics?.[1] || '').toLowerCase();
     if (!pubkeyTopics.has(topicPub)) continue;
@@ -243,7 +455,6 @@ async function scanBeraChefActivations(validators, dayRanges, rpcUrl) {
     activationsByValidator[pubkey].push(blockNumber);
   }
   
-  // Sort activation blocks for each validator
   for (const pubkey in activationsByValidator) {
     activationsByValidator[pubkey].sort((a, b) => a - b);
   }
@@ -253,8 +464,7 @@ async function scanBeraChefActivations(validators, dayRanges, rpcUrl) {
   return activationsByValidator;
 }
 
-// Scan incentive distributions (BGTBoosterIncentivesProcessed events)
-// Extracts block proposer information from events
+// Scan incentive distributions
 async function scanIncentiveDistributions(validators, dayRanges, rpcUrl) {
   console.log('🔍 Scanning BGTBoosterIncentivesProcessed events...');
   
@@ -264,7 +474,6 @@ async function scanIncentiveDistributions(validators, dayRanges, rpcUrl) {
   ]);
   const boosterTopic0 = ethers.id(CONFIG.BOOSTER_EVENT_SIG);
   
-  // Build pubkey topic set
   const pubkeyTopics = new Set();
   const topicToPubkey = new Map();
   
@@ -275,12 +484,10 @@ async function scanIncentiveDistributions(validators, dayRanges, rpcUrl) {
     topicToPubkey.set(topic, pk.toLowerCase());
   }
   
-  // Calculate overall block range
   const allRanges = Object.values(dayRanges);
   const overallStartBlock = Math.min(...allRanges.map(r => r.startBlock));
   const overallEndBlock = Math.max(...allRanges.map(r => r.endBlock));
   
-  // Helper to get date for a block
   function getDateForBlock(blockNumber) {
     for (const [date, range] of Object.entries(dayRanges)) {
       if (blockNumber >= range.startBlock && blockNumber <= range.endBlock) {
@@ -290,16 +497,13 @@ async function scanIncentiveDistributions(validators, dayRanges, rpcUrl) {
     return null;
   }
   
-  // Map: date -> pubkey -> token -> BigInt amount
   const dailyDistributions = {};
   for (const date of Object.keys(dayRanges)) {
     dailyDistributions[date] = {};
   }
   
-  // Map: blockNumber -> validator pubkey
   const blockProposers = new Map();
   
-  // Scan in chunks
   const chunkSize = 2000;
   let allLogs = [];
   
@@ -319,7 +523,6 @@ async function scanIncentiveDistributions(validators, dayRanges, rpcUrl) {
     }
   }
   
-  // Process logs
   for (const log of allLogs) {
     const topicPub = (log.topics?.[1] || '').toLowerCase();
     if (!pubkeyTopics.has(topicPub)) continue;
@@ -330,12 +533,10 @@ async function scanIncentiveDistributions(validators, dayRanges, rpcUrl) {
     const eventBlockNumber = typeof log.blockNumber === 'number' ? log.blockNumber : parseInt(log.blockNumber.toString(), 10);
     const proposedBlockNumber = eventBlockNumber - 1;
     
-    // Store pubkey for the proposed block
     if (proposedBlockNumber >= overallStartBlock && proposedBlockNumber <= overallEndBlock) {
       blockProposers.set(proposedBlockNumber, pubkey);
     }
     
-    // Process distribution (only for blocks in our date range)
     const date = getDateForBlock(eventBlockNumber);
     if (!date) continue;
     
@@ -364,10 +565,7 @@ async function scanIncentiveDistributions(validators, dayRanges, rpcUrl) {
   return { dailyDistributions, blockProposers };
 }
 
-
-
-// Determine automated cutting board (ACB) blocks for a validator on a day
-// A block is subject to ACB if 7*43200 blocks have passed since last activation
+// Determine automated cutting board blocks
 async function determineACBBlocks(
   validator,
   date,
@@ -378,7 +576,6 @@ async function determineACBBlocks(
   const pubkey = validator.pubkey.toLowerCase();
   const activationBlocks = activationsByValidator[pubkey] || [];
   
-  // Get all blocks proposed by this validator on this day
   const validatorBlocks = [];
   for (let blockNum = dayRange.startBlock; blockNum <= dayRange.endBlock; blockNum++) {
     const blockPubkey = blockProposers.get(blockNum);
@@ -395,18 +592,14 @@ async function determineACBBlocks(
     };
   }
   
-  // Determine ACB blocks based on activation timing
   const acbBlocks = [];
   
   for (const blockNum of validatorBlocks) {
-    // Find last activation before or at this block
     const lastActivationBeforeBlock = activationBlocks.filter(b => b <= blockNum).pop();
     
     if (!lastActivationBeforeBlock) {
-      // No activation found - assume ACB
       acbBlocks.push(blockNum);
     } else {
-      // Check if 7*43200 blocks (7 days) have passed since last activation
       const blocksSinceActivation = blockNum - lastActivationBeforeBlock;
       if (blocksSinceActivation >= CONFIG.AUTOMATED_CUTTING_BOARD_BLOCKS) {
         acbBlocks.push(blockNum);
@@ -423,13 +616,12 @@ async function determineACBBlocks(
   };
 }
 
-// Compute USD valuations for distributions
+// Compute USD valuations
 async function computeUsdValuations(dailyDistributions, dayRanges, rpcUrl) {
   console.log('💰 Computing USD valuations...');
   
   const provider = new ethers.JsonRpcProvider(rpcUrl);
   
-  // Collect all unique tokens
   const tokenSet = new Set();
   for (const date of Object.keys(dayRanges)) {
     const dayData = dailyDistributions[date] || {};
@@ -439,7 +631,6 @@ async function computeUsdValuations(dailyDistributions, dayRanges, rpcUrl) {
     }
   }
   
-  // Fetch decimals and rates
   const tokenList = Array.from(tokenSet);
   console.log(`📊 Fetching metadata for ${tokenList.length} unique tokens...`);
   
@@ -449,11 +640,9 @@ async function computeUsdValuations(dailyDistributions, dayRanges, rpcUrl) {
   
   for (const token of tokenList) {
     await getUsdRatePerToken(token);
-    // Small delay to be respectful to API
     await new Promise(resolve => setTimeout(resolve, 50));
   }
   
-  // Compute USD values per day per validator
   const dailyUsd = {};
   
   for (const date of Object.keys(dayRanges)) {
@@ -485,7 +674,6 @@ async function computeUsdValuations(dailyDistributions, dayRanges, rpcUrl) {
 function generateCSV(results, dates, outputFile) {
   console.log(`📝 Generating CSV output to ${outputFile}...`);
   
-  // Group results by validator
   const validatorMap = new Map();
   for (const result of results) {
     const key = result.pubkey;
@@ -504,7 +692,6 @@ function generateCSV(results, dates, outputFile) {
     };
   }
   
-  // Build headers: Validator Name, Validator Pubkey, Proposer Address, [Date ACB %, Date USD]* for each date, Final Stake
   const sortedDates = dates.sort();
   const headers = ['Validator Name', 'Validator Pubkey', 'Proposer Address'];
   for (const date of sortedDates) {
@@ -514,7 +701,6 @@ function generateCSV(results, dates, outputFile) {
   
   const rows = [headers.join(',')];
   
-  // Build rows
   for (const validator of validatorMap.values()) {
     const escapedName = validator.name.includes(',') || validator.name.includes('"') 
       ? `"${validator.name.replace(/"/g, '""')}"` 
@@ -564,7 +750,16 @@ function parseArgs() {
     .option('rpc', {
       alias: 'r',
       type: 'string',
-      description: 'Custom RPC endpoint URL'
+      description: 'Custom execution layer RPC endpoint URL'
+    })
+    .option('cl-rpc', {
+      type: 'string',
+      description: 'Custom consensus layer RPC endpoint URL'
+    })
+    .option('validator-db', {
+      alias: 'v',
+      type: 'string',
+      description: 'Path to validator database (SQLite file)'
     })
     .option('help', {
       alias: 'h',
@@ -575,34 +770,21 @@ function parseArgs() {
     .help()
     .argv;
   
-  // Determine start and end dates
-  // Valid combinations:
-  // 1. start-date + end-date
-  // 2. start-date + days
-  // 3. end-date + days (calculate start-date from end-date - days)
-  // 4. start-date only (default end-date to yesterday)
-  // 5. end-date only (default start-date to 2025-12-16)
-  // 6. days only (requires start-date, defaults to 2025-12-16)
-  // 7. none (defaults: start-date 2025-12-16, end-date yesterday)
-  
   let startDate;
   let endDate;
   
   if (argv['end-date'] && argv.days && !argv['start-date']) {
-    // end-date + days: calculate start-date from end-date - days
     endDate = new Date(argv['end-date'] + 'T23:59:59.999Z');
     startDate = new Date(endDate);
     startDate.setUTCDate(startDate.getUTCDate() - (argv.days - 1));
     startDate.setUTCHours(0, 0, 0, 0);
   } else {
-    // Determine start date
     if (argv['start-date']) {
       startDate = new Date(argv['start-date'] + 'T00:00:00.000Z');
     } else {
       startDate = new Date('2025-12-16T00:00:00.000Z');
     }
     
-    // Determine end date
     if (argv['end-date']) {
       endDate = new Date(argv['end-date'] + 'T23:59:59.999Z');
     } else if (argv.days) {
@@ -610,31 +792,36 @@ function parseArgs() {
       endDate.setUTCDate(endDate.getUTCDate() + argv.days - 1);
       endDate.setUTCHours(23, 59, 59, 999);
     } else {
-      // Default to end of yesterday
       endDate = new Date();
       endDate.setUTCDate(endDate.getUTCDate() - 1);
       endDate.setUTCHours(23, 59, 59, 999);
     }
   }
   
-  // Validate date range
   if (startDate > endDate) {
     throw new Error(`Start date (${startDate.toISOString().split('T')[0]}) must be before or equal to end date (${endDate.toISOString().split('T')[0]})`);
   }
   
-  // Determine RPC URL
-  let rpcUrl;
-  if (argv.rpc) {
-    rpcUrl = argv.rpc;
-  } else {
-    rpcUrl = ConfigHelper.getRpcUrl('el', argv.chain);
+  const chain = argv.chain;
+  const network = CONFIG.NETWORKS[chain];
+  
+  let rpcUrl = argv.rpc || network.el;
+  let clUrl = argv['cl-rpc'] || network.cl;
+  
+  // Determine validator database path
+  let validatorDbPath = argv['validator-db'];
+  if (!validatorDbPath) {
+    // Default to validator.sqlite in the same directory as the script
+    validatorDbPath = path.join(__dirname, 'validator.sqlite');
   }
   
   return {
     startDate: startDate.toISOString().split('T')[0],
     endDate: endDate,
-    chain: argv.chain,
+    chain: chain,
     rpc: rpcUrl,
+    cl: clUrl,
+    validatorDb: validatorDbPath,
     help: argv.help
   };
 }
@@ -651,17 +838,20 @@ Usage:
   node scan-cutting-board-usage.js [options]
 
 Options:
-  -s, --start-date=DATE    Start date for analysis (YYYY-MM-DD, default: 2025-12-16)
-  -e, --end-date=DATE      End date for analysis (YYYY-MM-DD, defaults to end of yesterday)
-  -d, --days=N             Number of days to analyze from start date (mutually exclusive with --end-date)
-  -c, --chain=NAME         Chain to analyze: mainnet|bepolia (default: mainnet)
-  -r, --rpc=URL            Custom RPC endpoint URL
-  -h, --help               Show this help message
+  -s, --start-date=DATE      Start date for analysis (YYYY-MM-DD, default: 2025-12-16)
+  -e, --end-date=DATE         End date for analysis (YYYY-MM-DD, defaults to end of yesterday)
+  -d, --days=N                Number of days to analyze from start date
+  -c, --chain=NAME            Chain to analyze: mainnet|bepolia (default: mainnet)
+  -r, --rpc=URL               Custom execution layer RPC endpoint URL
+  --cl-rpc=URL                Custom consensus layer RPC endpoint URL
+  -v, --validator-db=PATH     Path to validator database (SQLite file, default: ./validator.sqlite)
+  -h, --help                  Show this help message
 
 Examples:
   node scan-cutting-board-usage.js
   node scan-cutting-board-usage.js --start-date=2025-12-18 --days=7
   node scan-cutting-board-usage.js --start-date=2025-12-26 --end-date=2025-12-31
+  node scan-cutting-board-usage.js --validator-db=/path/to/validators.db
 `);
     process.exit(0);
   }
@@ -669,7 +859,8 @@ Examples:
   try {
     console.log('🚀 Starting Cutting Board Analysis...\n');
     console.log(`📅 Analysis period: ${config.startDate} to ${config.endDate.toISOString().split('T')[0]}`);
-    console.log(`⛓️  Chain: ${config.chain}\n`);
+    console.log(`⛓️  Chain: ${config.chain}`);
+    console.log(`📁 Validator DB: ${config.validatorDb}\n`);
     
     // Generate date range for analysis
     const startDate = new Date(config.startDate + 'T00:00:00.000Z');
@@ -696,15 +887,14 @@ Examples:
     activationDates.push(nextDay);
     
     // Load validators
-    const clUrl = ConfigHelper.getBlockScannerUrl(config.chain);
-    const validators = await loadValidators();
+    const validators = await loadValidators(config.validatorDb);
     
     if (validators.length === 0) {
       throw new Error('No validators loaded');
     }
     
-    // Find day boundaries once for extended period (includes analysis period)
-    const allBoundaries = await findDayBoundaries(activationDates, config.chain);
+    // Find day boundaries once for extended period
+    const allBoundaries = await findDayBoundaries(activationDates, config.cl);
     
     // Extract boundaries for analysis period
     const dayBoundaries = {};
@@ -754,7 +944,7 @@ Examples:
     
     // Get final stake for all validators
     console.log('📊 Fetching final stake amounts...');
-    const validatorFetcher = new ValidatorFetcher(clUrl);
+    const validatorFetcher = new ValidatorFetcher(config.cl);
     const finalBlock = Math.max(...Object.values(dayRanges).map(r => r.endBlock));
     const finalStakes = await validatorFetcher.getValidators(finalBlock);
     
@@ -769,7 +959,6 @@ Examples:
         const dayRange = dayRanges[date];
         const pubkey = validator.pubkey.toLowerCase();
         
-        // Determine automated cutting board (ACB) percentage
         const cuttingBoardData = await determineACBBlocks(
           validator,
           date,
@@ -778,10 +967,8 @@ Examples:
           blockProposers
         );
         
-        // Get USD value
         const usdValue = dailyUsd[date]?.[pubkey] || 0;
         
-        // Get final stake
         const finalStake = finalStakes?.[validator.proposer]?.voting_power || validator.votingPower || 0;
         
         results.push({
