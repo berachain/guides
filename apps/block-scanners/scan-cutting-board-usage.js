@@ -391,7 +391,8 @@ async function determineACBBlocks(
     return {
       totalBlocks: 0,
       acbBlocks: 0,
-      percentage: 0
+      percentage: 0,
+      expirationToActivationGap: null
     };
   }
   
@@ -416,10 +417,42 @@ async function determineACBBlocks(
   
   const percentage = validatorBlocks.length > 0 ? (acbBlocks.length / validatorBlocks.length) * 100 : 0;
   
+  // Calculate gap between expiration and new activation on this day
+  // Find activations that happened on this day
+  const activationsOnDay = activationBlocks.filter(b => 
+    b >= dayRange.startBlock && b <= dayRange.endBlock
+  );
+  
+  let expirationToActivationGap = null;
+  
+  if (activationsOnDay.length > 0 && acbBlocks.length > 0) {
+    // There are activations on this day and ACB blocks, so we need to check for gaps
+    // For each activation on this day, check if there was a previous activation that expired
+    for (const newActivationBlock of activationsOnDay) {
+      // Find the activation that was active before this new one
+      const previousActivations = activationBlocks.filter(b => b < newActivationBlock);
+      if (previousActivations.length > 0) {
+        const lastPreviousActivation = previousActivations[previousActivations.length - 1];
+        const expirationBlock = lastPreviousActivation + CONFIG.AUTOMATED_CUTTING_BOARD_BLOCKS;
+        
+        // Check if expiration happened before the new activation
+        // (expiration can happen before the day started, as long as there are ACB blocks on this day)
+        if (expirationBlock < newActivationBlock) {
+          const gap = newActivationBlock - expirationBlock;
+          // Use the first (earliest) gap found, or the minimum gap if multiple exist
+          if (expirationToActivationGap === null || gap < expirationToActivationGap) {
+            expirationToActivationGap = gap;
+          }
+        }
+      }
+    }
+  }
+  
   return {
     totalBlocks: validatorBlocks.length,
     acbBlocks: acbBlocks.length,
-    percentage: percentage
+    percentage: percentage,
+    expirationToActivationGap: expirationToActivationGap
   };
 }
 
@@ -500,15 +533,16 @@ function generateCSV(results, dates, outputFile) {
     }
     validatorMap.get(key).dailyData[result.date] = {
       acbPercentage: result.acbPercentage,
-      usdValue: result.usdValue
+      usdValue: result.usdValue,
+      expirationToActivationGap: result.expirationToActivationGap
     };
   }
   
-  // Build headers: Validator Name, Validator Pubkey, Proposer Address, [Date ACB %, Date USD]* for each date, Final Stake
+  // Build headers: Validator Name, Validator Pubkey, Proposer Address, [Date ACB %, Date USD, Date Gap]* for each date, Final Stake
   const sortedDates = dates.sort();
   const headers = ['Validator Name', 'Validator Pubkey', 'Proposer Address'];
   for (const date of sortedDates) {
-    headers.push(`${date} ACB %`, `${date} USD`);
+    headers.push(`${date} ACB %`, `${date} USD`, `${date} Gap`);
   }
   headers.push('Final Stake');
   
@@ -523,9 +557,10 @@ function generateCSV(results, dates, outputFile) {
     const row = [escapedName, validator.pubkey, validator.proposer];
     
     for (const date of sortedDates) {
-      const dayData = validator.dailyData[date] || { acbPercentage: 0, usdValue: 0 };
+      const dayData = validator.dailyData[date] || { acbPercentage: 0, usdValue: 0, expirationToActivationGap: null };
       row.push(dayData.acbPercentage.toFixed(2));
       row.push(dayData.usdValue.toFixed(6));
+      row.push(dayData.expirationToActivationGap !== null ? dayData.expirationToActivationGap.toString() : '');
     }
     
     row.push(validator.finalStake.toFixed(6));
@@ -791,6 +826,7 @@ Examples:
           date: date,
           acbPercentage: cuttingBoardData.percentage,
           usdValue: usdValue,
+          expirationToActivationGap: cuttingBoardData.expirationToActivationGap,
           finalStake: finalStake
         });
         
