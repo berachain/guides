@@ -240,12 +240,12 @@ const CONFIG = {
   HONEY_TOKEN: '0xFCBD14DC51f0A4d49d5E53C2E0950e0bC26d0Dce',
   NETWORKS: {
     mainnet: {
-      el: 'https://rpc.berachain.com/',
-      cl: 'https://consensus.berachain.com/'
+      el: process.env.MAINNET_EL_URL || 'https://rpc.berachain.com/',
+      cl: process.env.MAINNET_CL_URL || 'http://37.27.231.195:59820'
     },
     bepolia: {
-      el: 'https://bepolia.rpc.berachain.com/',
-      cl: 'https://bepolia.consensus.berachain.com/'
+      el: process.env.BEPOLIA_EL_URL || 'https://bepolia.rpc.berachain.com/',
+      cl: process.env.BEPOLIA_CL_URL || 'http://37.27.231.195:59860'
     }
   }
 };
