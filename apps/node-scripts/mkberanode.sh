@@ -166,8 +166,8 @@ maybe_install_deps_debian() {
   apt_install_if_missing tar tar
   # lz4 for snapshot decompression
   apt_install_if_missing lz4 lz4 || warn "Failed to install lz4 - snapshots may not work"
-  # jq improves API parsing but is optional
-  apt_install_if_missing jq jq || warn "Failed to install jq - will use fallback parsing"
+  # jq required for CSV parsing
+  apt_install_if_missing jq jq
   # openssl for JWT generation
   apt_install_if_missing openssl openssl || warn "Failed to install openssl - JWT generation may fail"
   # ca-certificates ensures TLS works for curl to GitHub
@@ -208,12 +208,7 @@ detect_external_ip() {
   echo "$ip"
 }
 
-if ! command -v jq >/dev/null 2>&1; then
-  warn "jq not found; falling back to minimal parsing without jq."
-  USE_JQ=0
-else
-  USE_JQ=1
-fi
+need_cmd jq
 if ! command -v openssl >/dev/null 2>&1; then
   warn "openssl not found; will generate JWT using /dev/urandom."
 fi
@@ -250,25 +245,13 @@ curl_gh() {
 # Returns tag (e.g. v1.3.2) for latest release
 gh_latest_tag() {
   local repo="$1"
-  if [[ $USE_JQ -eq 1 ]]; then
-    curl_gh "$GH_API/repos/$repo/releases/latest" | jq -r '.tag_name'
-  else
-    curl_gh "$GH_API/repos/$repo/releases/latest" | awk -F'"' '/"tag_name":/ {print $4; exit}'
-  fi
+  curl_gh "$GH_API/repos/$repo/releases/latest" | jq -r '.tag_name'
 }
 
 # Finds asset download URL by partial name match for a given release tag
 gh_asset_url_by_tag_and_match() {
   local repo="$1" tag="$2" match="$3"
-  if [[ $USE_JQ -eq 1 ]]; then
-    curl_gh "$GH_API/repos/$repo/releases/tags/$tag" | jq -r --arg m "$match" '.assets[] | select(.name | test($m)) | .browser_download_url' | head -n1
-  else
-    curl_gh "$GH_API/repos/$repo/releases/tags/$tag" | awk -v m="$match" '
-      BEGIN{url=""}
-      /"name":/ { if ($0 ~ m) f=1; else f=0 }
-      /"browser_download_url":/ && f==1 { gsub(/[",]/,""); split($0,a,": "); print a[2]; exit }
-    '
-  fi
+  curl_gh "$GH_API/repos/$repo/releases/tags/$tag" | jq -r --arg m "$match" '.assets[] | select(.name | test($m)) | .browser_download_url' | head -n1
 }
 
 # ------------------------------
@@ -293,47 +276,23 @@ parse_snapshot_urls() {
   # Sort by created_at descending and take first match for each type
   local beacon_url el_url beacon_name el_name
   
-  if [[ $USE_JQ -eq 1 ]]; then
-    beacon_url=$(echo "$csv_data" | jq -R -r --arg type "$beacon_type" '
-      split("\n") | 
-      map(select(. != "" and (. | startswith("type,") | not))) |
-      map(split(",")) |
-      map(select(.[0] == $type)) |
-      sort_by(.[4]) | reverse | .[0] // empty |
-      if . then .[6] // "" else "" end
-    ' | tr -d '\r\n' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
-    el_url=$(echo "$csv_data" | jq -R -r --arg type "$el_type" '
-      split("\n") | 
-      map(select(. != "" and (. | startswith("type,") | not))) |
-      map(split(",")) |
-      map(select(.[0] == $type)) |
-      sort_by(.[4]) | reverse | .[0] // empty |
-      if . then .[6] // "" else "" end
-    ' | tr -d '\r\n' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
-  else
-    # Fallback awk parsing - find latest by created_at timestamp
-    # CSV format: type,size_bytes,block_number,version,created_at,sha256,url
-    beacon_url=$(echo "$csv_data" | awk -F',' -v type="$beacon_type" '
-      BEGIN { latest_time = ""; latest_url = "" }
-      NR > 1 && $1 == type {
-        if (latest_time == "" || $5 > latest_time) {
-          latest_time = $5
-          latest_url = $7
-        }
-      }
-      END { if (latest_url != "" && latest_url ~ /^https?:\/\//) printf "%s", latest_url }
-    ' | tr -d '\r\n' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
-    el_url=$(echo "$csv_data" | awk -F',' -v type="$el_type" '
-      BEGIN { latest_time = ""; latest_url = "" }
-      NR > 1 && $1 == type {
-        if (latest_time == "" || $5 > latest_time) {
-          latest_time = $5
-          latest_url = $7
-        }
-      }
-      END { if (latest_url != "" && latest_url ~ /^https?:\/\//) printf "%s", latest_url }
-    ' | tr -d '\r\n' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
-  fi
+  beacon_url=$(echo "$csv_data" | jq -R -r --arg type "$beacon_type" '
+    split("\n") | 
+    map(select(. != "" and (. | startswith("type,") | not))) |
+    map(split(",")) |
+    map(select(.[0] == $type)) |
+    sort_by(.[4]) | reverse | .[0] // empty |
+    if . then .[6] // "" else "" end
+  ' | tr -d '\r\n' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+  
+  el_url=$(echo "$csv_data" | jq -R -r --arg type "$el_type" '
+    split("\n") | 
+    map(select(. != "" and (. | startswith("type,") | not))) |
+    map(split(",")) |
+    map(select(.[0] == $type)) |
+    sort_by(.[4]) | reverse | .[0] // empty |
+    if . then .[6] // "" else "" end
+  ' | tr -d '\r\n' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
   
   # Extract filename from URL
   if [[ -n "$beacon_url" ]]; then
