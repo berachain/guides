@@ -51,6 +51,7 @@ bb create testnet reth
 bb bb-testnet-reth info
 bb bb-testnet-reth version set --cl v1.3.1 --el v1.0.1
 bb bb-testnet-reth build
+bb bb-testnet-reth snapshot
 bb bb-testnet-reth init
 bb bb-testnet-reth install
 bb bb-testnet-reth start
@@ -64,6 +65,7 @@ bb create mainnet geth && bb create testnet reth
 bb bb-mainnet-geth version set --cl v1.3.2 --el v1.19.5
 bb bb-testnet-reth version set --cl v1.4.0-rc1 --el v1.20.0-rc5
 bb build
+bb snapshot
 bb init
 bb install
 bb start
@@ -96,6 +98,16 @@ Displays detailed information about an installation including versions, service 
 - `--no-pull`: Skip git pull before switching branches (default: always pull)
 - `--quiet`: Silence compiler output while keeping operational logging
 - `clean`: Remove build artifacts (preserves installed binaries)
+
+**`[installation] snapshot [--skip-cl] [--skip-el]`** - Fetch and extract snapshots
+
+Downloads the latest snapshots from snapshots.berachain.com and extracts them to the installation's data directories. This significantly speeds up initial sync by starting from a recent chain state instead of syncing from genesis.
+
+- `--skip-cl`: Skip consensus layer snapshot
+- `--skip-el`: Skip execution layer snapshot
+- Automatically detects chain (mainnet/testnet), EL client (reth/geth), and mode (pruned/archive)
+- Skips download if data already exists
+- Uses streaming extraction (no intermediate disk space needed)
 
 **`[installation] init`** - Initialize network parameters
 

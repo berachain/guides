@@ -26,12 +26,12 @@ declare -A BB_CONFIG=(
 bb_validate_command() {
     local cmd="$1"
     local valid_global_commands=(
-        "create" "list" "info" "build" "init" "debug" "reset" 
+        "create" "list" "info" "build" "init" "snapshot" "debug" "reset" 
         "start" "stop" "restart" "install" "uninstall" 
         "autostart" "autostop" "help" "-h" "--help"
     )
     local valid_installation_commands=(
-        "info" "build" "init" "version" "install" "uninstall"
+        "info" "build" "init" "snapshot" "version" "install" "uninstall"
         "start" "stop" "restart" "status" "logs" "debug" "attach"
         "reset" "remove" "autostart" "autostop"
     )
@@ -154,6 +154,7 @@ bb_cmd_help() {
     echo -e "${GREEN}All Other Commands:${NC}"
     echo "  [installation] info                  Show installation information"
                 echo "  [installation] build [--no-pull] [--quiet] [clean]  Build binaries (debug with symbols)"
+    echo "  [installation] snapshot [--skip-cl] [--skip-el]  Fetch and extract snapshots"
     echo "  [installation] init                  Initialize network parameters"
     echo "  [installation] install               Install systemd services (no sudo required)"
     echo "  [installation] start [cl|el]         Start services"
@@ -338,6 +339,23 @@ bb_cmd_init() {
 # Global init command (for all installations)
 bb_cmd_init_all() {
     bb_iterate_all_installations_with_errors "init" "bb_cmd_init" "$@"
+}
+
+# Snapshot command implementation (delegates to snapshot-fetch.sh)
+bb_cmd_snapshot() {
+    local installation="$1"
+    shift
+    
+    if ! bb_validate_installation "$installation"; then
+        return 1
+    fi
+    
+    "${BB_CONFIG[scripts_dir]}/snapshot-fetch.sh" --installation "$installation" "$@"
+}
+
+# Global snapshot command (for all installations)
+bb_cmd_snapshot_all() {
+    bb_iterate_all_installations_with_errors "snapshot" "bb_cmd_snapshot" "$@"
 }
 
 # Service management commands (delegate to systemd-manage.sh)
@@ -643,6 +661,10 @@ bb_dispatch_command() {
             # Global init - initialize all installations
             bb_cmd_init_all "$@"
             ;;
+        "snapshot")
+            # Global snapshot - fetch snapshots for all installations
+            bb_cmd_snapshot_all "$@"
+            ;;
         "help"|"-h"|"--help")
             bb_cmd_help "$@"
             ;;
@@ -724,7 +746,7 @@ bb_dispatch_command() {
 
 bb_show_available_commands_for_installation() {
     echo "Available installation commands:"
-    echo "  info, build, init, version, install, start, status, logs,"
+    echo "  info, build, snapshot, init, version, install, start, status, logs,"
     echo "  stop, restart, reset, remove, uninstall, autostart, autostop, attach"
 }
 
@@ -746,6 +768,9 @@ bb_dispatch_installation_command() {
             ;;
         "init")
             bb_cmd_init "$installation"
+            ;;
+        "snapshot")
+            bb_cmd_snapshot "$installation" "$@"
             ;;
         "install")
             # Check ownership for install operations
