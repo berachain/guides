@@ -114,7 +114,9 @@ console.log('-------------------------');
 console.log(`Network: ${config.snapshot_chain === 'bera-snapshot' ? 'mainnet' : 'testnet'}`);
 console.log(`Client: ${config.el_client}`);
 console.log(`Type: ${config.snapshot_type}`);
-console.log(`Geography: ${config.geography}`);
+if (config.geography !== 'na') {
+    console.log(`Note: --geography parameter is deprecated and ignored (new service uses single endpoint)`);
+}
 console.log('');
 
 function startDownload(mediaLink, fileName) {
@@ -126,86 +128,91 @@ function startDownload(mediaLink, fileName) {
 	console.log(`\n✓ ${fileName} - Complete`);
 }
 
-// Fetch bucket contents and start downloads
-// Both mainnet and testnet append geography
-const bucketName = `${config.snapshot_chain}-${config.geography}`;
-
-const bucketUrl = `https://storage.googleapis.com/storage/v1/b/${bucketName}/o`;
-console.log('Fetching bucket contents from:');
-console.log(`  ${bucketUrl}`);
+// Fetch snapshot index from snapshots.berachain.com
+const indexUrl = 'https://snapshots.berachain.com/index.csv';
+console.log('Fetching snapshot index from:');
+console.log(`  ${indexUrl}`);
 console.log('');
 
 const req = https.request({
-	hostname: 'storage.googleapis.com',
-	path: `/storage/v1/b/${bucketName}/o`,
+	hostname: 'snapshots.berachain.com',
+	path: '/index.csv',
 	method: 'GET',
-	headers: { 'Accept': 'application/json' }
+	headers: { 'Accept': 'text/csv' }
 }, async (res) => {
 	let data = '';
 	res.on('data', chunk => data += chunk);
 	res.on('end', async () => {
-		const parsedData = JSON.parse(data);
-		const directoryStructure = {};
+		// Parse CSV: type,size_bytes,block_number,version,created_at,sha256,url
+		const lines = data.trim().split('\n');
+		if (lines.length < 2) {
+			console.error('Error: Invalid CSV format or no snapshots found');
+			process.exit(1);
+		}
 		
-		parsedData.items?.forEach(item => {
-			const pathParts = item.name.split('/');
-			const fileName = pathParts.pop();
-			const directoryPath = pathParts.join('/');
-			
-			if (!directoryStructure[directoryPath]) {
-				directoryStructure[directoryPath] = [];
-			}
-			
-			// Skip SHA256 files
-			if (!fileName.endsWith('.sha256')) {
-				directoryStructure[directoryPath].push({
-					name: fileName,
-					size: item.size,
-					timeCreated: item.timeCreated,
-					mediaLink: item.mediaLink
-				});
-			}
-		});
+		// Map to snapshot service type names
+		const beaconType = `beacon-kit-${config.snapshot_type}`;
+		const elType = `${config.el_client}-${config.snapshot_type}`;
 		
-		// Directory structure:
-		// Both mainnet and testnet:
-		//   - Beacon CL: beacon-kit/<type> (client-independent)
-		//   - Execution EL: bera-<client>/<type>
-		const dir_keys = {
-			beacon_key: `beacon-kit/${config.snapshot_type}`,
-			el_key: `bera-${config.el_client}/${config.snapshot_type}`
+		const snapshots = {
+			beacon: null,
+			el: null
 		};
-
-		// Find the files to download and log their URLs
-		const downloadsToQueue = [];
-		const MIN_SIZE_BYTES = 1024 * 1024; // 1 MB minimum
 		
-		for (const key in dir_keys) {
-			const dir = dir_keys[key];
-			if (directoryStructure[dir]) {
-				// Filter out small files (likely placeholder/stub files)
-				const files = directoryStructure[dir].filter(f => parseInt(f.size) >= MIN_SIZE_BYTES);
-				if (files.length === 0) {
-					console.log(`Warning: No valid snapshots found in ${dir} (all files < 1MB)`);
-					continue;
-				}
-				files.sort((a, b) => new Date(b.timeCreated) - new Date(a.timeCreated));
-				const latest = files[0];
-				downloadsToQueue.push({
-					name: latest.name,
-					mediaLink: latest.mediaLink,
-					dir: dir
-				});
+		// Parse CSV (skip header)
+		for (let i = 1; i < lines.length; i++) {
+			const line = lines[i].trim();
+			if (!line) continue;
+			
+			// Simple CSV parsing (assuming no quoted commas in our data)
+			const fields = line.split(',');
+			if (fields.length < 7) continue;
+			
+			const type = fields[0];
+			const sizeBytes = parseInt(fields[1]);
+			const createdAt = fields[4];
+			const url = fields[6];
+			
+			// Find latest snapshot for each type
+			if (type === beaconType && (!snapshots.beacon || createdAt > snapshots.beacon.createdAt)) {
+				snapshots.beacon = { url, createdAt, sizeBytes };
 			}
+			if (type === elType && (!snapshots.el || createdAt > snapshots.el.createdAt)) {
+				snapshots.el = { url, createdAt, sizeBytes };
+			}
+		}
+		
+		const downloadsToQueue = [];
+		
+		if (snapshots.beacon) {
+			const fileName = snapshots.beacon.url.split('/').pop();
+			downloadsToQueue.push({
+				name: fileName,
+				mediaLink: snapshots.beacon.url,
+				type: 'beacon'
+			});
+		}
+		
+		if (snapshots.el) {
+			const fileName = snapshots.el.url.split('/').pop();
+			downloadsToQueue.push({
+				name: fileName,
+				mediaLink: snapshots.el.url,
+				type: 'execution layer'
+			});
 		}
 
 		if (downloadsToQueue.length > 0) {
 			console.log('Will download the following files:');
 			downloadsToQueue.forEach(item => {
-				console.log(`  ${item.name} from ${item.dir}`);
+				console.log(`  ${item.name} (${item.type})`);
 				console.log(`    URL: ${item.mediaLink}`);
 			});
 			console.log('');
+		} else {
+			console.log('Warning: No snapshots found matching the requested criteria.');
+			console.log(`  Looking for: ${beaconType} and ${elType}`);
+			process.exit(0);
 		}
 
 		// Download files sequentially
