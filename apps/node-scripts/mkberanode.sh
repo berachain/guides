@@ -300,16 +300,16 @@ parse_snapshot_urls() {
       map(split(",")) |
       map(select(.[0] == $type)) |
       sort_by(.[4]) | reverse | .[0] // empty |
-      .[6] // empty
-    ')
+      if . then .[6] // "" else "" end
+    ' | tr -d '\r\n' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
     el_url=$(echo "$csv_data" | jq -R -r --arg type "$el_type" '
       split("\n") | 
       map(select(. != "" and (. | startswith("type,") | not))) |
       map(split(",")) |
       map(select(.[0] == $type)) |
       sort_by(.[4]) | reverse | .[0] // empty |
-      .[6] // empty
-    ')
+      if . then .[6] // "" else "" end
+    ' | tr -d '\r\n' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
   else
     # Fallback awk parsing - find latest by created_at timestamp
     # CSV format: type,size_bytes,block_number,version,created_at,sha256,url
@@ -321,8 +321,8 @@ parse_snapshot_urls() {
           latest_url = $7
         }
       }
-      END { if (latest_url != "") print latest_url }
-    ')
+      END { if (latest_url != "" && latest_url ~ /^https?:\/\//) printf "%s", latest_url }
+    ' | tr -d '\r\n' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
     el_url=$(echo "$csv_data" | awk -F',' -v type="$el_type" '
       BEGIN { latest_time = ""; latest_url = "" }
       NR > 1 && $1 == type {
@@ -331,8 +331,8 @@ parse_snapshot_urls() {
           latest_url = $7
         }
       }
-      END { if (latest_url != "") print latest_url }
-    ')
+      END { if (latest_url != "" && latest_url ~ /^https?:\/\//) printf "%s", latest_url }
+    ' | tr -d '\r\n' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
   fi
   
   # Extract filename from URL
