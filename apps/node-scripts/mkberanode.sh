@@ -276,82 +276,85 @@ gh_asset_url_by_tag_and_match() {
 # ------------------------------
 # Snapshot download and installation
 # ------------------------------
-fetch_snapshot_list() {
+fetch_snapshot_index() {
   local snapshot_chain="$1"
-  local geography="$2"
-  local bucket_url="https://storage.googleapis.com/storage/v1/b/${snapshot_chain}-${geography}/o"
+  local index_url="https://snapshots.berachain.com/index.csv"
   
-  info "Fetching bucket contents from: $bucket_url" >&2
-  curl -fsSL -H "Accept: application/json" "$bucket_url"
-}
-
-parse_single_snapshot_jq() {
-  local json_data="$1" dir="$2"
-  echo "$json_data" | jq -r --arg dir "$dir" '
-    .items[] | 
-    select(.name | startswith($dir)) | 
-    select(.name | endswith(".tar.lz4")) | 
-    select(.name | contains(".sha256") | not) |
-    [.timeCreated, .mediaLink, .name] | 
-    @tsv' | sort -r | head -n1
-}
-
-parse_single_snapshot_awk() {
-  local json_data="$1" dir="$2"
-  echo "$json_data" | awk -v dir="$dir" '
-    /"name":/ { 
-      gsub(/[",]/, ""); 
-      split($0, parts, ": "); 
-      name = parts[2];
-      if (name ~ "^" dir && name ~ "\\.tar\\.lz4$" && name !~ "\\.sha256") {
-        getline; gsub(/[",]/, ""); split($0, s, ": "); size = s[2];
-        getline; gsub(/[",]/, ""); split($0, t, ": "); time = t[2];
-        getline; gsub(/[",]/, ""); split($0, m, ": "); url = m[2];
-        print time "\t" url "\t" name;
-      }
-    }' | sort -r | head -n1
-}
-
-extract_snapshot_info() {
-  local json_data="$1" el_client="$2" snapshot_type="$3" snapshot_kind="$4"
-  local dir
-  if [[ "$snapshot_kind" == "beacon" ]]; then
-    local beacon_type="$snapshot_type"
-    if [[ "$snapshot_type" == "pruned" ]]; then
-      beacon_type="full"
-    fi
-    dir="beacon_${el_client}/${beacon_type}"
-  else
-    dir="bera-${el_client}/${snapshot_type}"
-  fi
-  local result
-  
-  if [[ $USE_JQ -eq 1 ]]; then
-    result=$(parse_single_snapshot_jq "$json_data" "$dir")
-  else
-    result=$(parse_single_snapshot_awk "$json_data" "$dir")
-  fi
-  
-  if [[ -n "$result" ]]; then
-    local url name
-    url=$(echo "$result" | cut -f2)
-    name=$(echo "$result" | cut -f3 | xargs basename 2>/dev/null || echo "$result" | cut -f3 | sed 's|.*/||')
-    echo "${snapshot_kind^^}_URL='$url'"
-    echo "${snapshot_kind^^}_NAME='$name'"
-  else
-    echo "${snapshot_kind^^}_URL=''"
-    echo "${snapshot_kind^^}_NAME=''"
-  fi
+  info "Fetching snapshot index from: $index_url" >&2
+  curl -fsSL "$index_url"
 }
 
 parse_snapshot_urls() {
-  local json_data="$1" el_client="$2" snapshot_type="$3"
+  local csv_data="$1" el_client="$2" snapshot_type="$3"
   
-  # Extract beacon snapshot info
-  extract_snapshot_info "$json_data" "$el_client" "$snapshot_type" "beacon"
+  # Map to snapshot service type names
+  local beacon_type="beacon-kit-${snapshot_type}"
+  local el_type="${el_client}-${snapshot_type}"
   
-  # Extract EL snapshot info  
-  extract_snapshot_info "$json_data" "$el_client" "$snapshot_type" "el"
+  # Parse CSV to find latest snapshots (CSV is: type,size_bytes,block_number,version,created_at,sha256,url)
+  # Sort by created_at descending and take first match for each type
+  local beacon_url el_url beacon_name el_name
+  
+  if [[ $USE_JQ -eq 1 ]]; then
+    beacon_url=$(echo "$csv_data" | jq -R -r --arg type "$beacon_type" '
+      split("\n") | 
+      map(select(. != "" and (. | startswith("type,") | not))) |
+      map(split(",")) |
+      map(select(.[0] == $type)) |
+      sort_by(.[4]) | reverse | .[0] // empty |
+      .[6] // empty
+    ')
+    el_url=$(echo "$csv_data" | jq -R -r --arg type "$el_type" '
+      split("\n") | 
+      map(select(. != "" and (. | startswith("type,") | not))) |
+      map(split(",")) |
+      map(select(.[0] == $type)) |
+      sort_by(.[4]) | reverse | .[0] // empty |
+      .[6] // empty
+    ')
+  else
+    # Fallback awk parsing - find latest by created_at timestamp
+    # CSV format: type,size_bytes,block_number,version,created_at,sha256,url
+    beacon_url=$(echo "$csv_data" | awk -F',' -v type="$beacon_type" '
+      BEGIN { latest_time = ""; latest_url = "" }
+      NR > 1 && $1 == type {
+        if (latest_time == "" || $5 > latest_time) {
+          latest_time = $5
+          latest_url = $7
+        }
+      }
+      END { if (latest_url != "") print latest_url }
+    ')
+    el_url=$(echo "$csv_data" | awk -F',' -v type="$el_type" '
+      BEGIN { latest_time = ""; latest_url = "" }
+      NR > 1 && $1 == type {
+        if (latest_time == "" || $5 > latest_time) {
+          latest_time = $5
+          latest_url = $7
+        }
+      }
+      END { if (latest_url != "") print latest_url }
+    ')
+  fi
+  
+  # Extract filename from URL
+  if [[ -n "$beacon_url" ]]; then
+    beacon_name=$(echo "$beacon_url" | sed 's|.*/||')
+    echo "BEACON_URL='$beacon_url'"
+    echo "BEACON_NAME='$beacon_name'"
+  else
+    echo "BEACON_URL=''"
+    echo "BEACON_NAME=''"
+  fi
+  
+  if [[ -n "$el_url" ]]; then
+    el_name=$(echo "$el_url" | sed 's|.*/||')
+    echo "EL_URL='$el_url'"
+    echo "EL_NAME='$el_name'"
+  else
+    echo "EL_URL=''"
+    echo "EL_NAME=''"
+  fi
 }
 
 :
@@ -368,18 +371,17 @@ install_snapshots() {
   fi
   
   # Resolve snapshot URLs
-  info "Resolving snapshot URLs..."
-  local snapshot_chain="bera-snapshot"
-  if [[ "$CHAIN" == "bepolia" ]]; then
-    snapshot_chain="bera-testnet-snapshot"
+  info "Resolving snapshot URLs from snapshots.berachain.com..."
+  if [[ -n "${SNAPSHOT_GEOGRAPHY:-}" ]]; then
+    warn "Note: --snapshot-geography parameter is deprecated and ignored (new service uses single endpoint)"
   fi
-  local json_data snapshot_info
-  json_data=$(fetch_snapshot_list "$snapshot_chain" "$SNAPSHOT_GEOGRAPHY") || json_data=""
-  if [[ -z "$json_data" ]]; then
-    warn "Failed to fetch snapshot list, will proceed with normal initialization"
+  local csv_data snapshot_info
+  csv_data=$(fetch_snapshot_index "$CHAIN") || csv_data=""
+  if [[ -z "$csv_data" ]]; then
+    warn "Failed to fetch snapshot index, will proceed with normal initialization"
     return 0
   fi
-  snapshot_info=$(parse_snapshot_urls "$json_data" "$EL_CHOICE" "$MODE")
+  snapshot_info=$(parse_snapshot_urls "$csv_data" "$EL_CHOICE" "$MODE")
   # Initialize and eval results
   BEACON_URL="" EL_URL=""
   eval "$snapshot_info"
