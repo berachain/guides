@@ -95,15 +95,13 @@ Usage: ./fetch-berachain-snapshot.js [options]
 Options:
   -c, --client <client>      Execution client: reth or geth (default: reth)
   -n, --network <network>    Network: mainnet or testnet (default: mainnet)
-  -g, --geography <geo>      Geography: na, eu, or as (default: na)
   -t, --type <type>         Snapshot type: pruned or archive (default: pruned)
   -h, --help                Show this help message
 
 Examples:
-  ./fetch-berachain-snapshot.js                    # Download reth pruned mainnet from NA
-  ./fetch-berachain-snapshot.js -c geth            # Download geth pruned mainnet from NA
-  ./fetch-berachain-snapshot.js -n testnet -t archive  # Download reth archive testnet from NA
-  ./fetch-berachain-snapshot.js -c geth -n testnet -g eu -t archive  # Download geth archive testnet from EU
+  ./fetch-berachain-snapshot.js                    # Download reth pruned mainnet
+  ./fetch-berachain-snapshot.js -c geth            # Download geth pruned mainnet
+  ./fetch-berachain-snapshot.js -n testnet -t archive  # Download reth archive testnet
     `);
 }
 
