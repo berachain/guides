@@ -30,6 +30,7 @@ CL_VERSION=""       # e.g. v1.3.2 (empty: latest)
 EL_VERSION=""       # e.g. v1.20.0 (empty: latest)
 USE_SNAPSHOT=1      # if 1, download and install snapshots
 SNAPSHOT_GEOGRAPHY="na"  # na|eu|as for snapshot region
+SNAPSHOT_GEOGRAPHY_PROVIDED=0  # track if --snapshot-geography was explicitly provided
 
 # Paths
 BASE_DIR="/opt/berachain"
@@ -105,7 +106,7 @@ while [[ $# -gt 0 ]]; do
     --cl-version) CL_VERSION="${2:-}"; shift 2;;
     --el-version) EL_VERSION="${2:-}"; shift 2;;
     --no-snapshot) USE_SNAPSHOT=0; shift 1;;
-    --snapshot-geography) SNAPSHOT_GEOGRAPHY="${2:-}"; shift 2;;
+    --snapshot-geography) SNAPSHOT_GEOGRAPHY="${2:-}"; SNAPSHOT_GEOGRAPHY_PROVIDED=1; shift 2;;
     -h|--help) print_usage; exit 0;;
     *) err "Unknown arg: $1"; print_usage; exit 1;;
   esac
@@ -329,7 +330,7 @@ install_snapshots() {
   
   # Resolve snapshot URLs
   info "Resolving snapshot URLs from snapshots.berachain.com..."
-  if [[ -n "${SNAPSHOT_GEOGRAPHY:-}" ]]; then
+  if [[ $SNAPSHOT_GEOGRAPHY_PROVIDED -eq 1 ]]; then
     warn "Note: --snapshot-geography parameter is deprecated and ignored (new service uses single endpoint)"
   fi
   local csv_data snapshot_info
