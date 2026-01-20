@@ -14,8 +14,7 @@
 #     --mode {archive|pruned} \
 #     [--cl-version vX.Y.Z] \
 #     [--el-version vA.B.C] \
-#     [--no-snapshot] \
-#     [--snapshot-geography {na|eu|as}]
+#     [--no-snapshot]
 
 set -eu
 # Enable pipefail if the shell supports it (bash, zsh). Safe no-op on dash/sh.
@@ -74,12 +73,11 @@ need_cmd() { command -v "$1" >/dev/null 2>&1 || { err "Required command '$1' not
 print_usage() {
   cat <<EOF
 Usage:
-  sudo $0 --chain {mainnet|bepolia} --el {reth|geth} --mode {archive|pruned} [--cl-version vX.Y.Z] [--el-version vA.B.C] [--no-snapshot] [--snapshot-geography {na|eu|as}]
+  sudo $0 --chain {mainnet|bepolia} --el {reth|geth} --mode {archive|pruned} [--cl-version vX.Y.Z] [--el-version vA.B.C] [--no-snapshot]
 
 Examples:
   sudo $0 --chain mainnet --el reth --mode archive
   sudo $0 --chain bepolia --el geth --mode pruned --cl-version v1.3.2 --el-version v1.19.5
-  sudo $0 --chain mainnet --el reth --mode pruned --snapshot-geography eu
   sudo $0 --chain mainnet --el reth --mode pruned --no-snapshot
 
 EOF
