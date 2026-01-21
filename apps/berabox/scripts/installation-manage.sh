@@ -276,10 +276,10 @@ show_installation_info() {
     printf "%-20s %s\n" "  CL Node API:" "http://$external_ip:$((base_port + 5)) (external)"
     echo "Execution Layer:"
     printf "%-20s %s\n" "  EL RPC:" "http://$external_ip:$((base_port + 10)) (external)"
-    printf "%-20s %s\n" "  EL WS:" "ws://$external_ip:$((base_port + 15)) (external)"
-    printf "%-20s %s\n" "  EL Auth RPC:" "http://127.0.0.1:$((base_port + 11))"
-    printf "%-20s %s\n" "  EL P2P:" "$((base_port + 12)) (external)"
+    printf "%-20s %s\n" "  EL P2P:" "$((base_port + 11)) (external)"
+    printf "%-20s %s\n" "  EL Auth RPC:" "http://127.0.0.1:$((base_port + 12))"
     printf "%-20s %s\n" "  EL Prometheus:" "http://127.0.0.1:$((base_port + 13))"
+    printf "%-20s %s\n" "  EL WS:" "ws://$external_ip:$((base_port + 15)) (external)"
     echo ""
     
     # Validator keys (if CL is initialized)
