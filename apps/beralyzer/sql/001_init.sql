@@ -38,12 +38,13 @@ CREATE TABLE IF NOT EXISTS blocks (
   total_priority_fees_wei NUMERIC(78,0),
   effective_gas_price_avg_wei NUMERIC(78,0),
   priority_fee_avg_wei NUMERIC(78,0),
-  -- consensus fields merged into blocks (removed absent_validators JSONB)
+  -- consensus fields merged into blocks
   missing_count INT,
   missing_voting_power NUMERIC(78,0),
   total_voting_power NUMERIC(78,0),
   missing_percentage DOUBLE PRECISION,
   last_commit_round INT,
+  absent_validators JSONB,
   CONSTRAINT chain_client_type_chk
     CHECK (chain_client_type IN ('Reth','Geth','Erigon','Nethermind','Besu','Unknown'))
 );
