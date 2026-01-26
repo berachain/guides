@@ -91,7 +91,7 @@ const DEPOSIT_TOPIC = hashEvent(DEPOSIT_EVENT_SIGNATURE);
 
 // Configuration
 const RPC_URL = resolvedRpcUrl;
-const CONTRACT_ADDRESS = ConfigHelper.getBeaconDepositAddress();
+const CONTRACT_ADDRESS = ConfigHelper.getBeaconDepositAddress(chainName);
 const START_BLOCK = Number.isFinite(args.startBlock) ? args.startBlock : 0; 
 const BLOCK_CHUNK_SIZE = ConfigHelper.getDefaultLogChunkSize();
 const GENESIS_FORK_VERSION = '0xdf609e3b062842c6425ff716aec2d2092c46455d9b2e1a2c9e32c6ba63ff0bda';
