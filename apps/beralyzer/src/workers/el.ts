@@ -21,7 +21,7 @@ import {
 } from "../metrics.js";
 
 // Transaction type classification
-function classifyTransactionType(tx: any): string {
+export function classifyTransactionType(tx: any): string {
   const type = tx.type;
   if (type === 0) return "legacy";
   if (type === 1) return "access_list";
@@ -32,7 +32,7 @@ function classifyTransactionType(tx: any): string {
 }
 
 // Parse EIP-7702 transaction data
-function parseEIP7702Transaction(tx: any) {
+export function parseEIP7702Transaction(tx: any) {
   if (tx.type !== 4) return null;
 
   const contractCode = tx.contract_code || null;
@@ -46,7 +46,7 @@ function parseEIP7702Transaction(tx: any) {
 }
 
 // Parse blob transaction data
-function parseBlobTransaction(tx: any) {
+export function parseBlobTransaction(tx: any) {
   if (tx.type !== 3) return null;
 
   return {
@@ -59,7 +59,7 @@ function parseBlobTransaction(tx: any) {
 }
 
 // Parse access list transaction data
-function parseAccessListTransaction(tx: any) {
+export function parseAccessListTransaction(tx: any) {
   if (tx.type !== 1) return null;
 
   return {
@@ -79,6 +79,53 @@ export interface ElWorkerConfig {
 
 const TRANSFER_TOPIC =
   "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
+
+// Record a failed block for later analysis and retry
+async function recordFailedBlock(
+  pg: Pool | Client,
+  blockHeight: number,
+  module: string,
+  failureStage: string,
+  error: Error,
+  errorDetails?: Record<string, any>,
+): Promise<void> {
+  try {
+    const errorInfo: any = {
+      message: error.message,
+      name: error.constructor.name,
+      ...errorDetails,
+    };
+    if (error.stack) {
+      errorInfo.stack = error.stack;
+    }
+
+    await pg.query(
+      `INSERT INTO failed_blocks(block_height, module, failure_stage, error_type, error_message, error_details, last_retried_at, retry_count)
+       VALUES($1, $2, $3, $4, $5, $6, NOW(), 0)
+       ON CONFLICT (block_height, module, failure_stage)
+       DO UPDATE SET
+         error_type = EXCLUDED.error_type,
+         error_message = EXCLUDED.error_message,
+         error_details = EXCLUDED.error_details,
+         last_retried_at = NOW(),
+         retry_count = failed_blocks.retry_count + 1`,
+      [
+        blockHeight,
+        module,
+        failureStage,
+        error.constructor.name,
+        error.message,
+        JSON.stringify(errorInfo),
+      ],
+    );
+  } catch (recordError) {
+    // Don't fail the main process if we can't record the failure
+    console.error(
+      `Failed to record failed block ${blockHeight} in ${failureStage}:`,
+      (recordError as Error).message,
+    );
+  }
+}
 
 export async function ingestEl(
   pg: Pool | Client,
@@ -210,6 +257,7 @@ export async function ingestEl(
         const txHashes: string[] = blk.transactions as any;
         headerQueue.push({ bn, blk, txHashes });
       } catch (e) {
+        const err = e as Error;
         rpcCallsTotal.inc({
           endpoint: "el",
           method: "getBlock",
@@ -217,8 +265,34 @@ export async function ingestEl(
         });
         rpcErrors.inc({
           endpoint: "el",
-          error_type: (e as Error).constructor.name,
+          error_type: err.constructor.name,
         });
+
+        // Log detailed error for study and retry
+        const errorDetails = {
+          block_height: bn,
+          rpc_duration_ms: Date.now() - rpcStart,
+          rpc_url: (provider as any).currentUrl || "unknown",
+        };
+        console.error(
+          `EL: Failed to fetch block header ${bn}:`,
+          JSON.stringify({
+            error_type: err.constructor.name,
+            error_message: err.message,
+            ...errorDetails,
+          }),
+        );
+
+        // Record failed block for later retry
+        await recordFailedBlock(
+          pg,
+          bn,
+          "blocks_el",
+          "header_fetch",
+          err,
+          errorDetails,
+        );
+
         headerQueue.push({ bn, blk: null as any, txHashes: [] }); // Push null to maintain order
       }
     }
@@ -281,6 +355,7 @@ export async function ingestEl(
               );
               txMap.set(h.toLowerCase(), tx);
             } catch (e) {
+              const err = e as Error;
               rpcCallsTotal.inc({
                 endpoint: "el",
                 method: "getTransaction",
@@ -288,8 +363,33 @@ export async function ingestEl(
               });
               rpcErrors.inc({
                 endpoint: "el",
-                error_type: (e as Error).constructor.name,
+                error_type: err.constructor.name,
               });
+
+              // Log detailed error for study
+              console.error(
+                `EL: Failed to fetch transaction ${h} for block ${bn}:`,
+                JSON.stringify({
+                  error_type: err.constructor.name,
+                  error_message: err.message,
+                  block_height: bn,
+                  tx_hash: h,
+                  rpc_duration_ms: Date.now() - rpcStart,
+                }),
+              );
+
+              // Record failed block (transaction fetch failure)
+              await recordFailedBlock(
+                pg,
+                bn,
+                "blocks_el",
+                "tx_fetch",
+                err,
+                {
+                  tx_hash: h,
+                  rpc_duration_ms: Date.now() - rpcStart,
+                },
+              );
             }
           }),
         );
@@ -300,7 +400,7 @@ export async function ingestEl(
       txIndex++;
       queueDepth.set({ type: "tx_queue" }, txQueue.length);
 
-      if (cfg.log && bn % 100 === 0) {
+      if (cfg.log && bn % 1000 === 0) {
         console.log(
           `EL: block ${bn} fetched transactions in ${Date.now() - t0}ms (${txHashes.length} txs), tx queue size: ${txQueue.length}`,
         );
@@ -355,6 +455,7 @@ export async function ingestEl(
               );
               receiptMap.set(h.toLowerCase(), receipt);
             } catch (e) {
+              const err = e as Error;
               rpcCallsTotal.inc({
                 endpoint: "el",
                 method: "getTransactionReceipt",
@@ -362,8 +463,33 @@ export async function ingestEl(
               });
               rpcErrors.inc({
                 endpoint: "el",
-                error_type: (e as Error).constructor.name,
+                error_type: err.constructor.name,
               });
+
+              // Log detailed error for study
+              console.error(
+                `EL: Failed to fetch receipt ${h} for block ${bn}:`,
+                JSON.stringify({
+                  error_type: err.constructor.name,
+                  error_message: err.message,
+                  block_height: bn,
+                  tx_hash: h,
+                  rpc_duration_ms: Date.now() - rpcStart,
+                }),
+              );
+
+              // Record failed block (receipt fetch failure)
+              await recordFailedBlock(
+                pg,
+                bn,
+                "blocks_el",
+                "receipt_fetch",
+                err,
+                {
+                  tx_hash: h,
+                  rpc_duration_ms: Date.now() - rpcStart,
+                },
+              );
             }
           }),
         );
@@ -419,13 +545,125 @@ export async function ingestEl(
 
       const { bn, blk, allItems } = ready;
 
-      // Skip if block fetch failed
+      // Handle blocks that failed to fetch
       if (!blk) {
+        // Update cursor to continue processing despite failure
+        // The block is already recorded in failed_blocks table
+        if (cfg.advanceCursor !== false) {
+          try {
+            await pg.query(
+              `INSERT INTO ingest_cursors(module,last_processed_height) VALUES($1,$2)
+               ON CONFLICT (module) DO UPDATE SET last_processed_height=EXCLUDED.last_processed_height, updated_at=NOW()`,
+              ["blocks_el", bn],
+            );
+          } catch (cursorError) {
+            console.error(
+              `EL: Failed to update cursor for failed block ${bn}:`,
+              (cursorError as Error).message,
+            );
+          }
+        }
         writeIndex++;
         continue;
       }
 
+      // Validation: Ensure all expected transactions have both tx and receipt
+      const expectedTxCount = blk.transactions.length;
+      const actualTxCount = allItems.filter((item) => item !== null && item.tx && item.receipt).length;
+      
+      if (actualTxCount !== expectedTxCount) {
+        // Block is incomplete - don't write it, record as failed
+        const missingCount = expectedTxCount - actualTxCount;
+        console.error(
+          `EL: Block ${bn} incomplete: expected ${expectedTxCount} transactions, got ${actualTxCount} (missing ${missingCount})`,
+        );
+        
+        // Record failed block
+        await recordFailedBlock(
+          pg,
+          bn,
+          "blocks_el",
+          "tx_fetch",
+          new Error(`Incomplete block: missing ${missingCount} transaction(s)`),
+          {
+            expected_tx_count: expectedTxCount,
+            actual_tx_count: actualTxCount,
+            missing_tx_count: missingCount,
+            validation_failed: true,
+          },
+        );
+
+        // Update cursor to continue processing despite failure
+        if (cfg.advanceCursor !== false) {
+          try {
+            await pg.query(
+              `INSERT INTO ingest_cursors(module,last_processed_height) VALUES($1,$2)
+               ON CONFLICT (module) DO UPDATE SET last_processed_height=EXCLUDED.last_processed_height, updated_at=NOW()`,
+              ["blocks_el", bn],
+            );
+          } catch (cursorError) {
+            console.error(
+              `EL: Failed to update cursor for failed block ${bn}:`,
+              (cursorError as Error).message,
+            );
+          }
+        }
+
+        writeIndex++;
+        continue; // Skip writing this incomplete block
+      }
+
       const t0 = Date.now();
+
+      // Check if this block was previously failed - if so, delete existing data for clean retry
+      const failedCheck = await pg.query(
+        `SELECT block_height FROM failed_blocks 
+         WHERE block_height = $1 AND module = 'blocks_el' AND resolved_at IS NULL`,
+        [bn],
+      );
+      const isRetry = failedCheck.rows.length > 0;
+
+      if (isRetry) {
+        // This is a retry - delete all existing data for this block
+        // CASCADE will automatically delete transactions, contracts, erc20_tokens, etc.
+        const isPool = "query" in pg;
+        let cleanupClient: any = null;
+        try {
+          if (isPool) {
+            cleanupClient = await (pg as Pool).connect();
+            await cleanupClient.query("BEGIN");
+          } else {
+            cleanupClient = pg as Client;
+            await cleanupClient.query("BEGIN");
+          }
+
+          await cleanupClient.query(`DELETE FROM blocks WHERE height = $1`, [bn]);
+          if (cfg.log) {
+            console.log(`EL: Deleted existing data for failed block ${bn} before retry`);
+          }
+
+          await cleanupClient.query("COMMIT");
+        } catch (cleanupError) {
+          if (cleanupClient) {
+            try {
+              await cleanupClient.query("ROLLBACK");
+            } catch (rollbackError) {
+              // Ignore rollback errors
+            }
+            if ("release" in cleanupClient) {
+              cleanupClient.release();
+            }
+          }
+          console.error(
+            `EL: Failed to cleanup block ${bn} before retry:`,
+            (cleanupError as Error).message,
+          );
+        } finally {
+          if (cleanupClient && "release" in cleanupClient) {
+            cleanupClient.release();
+          }
+        }
+      }
 
       // Start transaction for this block
       const isPool = "query" in pg;
@@ -454,7 +692,16 @@ export async function ingestEl(
           await transactionClient.query(
             `INSERT INTO blocks(height, el_hash, timestamp, proposer_address, base_fee_per_gas_wei, gas_used_total, gas_limit, tx_count, chain_client, chain_client_type, chain_client_version)
              VALUES($1,$2,to_timestamp($3), NULL, $4, $5, $6, $7, $8, $9, $10)
-             ON CONFLICT (height) DO NOTHING`,
+             ON CONFLICT (height) DO UPDATE SET
+               el_hash=EXCLUDED.el_hash,
+               timestamp=EXCLUDED.timestamp,
+               base_fee_per_gas_wei=EXCLUDED.base_fee_per_gas_wei,
+               gas_used_total=EXCLUDED.gas_used_total,
+               gas_limit=EXCLUDED.gas_limit,
+               tx_count=EXCLUDED.tx_count,
+               chain_client=EXCLUDED.chain_client,
+               chain_client_type=EXCLUDED.chain_client_type,
+               chain_client_version=EXCLUDED.chain_client_version`,
             [
               bn,
               blk.hash,
@@ -550,6 +797,11 @@ export async function ingestEl(
               // Parallel database insert - use transactionClient to keep in same transaction
               // PostgreSQL Client queues concurrent queries on same connection, still faster than sequential
               const queryStart = Date.now();
+              // Delete existing transaction first if retrying (to ensure clean state)
+              if (isRetry) {
+                await transactionClient.query(`DELETE FROM transactions WHERE hash = $1`, [tx.hash]);
+              }
+              
               await transactionClient.query(
                 `INSERT INTO transactions(hash, block_height, from_address, to_address, value_wei, gas_limit, max_fee_per_gas_wei, max_priority_fee_per_gas_wei, type, selector, input_size, creates_contract, created_contract_address, state_change_accounts, erc20_transfer_count, erc20_unique_token_count, status, gas_used, cumulative_gas_used, effective_gas_price_wei, total_fee_wei, priority_fee_per_gas_wei, transaction_category, access_list, blob_versioned_hashes, max_fee_per_blob_gas_wei, blob_gas_used, eip_7702_authorization, eip_7702_contract_code_hash, eip_7702_delegation_address)
                VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30)
@@ -706,6 +958,18 @@ export async function ingestEl(
           // Commit transaction - block is now fully processed
           await transactionClient.query("COMMIT");
 
+          // If this was a failed block retry, mark it as resolved by deleting the failed_blocks entry
+          if (isRetry) {
+            await pg.query(
+              `DELETE FROM failed_blocks 
+               WHERE block_height = $1 AND module = 'blocks_el'`,
+              [bn],
+            );
+            if (cfg.log) {
+              console.log(`EL: Successfully retried block ${bn}, removed from failed_blocks`);
+            }
+          }
+
           // Update metrics after successful commit
           blocksProcessed.inc({ type: "el" }, 1);
           const blockDuration = (Date.now() - t0) / 1000;
@@ -718,7 +982,7 @@ export async function ingestEl(
           nextCursor = bn;
           writeIndex++;
 
-          if (cfg.log && bn % 100 === 0) {
+          if (cfg.log && bn % 1000 === 0) {
             console.log(
               `EL: block ${bn} processed in ${Date.now() - t0}ms (${blk.transactions.length} txs)`,
             );
@@ -789,6 +1053,44 @@ export async function ingestEl(
             `EL: Error processing block ${bn}, transaction rolled back:`,
             JSON.stringify(errorDetails, null, 2),
           );
+
+          // Check if this was a retry attempt
+          const retryCheck = await pg.query(
+            `SELECT block_height FROM failed_blocks 
+             WHERE block_height = $1 AND module = 'blocks_el' AND resolved_at IS NULL`,
+            [bn],
+          );
+          const wasRetry = retryCheck.rows.length > 0;
+
+          // Record failed block for later retry
+          await recordFailedBlock(
+            pg,
+            bn,
+            "blocks_el",
+            "db_write",
+            blockError as Error,
+            {
+              ...errorDetails,
+              retry_attempt: wasRetry ? "yes" : "no",
+            },
+          );
+
+          // Update cursor to continue processing despite failure
+          if (cfg.advanceCursor !== false) {
+            try {
+              await pg.query(
+                `INSERT INTO ingest_cursors(module,last_processed_height) VALUES($1,$2)
+                 ON CONFLICT (module) DO UPDATE SET last_processed_height=EXCLUDED.last_processed_height, updated_at=NOW()`,
+                ["blocks_el", bn],
+              );
+            } catch (cursorError) {
+              console.error(
+                `EL: Failed to update cursor for failed block ${bn}:`,
+                (cursorError as Error).message,
+              );
+            }
+          }
+
           writeIndex++;
         } finally {
           if (transactionClient && "release" in transactionClient) {
@@ -797,10 +1099,43 @@ export async function ingestEl(
         }
       } catch (clientError) {
         // Handle client acquisition errors
+        const err = clientError as Error;
         console.error(
           `EL: Error acquiring transaction client for block ${bn}:`,
-          (clientError as Error).message,
+          JSON.stringify({
+            error_type: err.constructor.name,
+            error_message: err.message,
+            block_height: bn,
+            stack: err.stack,
+          }),
         );
+
+        // Record failed block
+        await recordFailedBlock(
+          pg,
+          bn,
+          "blocks_el",
+          "db_write",
+          err,
+          { error_context: "client_acquisition" },
+        );
+
+        // Update cursor to continue processing despite failure
+        if (cfg.advanceCursor !== false) {
+          try {
+            await pg.query(
+              `INSERT INTO ingest_cursors(module,last_processed_height) VALUES($1,$2)
+               ON CONFLICT (module) DO UPDATE SET last_processed_height=EXCLUDED.last_processed_height, updated_at=NOW()`,
+              ["blocks_el", bn],
+            );
+          } catch (cursorError) {
+            console.error(
+              `EL: Failed to update cursor for failed block ${bn}:`,
+              (cursorError as Error).message,
+            );
+          }
+        }
+
         writeIndex++;
       }
     }
