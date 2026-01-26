@@ -93,12 +93,14 @@ export const rpcErrors = new Counter({
 export const loopIterations = new Counter({
   name: "beralyzer_loop_iterations_total",
   help: "Total number of main loop iterations",
+  labelNames: ["worker"], // EL, ERC20, CL, Decoder, Snapshots
   registers: [register],
 });
 
 export const loopDuration = new Histogram({
   name: "beralyzer_loop_duration_seconds",
   help: "Duration of main loop iterations in seconds",
+  labelNames: ["worker"], // EL, ERC20, CL, Decoder, Snapshots
   buckets: [0.5, 1, 2, 5, 10, 30, 60],
   registers: [register],
 });
