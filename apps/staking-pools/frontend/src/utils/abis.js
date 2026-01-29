@@ -7,8 +7,6 @@ export const STAKING_POOL_ABI = [
   { name: 'activeThresholdReached', type: 'function', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'bool' }] },
   { name: 'convertToAssets', type: 'function', stateMutability: 'view', inputs: [{ name: 'shares', type: 'uint256' }], outputs: [{ name: '', type: 'uint256' }] },
   { name: 'convertToShares', type: 'function', stateMutability: 'view', inputs: [{ name: 'assets', type: 'uint256' }], outputs: [{ name: '', type: 'uint256' }] },
-  { name: 'previewRedeem', type: 'function', stateMutability: 'view', inputs: [{ name: 'shares', type: 'uint256' }], outputs: [{ name: '', type: 'uint256' }] },
-  { name: 'previewWithdraw', type: 'function', stateMutability: 'view', inputs: [{ name: 'assets', type: 'uint256' }], outputs: [{ name: '', type: 'uint256' }] },
   { name: 'submit', type: 'function', stateMutability: 'payable', inputs: [{ name: 'receiver', type: 'address' }], outputs: [{ name: '', type: 'uint256' }] }
 ]
 
@@ -32,9 +30,6 @@ export const WITHDRAWAL_VAULT_ABI = [
     ], outputs: [] },
   { name: 'finalizeWithdrawalRequest', type: 'function', stateMutability: 'nonpayable', inputs: [
       { name: 'requestId', type: 'uint256' }
-    ], outputs: [] },
-  { name: 'finalizeWithdrawalRequests', type: 'function', stateMutability: 'nonpayable', inputs: [
-      { name: 'requestIds', type: 'uint256[]' }
     ], outputs: [] },
   { name: 'getWithdrawalRequest', type: 'function', stateMutability: 'view', inputs: [
       { name: 'requestId', type: 'uint256' }
