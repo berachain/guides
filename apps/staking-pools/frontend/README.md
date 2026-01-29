@@ -5,7 +5,7 @@ Boilerplate user-facing web interface for staking into a single StakingPool and 
 ## Quick Start
 
 ```bash
-cd apps/staking-pools/frontend
+cd /home/cam/src/contracts-staking-pools/script/frontend
 npm install
 npm run dev
 ```
@@ -32,6 +32,8 @@ This app loads `/config.json` at runtime. Serve or edit `config.json` to set:
   - by assets: `WithdrawalVault.requestWithdrawal(pubkey, assetsInGWei, maxFeeToPay)`
   - by shares: `WithdrawalVault.requestRedeem(pubkey, shares, maxFeeToPay)`
   - finalize: `WithdrawalVault.finalizeWithdrawalRequest(requestId)` after cooldown
+
+Operator and delegator views were removed to keep this a minimal end‑user example.
 
 ## External Access
 
