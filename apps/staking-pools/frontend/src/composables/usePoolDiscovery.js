@@ -9,7 +9,11 @@ const FACTORY_ADDRESSES = {
 }
 
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000'
-const GRAPHQL_ENDPOINT = 'https://api.berachain.com/graphql'
+const GRAPHQL_ENDPOINTS = {
+  80094: 'https://api.berachain.com/graphql',
+  80069: 'https://bepolia-api.berachain.com/graphql'
+}
+const DEAD_ASSETS_THRESHOLD_WEI = 5_000_000_000_000_000n // 0.005 BERA
 const CHAIN_ENUM_BY_ID = {
   80094: 'BERACHAIN',
   80069: 'BEPOLIA'
@@ -20,6 +24,13 @@ export function usePoolDiscovery(publicClient, chainId, configPools = null, conf
   const pools = ref([])
   const isLoading = ref(false)
   const error = ref(null)
+
+  function defaultPoolName(stakingPoolAddress) {
+    if (!stakingPoolAddress || typeof stakingPoolAddress !== 'string') return 'Staking Pool'
+    const a = stakingPoolAddress.toLowerCase()
+    if (!a.startsWith('0x') || a.length < 6) return 'Staking Pool'
+    return `Staking Pool ${a.slice(0, 6)}`
+  }
 
   // Mode detection:
   // - Explicit mode: "single" or "discovery" in config.mode
@@ -136,7 +147,7 @@ export function usePoolDiscovery(publicClient, chainId, configPools = null, conf
               exchangeRate,
               isActive,
               isFullyExited,
-              name: poolConfig.name || 'Staking Pool',
+              name: poolConfig.name || defaultPoolName(poolConfig.stakingPool),
               fromConfig: true
             }
           } catch (err) {
@@ -181,8 +192,9 @@ export function usePoolDiscovery(publicClient, chainId, configPools = null, conf
     }
   }
 
-  async function graphqlRequest(query, variables) {
-    const response = await fetch(GRAPHQL_ENDPOINT, {
+  async function graphqlRequest(chainIdValue, query, variables) {
+    const endpoint = GRAPHQL_ENDPOINTS[chainIdValue] || GRAPHQL_ENDPOINTS[80094]
+    const response = await fetch(endpoint, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ query, variables })
@@ -205,7 +217,7 @@ export function usePoolDiscovery(publicClient, chainId, configPools = null, conf
     return out
   }
 
-  async function fetchAllValidators(chainEnum) {
+  async function fetchAllValidators(chainIdValue, chainEnum) {
     const query = `
       query Validators($chain: GqlChain!, $first: Int!, $skip: Int!) {
         polGetValidators(chain: $chain, first: $first, skip: $skip) {
@@ -215,6 +227,7 @@ export function usePoolDiscovery(publicClient, chainId, configPools = null, conf
             pubkey
             operator
             metadata { name logoURI website twitter }
+            dynamicData { apy stakedBeraAmount }
           }
         }
       }
@@ -226,7 +239,7 @@ export function usePoolDiscovery(publicClient, chainId, configPools = null, conf
     let guard = 0
 
     while (guard++ < 100) {
-      const data = await graphqlRequest(query, { chain: chainEnum, first, skip })
+      const data = await graphqlRequest(chainIdValue, query, { chain: chainEnum, first, skip })
       const page = data?.polGetValidators
       const pageVals = page?.validators || []
 
@@ -253,7 +266,7 @@ export function usePoolDiscovery(publicClient, chainId, configPools = null, conf
       throw new Error(`Factory address not found for chain ID ${chain}`)
     }
 
-    const vals = await fetchAllValidators(chainEnum)
+    const vals = await fetchAllValidators(chain, chainEnum)
     validators.value = vals
 
     if (!vals.length) return []
@@ -285,6 +298,8 @@ export function usePoolDiscovery(publicClient, chainId, configPools = null, conf
       const stakingPool = (result[1] || '').toLowerCase()
       if (!stakingPool || stakingPool === ZERO_ADDRESS) continue
 
+      const displayName = v.metadata?.name || defaultPoolName(stakingPool)
+
       discovered.push({
         validator: {
           index: null,
@@ -292,7 +307,8 @@ export function usePoolDiscovery(publicClient, chainId, configPools = null, conf
           balance: null,
           status: null,
           operator: v.operator,
-          metadata: v.metadata || null
+          metadata: v.metadata || null,
+          dynamicData: v.dynamicData || null
         },
         stakingPool,
         smartOperator: result[0],
@@ -302,7 +318,10 @@ export function usePoolDiscovery(publicClient, chainId, configPools = null, conf
         exchangeRate: '1.0',
         isActive: false,
         isFullyExited: false,
-        name: v.metadata?.name || null
+        isDead: false,
+        name: displayName,
+        polApy: v.dynamicData?.apy ?? null,
+        polStakedBeraAmount: v.dynamicData?.stakedBeraAmount ?? null
       })
     }
 
@@ -332,6 +351,9 @@ export function usePoolDiscovery(publicClient, chainId, configPools = null, conf
 
       discovered[i].isFullyExited = isFullyExited
       discovered[i].isActive = contractIsActive && !isFullyExited
+      discovered[i].totalAssetsWei = typeof totalAssets === 'bigint' ? totalAssets.toString() : null
+      discovered[i].isDead =
+        isFullyExited && typeof totalAssets === 'bigint' && totalAssets < DEAD_ASSETS_THRESHOLD_WEI
 
       if (typeof totalAssets === "bigint" && typeof totalSupply === "bigint") {
         if (totalSupply > 0n) {
@@ -341,7 +363,7 @@ export function usePoolDiscovery(publicClient, chainId, configPools = null, conf
       }
     }
 
-    return discovered
+    return discovered.sort((a, b) => (a.stakingPool || '').localeCompare(b.stakingPool || ''))
   }
 
   return {

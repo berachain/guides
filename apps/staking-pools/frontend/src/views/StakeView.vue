@@ -1,19 +1,25 @@
 <template>
   <div class="stake-view">
+    <div v-if="hubBoostUrl" class="view-links">
+      <a class="hub-link" :href="hubBoostUrl" target="_blank" rel="noreferrer">
+        View validator on Hub
+      </a>
+    </div>
+
     <!-- Stats Row -->
     <div class="stats-row">
       <StatCard
-        label="Total Staked"
+        label="Pool Assets"
         :value="formattedTotalAssets + ' BERA'"
         icon="📊"
       />
       <StatCard
-        label="Exchange Rate"
+        label="stBERA Rate"
         :value="'1 BERA = ' + exchangeRateDisplay + ' stBERA'"
         icon="🔄"
       />
       <StatCard
-        label="Pool Status"
+        label="Status"
         :value="poolStatusLabel"
         :value-class="poolStatusClass"
         icon="⚡"
@@ -58,6 +64,7 @@ const props = defineProps({
   isLoading: { type: Boolean, default: false },
   walletBalance: { type: String, default: '0' },
   explorerUrl: { type: String, default: 'https://berascan.com' },
+  hubBoostUrl: { type: String, default: null },
   formattedTotalAssets: { type: String, default: '0' },
   exchangeRate: { type: Number, default: 1 },
   poolStatus: { type: String, default: 'active' },
@@ -98,6 +105,28 @@ const poolStatusClass = computed(() => {
   display: flex;
   flex-direction: column;
   gap: var(--space-6);
+}
+
+.view-links {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.hub-link {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  text-decoration: none;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-secondary);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  transition: all var(--transition-fast);
+}
+
+.hub-link:hover {
+  color: var(--color-text-primary);
+  border-color: var(--color-border-focus);
+  background: var(--color-bg-card);
 }
 
 .stats-row {

@@ -52,6 +52,7 @@
             :is-loading="pool.isLoading.value"
             :wallet-balance="walletBalance"
             :explorer-url="explorerUrl"
+            :hub-boost-url="hubBoostUrl"
             :formatted-total-assets="pool.formattedTotalAssets.value"
             :exchange-rate="pool.exchangeRate.value"
             :pool-status="pool.poolStatus.value"
@@ -69,6 +70,7 @@
             :is-connected="wallet.isConnected.value"
             :is-loading="withdrawals.isLoading.value"
             :explorer-url="explorerUrl"
+            :hub-boost-url="hubBoostUrl"
             :user-shares="pool.userShares.value"
             :formatted-user-shares="pool.formattedUserShares.value"
             :formatted-user-assets="pool.formattedUserAssets.value"
@@ -108,15 +110,105 @@ const isLoading = ref(true)
 const loadError = ref(null)
 const walletBalance = ref('0')
 const activeTab = ref('stake')
+const isApplyingUrlState = ref(false)
 
 // Computed
 const explorerUrl = computed(() => config.value?.network?.explorerUrl || 'https://berascan.com')
+const hubBoostUrl = computed(() => {
+  const pubkey = poolConfig.value?.validatorPubkey
+  const chainId = config.value?.network?.chainId
+  if (!pubkey || typeof pubkey !== 'string') return null
+
+  const base =
+    chainId === 80069
+      ? 'https://bepolia.hub.berachain.com'
+      : 'https://hub.berachain.com'
+
+  return `${base}/boost/${encodeURIComponent(pubkey)}`
+})
 
 const tabs = computed(() => [
   { id: 'discover', label: 'Discover', icon: '🔍' },
   { id: 'stake', label: 'Stake', icon: '📥' },
   { id: 'withdraw', label: 'Withdraw', icon: '📤', badge: withdrawals.pendingCount.value || null }
 ])
+
+function normalizeTab(tab) {
+  if (tab === 'discover' || tab === 'stake' || tab === 'withdraw') return tab
+  return null
+}
+
+function getUrlState() {
+  const params = new URLSearchParams(window.location.search)
+  const tab = normalizeTab(params.get('tab'))
+  const pool = params.get('pool')
+  const pubkey = params.get('pubkey')
+  return { tab, pool, pubkey }
+}
+
+function writeUrlState(next, mode = 'push') {
+  const params = new URLSearchParams(window.location.search)
+  if (next.tab) params.set('tab', next.tab)
+  else params.delete('tab')
+
+  if (next.pool) params.set('pool', next.pool)
+  else params.delete('pool')
+
+  if (next.pubkey) params.set('pubkey', next.pubkey)
+  else params.delete('pubkey')
+
+  const qs = params.toString()
+  const url = qs ? `${window.location.pathname}?${qs}` : window.location.pathname
+  if (mode === 'replace') window.history.replaceState({}, '', url)
+  else window.history.pushState({}, '', url)
+}
+
+async function applyUrlState(state) {
+  isApplyingUrlState.value = true
+  try {
+    if (state.tab) activeTab.value = state.tab
+
+    // If URL specifies a pool, select it (works in discovery mode too).
+    if (state.pool && state.pubkey) {
+      poolAddress.value = state.pool
+      poolConfig.value = {
+        name: poolConfig.value?.name || 'Staking Pool',
+        validatorPubkey: state.pubkey,
+        stakingPool: state.pool,
+        enabled: true
+      }
+
+      // Try to set delegation handler for this pubkey.
+      if (wallet.publicClient.value) {
+        try {
+          const chainId = config.value?.network?.chainId
+          const factoryAddress =
+            chainId === 80069
+              ? '0x8b472791aC2f9e9Bd85f8919401b8Ce3bdFd464c'
+              : '0xAd17932a5B1aaeEa73D277a6AE670623F176E0D0'
+
+          const handlerAddr = await wallet.publicClient.value.readContract({
+            address: factoryAddress,
+            abi: DELEGATION_HANDLER_FACTORY_ABI,
+            functionName: 'delegationHandlers',
+            args: [state.pubkey]
+          })
+          delegationHandlerAddress.value =
+            handlerAddr && handlerAddr !== '0x0000000000000000000000000000000000000000'
+              ? handlerAddr
+              : null
+        } catch {
+          delegationHandlerAddress.value = null
+        }
+      }
+
+      await pool.loadPoolData()
+      if (wallet.isConnected.value) await pool.loadUserData()
+    }
+  } finally {
+    isApplyingUrlState.value = false
+  }
+}
 
 // Composables
 const wallet = useWallet()
@@ -164,23 +256,36 @@ async function initialize() {
     
     // Initialize chain for wallet
     await wallet.initializeChain(cfg)
+
+    // Apply any URL state after chain/config exists.
+    const urlState = getUrlState()
+    await applyUrlState(urlState)
+    // Normalize URL to reflect current state (without adding a history entry).
+    writeUrlState(
+      {
+        tab: activeTab.value,
+        pool: poolAddress.value,
+        pubkey: poolConfig.value?.validatorPubkey
+      },
+      'replace'
+    )
     
     // Determine mode
     const mode = cfg.mode || 'single'
     const isDiscoveryMode = (mode === 'discovery')
+    const enabledPools = Object.entries(cfg.pools || {})
+      .filter(([_, p]) => p.enabled)
+      .map(([key, p]) => ({ key, ...p }))
+    const firstEnabledPool = enabledPools[0] || null
     
     // For single pool mode, get first enabled pool
     if (!isDiscoveryMode) {
-      const pools = Object.entries(cfg.pools || {})
-        .filter(([_, p]) => p.enabled)
-        .map(([key, p]) => ({ key, ...p }))
-      
-      if (pools.length === 0) {
+      if (!firstEnabledPool) {
         throw new Error('Single pool mode requires at least one enabled pool in config.json. Add a pool to the "pools" section, or set "mode": "discovery" to use multi-pool mode.')
       }
       
-      poolConfig.value = pools[0]
-      poolAddress.value = pools[0].stakingPool
+      poolConfig.value = firstEnabledPool
+      poolAddress.value = firstEnabledPool.stakingPool
     } else {
       // Discovery mode: pools will be loaded when discover tab is opened
       // For now, we can't set a default pool, so leave it null
@@ -191,7 +296,8 @@ async function initialize() {
     
     // Try to get delegation handler from config, or query from factory if pubkey available
     let handlerAddr = cfg.contracts?.delegationHandler
-    if ((!handlerAddr || handlerAddr === '0x0000000000000000000000000000000000000000') && pools[0].validatorPubkey && wallet.publicClient.value) {
+    const handlerPubkey = firstEnabledPool?.validatorPubkey
+    if ((!handlerAddr || handlerAddr === '0x0000000000000000000000000000000000000000') && handlerPubkey && wallet.publicClient.value) {
       // Query delegation handler from factory using pubkey
       try {
         const factoryAddress = cfg.network?.chainId === 80069 
@@ -202,7 +308,7 @@ async function initialize() {
           address: factoryAddress,
           abi: DELEGATION_HANDLER_FACTORY_ABI,
           functionName: 'delegationHandlers',
-          args: [pools[0].validatorPubkey]
+          args: [handlerPubkey]
         })
         
         if (handlerAddr && handlerAddr !== '0x0000000000000000000000000000000000000000') {
@@ -322,12 +428,20 @@ watch(activeTab, async (tab) => {
   }
 })
 
+watch(
+  [activeTab, poolAddress, () => poolConfig.value?.validatorPubkey],
+  ([tab, pool, pubkey]) => {
+    if (isApplyingUrlState.value) return
+    writeUrlState({ tab, pool, pubkey }, 'push')
+  }
+)
+
 // Handle pool selection from discovery
 async function handleSelectPool(selectedPool) {
   // Update pool address and related state
   poolAddress.value = selectedPool.stakingPool
   poolConfig.value = {
-    name: `Validator ${selectedPool.validator.index}`,
+    name: selectedPool.name || 'Staking Pool',
     validatorPubkey: selectedPool.validator.pubkey,
     stakingPool: selectedPool.stakingPool,
     smartOperator: selectedPool.smartOperator,
@@ -371,6 +485,12 @@ let refreshInterval = null
 
 onMounted(() => {
   initialize()
+
+  window.addEventListener('popstate', async () => {
+    if (!config.value) return
+    const st = getUrlState()
+    await applyUrlState(st)
+  })
   
   refreshInterval = setInterval(async () => {
     if (poolAddress.value) {
