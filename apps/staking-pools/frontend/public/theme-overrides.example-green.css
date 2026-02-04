@@ -1,0 +1,12 @@
+/* 
+ * Example Theme Override: Green Accent
+ * 
+ * This is an example override file showing how to customize the accent color.
+ * Matches branding/logo-green.svg
+ * To use: Copy this file to theme-overrides.css and modify as needed.
+ */
+
+:root {
+  --color-accent: #10b981;
+  --color-accent-hover: #34d399;
+}

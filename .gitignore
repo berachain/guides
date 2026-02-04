@@ -15,6 +15,14 @@ node_modules
 # Testing
 coverage
 
+# Playwright artifacts (staking pools frontend)
+apps/staking-pools/frontend/playwright-report/
+apps/staking-pools/frontend/test-results/
+
+# Local operator config (staking pools frontend)
+apps/staking-pools/frontend/public/config.json
+apps/staking-pools/frontend/public/config.draft.json
+
 # Turbo
 .turbo
 

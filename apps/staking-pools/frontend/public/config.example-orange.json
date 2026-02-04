@@ -1,0 +1,33 @@
+{
+  "_comment": "Example configuration with orange branding theme",
+  "_mode": "Choose 'single' for one pool, 'discovery' for multi-pool browsing",
+  "mode": "single",
+  
+  "network": {
+    "name": "Bepolia",
+    "chainId": 80069,
+    "rpcUrl": "https://bepolia.rpc.berachain.com",
+    "explorerUrl": "https://bepolia.berascan.com"
+  },
+  
+  "branding": {
+    "name": "Orange Staking Pool",
+    "logo": "/branding/logo-orange.svg",
+    "theme": "orange"
+  },
+  
+  "contracts": {
+    "withdrawalVault": "0xAFAc2f11Cb39F0521b22494F6101002ce653D2f4",
+    "delegationHandler": "0x0000000000000000000000000000000000000000"
+  },
+  
+  "_pools_comment": "For single mode: Add your pool here. For discovery mode: Leave empty {}",
+  "pools": {
+    "default": {
+      "name": "Orange Staking Pool",
+      "stakingPool": "0x15aA5162f4c7915edc209296Cd366eBb4658c520",
+      "validatorPubkey": "0xa6ce5adefe9d089ffd772297d77d147beff8fa8bf3c1b5a6b8ff204fc168a026968278214a8dd1624cb5947bb009d70f",
+      "enabled": true
+    }
+  }
+}
