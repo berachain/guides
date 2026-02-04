@@ -1,0 +1,25 @@
+{
+  "_comment": "Multi-Pool Discovery Mode Configuration",
+  "_mode": "Set mode to 'discovery' to discover pools via api.berachain.com/graphql + on-chain factory calls",
+  "mode": "discovery",
+  
+  "network": {
+    "name": "Bepolia",
+    "chainId": 80069,
+    "rpcUrl": "https://bepolia.rpc.berachain.com",
+    "explorerUrl": "https://bepolia.berascan.com"
+  },
+  
+  "branding": {
+    "name": "Staking Pool Explorer",
+    "logo": null
+  },
+  
+  "contracts": {
+    "withdrawalVault": "0xAFAc2f11Cb39F0521b22494F6101002ce653D2f4",
+    "delegationHandler": "0x0000000000000000000000000000000000000000"
+  },
+  
+  "_pools_comment": "Leave empty for discovery mode - pools loaded from JSON file",
+  "pools": {}
+}

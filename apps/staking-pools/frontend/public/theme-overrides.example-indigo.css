@@ -1,0 +1,12 @@
+/* 
+ * Example Theme Override: Indigo Accent
+ * 
+ * This is an example override file showing how to customize the accent color.
+ * Matches branding/logo-monogram.png
+ * To use: Copy this file to theme-overrides.css and modify as needed.
+ */
+
+:root {
+  --color-accent: #6366f1;
+  --color-accent-hover: #818cf8;
+}

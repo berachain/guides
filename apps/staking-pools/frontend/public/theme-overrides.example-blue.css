@@ -1,0 +1,12 @@
+/* 
+ * Example Theme Override: Blue Accent
+ * 
+ * This is an example override file showing how to customize the accent color.
+ * Matches branding/logo-blue.svg
+ * To use: Copy this file to theme-overrides.css and modify as needed.
+ */
+
+:root {
+  --color-accent: #3b82f6;
+  --color-accent-hover: #60a5fa;
+}
