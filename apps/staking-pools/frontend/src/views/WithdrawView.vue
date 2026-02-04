@@ -1,5 +1,11 @@
 <template>
   <div class="withdraw-view">
+    <div v-if="hubBoostUrl" class="view-links">
+      <a class="hub-link" :href="hubBoostUrl" target="_blank" rel="noreferrer">
+        View validator on Hub
+      </a>
+    </div>
+
     <!-- Stats Row -->
     <div class="stats-row">
       <StatCard
@@ -57,6 +63,7 @@ const props = defineProps({
   isConnected: { type: Boolean, default: false },
   isLoading: { type: Boolean, default: false },
   explorerUrl: { type: String, default: 'https://berascan.com' },
+  hubBoostUrl: { type: String, default: null },
   userShares: { type: BigInt, default: 0n },
   formattedUserShares: { type: String, default: '0' },
   formattedUserAssets: { type: String, default: '0' },
@@ -79,6 +86,28 @@ const readyCount = computed(() => {
   display: flex;
   flex-direction: column;
   gap: var(--space-6);
+}
+
+.view-links {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.hub-link {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  text-decoration: none;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-secondary);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  transition: all var(--transition-fast);
+}
+
+.hub-link:hover {
+  color: var(--color-text-primary);
+  border-color: var(--color-border-focus);
+  background: var(--color-bg-card);
 }
 
 .stats-row {
