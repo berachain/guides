@@ -1,10 +1,38 @@
-import { ref } from 'vue'
+import { ref, toValue } from 'vue'
 import { parseEther } from 'viem'
 import { WITHDRAWAL_VAULT_ABI } from '../utils/abis.js'
 import { formatAssets, formatTimeRemaining } from '../utils/format.js'
+import { getChainConstants } from '../constants/chains.js'
 import { SECONDS_PER_BLOCK } from '../constants/thresholds.js'
 
-export function useWithdrawals(publicClient, walletClient, withdrawalVaultAddress, poolAddress, validatorPubkey, account) {
+async function fetchValidatorNamesByPubkeys(chainId, pubkeys) {
+  const chain = getChainConstants(chainId)
+  if (!chain?.graphqlEndpoint || !chain?.chainEnum || !pubkeys?.length) return new Map()
+  const normalized = pubkeys.map(pk => (pk?.startsWith('0x') ? pk : `0x${pk || ''}`))
+  try {
+    const res = await fetch(chain.graphqlEndpoint, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        query: `query GetValidators($chain: GqlChain!, $pubkeys: [String!]!) { polGetValidators(chain: $chain, where: { pubkeyIn: $pubkeys }) { validators { pubkey metadata { name } } } }`,
+        variables: { chain: chain.chainEnum, pubkeys: normalized }
+      })
+    })
+    if (!res.ok) return new Map()
+    const json = await res.json()
+    const list = json.data?.polGetValidators?.validators || []
+    const map = new Map()
+    for (const v of list) {
+      const key = v.pubkey?.toLowerCase()
+      if (key) map.set(key, { name: v.metadata?.name ?? null, metadata: v.metadata ?? null })
+    }
+    return map
+  } catch {
+    return new Map()
+  }
+}
+
+export function useWithdrawals(publicClient, walletClient, withdrawalVaultAddress, poolAddress, validatorPubkey, account, chainId = null) {
   const isLoading = ref(false)
   const error = ref(null)
   
@@ -17,8 +45,8 @@ export function useWithdrawals(publicClient, walletClient, withdrawalVaultAddres
   const finalizationDelayBlocks = ref(null)
   let lastDelayVault = null
   async function loadFinalizationDelay() {
-    const client = publicClient?.value || publicClient
-    const vault = withdrawalVaultAddress?.value
+    const client = toValue(publicClient)
+    const vault = toValue(withdrawalVaultAddress)
     if (!client || !vault) {
       finalizationDelayBlocks.value = null
       lastDelayVault = null
@@ -79,7 +107,7 @@ export function useWithdrawals(publicClient, walletClient, withdrawalVaultAddres
       // Get current block for status calculation
       const currentBlock = await publicClient.value.getBlockNumber()
       
-      const targetPubkey = (validatorPubkey?.value || validatorPubkey || '').toLowerCase()
+      const targetPubkey = (toValue(validatorPubkey) || '').toLowerCase()
 
       // Enumerate all tokens owned by user (multicall)
       const tokenCalls = []
@@ -141,8 +169,29 @@ export function useWithdrawals(publicClient, walletClient, withdrawalVaultAddres
           requestBlock: request.requestBlock,
           isReady,
           blocksRemaining: blocksRemaining === null ? null : Number(blocksRemaining),
-          estimatedTimeRemaining: blocksRemaining === null ? null : Number(blocksRemaining) * SECONDS_PER_BLOCK // seconds
+          estimatedTimeRemaining: blocksRemaining === null ? null : Number(blocksRemaining) * SECONDS_PER_BLOCK, // seconds
+          validatorName: null // Will be enriched below
         })
+      }
+      
+      // Enrich with validator names from GraphQL API
+      try {
+        const chain = toValue(chainId)
+        if (chain && requests.length > 0) {
+          const uniquePubkeys = [...new Set(requests.map(r => r.pubkey))]
+          const validatorMap = await fetchValidatorNamesByPubkeys(chain, uniquePubkeys)
+          
+          for (const request of requests) {
+            const normalizedPubkey = request.pubkey?.toLowerCase()
+            const validatorData = validatorMap.get(normalizedPubkey)
+            if (validatorData?.name) {
+              request.validatorName = validatorData.name
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('Failed to enrich with validator names:', err)
+        // Continue without validator names
       }
       
       withdrawalRequests.value = requests
