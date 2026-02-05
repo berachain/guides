@@ -1,7 +1,7 @@
 import { ref, computed } from 'vue'
 import { formatEther, parseEther } from 'viem'
 import { STAKING_POOL_ABI, DELEGATION_HANDLER_ABI, INCENTIVE_COLLECTOR_ABI } from '../utils/abis.js'
-import { formatNumber } from '../utils/format.js'
+import { formatNumber, calculateExchangeRate } from '../utils/format.js'
 
 export function useStakingPool(publicClient, walletClient, poolAddress, account, delegationHandlerAddress, incentiveCollectorAddress) {
   const isLoading = ref(false)
@@ -26,10 +26,9 @@ export function useStakingPool(publicClient, walletClient, poolAddress, account,
   const incentiveFeePercentage = ref(null)
   
   // Computed
-  const exchangeRate = computed(() => {
-    if (totalSupply.value === 0n) return 1
-    return Number(formatEther(totalAssets.value)) / Number(formatEther(totalSupply.value))
-  })
+  const exchangeRate = computed(() =>
+    calculateExchangeRate(totalAssets.value, totalSupply.value)
+  )
   
   const formattedTotalAssets = computed(() => {
     return formatNumber(Number(formatEther(totalAssets.value)))
@@ -45,32 +44,20 @@ export function useStakingPool(publicClient, walletClient, poolAddress, account,
   
   const formattedTotalDelegation = computed(() => {
     if (totalDelegation.value === 0n) return null
-    const amount = Number(formatEther(totalDelegation.value))
-    // Format as $50K style
-    if (amount >= 1_000_000) {
-      return '$' + (amount / 1_000_000).toFixed(0) + 'M'
-    }
-    if (amount >= 1_000) {
-      return '$' + (amount / 1_000).toFixed(0) + 'K'
-    }
-    return '$' + amount.toFixed(0)
+    return formatNumber(Number(formatEther(totalDelegation.value)), 0, { prefix: '$' })
   })
 
   const formattedIncentivePayoutAmount = computed(() => {
-    if (incentivePayoutAmount.value === null || incentivePayoutAmount.value === undefined) return null
-    try {
-      const amount = Number(formatEther(incentivePayoutAmount.value))
-      if (!Number.isFinite(amount)) return null
-      return formatNumber(amount) + ' BERA'
-    } catch {
-      return null
-    }
+    if (incentivePayoutAmount.value == null) return null
+    const amount = Number(formatEther(incentivePayoutAmount.value))
+    if (!Number.isFinite(amount)) return null
+    return formatNumber(amount) + ' BERA'
   })
 
   // Contract stores fee in basis points (100 = 1%, 1000 = 10%)
   const formattedIncentiveFeePercentage = computed(() => {
     const raw = incentiveFeePercentage.value
-    if (raw === null || raw === undefined) return null
+    if (raw == null) return null
     const n = typeof raw === 'bigint' ? Number(raw) : Number(raw)
     if (!Number.isFinite(n)) return null
     return (n / 100).toFixed(2) + '%'
@@ -163,8 +150,6 @@ export function useStakingPool(publicClient, walletClient, poolAddress, account,
       incentivePayoutAmount.value = payoutAmount
       incentiveFeePercentage.value = feePercentage
     } catch (err) {
-      // Error handling: Log pool data loading failures
-      // This indicates a real problem (RPC failure, invalid address, etc.)
       console.error('Failed to load pool data:', err)
       error.value = 'Failed to load pool data'
     }
@@ -202,7 +187,9 @@ export function useStakingPool(publicClient, walletClient, poolAddress, account,
   }
 
   async function previewDeposit(amount) {
-    if (!publicClient.value || !poolAddress.value || !amount) return 0n
+    if (!publicClient.value || !poolAddress.value || !amount) {
+      return { success: false, shares: 0n, error: 'Missing client, pool address, or amount' }
+    }
     
     try {
       // Ensure amount is a string for parseEther
@@ -213,17 +200,21 @@ export function useStakingPool(publicClient, walletClient, poolAddress, account,
         functionName: 'previewDeposit',
         args: [parseEther(amountStr)]
       })
-      return shares
+      return { success: true, shares, error: null }
     } catch (err) {
-      // Error handling: Log preview failures for debugging
-      // This indicates contract call issues or invalid amounts
+      // Return detailed error information for UI display
       console.error('Preview deposit failed:', err)
-      return 0n
+      const errorMsg = err?.message?.includes('execution reverted') 
+        ? 'Pool may be paused or amount invalid'
+        : err?.message || 'Contract call failed'
+      return { success: false, shares: 0n, error: errorMsg }
     }
   }
 
   async function previewRedeem(shares) {
-    if (!publicClient.value || !poolAddress.value || !shares) return 0n
+    if (!publicClient.value || !poolAddress.value || !shares) {
+      return { success: false, assets: 0n, error: 'Missing client, pool address, or shares' }
+    }
     
     try {
       const assets = await publicClient.value.readContract({
@@ -232,12 +223,14 @@ export function useStakingPool(publicClient, walletClient, poolAddress, account,
         functionName: 'previewRedeem',
         args: [shares]
       })
-      return assets
+      return { success: true, assets, error: null }
     } catch (err) {
-      // Error handling: Log preview failures for debugging
-      // This indicates contract call issues or invalid shares
+      // Return detailed error information for UI display
       console.error('Preview redeem failed:', err)
-      return 0n
+      const errorMsg = err?.message?.includes('execution reverted')
+        ? 'Pool may be paused or shares invalid'
+        : err?.message || 'Contract call failed'
+      return { success: false, assets: 0n, error: errorMsg }
     }
   }
 
@@ -256,21 +249,27 @@ export function useStakingPool(publicClient, walletClient, poolAddress, account,
     try {
       // Ensure amount is a string for parseEther
       const amountStr = String(amount)
+      const amountWei = parseEther(amountStr)
+      
+      // Preview deposit to get expected shares
+      const preview = await previewDeposit(amountStr)
+      if (!preview.success) {
+        throw new Error(`Preview failed: ${preview.error}`)
+      }
+      
       const hash = await walletClient.value.writeContract({
         address: poolAddress.value,
         abi: STAKING_POOL_ABI,
         functionName: 'submit',
         args: [account.value],
-        value: parseEther(amountStr),
+        value: amountWei,
         account: account.value
       })
-      
-      // Wait for confirmation
+
       const receipt = await publicClient.value.waitForTransactionReceipt({ hash })
-      
-      // Reload data
+
       await Promise.all([loadPoolData(), loadUserData()])
-      
+
       return { hash, receipt }
     } catch (err) {
       error.value = err.message || 'Stake failed'
