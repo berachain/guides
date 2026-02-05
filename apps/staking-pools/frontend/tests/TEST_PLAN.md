@@ -49,6 +49,13 @@ Run with: `npm run test:e2e` or `npm run test:e2e:ui` for interactive mode
 - [ ] Badge hidden when no delegation
 - [ ] Badge hidden when handler not found
 
+### Withdrawal Tab Badge (see dev-docs/VALIDATION_PLAN.md)
+- [ ] Badge hidden on Discover tab (no pool in context)
+- [ ] Badge shown on Stake tab when viewing a pool where user has pending withdrawal(s) for that validator
+- [ ] Badge shown on Withdraw tab when viewing a pool where user has pending withdrawal(s) for that validator
+- [ ] Badge hidden on Stake/Withdraw when viewing a pool where user has no withdrawal for that validator
+- [ ] After switching to a different pool, badge reflects the new pool’s withdrawal count (reload on pool change)
+
 ### Wallet Connection
 - [ ] Connect button works
 - [ ] Wallet address displays when connected
