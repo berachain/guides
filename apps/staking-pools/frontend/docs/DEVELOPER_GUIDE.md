@@ -1,288 +1,121 @@
 # Developer Guide
 
-Quick reference for working with the refactored codebase.
+Reference for the staking pool frontend codebase. The app is a Vue 3 SPA with no router and no global store; state lives in `App.vue` and composables.
 
 ## Getting Started
 
 ```bash
-# Install dependencies (includes new: vue-router, pinia)
 npm install
-
-# Run dev server
-npm run dev
-
-# Build for production
-npm run build
+npm run dev    # dev server (Vite, default port 3001)
+npm run build  # output in dist/
 ```
 
 ## Architecture Overview
 
 ```
-┌─────────────────────────────────────────────────┐
-│ App.vue (Router + Store + Layout)              │
-│ - Initializes config, router, store            │
-│ - Provides header, navigation, container       │
-│ - Handles periodic refresh                     │
-└─────────────────────────────────────────────────┘
-                      │
-        ┌─────────────┴─────────────┐
-        │                           │
-┌───────▼────────┐         ┌────────▼────────┐
-│ Vue Router     │         │ Pinia Store     │
-│ - Routes       │◄────────│ - State         │
-│ - Guards       │         │ - Actions       │
-│ - Navigation   │         │ - Computed      │
-└────────────────┘         └─────────────────┘
-        │                           │
-        └─────────────┬─────────────┘
-                      │
-        ┌─────────────┴─────────────┐
-        │                           │
-┌───────▼────────┐         ┌────────▼────────┐
-│ Views          │         │ Composables     │
-│ - StakeView    │         │ - useWallet     │
-│ - WithdrawView │         │ - useStaking... │
-│ - PoolListView │         │ - useWithdraw.. │
-└────────────────┘         └─────────────────┘
+App.vue (layout + orchestration)
+  - Loads config, initializes wallet chain, applies URL state
+  - Owns: activeTab, poolAddress, poolConfig, refs for composables
+  - Passes refs/computed into composables; handles stake/withdraw events
+  - URL state: ?tab=stake|withdraw|discover &pool=0x... &pubkey=0x...
+  - Periodic refresh (visibility-aware) and popstate for back/forward
+        |
+        +-- useWallet()           -> account, connect, disconnect, publicClient, walletClient
+        +-- useStakingPool(...)   -> pool data, user position, stake, previewDeposit/previewRedeem
+        +-- useWithdrawals(...)   -> withdrawal requests, requestRedeem, finalize
+        +-- usePoolDiscovery(...) -> pools list (config or API), discoverPools
+        |
+        v
+Views: StakeView, WithdrawView, PoolListView
+  - Receive props from App; emit events (stake, requestRedeem, finalize, connect, etc.)
+  - No direct composable use; all wiring in App.vue
 ```
+
+There is no `src/router/` or `src/stores/`. Navigation is tab-based via `activeTab`; deep links use query params and `applyUrlState` in App.vue.
+
+## URL State
+
+The app syncs UI state to the URL so links can open a specific tab and pool.
+
+- **Read:** `getUrlState()` returns `{ tab, pool, pubkey }` from `?tab=&pool=&pubkey=`.
+- **Write:** `writeUrlState({ tab, pool, pubkey }, 'push'|'replace')` updates the URL.
+- **Apply:** `applyUrlState(state)` sets `activeTab`, selects pool when `state.pool` and `state.pubkey` are present (both validated: pool as Ethereum address, pubkey as 98-char hex). After applying, pool data and optional delegation handler are loaded.
+
+Pool and pubkey from the URL are validated with `isValidAddress(pool)` and `isValidValidatorPubkey(pubkey)` before use; invalid values are ignored.
 
 ## Error Handling
 
-### Throwing Errors (in composables)
+### Shared utilities (`src/utils/errors.js`)
 
-```javascript
-import { ValidationError, PoolStateError, parseError } from '../utils/errors.js'
+- **parseError(err)** — Normalizes thrown errors and contract revert messages into a consistent shape for the UI (e.g. `{ message, summary }`). Use in catch blocks before setting component error state or passing to ErrorDisplay.
+- **ValidationError**, **PoolStateError** — Optional typed errors for validation or pool-state failures; `parseError` can recognize them and set a friendly summary.
 
-// Validation errors
-if (!amount) {
-  throw new ValidationError('Amount is required', 'amount')
-}
+### In composables
 
-// Pool state errors
-if (pool.isExited) {
-  throw new PoolStateError('Pool has exited', poolAddress, 'exited')
-}
+Throw plain `Error` or use typed errors. Components (or App.vue) catch and pass the result through `parseError` before displaying.
 
-// Parse raw errors
-try {
-  await contract.call()
-} catch (err) {
-  const typedError = parseError(err)
-  throw typedError
-}
+### In components
+
+Use the shared **ErrorDisplay** component for a consistent error UX (summary, optional technical details, dismiss, optional retry). Pass the result of `parseError(err)` as the `error` prop. Alternatively, keep inline error UI (as in StakeCard) but still use `parseError` so messaging is consistent.
+
+### Global error handler (`main.js`)
+
+`app.config.errorHandler` is set to log unhandled component errors. You can extend it to send to an error-tracking service (e.g. Sentry) using `parseError` for a consistent payload.
+
+## File Layout
+
+```
+src/
+  App.vue              # Root: config, URL state, composables, tab layout, event handlers
+  main.js              # Bootstrap + global error handler
+  theme.css            # Design tokens and base styles
+  components/
+    common/            # WalletConnect, TabNav, StatCard, PoolDetailHeader, ErrorDisplay
+    stake/             # StakeCard, PositionCard
+    withdraw/          # WithdrawCard, WithdrawQueue
+  composables/         # useWallet, useStakingPool, useWithdrawals, usePoolDiscovery
+  constants/           # addresses (incl. isValidAddress, isValidValidatorPubkey), chains, thresholds
+  utils/               # config (loadConfig, loadTheme), format, abis, errors
+  views/               # StakeView, WithdrawView, PoolListView
 ```
 
-### Displaying Errors (in components)
+## Adding a New View or Tab
 
-```vue
-<script setup>
-import { ref } from 'vue'
-import { parseError } from '../utils/errors.js'
-import ErrorDisplay from '../components/common/ErrorDisplay.vue'
-
-const error = ref(null)
-
-async function doSomething() {
-  try {
-    // ... operation
-  } catch (err) {
-    error.value = parseError(err)
-  }
-}
-
-function retry() {
-  error.value = null
-  doSomething()
-}
-</script>
-
-<template>
-  <ErrorDisplay 
-    :error="error"
-    :on-retry="retry"
-    @dismiss="error = null"
-  />
-</template>
-```
-
-## Routing
-
-### Navigate Programmatically
-
-```javascript
-import { useRouter } from 'vue-router'
-
-const router = useRouter()
-
-// Navigate to discover
-router.push({ name: 'discover' })
-
-// Navigate to pool stake view
-router.push({
-  name: 'stake',
-  params: { address: poolAddress },
-  query: { pubkey: validatorPubkey }
-})
-
-// Navigate to pool withdraw view
-router.push({
-  name: 'withdraw',
-  params: { address: poolAddress },
-  query: { pubkey: validatorPubkey }
-})
-```
-
-### Access Route Params
-
-```javascript
-import { useRoute } from 'vue-router'
-
-const route = useRoute()
-
-// Get pool address from URL
-const poolAddress = route.params.address
-
-// Get validator pubkey from query
-const pubkey = route.query.pubkey
-```
-
-### Add New Routes
-
-Edit `src/router/index.js`:
-
-```javascript
-const routes = [
-  // ... existing routes
-  {
-    path: '/pool/:address/my-new-view',
-    name: 'myNewView',
-    component: () => import('../views/MyNewView.vue'),
-    meta: { requiresPool: true, requiresConfig: true }
-  }
-]
-```
-
-## Store Usage
-
-### In Components
-
-```javascript
-import { usePoolStore } from '../stores/poolStore.js'
-
-const poolStore = usePoolStore()
-
-// Access state
-poolStore.config
-poolStore.poolAddress
-poolStore.wallet.isConnected.value
-
-// Access computed
-poolStore.explorerUrl
-poolStore.hasSelectedPool
-
-// Call actions
-await poolStore.initialize(config)
-await poolStore.selectPool(pool)
-await poolStore.stake(amount, { resolve, reject })
-```
-
-### Adding Store Actions
-
-Edit `src/stores/poolStore.js`:
-
-```javascript
-export const usePoolStore = defineStore('pool', () => {
-  // ... existing code
-  
-  async function myNewAction(param) {
-    try {
-      // Do something with composables
-      const result = await pool.someMethod(param)
-      
-      // Update state if needed
-      someState.value = result
-      
-      return result
-    } catch (err) {
-      const typedError = parseError(err)
-      console.error('My action failed:', typedError)
-      throw typedError
-    }
-  }
-  
-  return {
-    // ... existing exports
-    myNewAction
-  }
-})
-```
-
-## Creating New Views
-
-```vue
-<!-- src/views/MyNewView.vue -->
-<template>
-  <div class="my-new-view">
-    <h1>{{ poolStore.poolConfig?.name }}</h1>
-    <button @click="doSomething">Do Something</button>
-  </div>
-</template>
-
-<script setup>
-import { usePoolStore } from '../stores/poolStore.js'
-
-const poolStore = usePoolStore()
-
-async function doSomething() {
-  await poolStore.myNewAction('param')
-}
-</script>
-
-<style scoped>
-.my-new-view {
-  padding: var(--space-6);
-}
-</style>
-```
+1. Add a new view component under `src/views/`.
+2. In App.vue: add a tab id (e.g. in `tabs` computed and `normalizeTab`), a `v-else-if` branch for the new tab, and any new event handlers that delegate to composables.
+3. If the view needs URL state, extend `getUrlState` / `writeUrlState` / `applyUrlState` (and optionally add query params) so the new tab is restorable from a link.
 
 ## Common Patterns
 
-### Loading State
+### Loading state
 
-```javascript
+```js
 const isLoading = ref(false)
-
 async function fetchData() {
   isLoading.value = true
   try {
-    // ... fetch
+    // ...
   } finally {
     isLoading.value = false
   }
 }
 ```
 
-```vue
-<template>
-  <div v-if="isLoading">Loading...</div>
-  <div v-else>{{ data }}</div>
-</template>
-```
+### Error + retry (with ErrorDisplay)
 
-### Error + Retry Pattern
+```js
+import { parseError } from '../utils/errors.js'
+import ErrorDisplay from '../components/common/ErrorDisplay.vue'
 
-```javascript
 const error = ref(null)
-
 async function operation() {
   error.value = null
   try {
-    // ... operation
+    // ...
   } catch (err) {
     error.value = parseError(err)
   }
 }
-
 function retry() {
   error.value = null
   operation()
@@ -290,270 +123,50 @@ function retry() {
 ```
 
 ```vue
-<template>
-  <ErrorDisplay 
-    :error="error"
-    :on-retry="retry"
-    @dismiss="error = null"
-  />
-</template>
+<ErrorDisplay :error="error" :on-retry="retry" @dismiss="error = null" />
 ```
 
-### Wallet Connection Check
+### Wallet check before actions
 
-```javascript
-import { usePoolStore } from '../stores/poolStore.js'
+Components receive `isConnected` from App.vue (from `wallet.isConnected.value`). Disable actions or show "Connect Wallet" when not connected; stake/withdraw handlers in App.vue assume wallet is connected when the user triggers them (composables throw if not).
 
-const poolStore = usePoolStore()
+### Preview before submit
 
-async function requiresWallet() {
-  if (!poolStore.wallet.isConnected.value) {
-    throw new ValidationError('Wallet not connected')
-  }
-  // ... proceed
-}
-```
-
-```vue
-<template>
-  <button 
-    v-if="!poolStore.wallet.isConnected.value"
-    @click="poolStore.wallet.connect"
-  >
-    Connect Wallet
-  </button>
-  <button 
-    v-else
-    @click="doAction"
-  >
-    Do Action
-  </button>
-</template>
-```
-
-### Preview Before Action
-
-```javascript
-async function handleStake(amount) {
-  // Preview first
-  const preview = await poolStore.pool.previewDeposit(amount)
-  if (!preview.success) {
-    error.value = parseError(preview.error)
-    return
-  }
-  
-  // Show preview to user
-  console.log('Expected shares:', preview.shares)
-  
-  // Execute
-  await poolStore.stake(amount, { resolve, reject })
-}
-```
+Stake and withdraw flows call `pool.previewDeposit(amount)` or `pool.previewRedeem(shares)` and show the result before the user confirms. Handlers in App.vue call the composable preview methods and pass results back to the card components.
 
 ## Testing
 
-### Unit Test a Store Action
+### Unit tests (Vitest)
 
-```javascript
-import { setActivePinia, createPinia } from 'pinia'
-import { usePoolStore } from '@/stores/poolStore'
-import { describe, it, expect, beforeEach, vi } from 'vitest'
+- **utils/format.js** — `validateAmount`, `formatNumber`, `calculateExchangeRate`, `formatTimeRemaining`, etc.
+- **constants/addresses.js** — `isValidAddress`, `isValidValidatorPubkey`, `normalizeAddress`, `isZeroAddress`.
+- Optionally: composable return shapes or pure helpers used by composables.
 
-describe('poolStore', () => {
-  beforeEach(() => {
-    setActivePinia(createPinia())
-  })
+Run: `npm run test` (or `npm run test:unit` if script is added).
 
-  it('stakes successfully', async () => {
-    const store = usePoolStore()
-    
-    // Mock composables
-    store.wallet.isConnected.value = true
-    store.poolAddress = '0x123'
-    
-    const mockStake = vi.fn().mockResolvedValue({ hash: '0xabc' })
-    store.pool.stake = mockStake
-    
-    // Execute
-    await store.stake('1.0', {
-      resolve: vi.fn(),
-      reject: vi.fn()
-    })
-    
-    expect(mockStake).toHaveBeenCalledWith('1.0')
-  })
-})
-```
+### E2E tests (Playwright)
 
-### Component Test with Store
+- **tests/basic.spec.js** — Single-pool flows: load, connect wallet, stake tab, withdraw tab, position display, pool scenarios (normal, exited, pending), discovery and pool selection, URL state.
+- **tests/helpers/** — Mock wallet and pool scenario helpers.
 
-```javascript
-import { mount } from '@vue/test-utils'
-import { createPinia } from 'pinia'
-import StakeView from '@/views/StakeView.vue'
+Run: `npm run test:e2e`.
 
-describe('StakeView', () => {
-  it('displays pool info', () => {
-    const wrapper = mount(StakeView, {
-      global: {
-        plugins: [createPinia()]
-      }
-    })
-    
-    // ... assertions
-  })
-})
-```
+## Style and Conventions
+
+- **Components:** PascalCase (`StakeCard.vue`).
+- **Composables:** camelCase with `use` prefix (`useWallet.js`).
+- **Utils:** camelCase (`parseError`, `formatNumber`).
+- **Constants:** SCREAMING_SNAKE_CASE in `constants/` (`ZERO_ADDRESS`).
+- **Component structure:** `<template>` then `<script setup>` (imports, props/emits, refs/computed, methods, lifecycle) then `<style scoped>`.
+
+## Pitfalls
+
+- **Don’t use pool or pubkey from the URL without validating.** Use `isValidAddress(pool)` and `isValidValidatorPubkey(pubkey)` in `applyUrlState` and anywhere else URL or external input is used to set pool state.
+- **Don’t forget to handle errors in async handlers.** Catch, run through `parseError`, and set component error state or pass to ErrorDisplay so the user sees a consistent message.
+- **Don’t mutate refs that App.vue owns (e.g. poolAddress) from a view without going through the intended flow.** Pool selection should go through the handler that updates poolConfig and delegation handler (e.g. `handleSelectPool` or URL apply).
 
 ## Debugging
 
-### Vue DevTools
-
-1. Install Vue DevTools browser extension
-2. Open DevTools → Vue tab
-3. Pinia tab shows store state, actions, getters
-4. Router tab shows current route, navigation history
-
-### Error Tracking
-
-All errors pass through global error handler in `main.js`:
-
-```javascript
-app.config.errorHandler = (err, instance, info) => {
-  // Errors are logged with full context
-  console.error('Unhandled error:', { error, component, info })
-}
-```
-
-Add error tracking service:
-
-```javascript
-import * as Sentry from '@sentry/vue'
-
-app.config.errorHandler = (err, instance, info) => {
-  const typedError = parseError(err)
-  Sentry.captureException(typedError, { extra: { component, info } })
-}
-```
-
-## Style Guide
-
-### File Organization
-
-```
-src/
-├── components/
-│   ├── common/           # Shared components
-│   ├── stake/            # Stake-specific
-│   └── withdraw/         # Withdraw-specific
-├── composables/          # Reusable logic
-├── constants/            # Constants, addresses
-├── router/               # Route definitions
-├── stores/               # Pinia stores
-├── utils/                # Utilities, errors
-└── views/                # Page-level components
-```
-
-### Naming Conventions
-
-- **Components:** PascalCase (`StakeCard.vue`)
-- **Composables:** camelCase with `use` prefix (`useWallet.js`)
-- **Stores:** camelCase with `use` prefix (`usePoolStore.js`)
-- **Utils:** camelCase (`parseError`, `formatNumber`)
-- **Constants:** SCREAMING_SNAKE_CASE (`ZERO_ADDRESS`)
-
-### Component Structure
-
-```vue
-<template>
-  <!-- Template -->
-</template>
-
-<script setup>
-// Imports
-import { ref } from 'vue'
-import { usePoolStore } from '../stores/poolStore.js'
-
-// Store/composables
-const poolStore = usePoolStore()
-
-// Local state
-const localState = ref(null)
-
-// Computed
-const computed = computed(() => ...)
-
-// Methods
-function method() { ... }
-
-// Lifecycle
-onMounted(() => { ... })
-</script>
-
-<style scoped>
-/* Styles */
-</style>
-```
-
-## Performance Tips
-
-1. **Lazy load routes:** Already done with `() => import()`
-2. **Computed properties:** Use computed for derived state
-3. **Avoid watchers:** Use computed when possible
-4. **Debounce inputs:** Already done in preview functions
-5. **Batch updates:** Store actions batch related updates
-
-## Common Pitfalls
-
-### ❌ Don't Access .value in Template
-
-```vue
-<!-- Wrong -->
-<template>{{ poolStore.wallet.isConnected.value }}</template>
-
-<!-- Right -->
-<template>{{ poolStore.wallet.isConnected }}</template>
-```
-
-### ❌ Don't Mutate Store State Directly
-
-```javascript
-// Wrong
-poolStore.poolAddress = '0x123'
-
-// Right
-await poolStore.selectPool(pool)
-```
-
-### ❌ Don't Forget Error Handling
-
-```javascript
-// Wrong
-async function stake() {
-  await poolStore.stake(amount)
-}
-
-// Right
-async function stake() {
-  try {
-    await poolStore.stake(amount, { resolve, reject })
-  } catch (err) {
-    error.value = parseError(err)
-  }
-}
-```
-
-### ❌ Don't Skip Address Validation
-
-```javascript
-// Wrong
-const address = route.params.address
-await contract.call({ address })
-
-// Right
-import { isValidAddress } from '../constants/addresses.js'
-const address = route.params.address
-if (!isValidAddress(address)) {
-  throw new ValidationError('Invalid address')
-}
-```
+- Vue DevTools: inspect component tree and refs; no Pinia or Router tabs.
+- Console: initialization and RPC errors are logged; global error handler logs unhandled component errors.
+- Network: config.json and RPC calls; check CORS if RPC fails from the browser.

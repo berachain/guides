@@ -76,15 +76,18 @@ export async function installEnhancedMockWallet({
           const contractMocks = contractReads[contractAddress]
           
           // Try to match the function call by function selector
+          const abi = [...STAKING_POOL_ABI, ...WITHDRAWAL_VAULT_ABI]
           for (const [functionName, mockValue] of Object.entries(contractMocks)) {
             try {
-              // Encode function to get selector (first 4 bytes)
-              const abi = [...STAKING_POOL_ABI, ...WITHDRAWAL_VAULT_ABI]
-              const encoded = encodeFunctionData({
-                abi,
-                functionName,
-                args: []
-              })
+              // Encode function to get selector; use zero args for functions that require args
+              let encoded
+              const item = abi.find((x) => x.type === 'function' && x.name === functionName)
+              const args = (item?.inputs || []).map((inp) => (inp.type === 'uint256' || inp.type === 'uint64' ? 0n : '0x0000000000000000000000000000000000000000'))
+              try {
+                encoded = encodeFunctionData({ abi, functionName, args: args.length ? args : [] })
+              } catch {
+                encoded = encodeFunctionData({ abi, functionName, args: [] })
+              }
               const selector = encoded.slice(0, 10) // 0x + 4 bytes
               
               // Check if call data starts with this selector
@@ -196,11 +199,20 @@ export function createPoolStateMocks(poolAddress, state = {}) {
     },
     previewDeposit: (method, params, context) => {
       // Simple mock: return shares proportional to assets
-      const assets = BigInt(totalAssets)
       const supply = BigInt(totalSupply)
       if (supply === 0n) return parseEther('0')
-      // Simplified 1:1 for testing (adjust as needed)
       return parseEther(totalAssets)
+    },
+    previewRedeem: (method, params, context) => {
+      // Return assets proportional to shares so withdrawal preview shows non-zero BERA
+      const assets = BigInt(parseEther(totalAssets.toString()))
+      const supply = BigInt(parseEther(totalSupply.toString()))
+      if (supply === 0n) return 0n
+      const [callParams] = params || []
+      const data = callParams?.data || ''
+      const sharesHex = data.length >= 74 ? data.slice(10, 74) : '0'
+      const shares = BigInt('0x' + sharesHex)
+      return (assets * shares) / supply
     }
   })
 }

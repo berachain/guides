@@ -59,7 +59,14 @@
         You can finalize the claim {{ delaySuffix }} to receive BERA.
       </p>
       
-      <div v-if="error" class="error-message">{{ error }}</div>
+      <div v-if="error" class="error-message">
+        <div class="error-summary">{{ errorSummary }}</div>
+        <details v-if="errorMessage && errorMessage !== errorSummary" class="error-details">
+          <summary>Technical details</summary>
+          <pre class="error-full">{{ errorMessage }}</pre>
+        </details>
+        <button type="button" class="error-dismiss" @click="error = null">Dismiss</button>
+      </div>
       <div v-if="txHash" class="success-message">
         Withdrawal requested! 
         <a :href="explorerUrl + '/tx/' + txHash" target="_blank" rel="noopener">View tx</a>
@@ -72,6 +79,7 @@
 import { ref, computed, watch, onUnmounted } from 'vue'
 import { parseEther, formatEther } from 'viem'
 import { formatAssets, validateAmount } from '../../utils/format.js'
+import { parseError } from '../../utils/errors.js'
 import { DEBOUNCE_MS } from '../../constants/thresholds.js'
 
 const props = defineProps({
@@ -126,6 +134,19 @@ const delaySuffix = computed(() => {
 const amountValidation = computed(() => validateAmount(sharesAmount.value))
 const amountError = computed(() => (sharesAmount.value ? amountValidation.value.error : null))
 
+const errorSummary = computed(() => {
+  const e = error.value
+  if (!e) return ''
+  if (typeof e === 'object' && e.summary) return e.summary
+  return typeof e === 'string' ? e : 'Request failed.'
+})
+const errorMessage = computed(() => {
+  const e = error.value
+  if (!e) return ''
+  if (typeof e === 'object' && e.message) return e.message
+  return typeof e === 'string' ? e : ''
+})
+
 function setMax() {
   sharesAmount.value = formatEther(props.userShares)
 }
@@ -144,7 +165,7 @@ async function handleRequestRedeem() {
     sharesAmount.value = ''
     previewAssets.value = null
   } catch (err) {
-    error.value = err.message || 'Request failed'
+    error.value = parseError(err)
   }
 }
 
@@ -278,11 +299,59 @@ onUnmounted(() => {
 .error-message {
   margin-top: var(--space-4);
   padding: var(--space-3);
-  background: rgba(239, 68, 68, 0.1);
+  background: rgba(239, 68, 68, 0.08);
   border: 1px solid var(--color-error);
   border-radius: var(--radius-md);
   color: var(--color-error);
   font-size: var(--font-size-sm);
+}
+
+.error-summary {
+  font-weight: 500;
+  margin-bottom: var(--space-2);
+}
+
+.error-details {
+  margin-top: var(--space-2);
+}
+
+.error-details summary {
+  cursor: pointer;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  user-select: none;
+}
+
+.error-full {
+  margin: var(--space-2) 0 0 0;
+  padding: var(--space-2);
+  max-height: 120px;
+  overflow-y: auto;
+  font-family: ui-monospace, monospace;
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--color-text-secondary);
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.error-dismiss {
+  margin-top: var(--space-3);
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.error-dismiss:hover {
+  color: var(--color-text-primary);
+  border-color: var(--color-border-focus);
 }
 
 .success-message {

@@ -280,6 +280,72 @@ test.describe('Staking Pool Frontend (Single Pool)', () => {
       await expect(page.getByRole('heading', { name: 'Request Withdrawal' }).first()).toBeVisible()
     })
 
+    // Regression: handlePreviewRedeem must pass result.assets (bigint) to the callback, not the whole
+    // { success, assets, error } object, so "This creates a claim for ≈ X BERA" shows non-zero X.
+    test('withdraw preview shows non-zero BERA estimate when user has position', async ({ page }) => {
+      const scenario = TestPoolScenarios.normalWithPosition
+      const mockConfig = createPoolScenario(scenario.pool, {
+        ...scenario.userState,
+        userAddress: TEST_ACCOUNT.address
+      })
+
+      await installEnhancedMockWallet({
+        page,
+        account: TEST_ACCOUNT,
+        defaultChain: bepolia,
+        mocks: mockConfig
+      })
+
+      await page.route('**/config.json', route => {
+        route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            network: {
+              name: 'Bepolia',
+              chainId: 80069,
+              rpcUrl: 'https://bepolia.rpc.berachain.com',
+              explorerUrl: 'https://testnet.berascan.com'
+            },
+            contracts: {
+              withdrawalVault: '0xAFAc2f11Cb39F0521b22494F6101002ce653D2f4',
+              delegationHandler: '0x0000000000000000000000000000000000000000'
+            },
+            pools: {
+              default: {
+                name: 'Staking Pool',
+                stakingPool: scenario.pool.stakingPool,
+                validatorPubkey: scenario.pool.pubkey,
+                enabled: true
+              }
+            }
+          })
+        })
+      })
+
+      await page.goto('/')
+      await connectWallet(page)
+      await page.waitForTimeout(1000)
+      await ensureStakeView(page)
+
+      await page.locator('nav.tab-nav button').filter({ hasText: 'Withdraw' }).first().click()
+      await page.waitForTimeout(2000)
+
+      const sharesInput = page.locator('.withdraw-card input[type="number"]').first()
+      await expect(sharesInput).toBeVisible({ timeout: 10000 })
+      const enabled = await sharesInput.isEnabled().catch(() => false)
+      if (!enabled) {
+        test.skip(true, 'Pool read uses RPC; test account has no position on chain. Run with RPC mock or fork to assert preview.')
+      }
+
+      await sharesInput.fill('100')
+      await page.waitForTimeout(600)
+
+      const preview = page.locator('.withdraw-card').filter({ hasText: 'This creates a claim for' })
+      await expect(preview).toBeVisible({ timeout: 5000 })
+      await expect(preview).not.toContainText('0.0000 BERA')
+    })
+
     test('exited pool: user can view but cannot stake', async ({ page }) => {
       // Scenario: Exited pool, user has shares and ready withdrawal
       const scenario = TestPoolScenarios.exitedPool
@@ -532,4 +598,87 @@ test.describe('Staking Pool Frontend (Single Pool)', () => {
       })
     }
   })
+
+  test.describe('Config and URL state', () => {
+    test('shows retry when config fails to load', async ({ page }) => {
+      await page.route('**/config.json', route => route.abort('failed'))
+      await page.goto('/')
+      await expect(page.getByRole('button', { name: 'Retry' }).first()).toBeVisible({ timeout: 10000 })
+      await expect(page.locator('.error-state').first()).toBeVisible()
+    })
+
+    test('invalid URL pool and pubkey do not crash app', async ({ page }) => {
+      await page.goto('/?tab=stake&pool=not-an-address&pubkey=short')
+      await expect(page.locator('text=Loading...')).toHaveCount(0, { timeout: 20000 })
+      await page.waitForTimeout(1000)
+      await expect(page.locator('nav.tab-nav').first()).toBeVisible({ timeout: 5000 })
+    })
+
+    test('URL with valid tab persists after load', async ({ page }) => {
+      await page.goto('/?tab=withdraw')
+      await expect(page.locator('text=Loading...')).toHaveCount(0, { timeout: 20000 })
+      await page.waitForTimeout(1500)
+      const withdrawTab = page.locator('nav.tab-nav button').filter({ hasText: 'Withdraw' }).first()
+      await expect(withdrawTab).toBeVisible()
+      const isSelected = await withdrawTab.getAttribute('aria-selected') ?? await withdrawTab.evaluate(el => el.classList.contains('active'))
+      expect(isSelected || await page.locator('.withdraw-card, .withdraw-view').first().isVisible().catch(() => false)).toBeTruthy()
+    })
+  })
+
+  test.describe('Discover and navigation', () => {
+    test('discover tab shows pool list when in discovery mode', async ({ page }) => {
+      await page.route('**/config.json', route => {
+        route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            mode: 'discovery',
+            network: { name: 'Bepolia', chainId: 80069, rpcUrl: 'https://bepolia.rpc.berachain.com', explorerUrl: 'https://testnet.berascan.com' },
+            contracts: { withdrawalVault: '0xAFAc2f11Cb39F0521b22494F6101002ce653D2f4', delegationHandler: '0x0000000000000000000000000000000000000000' },
+            pools: {}
+          })
+        })
+      })
+      await page.goto('/')
+      await expect(page.locator('text=Loading...')).toHaveCount(0, { timeout: 20000 })
+      await page.waitForTimeout(1000)
+      const discoverBtn = page.locator('nav.tab-nav button').filter({ hasText: 'Discover' }).first()
+      await discoverBtn.click()
+      await page.waitForTimeout(3000)
+      const poolCards = page.locator('.pool-card')
+      await expect(poolCards.first()).toBeVisible({ timeout: 15000 })
+    })
+
+    test('selecting pool from discover switches to stake tab', async ({ page }) => {
+      await page.route('**/config.json', route => {
+        route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            mode: 'discovery',
+            network: { name: 'Bepolia', chainId: 80069, rpcUrl: 'https://bepolia.rpc.berachain.com', explorerUrl: 'https://testnet.berascan.com' },
+            contracts: { withdrawalVault: '0xAFAc2f11Cb39F0521b22494F6101002ce653D2f4', delegationHandler: '0x0000000000000000000000000000000000000000' },
+            pools: {}
+          })
+        })
+      })
+      await installEnhancedMockWallet({
+        page,
+        account: TEST_ACCOUNT,
+        defaultChain: bepolia,
+        mocks: { balance: '1000' }
+      })
+      await page.goto('/')
+      await expect(page.locator('text=Loading...')).toHaveCount(0, { timeout: 20000 })
+      await page.locator('nav.tab-nav button').filter({ hasText: 'Discover' }).first().click()
+      await page.waitForTimeout(3000)
+      const firstPool = page.locator('.pool-card').first()
+      await expect(firstPool).toBeVisible({ timeout: 15000 })
+      await firstPool.click()
+      await page.waitForTimeout(2000)
+      await expect(page.getByRole('heading', { name: 'Your Position' }).or(page.locator('h3.card-title:has-text("Stake BERA")')).first()).toBeVisible({ timeout: 10000 })
+      await expect(page.locator('nav.tab-nav button').filter({ hasText: 'Stake' }).first()).toBeVisible()
+    })
+  })
+
 })
