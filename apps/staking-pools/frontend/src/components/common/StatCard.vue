@@ -63,6 +63,10 @@ defineProps({
   font-weight: 500;
 }
 
+.stat-card--panel {
+  padding: var(--space-6);
+}
+
 .stat-card--panel .stat-content {
   gap: var(--space-3);
 }
