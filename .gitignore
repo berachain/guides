@@ -32,6 +32,7 @@ apps/staking-pools/frontend/public/config.draft.json
 # Build Outputs
 .next/
 out/
+deploy-out/
 build
 dist
 

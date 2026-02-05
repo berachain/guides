@@ -62,6 +62,7 @@ export function useWallet() {
       }
 
       account.value = accounts[0]
+      localStorage.setItem('wallet_connected_account', accounts[0])
 
       await ensureWalletChain()
 
@@ -71,12 +72,12 @@ export function useWallet() {
         transport: custom(window.ethereum)
       })
 
-      // Listen for account changes
       window.ethereum.on('accountsChanged', (newAccounts) => {
         if (newAccounts.length === 0) {
           disconnect()
         } else {
           account.value = newAccounts[0]
+          localStorage.setItem('wallet_connected_account', newAccounts[0])
           walletClient.value = createWalletClient({
             account: newAccounts[0],
             chain: chain.value,
@@ -89,6 +90,43 @@ export function useWallet() {
       error.value = err.message || 'Failed to connect wallet'
     } finally {
       isConnecting.value = false
+    }
+  }
+
+  async function reconnect() {
+    const savedAccount = localStorage.getItem('wallet_connected_account')
+    if (!savedAccount || !window.ethereum || !chain.value) return
+
+    try {
+      const accounts = await window.ethereum.request({ method: 'eth_accounts' })
+      if (accounts.length === 0 || !accounts.includes(savedAccount)) {
+        localStorage.removeItem('wallet_connected_account')
+        return
+      }
+
+      account.value = savedAccount
+      await ensureWalletChain()
+      walletClient.value = createWalletClient({
+        account: savedAccount,
+        chain: chain.value,
+        transport: custom(window.ethereum)
+      })
+
+      window.ethereum.on('accountsChanged', (newAccounts) => {
+        if (newAccounts.length === 0) {
+          disconnect()
+        } else {
+          account.value = newAccounts[0]
+          localStorage.setItem('wallet_connected_account', newAccounts[0])
+          walletClient.value = createWalletClient({
+            account: newAccounts[0],
+            chain: chain.value,
+            transport: custom(window.ethereum)
+          })
+        }
+      })
+    } catch (err) {
+      localStorage.removeItem('wallet_connected_account')
     }
   }
 
@@ -132,6 +170,7 @@ export function useWallet() {
     account.value = null
     walletClient.value = null
     error.value = null
+    localStorage.removeItem('wallet_connected_account')
   }
 
   return {
@@ -145,6 +184,7 @@ export function useWallet() {
     error,
     initializeChain,
     connect,
-    disconnect
+    disconnect,
+    reconnect
   }
 }

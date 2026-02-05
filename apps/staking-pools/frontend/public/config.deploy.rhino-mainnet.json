@@ -6,7 +6,7 @@
   "pools": {
     "default": {
       "name": "Rhino",
-      "validatorPubkey": "0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+      "validatorPubkey": "0xb8cb7205f642e6cb370cc9d1a9b229381f50f34f2e5aa5db8ef8c7c6016d034687f871afb9d3e2a583a782c0c881e31e",
       "enabled": true
     }
   }

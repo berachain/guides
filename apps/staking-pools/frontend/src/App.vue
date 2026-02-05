@@ -130,7 +130,7 @@ const poolConfig = ref(null)
 const isLoading = ref(true)
 const loadError = ref(null)
 const walletBalance = ref('0')
-const activeTab = ref('stake')
+const activeTab = ref('stake') // Default to stake; discover only shown in discovery mode
 const isApplyingUrlState = ref(false)
 
 // Computed
@@ -150,14 +150,18 @@ const tabs = computed(() => {
     (activeTab.value === 'stake' || activeTab.value === 'withdraw') &&
     poolAddress.value &&
     count > 0
-  return [
+  const mode = config.value?.mode || 'single'
+  const allTabs = [
     { id: 'discover', label: 'Discover', icon: '🔍' },
     { id: 'stake', label: 'Stake', icon: '📥' },
     { id: 'withdraw', label: 'Withdraw', icon: '📤', badge: showBadge ? count : null }
   ]
+  return mode === 'single' ? allTabs.filter(t => t.id !== 'discover') : allTabs
 })
 
 function normalizeTab(tab) {
+  const mode = config.value?.mode || 'single'
+  if (mode === 'single' && tab === 'discover') return 'stake'
   if (tab === 'discover' || tab === 'stake' || tab === 'withdraw') return tab
   return null
 }
@@ -307,30 +311,32 @@ async function initialize() {
   loadError.value = null
   
   try {
-    const cfg = await loadConfig()
+    let cfg = await loadConfig()
+    const chainId = cfg.network?.chainId
+    if (chainId != null && typeof chainId === 'number') {
+      const chainConstants = getChainConstants(chainId)
+      if (chainConstants) {
+        cfg = {
+          ...cfg,
+          network: {
+            name: cfg.network?.name ?? chainConstants.name,
+            chainId,
+            rpcUrl: cfg.network?.rpcUrl ?? chainConstants.rpcUrl,
+            explorerUrl: cfg.network?.explorerUrl ?? chainConstants.explorerUrl,
+            ...cfg.network
+          }
+        }
+      }
+    }
     config.value = cfg
-    
-    // Load theme if specified
+
     if (cfg.branding?.theme) {
       loadTheme(cfg.branding.theme)
     }
-    
-    // Initialize chain for wallet
-    await wallet.initializeChain(cfg)
 
-    // Apply any URL state after chain/config exists.
-    const urlState = getUrlState()
-    await applyUrlState(urlState)
-    // Normalize URL to reflect current state (without adding a history entry).
-    writeUrlState(
-      {
-        tab: activeTab.value,
-        pool: poolAddress.value,
-        pubkey: poolConfig.value?.validatorPubkey
-      },
-      'replace'
-    )
-    
+    await wallet.initializeChain(cfg)
+    await wallet.reconnect()
+
     // Determine mode
     const mode = cfg.mode || 'single'
     const isDiscoveryMode = (mode === 'discovery')
@@ -346,42 +352,107 @@ async function initialize() {
       }
       
       poolConfig.value = firstEnabledPool
-      poolAddress.value = firstEnabledPool.stakingPool
+      const pubkey = firstEnabledPool.validatorPubkey
+      if (!pubkey || typeof pubkey !== 'string' || pubkey.length !== 98) {
+        throw new Error('Single pool mode requires a valid validatorPubkey (98 hex chars) in the pool config.')
+      }
+      
+      // Derive pool address from pubkey if not provided in config
+      let poolAddr = firstEnabledPool.stakingPool
+      let incentiveCollector = firstEnabledPool.incentiveCollector
+      if (!poolAddr || poolAddr === '0x0000000000000000000000000000000000000000') {
+        let core
+        try {
+          const chain = getChainConstants(cfg.network?.chainId)
+          core = await wallet.publicClient.value.readContract({
+            address: chain.stakingPoolFactoryAddress,
+            abi: STAKING_POOL_FACTORY_ABI,
+            functionName: 'getCoreContracts',
+            args: [pubkey]
+          })
+        } catch (err) {
+          throw new Error('Could not resolve staking pool from chain. Check RPC and chain ID (80069 or 80094).')
+        }
+        const resolvedPool = core?.stakingPool ?? core?.[1]
+        if (!resolvedPool || resolvedPool === '0x0000000000000000000000000000000000000000') {
+          throw new Error('No staking pool found for this validator. Ensure the pool is deployed on this chain.')
+        }
+        poolAddr = resolvedPool
+        incentiveCollector = core?.incentiveCollector ?? core?.[3] ?? null
+      }
+      
+      poolAddress.value = poolAddr
+      poolConfig.value = {
+        ...firstEnabledPool,
+        stakingPool: poolAddr,
+        incentiveCollector: incentiveCollector || firstEnabledPool.incentiveCollector
+      }
     } else {
       // Discovery mode: pools will be loaded when discover tab is opened
       // For now, we can't set a default pool, so leave it null
       // User will need to select a pool from the discover tab
     }
     
-    withdrawalVaultAddress.value = cfg.contracts?.withdrawalVault
+    // Derive withdrawal vault from factory if not in config
+    let vaultAddr = cfg.contracts?.withdrawalVault
+    if (!vaultAddr || vaultAddr === '0x0000000000000000000000000000000000000000') {
+      try {
+        const chain = getChainConstants(cfg.network?.chainId)
+        vaultAddr = await wallet.publicClient.value.readContract({
+          address: chain.stakingPoolFactoryAddress,
+          abi: STAKING_POOL_FACTORY_ABI,
+          functionName: 'withdrawalVault'
+        })
+        if (!vaultAddr || vaultAddr === '0x0000000000000000000000000000000000000000') {
+          throw new Error('Withdrawal vault not found on chain.')
+        }
+      } catch (err) {
+        throw new Error('Could not resolve withdrawal vault from factory. Check RPC and chain ID.')
+      }
+    }
+    withdrawalVaultAddress.value = vaultAddr
     
     // Try to get delegation handler from config, or query from factory if pubkey available
     let handlerAddr = cfg.contracts?.delegationHandler
     const handlerPubkey = firstEnabledPool?.validatorPubkey
     if ((!handlerAddr || handlerAddr === '0x0000000000000000000000000000000000000000') && handlerPubkey && wallet.publicClient.value) {
-      // Query delegation handler from factory using pubkey
       try {
         const chain = getChainConstants(cfg.network?.chainId)
         const factoryAddress = chain?.delegationHandlerFactoryAddress
-        if (factoryAddress) {
-          handlerAddr = await wallet.publicClient.value.readContract({
-            address: factoryAddress,
-            abi: DELEGATION_HANDLER_FACTORY_ABI,
-            functionName: 'delegationHandlers',
-            args: [handlerPubkey]
-          })
+        if (!factoryAddress) {
+          throw new Error('Delegation handler factory address not configured for this chain.')
         }
-        
-        if (handlerAddr && handlerAddr !== '0x0000000000000000000000000000000000000000') {
-          console.log('Found delegation handler:', handlerAddr)
-        }
+        handlerAddr = await wallet.publicClient.value.readContract({
+          address: factoryAddress,
+          abi: DELEGATION_HANDLER_FACTORY_ABI,
+          functionName: 'delegationHandlers',
+          args: [handlerPubkey]
+        })
       } catch (err) {
-        // Error handling: Delegation handler query failed - this is expected if no handler exists
-        console.warn('Could not query delegation handler from factory:', err)
+        throw new Error('Could not resolve delegation handler from factory. Check RPC and chain ID.')
       }
     }
     
     delegationHandlerAddress.value = handlerAddr && handlerAddr !== '0x0000000000000000000000000000000000000000' ? handlerAddr : null
+    
+    // Apply URL state after pool initialization (but only for discovery mode or tab changes)
+    const urlState = getUrlState()
+    if (isDiscoveryMode && (urlState.pool || urlState.pubkey)) {
+      await applyUrlState(urlState)
+    } else if (urlState.tab) {
+      activeTab.value = urlState.tab
+    }
+    
+    // Normalize URL to reflect current state
+    // In single-pool mode, omit pool/pubkey from URL (they're implicit)
+    writeUrlState(
+      {
+        tab: activeTab.value === 'stake' ? null : activeTab.value,
+        pool: isDiscoveryMode ? poolAddress.value : null,
+        pubkey: isDiscoveryMode ? poolConfig.value?.validatorPubkey : null
+      },
+      'replace'
+    )
     
     // Load initial data (only if we have a pool address)
     if (poolAddress.value) {
@@ -497,10 +568,17 @@ watch(
   [activeTab, poolAddress, () => poolConfig.value?.validatorPubkey],
   ([tab, pool, pubkey]) => {
     if (isApplyingUrlState.value) return
+    const mode = config.value?.mode || 'single'
+    const isDiscovery = mode === 'discovery'
+    
     if (tab === 'discover') {
       writeUrlState({ tab: 'discover', pool: null, pubkey: null }, 'push')
-    } else {
+    } else if (isDiscovery) {
+      // Discovery mode: include pool/pubkey in URL
       writeUrlState({ tab, pool, pubkey }, 'push')
+    } else {
+      // Single-pool mode: omit pool/pubkey, only include tab if not stake
+      writeUrlState({ tab: tab === 'stake' ? null : tab, pool: null, pubkey: null }, 'push')
     }
   }
 )
