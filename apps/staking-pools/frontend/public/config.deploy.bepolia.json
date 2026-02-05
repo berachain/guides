@@ -1,0 +1,20 @@
+{
+  "_comment": "Discovery deployment: Bepolia, all pools, teal theme",
+  "mode": "discovery",
+  "network": {
+    "name": "Bepolia",
+    "chainId": 80069,
+    "rpcUrl": "https://bepolia.rpc.berachain.com",
+    "explorerUrl": "https://testnet.berascan.com"
+  },
+  "branding": {
+    "name": "Staking Pools — Bepolia",
+    "logo": null,
+    "theme": "teal"
+  },
+  "contracts": {
+    "withdrawalVault": "0xAFAc2f11Cb39F0521b22494F6101002ce653D2f4",
+    "delegationHandler": "0x0000000000000000000000000000000000000000"
+  },
+  "pools": {}
+}

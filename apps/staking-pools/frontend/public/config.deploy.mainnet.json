@@ -1,0 +1,20 @@
+{
+  "_comment": "Discovery deployment: Mainnet, all pools, coral theme. withdrawalVault from StakingPoolFactory.withdrawalVault() on mainnet.",
+  "mode": "discovery",
+  "network": {
+    "name": "Berachain",
+    "chainId": 80094,
+    "rpcUrl": "https://rpc.berachain.com",
+    "explorerUrl": "https://berascan.com"
+  },
+  "branding": {
+    "name": "Staking Pools — Mainnet",
+    "logo": null,
+    "theme": "coral"
+  },
+  "contracts": {
+    "withdrawalVault": "0xE858802Ed532C6DAD2D196AB5B1F2C15F9cb52b4",
+    "delegationHandler": "0x0000000000000000000000000000000000000000"
+  },
+  "pools": {}
+}
