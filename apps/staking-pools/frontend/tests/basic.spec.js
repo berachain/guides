@@ -289,6 +289,41 @@ test.describe('Staking Pool Frontend (Single Pool)', () => {
         userAddress: TEST_ACCOUNT.address
       })
 
+      // Mock RPC endpoint to intercept publicClient calls
+      await page.route('https://bepolia.rpc.berachain.com/*', async route => {
+        const postData = await route.request().postData()
+        if (!postData) {
+          await route.continue()
+          return
+        }
+        
+        const rpcRequest = JSON.parse(postData)
+        
+        // Mock balanceOf for the staking pool
+        if (rpcRequest.method === 'eth_call' && rpcRequest.params?.[0]?.data?.startsWith('0x70a08231')) {
+          const poolAddr = scenario.pool.stakingPool.toLowerCase()
+          const callTo = rpcRequest.params[0].to?.toLowerCase()
+          
+          if (callTo === poolAddr) {
+            // Return mocked balance (1000 stBERA = 1000 * 10^18)
+            const shares = (BigInt(scenario.userState.userShares) * BigInt(10**18)).toString(16).padStart(64, '0')
+            await route.fulfill({
+              status: 200,
+              contentType: 'application/json',
+              body: JSON.stringify({
+                jsonrpc: '2.0',
+                id: rpcRequest.id,
+                result: '0x' + shares
+              })
+            })
+            return
+          }
+        }
+        
+        // Pass through everything else
+        await route.continue()
+      })
+
       await installEnhancedMockWallet({
         page,
         account: TEST_ACCOUNT,
