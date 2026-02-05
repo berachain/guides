@@ -140,7 +140,7 @@ body {
 }
 
 .btn-outline:hover:not(:disabled) {
-  background: rgba(245, 200, 22, 0.1);
+  background: color-mix(in srgb, var(--color-accent) 12%, transparent);
 }
 
 .btn-sm {

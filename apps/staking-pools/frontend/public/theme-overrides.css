@@ -5,7 +5,7 @@
  * This file loads after preset themes (if any), so your overrides take precedence.
  * 
  * To use a preset theme, set "branding.theme" in config.json to:
- * "blue", "purple", "green", or "orange"
+ * "blue", "purple", "green", "orange", "teal", "coral", "indigo", "emerald", "cyan", or "slate"
  * 
  * To customize a preset or create a fully custom theme, uncomment and modify below.
  */

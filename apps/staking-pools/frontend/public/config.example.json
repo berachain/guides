@@ -13,7 +13,7 @@
   "branding": {
     "name": "Staking Pool",
     "logo": null,
-    "_theme_comment": "Theme preset: 'blue', 'purple', 'green', 'orange', 'teal', 'coral', 'indigo', 'emerald', 'cyan', or null (uses theme-overrides.css for custom)",
+    "_theme_comment": "Theme preset: 'blue', 'purple', 'green', 'orange', 'teal', 'coral', 'indigo', 'emerald', 'cyan', 'slate' (dark charcoal, not black), or null (uses theme-overrides.css for custom)",
     "theme": null
   },
   

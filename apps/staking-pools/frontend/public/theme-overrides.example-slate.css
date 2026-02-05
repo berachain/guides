@@ -1,0 +1,22 @@
+/*
+ * Preset: Slate (dark but not black)
+ * Charcoal/slate backgrounds, same structure as default. Professional, easier on the eyes.
+ */
+
+:root {
+  --color-bg-primary: #0f172a;
+  --color-bg-secondary: #1e293b;
+  --color-bg-card: #334155;
+  --color-bg-card-hover: #475569;
+  --color-bg-input: #0f172a;
+
+  --color-border: #475569;
+  --color-border-focus: #64748b;
+
+  --color-text-primary: #f8fafc;
+  --color-text-secondary: #cbd5e1;
+  --color-text-muted: #94a3b8;
+
+  --color-accent: #f5c816;
+  --color-accent-hover: #f7d34a;
+}
