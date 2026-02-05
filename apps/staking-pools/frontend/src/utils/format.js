@@ -8,6 +8,18 @@ import { formatEther } from 'viem'
  */
 
 /**
+ * Exchange rate from pool totalAssets/totalSupply (bigint). Returns 1 if supply is zero.
+ * @param {bigint} totalAssets
+ * @param {bigint} totalSupply
+ * @returns {number}
+ */
+export function calculateExchangeRate(totalAssets, totalSupply) {
+  if (totalSupply === 0n) return 1
+  const scaled = (totalAssets * 1_000_000n) / totalSupply
+  return Number(scaled) / 1_000_000
+}
+
+/**
  * Formats a numeric BERA amount with thousands separators.
  *
  * @param {number|string|bigint|null|undefined} value
@@ -35,16 +47,22 @@ export function formatBeraDisplay(value, opts = {}) {
   }).format(n)
 }
 
-export function formatNumber(value, decimals = 2) {
+/**
+ * @param {number|string} value
+ * @param {number} [decimals=2]
+ * @param {{ prefix?: string }} [opts] - e.g. { prefix: '$' } for delegation display
+ */
+export function formatNumber(value, decimals = 2, opts = {}) {
   const num = typeof value === 'number' ? value : Number(value)
   if (!Number.isFinite(num)) return '—'
+  const prefix = opts.prefix ?? ''
   if (num >= 1_000_000) {
-    return (num / 1_000_000).toFixed(2) + 'M'
+    return prefix + (num / 1_000_000).toFixed(decimals === 0 ? 0 : 2) + 'M'
   }
   if (num >= 1_000) {
-    return (num / 1_000).toFixed(2) + 'K'
+    return prefix + (num / 1_000).toFixed(decimals === 0 ? 0 : 2) + 'K'
   }
-  return num.toFixed(decimals)
+  return prefix + num.toFixed(decimals)
 }
 
 export function formatTimeRemaining(seconds) {
