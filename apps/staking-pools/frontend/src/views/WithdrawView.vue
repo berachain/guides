@@ -17,7 +17,7 @@
 
     <div class="summary-row">
       <StatCard
-        label="Pool Assets"
+        label="Assets"
         :value="formattedTotalAssets + ' BERA'"
         variant="panel"
       />
