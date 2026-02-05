@@ -25,6 +25,7 @@
         <thead>
           <tr>
             <th>ID</th>
+            <th>Validator</th>
             <th>Amount</th>
             <th>Status</th>
             <th>Action</th>
@@ -33,6 +34,10 @@
         <tbody>
           <tr v-for="request in requests" :key="request.id">
             <td class="id-cell">#{{ request.id }}</td>
+            <td class="validator-cell">
+              <span v-if="request.validatorName" class="validator-name">{{ request.validatorName }}</span>
+              <span v-else class="text-muted">—</span>
+            </td>
             <td>
               <div class="amount-cell">
                 <span class="amount-value">{{ formatAssets(request.assetsRequested) }}</span>
@@ -146,6 +151,14 @@ async function handleFinalizeAll() {
 .id-cell {
   font-family: monospace;
   color: var(--color-text-secondary);
+}
+
+.validator-cell {
+  font-weight: 500;
+}
+
+.validator-name {
+  color: var(--color-text-primary);
 }
 
 .amount-cell {
