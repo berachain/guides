@@ -1,7 +1,8 @@
 import { ref } from 'vue'
-import { formatEther, parseEther } from 'viem'
+import { parseEther } from 'viem'
 import { WITHDRAWAL_VAULT_ABI } from '../utils/abis.js'
-import { formatBeraDisplay } from '../utils/format.js'
+import { formatAssets, formatTimeRemaining } from '../utils/format.js'
+import { SECONDS_PER_BLOCK } from '../constants/thresholds.js'
 
 export function useWithdrawals(publicClient, walletClient, withdrawalVaultAddress, poolAddress, validatorPubkey, account) {
   const isLoading = ref(false)
@@ -15,8 +16,6 @@ export function useWithdrawals(publicClient, walletClient, withdrawalVaultAddres
   // contract getter. Do not hardcode: query WithdrawalVault each time per network.
   const finalizationDelayBlocks = ref(null)
   let lastDelayVault = null
-  const SECONDS_PER_BLOCK = 2 // berachain assumed 2s block time for UX math
-
   async function loadFinalizationDelay() {
     const client = publicClient?.value || publicClient
     const vault = withdrawalVaultAddress?.value
@@ -82,22 +81,48 @@ export function useWithdrawals(publicClient, walletClient, withdrawalVaultAddres
       
       const targetPubkey = (validatorPubkey?.value || validatorPubkey || '').toLowerCase()
 
-      // Enumerate all tokens owned by user
-      const requests = []
+      // Enumerate all tokens owned by user (multicall)
+      const tokenCalls = []
       for (let i = 0n; i < balance; i++) {
-        const tokenId = await publicClient.value.readContract({
+        tokenCalls.push({
           address: withdrawalVaultAddress.value,
           abi: WITHDRAWAL_VAULT_ABI,
           functionName: 'tokenOfOwnerByIndex',
           args: [account.value, i]
         })
-        
-        const request = await publicClient.value.readContract({
-          address: withdrawalVaultAddress.value,
-          abi: WITHDRAWAL_VAULT_ABI,
-          functionName: 'getWithdrawalRequest',
-          args: [tokenId]
-        })
+      }
+
+      const tokenResults = await publicClient.value.multicall({
+        contracts: tokenCalls,
+        allowFailure: true
+      })
+
+      const tokenIds = tokenResults
+        .map((res) => res?.result)
+        .filter((tokenId) => typeof tokenId === 'bigint')
+
+      if (tokenIds.length === 0) {
+        withdrawalRequests.value = []
+        pendingCount.value = 0
+        return
+      }
+
+      const requestCalls = tokenIds.map((tokenId) => ({
+        address: withdrawalVaultAddress.value,
+        abi: WITHDRAWAL_VAULT_ABI,
+        functionName: 'getWithdrawalRequest',
+        args: [tokenId]
+      }))
+
+      const requestResults = await publicClient.value.multicall({
+        contracts: requestCalls,
+        allowFailure: true
+      })
+
+      const requests = []
+      for (let i = 0; i < tokenIds.length; i++) {
+        const request = requestResults[i]?.result
+        if (!request) continue
 
         if (targetPubkey && request.pubkey?.toLowerCase() !== targetPubkey) {
           continue
@@ -106,9 +131,9 @@ export function useWithdrawals(publicClient, walletClient, withdrawalVaultAddres
         const readyBlock = typeof delayBlocks === 'bigint' ? (request.requestBlock + delayBlocks) : null
         const isReady = readyBlock ? currentBlock >= readyBlock : false
         const blocksRemaining = readyBlock ? (isReady ? 0n : readyBlock - currentBlock) : null
-        
+
         requests.push({
-          id: tokenId,
+          id: tokenIds[i],
           pubkey: request.pubkey,
           assetsRequested: request.assetsRequested,
           sharesBurnt: request.sharesBurnt,
@@ -226,19 +251,6 @@ export function useWithdrawals(publicClient, walletClient, withdrawalVaultAddres
     } finally {
       isLoading.value = false
     }
-  }
-
-  function formatAssets(assets) {
-    const s = formatEther(assets)
-    return formatBeraDisplay(s, { decimals: 4 }) || '0.0000'
-  }
-
-  function formatTimeRemaining(seconds) {
-    if (seconds <= 0) return 'Ready'
-    const hours = Math.floor(seconds / 3600)
-    const minutes = Math.floor((seconds % 3600) / 60)
-    if (hours > 0) return `~${hours}h ${minutes}m`
-    return `~${minutes}m`
   }
 
   return {

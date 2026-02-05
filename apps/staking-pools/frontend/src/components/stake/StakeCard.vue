@@ -34,9 +34,10 @@
         <span class="input-suffix">BERA</span>
       </div>
       
-      <div v-if="amount && previewShares" class="preview text-secondary">
+    <div v-if="amount && previewShares" class="preview text-secondary">
         You will receive ≈ {{ formatShares(previewShares) }} stBERA
       </div>
+    <div v-if="amountError" class="input-error">{{ amountError }}</div>
     </div>
     
     <button
@@ -71,6 +72,8 @@
 <script setup>
 import { ref, computed, watch } from 'vue'
 import { formatEther } from 'viem'
+import { validateAmount } from '../../utils/format.js'
+import { GAS_RESERVE_BERA, DEBOUNCE_MS } from '../../constants/thresholds.js'
 
 const props = defineProps({
   isConnected: { type: Boolean, default: false },
@@ -91,7 +94,7 @@ const canStake = computed(() => {
   if (props.isExited) return false
   if (!props.isConnected) return true // Show "Connect Wallet"
   if (props.isLoading) return false
-  if (!amount.value || parseFloat(amount.value) <= 0) return false
+  if (!amountValidation.value.valid) return false
   return true
 })
 
@@ -105,6 +108,8 @@ function getErrorSummary(raw) {
 }
 
 const errorSummary = computed(() => getErrorSummary(error.value))
+const amountValidation = computed(() => validateAmount(amount.value))
+const amountError = computed(() => (amount.value ? amountValidation.value.error : null))
 
 function formatShares(shares) {
   return parseFloat(formatEther(shares)).toFixed(4)
@@ -113,7 +118,7 @@ function formatShares(shares) {
 function setMax() {
   // Leave a small amount for gas
   const balance = parseFloat(props.walletBalance)
-  const maxAmount = Math.max(0, balance - 0.01).toFixed(4)
+  const maxAmount = Math.max(0, balance - GAS_RESERVE_BERA).toFixed(4)
   amount.value = maxAmount
 }
 
@@ -122,7 +127,8 @@ async function handleStake() {
     emit('connect')
     return
   }
-  
+  if (!amountValidation.value.valid) return
+
   error.value = null
   txHash.value = null
   
@@ -142,8 +148,9 @@ async function handleStake() {
 let previewTimeout = null
 watch(amount, (newAmount) => {
   if (previewTimeout) clearTimeout(previewTimeout)
-  
-  if (!newAmount || parseFloat(newAmount) <= 0) {
+
+  const validation = validateAmount(newAmount)
+  if (!validation.valid) {
     previewShares.value = null
     return
   }
@@ -152,7 +159,7 @@ watch(amount, (newAmount) => {
     emit('preview', newAmount, (shares) => {
       previewShares.value = shares
     })
-  }, 300)
+  }, DEBOUNCE_MS)
 })
 </script>
 
@@ -233,6 +240,12 @@ watch(amount, (newAmount) => {
 
 .preview {
   margin-top: var(--space-2);
+  font-size: var(--font-size-sm);
+}
+
+.input-error {
+  margin-top: var(--space-2);
+  color: var(--color-error);
   font-size: var(--font-size-sm);
 }
 

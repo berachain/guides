@@ -107,7 +107,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { formatEther } from 'viem'
 import { loadConfig, loadTheme } from './utils/config.js'
 import { useWallet } from './composables/useWallet.js'
@@ -115,6 +115,7 @@ import { useStakingPool } from './composables/useStakingPool.js'
 import { useWithdrawals } from './composables/useWithdrawals.js'
 import { DELEGATION_HANDLER_FACTORY_ABI, STAKING_POOL_FACTORY_ABI } from './utils/abis.js'
 import { getChainConstants } from './constants/chains.js'
+import { REFRESH_INTERVAL_MS } from './constants/thresholds.js'
 import WalletConnect from './components/common/WalletConnect.vue'
 import TabNav from './components/common/TabNav.vue'
 import StakeView from './views/StakeView.vue'
@@ -537,6 +538,20 @@ async function handleSelectPool(selectedPool) {
 
 // Periodic refresh
 let refreshInterval = null
+let visibilityHandler = null
+
+async function refreshData() {
+  if (document.visibilityState === 'hidden') return
+  if (poolAddress.value) {
+    await pool.loadPoolData()
+    if (wallet.isConnected.value) {
+      await pool.loadUserData()
+      if (activeTab.value === 'withdraw') {
+        await withdrawals.loadWithdrawalRequests()
+      }
+    }
+  }
+}
 
 onMounted(() => {
   initialize()
@@ -547,17 +562,21 @@ onMounted(() => {
     await applyUrlState(st)
   })
   
-  refreshInterval = setInterval(async () => {
-    if (poolAddress.value) {
-      await pool.loadPoolData()
-      if (wallet.isConnected.value) {
-        await pool.loadUserData()
-        if (activeTab.value === 'withdraw') {
-          await withdrawals.loadWithdrawalRequests()
-        }
-      }
+  visibilityHandler = () => {
+    if (document.visibilityState === 'visible') {
+      refreshData()
     }
-  }, 15000) // Refresh every 15 seconds
+  }
+  document.addEventListener('visibilitychange', visibilityHandler)
+
+  refreshInterval = setInterval(refreshData, REFRESH_INTERVAL_MS) // Refresh every 15 seconds
+})
+
+onUnmounted(() => {
+  if (refreshInterval) clearInterval(refreshInterval)
+  if (visibilityHandler) {
+    document.removeEventListener('visibilitychange', visibilityHandler)
+  }
 })
 </script>
 

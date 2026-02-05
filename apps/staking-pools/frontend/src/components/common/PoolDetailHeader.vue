@@ -91,6 +91,7 @@
 
 <script setup>
 import { computed, ref } from 'vue'
+import { shortAddress } from '../../utils/format.js'
 
 const props = defineProps({
   title: { type: String, default: null },
@@ -135,17 +136,11 @@ const poolStatusClass = computed(() => {
 const copiedKey = ref(null)
 
 const shortPoolAddress = computed(() => {
-  const a = props.poolAddress
-  if (!a || typeof a !== 'string') return ''
-  if (a.length <= 12) return a
-  return `${a.slice(0, 6)}…${a.slice(-4)}`
+  return shortAddress(props.poolAddress, 6, 4)
 })
 
 const shortValidatorPubkey = computed(() => {
-  const a = props.validatorPubkey
-  if (!a || typeof a !== 'string') return ''
-  if (a.length <= 18) return a
-  return `${a.slice(0, 10)}…${a.slice(-6)}`
+  return shortAddress(props.validatorPubkey, 10, 6)
 })
 
 const poolExplorerUrl = computed(() => {
@@ -163,12 +158,6 @@ const hasDetails = computed(() => {
       props.formattedIncentiveFeePercentage
   )
 })
-
-function shortAddress(a) {
-  if (!a || typeof a !== 'string') return ''
-  if (a.length <= 12) return a
-  return `${a.slice(0, 6)}…${a.slice(-4)}`
-}
 
 function addressExplorerUrl(address) {
   if (!props.explorerUrl || !address) return null

@@ -66,6 +66,8 @@
 </template>
 
 <script setup>
+import { formatNumber } from '../utils/format.js'
+import { DEAD_POOL_THRESHOLD_WEI } from '../constants/thresholds.js'
 defineProps({
   pools: { type: Array, default: () => [] },
   isLoading: { type: Boolean, default: false },
@@ -74,28 +76,17 @@ defineProps({
 
 defineEmits(['select-pool', 'retry'])
 
-function formatNumber(value) {
-  const num = parseFloat(value)
-  if (!Number.isFinite(num)) return '—'
-  if (num >= 1000000) {
-    return (num / 1000000).toFixed(2) + 'M'
-  }
-  if (num >= 1000) {
-    return (num / 1000).toFixed(2) + 'K'
-  }
-  return num.toFixed(2)
-}
-
 function hasUserPosition(pool) {
+  const deadThresholdBera = Number(DEAD_POOL_THRESHOLD_WEI) / 1e18
   const raw = pool?.userAssetsWei
   try {
-    if (typeof raw === 'bigint') return raw >= 5_000_000_000_000_000n
-    if (typeof raw === 'string') return BigInt(raw) >= 5_000_000_000_000_000n
+    if (typeof raw === 'bigint') return raw >= DEAD_POOL_THRESHOLD_WEI
+    if (typeof raw === 'string') return BigInt(raw) >= DEAD_POOL_THRESHOLD_WEI
   } catch {
     // Fall through to float path.
   }
   const n = Number(pool?.userAssets)
-  return Number.isFinite(n) && n >= 0.005
+  return Number.isFinite(n) && n >= deadThresholdBera
 }
 
 
@@ -120,11 +111,12 @@ function getStatusClass(pool) {
 }
 
 function isDeadPool(pool) {
+  const deadThresholdBera = Number(DEAD_POOL_THRESHOLD_WEI) / 1e18
   if (pool?.isDead === true) return true
   if (pool?.totalAssetsWei) {
     try {
       // Match display rounding: anything under 0.005 BERA is effectively 0.00 on the card.
-      return pool?.isFullyExited && BigInt(pool.totalAssetsWei) < 5_000_000_000_000_000n
+      return pool?.isFullyExited && BigInt(pool.totalAssetsWei) < DEAD_POOL_THRESHOLD_WEI
     } catch {
       // Fall through to float path.
     }
@@ -132,7 +124,7 @@ function isDeadPool(pool) {
   if (!pool?.isFullyExited) return false
   const staked = parseFloat(pool?.totalAssets)
   // Treat tiny dust as zero; UI rounds to 0.00 anyway.
-  return Number.isFinite(staked) && staked < 0.005
+  return Number.isFinite(staked) && staked < deadThresholdBera
 }
 
 function getViewButtonLabel(pool) {

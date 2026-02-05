@@ -2,9 +2,9 @@ import { ref } from 'vue'
 import { formatEther } from 'viem'
 import { STAKING_POOL_FACTORY_ABI, STAKING_POOL_ABI } from '../utils/abis.js'
 import { getChainConstants } from '../constants/chains.js'
+import { DEAD_POOL_THRESHOLD_WEI } from '../constants/thresholds.js'
 
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000'
-const DEAD_ASSETS_THRESHOLD_WEI = 5_000_000_000_000_000n // 0.005 BERA
 
 export function usePoolDiscovery(publicClient, chainId, configPools = null, configMode = null, account = null) {
   const validators = ref([])
@@ -390,7 +390,7 @@ export function usePoolDiscovery(publicClient, chainId, configPools = null, conf
       discovered[i].isActive = contractIsActive && !isFullyExited
       discovered[i].totalAssetsWei = typeof totalAssets === 'bigint' ? totalAssets.toString() : null
       discovered[i].isDead =
-        isFullyExited && typeof totalAssets === 'bigint' && totalAssets < DEAD_ASSETS_THRESHOLD_WEI
+        isFullyExited && typeof totalAssets === 'bigint' && totalAssets < DEAD_POOL_THRESHOLD_WEI
 
       if (typeof totalAssets === "bigint" && typeof totalSupply === "bigint") {
         if (totalSupply > 0n) {

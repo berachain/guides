@@ -1,0 +1,5 @@
+export const DEAD_POOL_THRESHOLD_WEI = 5_000_000_000_000_000n // 0.005 BERA
+export const GAS_RESERVE_BERA = 0.01
+export const DEBOUNCE_MS = 300
+export const REFRESH_INTERVAL_MS = 15000
+export const SECONDS_PER_BLOCK = 2
