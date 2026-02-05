@@ -1,25 +1,12 @@
 import { ref } from 'vue'
 import { formatEther } from 'viem'
 import { STAKING_POOL_FACTORY_ABI, STAKING_POOL_ABI } from '../utils/abis.js'
-
-// Factory addresses per network
-const FACTORY_ADDRESSES = {
-  80094: '0xb79b43dBA821Cb67751276Ce050fF4111445fB99', // mainnet
-  80069: '0x176c081E95C82CA68DEa20CA419C7506Aa063C24'  // bepolia
-}
+import { getChainConstants } from '../constants/chains.js'
 
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000'
-const GRAPHQL_ENDPOINTS = {
-  80094: 'https://api.berachain.com/graphql',
-  80069: 'https://bepolia-api.berachain.com/graphql'
-}
 const DEAD_ASSETS_THRESHOLD_WEI = 5_000_000_000_000_000n // 0.005 BERA
-const CHAIN_ENUM_BY_ID = {
-  80094: 'BERACHAIN',
-  80069: 'BEPOLIA'
-}
 
-export function usePoolDiscovery(publicClient, chainId, configPools = null, configMode = null) {
+export function usePoolDiscovery(publicClient, chainId, configPools = null, configMode = null, account = null) {
   const validators = ref([])
   const pools = ref([])
   const isLoading = ref(false)
@@ -93,6 +80,10 @@ export function usePoolDiscovery(publicClient, chainId, configPools = null, conf
             let exchangeRate = '1.0'
             let isActive = false
             let isFullyExited = false
+            let userShares = '0'
+            let userAssets = '0'
+            let userSharesWei = 0n
+            let userAssetsWei = 0n
 
             if (poolConfig.stakingPool && client) {
               try {
@@ -127,6 +118,25 @@ export function usePoolDiscovery(publicClient, chainId, configPools = null, conf
                 }
 
                 totalAssets = formatEther(assets)
+
+                const accountValue =
+                  typeof account?.value === 'string'
+                    ? account.value
+                    : (typeof account === 'string' ? account : null)
+                if (accountValue) {
+                  const shares = await client.readContract({
+                    address: poolConfig.stakingPool,
+                    abi: STAKING_POOL_ABI,
+                    functionName: 'balanceOf',
+                    args: [accountValue]
+                  })
+                  userSharesWei = shares
+                  if (totalSupply > 0n) {
+                    userAssetsWei = (assets * shares) / totalSupply
+                  }
+                  userShares = formatEther(shares)
+                  userAssets = formatEther(userAssetsWei)
+                }
               } catch (err) {
                 console.warn(`Failed to fetch metadata for config pool ${poolConfig.stakingPool}:`, err)
               }
@@ -144,6 +154,10 @@ export function usePoolDiscovery(publicClient, chainId, configPools = null, conf
               stakingRewardsVault: poolConfig.stakingRewardsVault,
               incentiveCollector: poolConfig.incentiveCollector,
               totalAssets,
+              userShares,
+              userAssets,
+              userSharesWei,
+              userAssetsWei,
               exchangeRate,
               isActive,
               isFullyExited,
@@ -193,7 +207,9 @@ export function usePoolDiscovery(publicClient, chainId, configPools = null, conf
   }
 
   async function graphqlRequest(chainIdValue, query, variables) {
-    const endpoint = GRAPHQL_ENDPOINTS[chainIdValue] || GRAPHQL_ENDPOINTS[80094]
+    const chainConstants = getChainConstants(chainIdValue)
+    const endpoint = chainConstants?.graphqlEndpoint
+    if (!endpoint) throw new Error(`No GraphQL endpoint for chain ID ${chainIdValue}`)
     const response = await fetch(endpoint, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -256,12 +272,11 @@ export function usePoolDiscovery(publicClient, chainId, configPools = null, conf
   }
 
   async function loadPoolsFromApi(chain, client) {
-    const chainEnum = CHAIN_ENUM_BY_ID[chain]
-    if (!chainEnum) {
+    const chainConstants = getChainConstants(chain)
+    if (!chainConstants) {
       throw new Error(`Unsupported chainId for API discovery: ${chain}`)
     }
-
-    const factoryAddress = FACTORY_ADDRESSES[chain]
+    const { chainEnum, stakingPoolFactoryAddress: factoryAddress } = chainConstants
     if (!factoryAddress) {
       throw new Error(`Factory address not found for chain ID ${chain}`)
     }
@@ -342,6 +357,28 @@ export function usePoolDiscovery(publicClient, chainId, configPools = null, conf
       stateResults.push(...res)
     }
 
+    const accountValue =
+      typeof account?.value === 'string'
+        ? account.value
+        : (typeof account === 'string' ? account : null)
+    const userCalls = []
+    if (accountValue) {
+      for (const p of discovered) {
+        userCalls.push({
+          address: p.stakingPool,
+          abi: STAKING_POOL_ABI,
+          functionName: 'balanceOf',
+          args: [accountValue]
+        })
+      }
+    }
+
+    const userResults = []
+    for (const batch of chunk(userCalls, 400)) {
+      const res = await client.multicall({ contracts: batch, allowFailure: true })
+      userResults.push(...res)
+    }
+
     for (let i = 0; i < discovered.length; i++) {
       const base = i * 4
       const totalAssets = stateResults[base]?.result ?? 0n
@@ -360,6 +397,20 @@ export function usePoolDiscovery(publicClient, chainId, configPools = null, conf
           discovered[i].exchangeRate = (Number(totalAssets) / Number(totalSupply)).toFixed(4)
         }
         discovered[i].totalAssets = formatEther(totalAssets)
+      }
+
+      if (accountValue) {
+        const shares = userResults[i]?.result ?? 0n
+        discovered[i].userSharesWei = shares
+        discovered[i].userShares = typeof shares === 'bigint' ? formatEther(shares) : '0'
+        if (typeof shares === 'bigint' && typeof totalAssets === 'bigint' && typeof totalSupply === 'bigint' && totalSupply > 0n) {
+          const assets = (totalAssets * shares) / totalSupply
+          discovered[i].userAssetsWei = assets
+          discovered[i].userAssets = formatEther(assets)
+        } else {
+          discovered[i].userAssetsWei = 0n
+          discovered[i].userAssets = '0'
+        }
       }
     }
 

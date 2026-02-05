@@ -16,7 +16,7 @@
       
       <div class="input-group">
         <div class="input-header">
-          <label class="label">Shares to redeem</label>
+          <label class="label">stBERA to redeem</label>
         </div>
         
         <div class="input-wrapper">
@@ -40,13 +40,8 @@
         </div>
         
         <div v-if="previewAssets" class="preview text-secondary">
-          You will receive ≈ {{ previewAssets }} BERA after delay
+          This creates a claim for ≈ {{ previewAssets }} BERA.
         </div>
-      </div>
-      
-      <div class="fee-info">
-        <span class="label">Withdrawal fee (EIP-7002)</span>
-        <span class="fee-value">{{ maxFee }} BERA</span>
       </div>
       
       <button
@@ -60,7 +55,7 @@
       </button>
       
       <p class="info-text text-muted">
-        Withdrawals have a ~24 hour delay before they can be finalized.
+        You can finalize the claim {{ delaySuffix }} to receive BERA.
       </p>
       
       <div v-if="error" class="error-message">{{ error }}</div>
@@ -75,6 +70,7 @@
 <script setup>
 import { ref, computed, watch } from 'vue'
 import { parseEther, formatEther } from 'viem'
+import { formatBeraDisplay } from '../../utils/format.js'
 
 const props = defineProps({
   isConnected: { type: Boolean, default: false },
@@ -82,7 +78,9 @@ const props = defineProps({
   userShares: { type: BigInt, default: 0n },
   formattedShares: { type: String, default: '0' },
   formattedAssets: { type: String, default: '0' },
-  explorerUrl: { type: String, default: 'https://berascan.com' }
+  explorerUrl: { type: String, default: 'https://berascan.com' },
+  finalizationDelayBlocks: { type: [BigInt, Number], default: null },
+  secondsPerBlock: { type: Number, default: 2 }
 })
 
 const emit = defineEmits(['connect', 'requestRedeem', 'previewRedeem'])
@@ -105,6 +103,24 @@ const canWithdraw = computed(() => {
   return true
 })
 
+const delaySuffix = computed(() => {
+  const blocksRaw = props.finalizationDelayBlocks
+  if (blocksRaw === null || blocksRaw === undefined) return 'after a delay'
+
+  const blocks = typeof blocksRaw === 'bigint' ? blocksRaw : BigInt(blocksRaw)
+  if (blocks <= 0n) return 'after a delay'
+
+  const blocksStr = blocks.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+
+  // approximate wall-clock time assuming fixed block time
+  const totalSeconds = Number(blocks) * (Number.isFinite(props.secondsPerBlock) ? props.secondsPerBlock : 2)
+  const hours = Math.floor(totalSeconds / 3600)
+  const minutes = Math.floor((totalSeconds % 3600) / 60)
+  const approx = hours > 0 ? `≈ ${hours}h ${minutes}m` : `≈ ${Math.max(1, minutes)}m`
+
+  return `after ${blocksStr} blocks (${approx})`
+})
+
 function setMax() {
   sharesAmount.value = formatEther(props.userShares)
 }
@@ -114,7 +130,7 @@ async function handleRequestRedeem() {
   txHash.value = null
   
   try {
-    const shares = parseEther(sharesAmount.value)
+    const shares = parseEther(String(sharesAmount.value))
     const result = await new Promise((resolve, reject) => {
       emit('requestRedeem', shares, parseEther(maxFee.value), { resolve, reject })
     })
@@ -137,8 +153,9 @@ watch(sharesAmount, (newAmount) => {
   }
   
   previewTimeout = setTimeout(() => {
-    emit('previewRedeem', parseEther(newAmount), (assets) => {
-      previewAssets.value = parseFloat(formatEther(assets)).toFixed(4)
+    emit('previewRedeem', parseEther(String(newAmount)), (assets) => {
+      const s = formatEther(assets)
+      previewAssets.value = formatBeraDisplay(s, { decimals: 4 }) || '0.0000'
     })
   }, 300)
 })
@@ -228,20 +245,6 @@ watch(sharesAmount, (newAmount) => {
 .preview {
   margin-top: var(--space-2);
   font-size: var(--font-size-sm);
-}
-
-.fee-info {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: var(--space-3);
-  background: var(--color-bg-secondary);
-  border-radius: var(--radius-md);
-  margin-bottom: var(--space-4);
-}
-
-.fee-value {
-  font-weight: 500;
 }
 
 .withdraw-btn {

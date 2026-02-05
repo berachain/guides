@@ -1,10 +1,12 @@
 <template>
-  <div class="stat-card">
+  <div :class="['stat-card', `stat-card--${variant}`]">
     <div class="stat-icon" v-if="icon">
       <span class="icon-emoji">{{ icon }}</span>
     </div>
     <div class="stat-content">
-      <span class="stat-label">{{ label }}</span>
+      <component :is="variant === 'panel' ? 'h3' : 'span'" :class="['stat-label', { 'card-title': variant === 'panel' }]">
+        {{ label }}
+      </component>
       <span :class="['stat-value', valueClass]">{{ value }}</span>
       <span v-if="subvalue" class="stat-subvalue">{{ subvalue }}</span>
     </div>
@@ -17,7 +19,8 @@ defineProps({
   value: { type: String, required: true },
   subvalue: { type: String, default: '' },
   icon: { type: String, default: '' },
-  valueClass: { type: String, default: '' }
+  valueClass: { type: String, default: '' },
+  variant: { type: String, default: 'stat' }
 })
 </script>
 
@@ -60,11 +63,23 @@ defineProps({
   font-weight: 500;
 }
 
+.stat-card--panel .stat-content {
+  gap: var(--space-3);
+}
+
+.stat-card--panel .stat-label.card-title {
+  margin: 0;
+  font-size: var(--font-size-lg);
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
 .stat-value {
   font-size: var(--font-size-2xl);
   font-weight: 700;
   color: var(--color-text-primary);
   line-height: 1.2;
+  white-space: pre-line;
 }
 
 .stat-value.text-accent {

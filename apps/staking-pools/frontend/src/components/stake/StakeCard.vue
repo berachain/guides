@@ -1,12 +1,16 @@
 <template>
   <div class="card stake-card">
     <h3 class="card-title">Stake BERA</h3>
+
+    <div v-if="isExited" class="exited-note">
+      Pool exited; deposits are disabled.
+    </div>
     
     <div class="input-group">
       <div class="input-header">
         <label class="label">Amount</label>
         <span v-if="isConnected" class="balance text-muted">
-          Balance: {{ walletBalance }} BERA
+          Wallet Balance: {{ walletBalance }} BERA
         </span>
       </div>
       
@@ -40,14 +44,19 @@
       @click="handleStake"
       :disabled="!canStake"
     >
-      <span v-if="!isConnected">Connect Wallet</span>
-      <span v-else-if="isExited">Pool Exited</span>
+      <span v-if="!isConnected && !isExited">Connect Wallet</span>
+      <span v-else-if="isExited">Deposits Disabled</span>
       <span v-else-if="isLoading">Staking...</span>
       <span v-else>Stake</span>
     </button>
     
     <div v-if="error" class="error-message">
-      {{ error }}
+      <div class="error-summary">{{ errorSummary }}</div>
+      <details class="error-details">
+        <summary>Technical details</summary>
+        <pre class="error-full">{{ error }}</pre>
+      </details>
+      <button type="button" class="error-dismiss" @click="error = null">Dismiss</button>
     </div>
     
     <div v-if="txHash" class="success-message">
@@ -79,12 +88,23 @@ const error = ref(null)
 const txHash = ref(null)
 
 const canStake = computed(() => {
-  if (!props.isConnected) return true // Show "Connect Wallet"
   if (props.isExited) return false
+  if (!props.isConnected) return true // Show "Connect Wallet"
   if (props.isLoading) return false
   if (!amount.value || parseFloat(amount.value) <= 0) return false
   return true
 })
+
+function getErrorSummary(raw) {
+  if (!raw || typeof raw !== 'string') return 'Transaction failed.'
+  const s = raw.toLowerCase()
+  if (s.includes('user rejected the request')) return 'Transaction declined in wallet.'
+  if (s.includes('user denied') || s.includes('rejected')) return 'Transaction declined in wallet.'
+  if (s.includes('insufficient funds') || s.includes('insufficient balance')) return 'Insufficient balance for gas or stake.'
+  return 'Transaction failed.'
+}
+
+const errorSummary = computed(() => getErrorSummary(error.value))
 
 function formatShares(shares) {
   return parseFloat(formatEther(shares)).toFixed(4)
@@ -139,6 +159,16 @@ watch(amount, (newAmount) => {
 <style scoped>
 .stake-card {
   height: fit-content;
+}
+
+.exited-note {
+  margin: 0 0 var(--space-4) 0;
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-secondary);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
 }
 
 .card-title {
@@ -215,11 +245,59 @@ watch(amount, (newAmount) => {
 .error-message {
   margin-top: var(--space-4);
   padding: var(--space-3);
-  background: rgba(239, 68, 68, 0.1);
+  background: rgba(239, 68, 68, 0.08);
   border: 1px solid var(--color-error);
   border-radius: var(--radius-md);
   color: var(--color-error);
   font-size: var(--font-size-sm);
+}
+
+.error-summary {
+  font-weight: 500;
+  margin-bottom: var(--space-2);
+}
+
+.error-details {
+  margin-top: var(--space-2);
+}
+
+.error-details summary {
+  cursor: pointer;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  user-select: none;
+}
+
+.error-full {
+  margin: var(--space-2) 0 0 0;
+  padding: var(--space-2);
+  max-height: 120px;
+  overflow-y: auto;
+  font-family: ui-monospace, monospace;
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--color-text-secondary);
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.error-dismiss {
+  margin-top: var(--space-3);
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.error-dismiss:hover {
+  color: var(--color-text-primary);
+  border-color: var(--color-border-focus);
 }
 
 .success-message {

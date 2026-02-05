@@ -57,7 +57,7 @@ In single pool mode, add your pool details under the `pools` object. Use `"defau
 
 | Network | Chain ID | RPC URL | Explorer | Staking Pool Factory | Delegation Handler Factory |
 |---------|----------|---------|----------|---------------------|---------------------------|
-| Bepolia | 80069 | `https://bepolia.rpc.berachain.com` | `https://bepolia.berascan.com` | `0x176c081E95C82CA68DEa20CA419C7506Aa063C24` | `0x8b472791aC2f9e9Bd85f8919401b8Ce3bdFd464c` |
+| Bepolia | 80069 | `https://bepolia.rpc.berachain.com` | `https://testnet.berascan.com` | `0x176c081E95C82CA68DEa20CA419C7506Aa063C24` | `0x8b472791aC2f9e9Bd85f8919401b8Ce3bdFd464c` |
 | Mainnet | 80094 | `https://rpc.berachain.com` | `https://berascan.com` | `0xb79b43dBA821Cb67751276Ce050fF4111445fB99` | `0xAd17932a5B1aaeEa73D277a6AE670623F176E0D0` |
 
 ## Getting Your Pool Address

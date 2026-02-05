@@ -45,31 +45,16 @@
         
         <div class="pool-info">
           <div class="info-row">
-            <span class="label">
-              Pool Assets
-              <span
-                class="info-tip"
-                tabindex="0"
-                data-tip="Total BERA held by the staking pool contract (on-chain totalAssets). This is pool TVL, not validator stake."
-              >ⓘ</span>:
-            </span>
+            <span class="label">Pool TVL:</span>
             <span class="value">{{ formatNumber(pool.totalAssets) }} BERA</span>
           </div>
-          <div v-if="pool.isActive && hasComparablePolFigures(pool)" class="info-row">
-            <span class="label">
-              Staked BERA
-              <span
-                class="info-tip"
-                tabindex="0"
-                data-tip="Amount of BERA Staked to POL by this Validator"
-              >ⓘ</span>:
+          <div v-if="hasUserPosition(pool)" class="info-row">
+            <span class="label">Your Position:</span>
+            <span class="value position-value">
+              <span class="position-assets">{{ formatNumber(pool.userAssets) }} BERA</span>
             </span>
-            <span class="value">{{ formatPolStaked(pool.polStakedBeraAmount) }} BERA</span>
           </div>
-          <div class="info-row">
-            <span class="label">Pool Address:</span>
-            <span class="value"><code class="address-inline">{{ shortenAddress(pool.stakingPool) }}</code></span>
-          </div>
+          
         </div>
 
         <button :class="['btn', getViewButtonClass(pool), 'btn-block']">
@@ -101,22 +86,18 @@ function formatNumber(value) {
   return num.toFixed(2)
 }
 
-function hasComparablePolFigures(pool) {
-  const raw = pool?.polStakedBeraAmount
-  const n = raw === null || raw === undefined ? NaN : Number(raw)
-  return Number.isFinite(n) && n > 0
+function hasUserPosition(pool) {
+  const raw = pool?.userAssetsWei
+  try {
+    if (typeof raw === 'bigint') return raw >= 5_000_000_000_000_000n
+    if (typeof raw === 'string') return BigInt(raw) >= 5_000_000_000_000_000n
+  } catch {
+    // Fall through to float path.
+  }
+  const n = Number(pool?.userAssets)
+  return Number.isFinite(n) && n >= 0.005
 }
 
-function formatPolStaked(value) {
-  const n = value === null || value === undefined ? NaN : Number(value)
-  if (!Number.isFinite(n) || n <= 0) return '—'
-  return formatNumber(n)
-}
-
-function shortenAddress(address) {
-  if (!address) return ''
-  return `${address.slice(0, 6)}...${address.slice(-4)}`
-}
 
 function getStatusLabel(pool) {
   if (isDeadPool(pool)) {
@@ -168,7 +149,7 @@ function getViewButtonClass(pool) {
 
 <style scoped>
 .pool-list-view {
-  padding: var(--space-4);
+  padding: 0;
 }
 
 .header-section {
@@ -231,43 +212,6 @@ function getViewButtonClass(pool) {
   background: var(--color-bg);
   padding: 2px 6px;
   border-radius: var(--radius-sm);
-}
-
-.info-tip {
-  display: inline-block;
-  margin-left: 6px;
-  font-size: var(--font-size-xs);
-  color: var(--color-text-secondary);
-  cursor: help;
-  user-select: none;
-  position: relative;
-}
-
-.info-tip::after {
-  content: attr(data-tip);
-  position: absolute;
-  left: 50%;
-  bottom: calc(100% + 8px);
-  transform: translateX(-50%);
-  width: min(320px, 70vw);
-  padding: 10px 12px;
-  border-radius: var(--radius-md);
-  background: rgba(17, 24, 39, 0.98);
-  border: 1px solid var(--color-border);
-  color: #fff;
-  font-size: var(--font-size-sm);
-  line-height: 1.25;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
-  opacity: 0;
-  visibility: hidden;
-  pointer-events: none;
-  z-index: 1000;
-}
-
-.info-tip:hover::after,
-.info-tip:focus-visible::after {
-  opacity: 1;
-  visibility: visible;
 }
 
 .pools-grid {
@@ -340,6 +284,8 @@ function getViewButtonClass(pool) {
   display: flex;
   justify-content: space-between;
   margin-bottom: var(--space-2);
+  gap: var(--space-3);
+  align-items: center;
 }
 
 .info-row .label {
@@ -349,6 +295,28 @@ function getViewButtonClass(pool) {
 
 .info-row .value {
   font-weight: 600;
+  font-size: var(--font-size-sm);
+}
+
+.position-value {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.position-shares {
+  color: var(--color-text-secondary);
+  font-weight: 600;
+}
+
+.position-assets {
+  color: var(--color-accent);
+  font-weight: 700;
+}
+
+.position-sep {
+  color: var(--color-text-muted);
   font-size: var(--font-size-sm);
 }
 

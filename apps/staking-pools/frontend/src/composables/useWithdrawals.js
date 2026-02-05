@@ -1,8 +1,9 @@
 import { ref } from 'vue'
 import { formatEther, parseEther } from 'viem'
-import { WITHDRAWAL_VAULT_ABI, STAKING_POOL_ABI } from '../utils/abis.js'
+import { WITHDRAWAL_VAULT_ABI } from '../utils/abis.js'
+import { formatBeraDisplay } from '../utils/format.js'
 
-export function useWithdrawals(publicClient, walletClient, withdrawalVaultAddress, poolAddress, account) {
+export function useWithdrawals(publicClient, walletClient, withdrawalVaultAddress, poolAddress, validatorPubkey, account) {
   const isLoading = ref(false)
   const error = ref(null)
   
@@ -10,8 +11,47 @@ export function useWithdrawals(publicClient, walletClient, withdrawalVaultAddres
   const withdrawalRequests = ref([])
   const pendingCount = ref(0)
   
-  // Finalization delay (blocks)
-  const FINALIZATION_DELAY = 7200 // ~24 hours at 12s blocks
+  // Finalization delay (blocks). Prefer reading from the contract; fall back to a
+  // contract getter. Do not hardcode: query WithdrawalVault each time per network.
+  const finalizationDelayBlocks = ref(null)
+  let lastDelayVault = null
+  const SECONDS_PER_BLOCK = 2 // berachain assumed 2s block time for UX math
+
+  async function loadFinalizationDelay() {
+    const client = publicClient?.value || publicClient
+    const vault = withdrawalVaultAddress?.value
+    if (!client || !vault) {
+      finalizationDelayBlocks.value = null
+      lastDelayVault = null
+      return
+    }
+
+    if (lastDelayVault === vault && finalizationDelayBlocks.value !== null) return
+
+    lastDelayVault = vault
+    finalizationDelayBlocks.value = null
+
+    try {
+      const abi = [
+        {
+          name: 'WITHDRAWAL_REQUEST_FINALIZATION_BLOCK_DELAY',
+          type: 'function',
+          stateMutability: 'view',
+          inputs: [],
+          outputs: [{ name: '', type: 'uint256' }]
+        }
+      ]
+      const v = await client.readContract({
+        address: vault,
+        abi,
+        functionName: 'WITHDRAWAL_REQUEST_FINALIZATION_BLOCK_DELAY'
+      })
+      finalizationDelayBlocks.value = typeof v === 'bigint' && v > 0n ? v : null
+    } catch (err) {
+      console.warn('Could not read withdrawal finalization delay from contract:', err)
+      finalizationDelayBlocks.value = null
+    }
+  }
 
   async function loadWithdrawalRequests() {
     if (!publicClient.value || !withdrawalVaultAddress.value || !account.value) {
@@ -20,6 +60,9 @@ export function useWithdrawals(publicClient, walletClient, withdrawalVaultAddres
     }
     
     try {
+      await loadFinalizationDelay()
+      const delayBlocks = finalizationDelayBlocks.value
+
       // Get user's NFT balance (number of withdrawal requests)
       const balance = await publicClient.value.readContract({
         address: withdrawalVaultAddress.value,
@@ -37,6 +80,8 @@ export function useWithdrawals(publicClient, walletClient, withdrawalVaultAddres
       // Get current block for status calculation
       const currentBlock = await publicClient.value.getBlockNumber()
       
+      const targetPubkey = (validatorPubkey?.value || validatorPubkey || '').toLowerCase()
+
       // Enumerate all tokens owned by user
       const requests = []
       for (let i = 0n; i < balance; i++) {
@@ -53,10 +98,14 @@ export function useWithdrawals(publicClient, walletClient, withdrawalVaultAddres
           functionName: 'getWithdrawalRequest',
           args: [tokenId]
         })
-        
-        const readyBlock = request.requestBlock + BigInt(FINALIZATION_DELAY)
-        const isReady = currentBlock >= readyBlock
-        const blocksRemaining = isReady ? 0n : readyBlock - currentBlock
+
+        if (targetPubkey && request.pubkey?.toLowerCase() !== targetPubkey) {
+          continue
+        }
+
+        const readyBlock = typeof delayBlocks === 'bigint' ? (request.requestBlock + delayBlocks) : null
+        const isReady = readyBlock ? currentBlock >= readyBlock : false
+        const blocksRemaining = readyBlock ? (isReady ? 0n : readyBlock - currentBlock) : null
         
         requests.push({
           id: tokenId,
@@ -66,8 +115,8 @@ export function useWithdrawals(publicClient, walletClient, withdrawalVaultAddres
           user: request.user,
           requestBlock: request.requestBlock,
           isReady,
-          blocksRemaining: Number(blocksRemaining),
-          estimatedTimeRemaining: Number(blocksRemaining) * 12 // seconds
+          blocksRemaining: blocksRemaining === null ? null : Number(blocksRemaining),
+          estimatedTimeRemaining: blocksRemaining === null ? null : Number(blocksRemaining) * SECONDS_PER_BLOCK // seconds
         })
       }
       
@@ -88,26 +137,8 @@ export function useWithdrawals(publicClient, walletClient, withdrawalVaultAddres
     error.value = null
     
     try {
-      // First, approve the withdrawal vault to spend shares
-      const currentAllowance = await publicClient.value.readContract({
-        address: poolAddress.value,
-        abi: STAKING_POOL_ABI,
-        functionName: 'allowance',
-        args: [account.value, withdrawalVaultAddress.value]
-      })
-      
-      if (currentAllowance < shares) {
-        const approveHash = await walletClient.value.writeContract({
-          address: poolAddress.value,
-          abi: STAKING_POOL_ABI,
-          functionName: 'approve',
-          args: [withdrawalVaultAddress.value, shares],
-          account: account.value
-        })
-        await publicClient.value.waitForTransactionReceipt({ hash: approveHash })
-      }
-      
-      // Request the redeem
+      // No approve needed: WithdrawalVault calls StakingPool.notifyWithdrawalRequest(user, amountInWei),
+      // and the pool burns the user's shares directly (only callable by the vault). StBERA allowances are unused.
       const hash = await walletClient.value.writeContract({
         address: withdrawalVaultAddress.value,
         abi: WITHDRAWAL_VAULT_ABI,
@@ -198,7 +229,8 @@ export function useWithdrawals(publicClient, walletClient, withdrawalVaultAddres
   }
 
   function formatAssets(assets) {
-    return parseFloat(formatEther(assets)).toFixed(4)
+    const s = formatEther(assets)
+    return formatBeraDisplay(s, { decimals: 4 }) || '0.0000'
   }
 
   function formatTimeRemaining(seconds) {
@@ -214,6 +246,8 @@ export function useWithdrawals(publicClient, walletClient, withdrawalVaultAddres
     error,
     withdrawalRequests,
     pendingCount,
+    finalizationDelayBlocks,
+    SECONDS_PER_BLOCK,
     loadWithdrawalRequests,
     requestRedeem,
     finalizeWithdrawal,

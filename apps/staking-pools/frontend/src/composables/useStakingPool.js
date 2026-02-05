@@ -1,8 +1,8 @@
 import { ref, computed } from 'vue'
 import { formatEther, parseEther } from 'viem'
-import { STAKING_POOL_ABI, DELEGATION_HANDLER_ABI } from '../utils/abis.js'
+import { STAKING_POOL_ABI, DELEGATION_HANDLER_ABI, INCENTIVE_COLLECTOR_ABI } from '../utils/abis.js'
 
-export function useStakingPool(publicClient, walletClient, poolAddress, account, delegationHandlerAddress) {
+export function useStakingPool(publicClient, walletClient, poolAddress, account, delegationHandlerAddress, incentiveCollectorAddress) {
   const isLoading = ref(false)
   const error = ref(null)
   
@@ -19,6 +19,10 @@ export function useStakingPool(publicClient, walletClient, poolAddress, account,
   
   // Delegation state
   const totalDelegation = ref(0n)
+
+  // Incentive collector state
+  const incentivePayoutAmount = ref(null)
+  const incentiveFeePercentage = ref(null)
   
   // Computed
   const exchangeRate = computed(() => {
@@ -49,6 +53,26 @@ export function useStakingPool(publicClient, walletClient, poolAddress, account,
       return '$' + (amount / 1_000).toFixed(0) + 'K'
     }
     return '$' + amount.toFixed(0)
+  })
+
+  const formattedIncentivePayoutAmount = computed(() => {
+    if (incentivePayoutAmount.value === null || incentivePayoutAmount.value === undefined) return null
+    try {
+      const amount = Number(formatEther(incentivePayoutAmount.value))
+      if (!Number.isFinite(amount)) return null
+      return formatNumber(amount) + ' BERA'
+    } catch {
+      return null
+    }
+  })
+
+  // Contract stores fee in basis points (100 = 1%, 1000 = 10%)
+  const formattedIncentiveFeePercentage = computed(() => {
+    const raw = incentiveFeePercentage.value
+    if (raw === null || raw === undefined) return null
+    const n = typeof raw === 'bigint' ? Number(raw) : Number(raw)
+    if (!Number.isFinite(n)) return null
+    return (n / 100).toFixed(2) + '%'
   })
   
   const poolStatus = computed(() => {
@@ -116,8 +140,28 @@ export function useStakingPool(publicClient, walletClient, poolAddress, account,
       } else {
         promises.push(Promise.resolve(0n))
       }
+
+      if (incentiveCollectorAddress?.value) {
+        promises.push(
+          publicClient.value.readContract({
+            address: incentiveCollectorAddress.value,
+            abi: INCENTIVE_COLLECTOR_ABI,
+            functionName: 'payoutAmount'
+          }).catch(() => null)
+        )
+        promises.push(
+          publicClient.value.readContract({
+            address: incentiveCollectorAddress.value,
+            abi: INCENTIVE_COLLECTOR_ABI,
+            functionName: 'feePercentage'
+          }).catch(() => null)
+        )
+      } else {
+        promises.push(Promise.resolve(null))
+        promises.push(Promise.resolve(null))
+      }
       
-      const [assets, supply, active, exited, threshold, delegation] = await Promise.all(promises)
+      const [assets, supply, active, exited, threshold, delegation, payoutAmount, feePercentage] = await Promise.all(promises)
       
       totalAssets.value = assets
       totalSupply.value = supply
@@ -125,6 +169,8 @@ export function useStakingPool(publicClient, walletClient, poolAddress, account,
       isFullyExited.value = exited
       activeThresholdReached.value = threshold
       totalDelegation.value = delegation || 0n
+      incentivePayoutAmount.value = payoutAmount
+      incentiveFeePercentage.value = feePercentage
     } catch (err) {
       // Error handling: Log pool data loading failures
       // This indicates a real problem (RPC failure, invalid address, etc.)
@@ -261,6 +307,8 @@ export function useStakingPool(publicClient, walletClient, poolAddress, account,
     formattedUserShares,
     formattedUserAssets,
     formattedTotalDelegation,
+    formattedIncentivePayoutAmount,
+    formattedIncentiveFeePercentage,
     poolStatus,
     
     // Methods

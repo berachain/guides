@@ -22,7 +22,7 @@ export const bepolia = defineChain({
   name: 'Bepolia',
   nativeCurrency: { name: 'BERA', symbol: 'BERA', decimals: 18 },
   rpcUrls: { default: { http: ['https://bepolia.rpc.berachain.com'] } },
-  blockExplorers: { default: { name: 'Berascan', url: 'https://bepolia.berascan.com' } }
+  blockExplorers: { default: { name: 'Berascan', url: 'https://testnet.berascan.com' } }
 })
 
 // Test account private key (well-known test key from Hardhat)
