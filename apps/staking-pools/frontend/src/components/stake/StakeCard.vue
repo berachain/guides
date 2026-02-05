@@ -70,7 +70,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onUnmounted } from 'vue'
 import { formatEther } from 'viem'
 import { validateAmount } from '../../utils/format.js'
 import { GAS_RESERVE_BERA, DEBOUNCE_MS } from '../../constants/thresholds.js'
@@ -154,12 +154,16 @@ watch(amount, (newAmount) => {
     previewShares.value = null
     return
   }
-  
+
   previewTimeout = setTimeout(() => {
     emit('preview', newAmount, (shares) => {
       previewShares.value = shares
     })
   }, DEBOUNCE_MS)
+})
+
+onUnmounted(() => {
+  if (previewTimeout) clearTimeout(previewTimeout)
 })
 </script>
 

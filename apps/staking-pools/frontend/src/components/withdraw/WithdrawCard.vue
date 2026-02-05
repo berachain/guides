@@ -69,7 +69,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onUnmounted } from 'vue'
 import { parseEther, formatEther } from 'viem'
 import { formatAssets, validateAmount } from '../../utils/format.js'
 import { DEBOUNCE_MS } from '../../constants/thresholds.js'
@@ -158,12 +158,16 @@ watch(sharesAmount, (newAmount) => {
     previewAssets.value = null
     return
   }
-  
+
   previewTimeout = setTimeout(() => {
     emit('previewRedeem', parseEther(String(newAmount)), (assets) => {
       previewAssets.value = formatAssets(assets)
     })
   }, DEBOUNCE_MS)
+})
+
+onUnmounted(() => {
+  if (previewTimeout) clearTimeout(previewTimeout)
 })
 </script>
 
