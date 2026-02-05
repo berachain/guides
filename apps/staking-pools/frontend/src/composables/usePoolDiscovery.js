@@ -1,10 +1,10 @@
-import { ref } from 'vue'
+import { ref, toValue } from 'vue'
 import { formatEther } from 'viem'
 import { STAKING_POOL_FACTORY_ABI, STAKING_POOL_ABI } from '../utils/abis.js'
+import { calculateExchangeRate } from '../utils/format.js'
 import { getChainConstants } from '../constants/chains.js'
 import { DEAD_POOL_THRESHOLD_WEI } from '../constants/thresholds.js'
-
-const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000'
+import { isZeroAddress } from '../constants/addresses.js'
 
 export function usePoolDiscovery(publicClient, chainId, configPools = null, configMode = null, account = null) {
   const validators = ref([])
@@ -26,9 +26,8 @@ export function usePoolDiscovery(publicClient, chainId, configPools = null, conf
     isLoading.value = true
     error.value = null
 
-    // Handle both direct objects and computed refs
-    const poolsObj = configPools?.value || configPools
-    const mode = configMode?.value || configMode
+    const poolsObj = toValue(configPools)
+    const mode = toValue(configMode)
 
     // Determine mode: explicit mode takes precedence, then auto-detect
     let useSingleMode = false
@@ -38,7 +37,7 @@ export function usePoolDiscovery(publicClient, chainId, configPools = null, conf
     } else {
       if (poolsObj && typeof poolsObj === 'object' && Object.keys(poolsObj).length > 0) {
         const configPoolList = Object.entries(poolsObj)
-          .filter(([_, p]) => p.enabled)
+          .filter(([_, p]) => p && p.enabled)
           .map(([key, p]) => ({ key, ...p }))
 
         useSingleMode = (configPoolList.length > 0)
@@ -53,7 +52,7 @@ export function usePoolDiscovery(publicClient, chainId, configPools = null, conf
       }
 
       const configPoolList = Object.entries(poolsObj)
-        .filter(([_, p]) => p.enabled)
+        .filter(([_, p]) => p && p.enabled)
         .map(([key, p]) => ({ key, ...p }))
 
       if (configPoolList.length === 0) {
@@ -71,15 +70,17 @@ export function usePoolDiscovery(publicClient, chainId, configPools = null, conf
   // Path 1: Load single pool from config
   async function loadPoolsFromConfig(configPoolList) {
     try {
-      const client = publicClient?.value || publicClient
+      const client = toValue(publicClient)
 
       const discoveredPools = await Promise.all(
         configPoolList.map(async (poolConfig) => {
           try {
             let totalAssets = '0'
+            let totalAssetsWei = null
             let exchangeRate = '1.0'
             let isActive = false
             let isFullyExited = false
+            let isDead = false
             let userShares = '0'
             let userAssets = '0'
             let userSharesWei = 0n
@@ -114,15 +115,19 @@ export function usePoolDiscovery(publicClient, chainId, configPools = null, conf
                 isActive = contractIsActive && !isFullyExited
 
                 if (totalSupply > 0n) {
-                  exchangeRate = (Number(assets) / Number(totalSupply)).toFixed(4)
+                  exchangeRate = calculateExchangeRate(assets, totalSupply).toFixed(4)
                 }
 
                 totalAssets = formatEther(assets)
 
-                const accountValue =
-                  typeof account?.value === 'string'
-                    ? account.value
-                    : (typeof account === 'string' ? account : null)
+                const assetsWei = typeof assets === 'bigint' ? assets : 0n
+                totalAssetsWei = typeof assets === 'bigint' ? assets.toString() : null
+                isDead = isFullyExited && assetsWei < DEAD_POOL_THRESHOLD_WEI
+
+                const accountValue = (() => {
+                  const a = toValue(account)
+                  return typeof a === 'string' ? a : null
+                })()
                 if (accountValue) {
                   const shares = await client.readContract({
                     address: poolConfig.stakingPool,
@@ -154,6 +159,7 @@ export function usePoolDiscovery(publicClient, chainId, configPools = null, conf
               stakingRewardsVault: poolConfig.stakingRewardsVault,
               incentiveCollector: poolConfig.incentiveCollector,
               totalAssets,
+              totalAssetsWei,
               userShares,
               userAssets,
               userSharesWei,
@@ -161,6 +167,7 @@ export function usePoolDiscovery(publicClient, chainId, configPools = null, conf
               exchangeRate,
               isActive,
               isFullyExited,
+              isDead,
               name: poolConfig.name || defaultPoolName(poolConfig.stakingPool),
               fromConfig: true
             }
@@ -183,8 +190,8 @@ export function usePoolDiscovery(publicClient, chainId, configPools = null, conf
   // Path 2: Discovery mode (API-first, then JSON snapshot fallback on bepolia)
   async function loadPoolsFromDiscovery() {
     try {
-      const chain = chainId?.value || chainId
-      const client = publicClient?.value || publicClient
+      const chain = toValue(chainId)
+      const client = toValue(publicClient)
 
       if (!chain || !client) {
         error.value = 'Public client and chain ID required'
@@ -311,7 +318,7 @@ export function usePoolDiscovery(publicClient, chainId, configPools = null, conf
       if (!result) continue
 
       const stakingPool = (result[1] || '').toLowerCase()
-      if (!stakingPool || stakingPool === ZERO_ADDRESS) continue
+      if (!stakingPool || isZeroAddress(stakingPool)) continue
 
       const displayName = v.metadata?.name || defaultPoolName(stakingPool)
 
@@ -357,10 +364,10 @@ export function usePoolDiscovery(publicClient, chainId, configPools = null, conf
       stateResults.push(...res)
     }
 
-    const accountValue =
-      typeof account?.value === 'string'
-        ? account.value
-        : (typeof account === 'string' ? account : null)
+    const accountValue = (() => {
+      const a = toValue(account)
+      return typeof a === 'string' ? a : null
+    })()
     const userCalls = []
     if (accountValue) {
       for (const p of discovered) {
@@ -392,9 +399,9 @@ export function usePoolDiscovery(publicClient, chainId, configPools = null, conf
       discovered[i].isDead =
         isFullyExited && typeof totalAssets === 'bigint' && totalAssets < DEAD_POOL_THRESHOLD_WEI
 
-      if (typeof totalAssets === "bigint" && typeof totalSupply === "bigint") {
+      if (typeof totalAssets === 'bigint' && typeof totalSupply === 'bigint') {
         if (totalSupply > 0n) {
-          discovered[i].exchangeRate = (Number(totalAssets) / Number(totalSupply)).toFixed(4)
+          discovered[i].exchangeRate = calculateExchangeRate(totalAssets, totalSupply).toFixed(4)
         }
         discovered[i].totalAssets = formatEther(totalAssets)
       }

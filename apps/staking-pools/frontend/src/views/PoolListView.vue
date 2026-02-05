@@ -29,52 +29,159 @@
       <p class="text-secondary">Validators with staking pools will appear here</p>
     </div>
 
-    <div v-else class="pools-grid">
-      <div
-        v-for="pool in pools"
-        :key="pool.stakingPool"
-        :class="['pool-card', 'card', { dead: isDeadPool(pool) }]"
-        @click="$emit('select-pool', pool)"
-      >
-        <div class="pool-header">
-          <h3>{{ pool.name || (pool.validator.index !== null ? `Validator ${pool.validator.index}` : 'Staking Pool') }}</h3>
-          <span :class="['status-badge', getStatusClass(pool)]">
-            {{ getStatusLabel(pool) }}
-          </span>
-        </div>
-        
-        <div class="pool-info">
-          <div class="info-row">
-            <span class="label">Assets:</span>
-            <span class="value">{{ formatNumber(pool.totalAssets) }} BERA</span>
+    <div v-else class="pools-sections">
+      <section v-if="activePools.length > 0" class="pool-section">
+        <h2 class="section-title">Active</h2>
+        <div class="pools-grid">
+          <div
+            v-for="pool in activePools"
+            :key="pool.stakingPool"
+            class="pool-card card"
+            @click="$emit('select-pool', pool)"
+          >
+            <div class="pool-header">
+              <h3>{{ pool.name || (pool.validator?.index != null ? `Validator ${pool.validator.index}` : 'Staking Pool') }}</h3>
+              <span :class="['status-badge', getStatusClass(pool)]">{{ getStatusLabel(pool) }}</span>
+            </div>
+            <div class="pool-info">
+              <div class="info-row">
+                <span class="label">Assets:</span>
+                <span class="value">{{ formatNumber(pool.totalAssets) }} BERA</span>
+              </div>
+              <div v-if="hasUserPosition(pool)" class="info-row">
+                <span class="label">Your Position:</span>
+                <span class="value position-value"><span class="position-assets">{{ formatNumber(pool.userAssets) }} BERA</span></span>
+              </div>
+            </div>
+            <button :class="['btn', getViewButtonClass(pool), 'btn-block']">{{ getViewButtonLabel(pool) }}</button>
           </div>
-          <div v-if="hasUserPosition(pool)" class="info-row">
-            <span class="label">Your Position:</span>
-            <span class="value position-value">
-              <span class="position-assets">{{ formatNumber(pool.userAssets) }} BERA</span>
-            </span>
-          </div>
-          
         </div>
-
-        <button :class="['btn', getViewButtonClass(pool), 'btn-block']">
-          {{ getViewButtonLabel(pool) }}
-        </button>
-      </div>
+      </section>
+      <section v-if="inactivePools.length > 0" class="pool-section">
+        <h2 class="section-title">Inactive</h2>
+        <div class="pools-grid">
+          <div
+            v-for="pool in inactivePools"
+            :key="pool.stakingPool"
+            class="pool-card card"
+            @click="$emit('select-pool', pool)"
+          >
+            <div class="pool-header">
+              <h3>{{ pool.name || (pool.validator?.index != null ? `Validator ${pool.validator.index}` : 'Staking Pool') }}</h3>
+              <span :class="['status-badge', getStatusClass(pool)]">{{ getStatusLabel(pool) }}</span>
+            </div>
+            <div class="pool-info">
+              <div class="info-row">
+                <span class="label">Assets:</span>
+                <span class="value">{{ formatNumber(pool.totalAssets) }} BERA</span>
+              </div>
+              <div v-if="hasUserPosition(pool)" class="info-row">
+                <span class="label">Your Position:</span>
+                <span class="value position-value"><span class="position-assets">{{ formatNumber(pool.userAssets) }} BERA</span></span>
+              </div>
+            </div>
+            <button :class="['btn', getViewButtonClass(pool), 'btn-block']">{{ getViewButtonLabel(pool) }}</button>
+          </div>
+        </div>
+      </section>
+      <section v-if="exitedPools.length > 0" class="pool-section">
+        <h2 class="section-title">Exited</h2>
+        <div class="pools-grid">
+          <div
+            v-for="pool in exitedPools"
+            :key="pool.stakingPool"
+            class="pool-card card"
+            @click="$emit('select-pool', pool)"
+          >
+            <div class="pool-header">
+              <h3>{{ pool.name || (pool.validator?.index != null ? `Validator ${pool.validator.index}` : 'Staking Pool') }}</h3>
+              <span :class="['status-badge', getStatusClass(pool)]">{{ getStatusLabel(pool) }}</span>
+            </div>
+            <div class="pool-info">
+              <div class="info-row">
+                <span class="label">Assets:</span>
+                <span class="value">{{ formatNumber(pool.totalAssets) }} BERA</span>
+              </div>
+              <div v-if="hasUserPosition(pool)" class="info-row">
+                <span class="label">Your Position:</span>
+                <span class="value position-value"><span class="position-assets">{{ formatNumber(pool.userAssets) }} BERA</span></span>
+              </div>
+            </div>
+            <button :class="['btn', getViewButtonClass(pool), 'btn-block']">{{ getViewButtonLabel(pool) }}</button>
+          </div>
+        </div>
+      </section>
+      <section v-if="deadPools.length > 0" class="pool-section">
+        <h2 class="section-title">Dead</h2>
+        <div class="pools-grid">
+          <div
+            v-for="pool in deadPools"
+            :key="pool.stakingPool"
+            :class="['pool-card', 'card', 'dead']"
+            @click="$emit('select-pool', pool)"
+          >
+            <div class="pool-header">
+              <h3>{{ pool.name || (pool.validator?.index != null ? `Validator ${pool.validator.index}` : 'Staking Pool') }}</h3>
+              <span :class="['status-badge', getStatusClass(pool)]">{{ getStatusLabel(pool) }}</span>
+            </div>
+            <div class="pool-info">
+              <div class="info-row">
+                <span class="label">Assets:</span>
+                <span class="value">{{ formatNumber(pool.totalAssets) }} BERA</span>
+              </div>
+              <div v-if="hasUserPosition(pool)" class="info-row">
+                <span class="label">Your Position:</span>
+                <span class="value position-value"><span class="position-assets">{{ formatNumber(pool.userAssets) }} BERA</span></span>
+              </div>
+            </div>
+            <button :class="['btn', getViewButtonClass(pool), 'btn-block']">{{ getViewButtonLabel(pool) }}</button>
+          </div>
+        </div>
+      </section>
     </div>
   </div>
 </template>
 
 <script setup>
+import { computed } from 'vue'
 import { formatNumber } from '../utils/format.js'
 import { DEAD_POOL_THRESHOLD_WEI } from '../constants/thresholds.js'
-defineProps({
+
+const props = defineProps({
   pools: { type: Array, default: () => [] },
   isLoading: { type: Boolean, default: false },
   error: { type: String, default: null }
 })
 
 defineEmits(['select-pool', 'retry'])
+
+function isDeadPool(pool) {
+  if (pool?.isDead === true) return true
+  if (pool?.totalAssetsWei) {
+    try {
+      return pool?.isFullyExited && BigInt(pool.totalAssetsWei) < DEAD_POOL_THRESHOLD_WEI
+    } catch {
+      // fall through
+    }
+  }
+  if (!pool?.isFullyExited) return false
+  const deadThresholdBera = Number(DEAD_POOL_THRESHOLD_WEI) / 1e18
+  const staked = parseFloat(pool?.totalAssets)
+  return Number.isFinite(staked) && staked < deadThresholdBera
+}
+
+const activePools = computed(() =>
+  props.pools.filter(p => !isDeadPool(p) && !p.isFullyExited && p.isActive)
+)
+const inactivePools = computed(() =>
+  props.pools.filter(p => !isDeadPool(p) && !p.isFullyExited && !p.isActive)
+)
+const exitedPools = computed(() =>
+  props.pools.filter(p => !isDeadPool(p) && p.isFullyExited)
+)
+const deadPools = computed(() =>
+  props.pools.filter(p => isDeadPool(p))
+)
 
 function hasUserPosition(pool) {
   const deadThresholdBera = Number(DEAD_POOL_THRESHOLD_WEI) / 1e18
@@ -91,40 +198,15 @@ function hasUserPosition(pool) {
 
 
 function getStatusLabel(pool) {
-  if (isDeadPool(pool)) {
-    return 'Dead'
-  }
-  if (pool.isFullyExited) {
-    return 'Exited'
-  }
+  if (isDeadPool(pool)) return 'Dead'
+  if (pool.isFullyExited) return 'Exited'
   return pool.isActive ? 'Active' : 'Inactive'
 }
 
 function getStatusClass(pool) {
-  if (isDeadPool(pool)) {
-    return 'dead'
-  }
-  if (pool.isFullyExited) {
-    return 'exited'
-  }
+  if (isDeadPool(pool)) return 'dead'
+  if (pool.isFullyExited) return 'exited'
   return pool.isActive ? 'active' : 'inactive'
-}
-
-function isDeadPool(pool) {
-  const deadThresholdBera = Number(DEAD_POOL_THRESHOLD_WEI) / 1e18
-  if (pool?.isDead === true) return true
-  if (pool?.totalAssetsWei) {
-    try {
-      // Match display rounding: anything under 0.005 BERA is effectively 0.00 on the card.
-      return pool?.isFullyExited && BigInt(pool.totalAssetsWei) < DEAD_POOL_THRESHOLD_WEI
-    } catch {
-      // Fall through to float path.
-    }
-  }
-  if (!pool?.isFullyExited) return false
-  const staked = parseFloat(pool?.totalAssets)
-  // Treat tiny dust as zero; UI rounds to 0.00 anyway.
-  return Number.isFinite(staked) && staked < deadThresholdBera
 }
 
 function getViewButtonLabel(pool) {
@@ -204,6 +286,19 @@ function getViewButtonClass(pool) {
   background: var(--color-bg);
   padding: 2px 6px;
   border-radius: var(--radius-sm);
+}
+
+.pools-sections {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+}
+
+.pool-section .section-title {
+  font-size: var(--font-size-lg);
+  font-weight: 600;
+  margin: 0 0 var(--space-4) 0;
+  color: var(--color-text-secondary);
 }
 
 .pools-grid {
