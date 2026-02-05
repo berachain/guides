@@ -17,7 +17,7 @@ A Vue.js frontend for Berachain staking pools. Users can stake BERA, view positi
 
 3. **Run dev server:**
    ```bash
-   npm run dev
+   npx vite
    ```
 
 4. **Build for production:**
@@ -36,7 +36,7 @@ Quick summary:
 
 ## Development
 
-- Dev server: `npm run dev` (runs on port 3001)
+- Dev server: `npx vite` (runs on port 3001)
 - Tests: `npm run test:e2e` (Playwright E2E tests)
 - Build: `npm run build` (outputs to `dist/`)
 

@@ -1,7 +1,6 @@
 import { ref, computed } from 'vue'
 import { createWalletClient, createPublicClient, custom, http, defineChain } from 'viem'
-
-const MULTICALL3_ADDRESS = '0xcA11bde05977b3631167028862bE2a173976CA11'
+import { MULTICALL3_ADDRESS } from '../constants/addresses.js'
 
 export function useWallet() {
   const account = ref(null)

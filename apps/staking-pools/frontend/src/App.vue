@@ -278,7 +278,8 @@ const withdrawals = useWithdrawals(
   withdrawalVaultAddress,
   poolAddress,
   computed(() => poolConfig.value?.validatorPubkey || null),
-  wallet.account
+  wallet.account,
+  computed(() => config.value?.network?.chainId || null)
 )
 
 // Pool discovery - respects explicit mode or auto-detects
