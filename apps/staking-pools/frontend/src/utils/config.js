@@ -28,19 +28,11 @@ export function loadTheme(themeName) {
     existing.remove()
   }
   
-  // Find theme-overrides.css link to insert preset before it
-  const customOverride = document.querySelector('link[href="/theme-overrides.css"]')
-  
-  // Load preset theme
+  // Load preset theme. Append so it comes after theme.css (injected by Vite from main.js)
+  // and after theme-overrides.css, so the preset actually overrides the default accent.
   const link = document.createElement('link')
   link.id = 'theme-preset'
   link.rel = 'stylesheet'
   link.href = `/theme-overrides.example-${themeName}.css`
-  
-  // Insert before custom overrides so custom can override preset
-  if (customOverride) {
-    document.head.insertBefore(link, customOverride)
-  } else {
-    document.head.appendChild(link)
-  }
+  document.head.appendChild(link)
 }

@@ -127,8 +127,8 @@ async function handleDelegate() {
 }
 
 .info-banner {
-  background: rgba(245, 200, 22, 0.1);
-  border: 1px solid rgba(245, 200, 22, 0.3);
+  background: color-mix(in srgb, var(--color-accent) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-accent) 35%, transparent);
   border-radius: var(--radius-md);
   padding: var(--space-3);
   margin-bottom: var(--space-4);
