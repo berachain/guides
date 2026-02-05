@@ -1,0 +1,12 @@
+{
+  "_comment": "Minimal config: only chainId and validatorPubkey. Network name/rpcUrl/explorerUrl and pool/contract addresses are derived. See CONFIG_GUIDE.md.",
+  "mode": "single",
+  "network": { "chainId": 80069 },
+  "pools": {
+    "default": {
+      "name": "Staking Pool",
+      "validatorPubkey": "0xa6ce5adefe9d089ffd772297d77d147beff8fa8bf3c1b5a6b8ff204fc168a026968278214a8dd1624cb5947bb009d70f",
+      "enabled": true
+    }
+  }
+}

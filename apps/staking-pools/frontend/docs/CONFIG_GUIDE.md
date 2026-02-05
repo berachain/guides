@@ -8,9 +8,9 @@ Copy `public/config.example.json` to `public/config.json` and edit with your set
 
 ## Configuration Modes
 
-The frontend supports two modes. Single pool mode is the typical deployment scenario where you're serving one validator's staking pool. Set `"mode": "single"` and add your pool details in the `pools` section. The frontend displays that pool and allows users to stake directly to it.
+The frontend supports two modes. **Single pool mode** is the typical deployment scenario where you're serving one validator's staking pool. Set `"mode": "single"` and add your pool details in the `pools` section. The frontend displays that pool and allows users to stake directly to it.
 
-Discovery mode loads multiple pools automatically and lets users browse and select pools. Set `"mode": "discovery"` and leave the `pools` object empty. Discovery uses `api.berachain.com/graphql` to enumerate validator pubkeys, then resolves each validator’s staking pool via on-chain factory calls.
+**Discovery mode** loads multiple pools automatically and lets users browse and select pools. Set `"mode": "discovery"` and leave the `pools` object empty. Discovery uses `api.berachain.com/graphql` to enumerate validator pubkeys, then resolves each validator’s staking pool via on-chain factory calls.
 
 ## Configuration Fields
 
@@ -18,12 +18,12 @@ Discovery mode loads multiple pools automatically and lets users browse and sele
 
 The network section defines which blockchain network the frontend connects to:
 
-| Field | Description |
-|-------|-------------|
-| `name` | Display name users will see |
-| `chainId` | Network chain ID (80069 for Bepolia, 80094 for mainnet) |
-| `rpcUrl` | RPC endpoint (must be accessible from browsers and support eth_call and eth_getBalance) |
-| `explorerUrl` | Block explorer URL |
+| Field          | Description |
+|----------------|-------------|
+| `name`         | Display name users will see |
+| `chainId`      | Network chain ID (80069 for Bepolia, 80094 for mainnet) |
+| `rpcUrl`       | RPC endpoint (must be accessible from browsers and support eth_call and eth_getBalance) |
+| `explorerUrl`  | Block explorer URL |
 
 Public RPC endpoints work, but consider using a dedicated endpoint for production to avoid rate limits that appear during peak usage, because that's when they always appear.
 
@@ -55,10 +55,10 @@ In single pool mode, add your pool details under the `pools` object. Use `"defau
 
 ## Network Presets
 
-| Network | Chain ID | RPC URL | Explorer | Staking Pool Factory | Delegation Handler Factory |
-|---------|----------|---------|----------|---------------------|---------------------------|
-| Bepolia | 80069 | `https://bepolia.rpc.berachain.com` | `https://testnet.berascan.com` | `0x176c081E95C82CA68DEa20CA419C7506Aa063C24` | `0x8b472791aC2f9e9Bd85f8919401b8Ce3bdFd464c` |
-| Mainnet | 80094 | `https://rpc.berachain.com` | `https://berascan.com` | `0xb79b43dBA821Cb67751276Ce050fF4111445fB99` | `0xAd17932a5B1aaeEa73D277a6AE670623F176E0D0` |
+| Network  | Chain ID | RPC URL                             | Explorer                      | Staking Pool Factory             | Delegation Handler Factory       |
+|----------|----------|-------------------------------------|-------------------------------|----------------------------------|----------------------------------|
+| Bepolia  | 80069    | `https://bepolia.rpc.berachain.com` | `https://testnet.berascan.com` | `0x176c081E95C82CA68DEa20CA419C7506Aa063C24` | `0x8b472791aC2f9e9Bd85f8919401b8Ce3bdFd464c` |
+| Mainnet  | 80094    | `https://rpc.berachain.com`         | `https://berascan.com`        | `0xb79b43dBA821Cb67751276Ce050fF4111445fB99` | `0xAd17932a5B1aaeEa73D277a6AE670623F176E0D0` |
 
 ## Getting Your Pool Address
 

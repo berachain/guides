@@ -21,13 +21,14 @@ If you're unsure about the pool address or validator pubkey, check your deployme
 
 Set the network section to match your deployment target. See [CONFIG_GUIDE.md](./CONFIG_GUIDE.md#network-presets) for network presets and current contract addresses.
 
-In the pools section, add your pool details. Set `mode` to `"single"` and add a pool entry under the `pools` object. The `name` field is what users see, `stakingPool` is your contract address, `validatorPubkey` is the 98-character hex public key, and `enabled` should be `true`. The delegation handler can be left as `0x0000000000000000000000000000000000000000` if you're not using delegation features.
+In the pools section, add your pool details. Set `mode` to `"single"` and add a pool entry under the `pools` object. The `name` field is what users see, `stakingPool` is your contract address, `validatorPubkey` is the 98-character hex public key, and `enabled` should be `true`. The delegation handler can be left as `0x0000000000000000000000000000000000000000` if you're not running a delegated pool or don't want to mention it.
+
 
 ## Branding
 
 Set `branding.name` to your pool's display name and `branding.logo` to the logo path (or `null`). Logo paths are relative to `public`, so `/branding/logo.svg` references `public/branding/logo.svg`.
 
-For theme colors, set `branding.theme` to a preset (`"blue"`, `"purple"`, `"green"`, `"orange"`, `"teal"`, `"coral"`, `"indigo"`, `"emerald"`, or `"cyan"`). Each preset includes a matching example logo in `public/branding/` and theme files. For custom colors, leave `theme` as `null` and edit `public/theme-overrides.css` to override CSS variables. The override file loads after preset themes, so you can customize a preset or start from scratch. See [CONFIG_GUIDE.md](./CONFIG_GUIDE.md#branding) for details.
+For theme colors, set `branding.theme` to a preset (`"blue"`, `"purple"`, `"green"`, `"orange"`, `"teal"`, `"coral"`, `"indigo"`, `"emerald"`, `"cyan"`, or `"slate"`). Each preset includes a matching example logo in `public/branding/` and theme files. For custom colors, leave `theme` as `null` and edit `public/theme-overrides.css` to override CSS variables. The override file loads after preset themes, so you can customize a preset or start from scratch. See [CONFIG_GUIDE.md](./CONFIG_GUIDE.md#branding) for details.
 
 ## Build
 
@@ -62,13 +63,13 @@ server {
 2. Test the configuration: `nginx -t`
 3. Reload nginx: `systemctl reload nginx` or `service nginx reload`
 
-For HTTPS, use Let's Encrypt with certbot to obtain certificates and update the server block to listen on port 443 with SSL configuration.
+For HTTPS, consider using Let's Encrypt with certbot to obtain certificates, then update the server block to listen on port 443 with SSL configuration.
 
 ## Troubleshooting
 
 1. **RPC connection failures:** Verify the URL in `config.json` is correct and accessible from your deployment environment. Test with `curl` to confirm it responds. Some providers require API keys or have rate limits that kick in at the worst possible moment. CORS errors mean the RPC server isn't allowing requests from your domain; contact your provider or use one that supports browser requests.
 
-2. **Contract address mistakes:** Verify the staking pool address matches your deployed contract and is correct for the network in your config. The validator pubkey must be exactly 98 hex characters (0x prefix plus 96 characters). Open the browser console for specific errors; wrong chain ID or incorrect contract ABIs are common culprits.
+2. **Contract address mistakes:** Verify the staking pool address matches your deployed contract and is correct for the network in your config. The validator pubkey must be exactly 98 hex characters (0x prefix plus 96 characters). 
 
 3. **Build failures:** Validate `config.json` syntax with a linter before building. If `npm install` fails, check your Node.js version (18+ recommended). Missing file warnings mean referenced assets in `public/` don't exist.
 

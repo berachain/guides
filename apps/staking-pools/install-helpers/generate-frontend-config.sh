@@ -138,8 +138,9 @@ fi
 # Query withdrawal vault from factory
 WITHDRAWAL_VAULT=$(cast call "$FACTORY" "withdrawalVault()(address)" -r "$RPC_URL" 2>/dev/null || echo "0x0000000000000000000000000000000000000000")
 
-# Query delegation handler (may not exist)
-DELEGATION_HANDLER=$(get_delegation_handler "$FACTORY" "$PUBKEY" "$RPC_URL")
+# Query delegation handler from DelegationHandlerFactory (may not exist)
+DH_FACTORY=$(get_delegation_handler_factory_for_network "$NETWORK")
+DELEGATION_HANDLER=$(get_delegation_handler "${DH_FACTORY:-0x0}" "$PUBKEY" "$RPC_URL")
 
 POOL_KEY="default"
 POOL_NAME="Staking Pool"
