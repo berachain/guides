@@ -7,7 +7,7 @@
     "name": "Bepolia",
     "chainId": 80069,
     "rpcUrl": "https://bepolia.rpc.berachain.com",
-    "explorerUrl": "https://bepolia.berascan.com"
+    "explorerUrl": "https://testnet.berascan.com"
   },
   
   "branding": {

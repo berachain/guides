@@ -43,6 +43,11 @@ export const DELEGATION_HANDLER_FACTORY_ABI = [
   { name: 'delegationHandlers', type: 'function', stateMutability: 'view', inputs: [{ name: 'pubkey', type: 'bytes' }], outputs: [{ name: '', type: 'address' }] }
 ]
 
+export const INCENTIVE_COLLECTOR_ABI = [
+  { name: 'payoutAmount', type: 'function', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256' }] },
+  { name: 'feePercentage', type: 'function', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint96' }] }
+]
+
 export const STAKING_POOL_FACTORY_ABI = [
   { 
     name: 'getCoreContracts', 

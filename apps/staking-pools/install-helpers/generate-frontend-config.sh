@@ -67,7 +67,7 @@ fi
 # Use constants from lib-common.sh
 # RPC + Explorer per network (docs constants)
 EXP_MAINNET="https://berascan.com"
-EXP_BEPOLIA="https://bepolia.berascan.com"
+EXP_BEPOLIA="https://testnet.berascan.com"
 NAME_MAINNET="Berachain"
 NAME_BEPOLIA="Bepolia"
 CHAINID_MAINNET=80094

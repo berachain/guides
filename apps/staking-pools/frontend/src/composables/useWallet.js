@@ -64,6 +64,8 @@ export function useWallet() {
 
       account.value = accounts[0]
 
+      await ensureWalletChain()
+
       walletClient.value = createWalletClient({
         account: account.value,
         chain: chain.value,
@@ -88,6 +90,42 @@ export function useWallet() {
       error.value = err.message || 'Failed to connect wallet'
     } finally {
       isConnecting.value = false
+    }
+  }
+
+  async function ensureWalletChain() {
+    if (!window.ethereum || !chain.value?.id) return
+
+    const targetHex = `0x${chain.value.id.toString(16)}`
+    const currentHex = await window.ethereum.request({ method: 'eth_chainId' })
+    if (currentHex && currentHex.toLowerCase() === targetHex.toLowerCase()) return
+
+    try {
+      await window.ethereum.request({
+        method: 'wallet_switchEthereumChain',
+        params: [{ chainId: targetHex }]
+      })
+    } catch (err) {
+      const code = err?.code ?? err?.data?.originalError?.code
+      if (code !== 4902) throw err
+
+      const rpcUrls = chain.value.rpcUrls?.default?.http || []
+      const blockExplorerUrls = chain.value.blockExplorers?.default?.url
+        ? [chain.value.blockExplorers.default.url]
+        : undefined
+
+      await window.ethereum.request({
+        method: 'wallet_addEthereumChain',
+        params: [
+          {
+            chainId: targetHex,
+            chainName: chain.value.name,
+            nativeCurrency: chain.value.nativeCurrency,
+            rpcUrls,
+            blockExplorerUrls
+          }
+        ]
+      })
     }
   }
 

@@ -1,7 +1,7 @@
 <template>
   <div class="card withdraw-queue">
     <div class="queue-header">
-      <h3 class="card-title">Pending Withdrawals</h3>
+      <h3 class="card-title">Withdrawals</h3>
       <button
         v-if="readyRequests.length > 1"
         class="btn btn-primary btn-sm"
@@ -17,7 +17,7 @@
     </div>
     
     <div v-else-if="requests.length === 0" class="empty-state">
-      <p class="text-secondary">No pending withdrawal requests</p>
+      <p class="text-secondary">No withdrawal requests</p>
     </div>
     
     <div v-else class="table-wrapper">
@@ -41,9 +41,10 @@
             </td>
             <td>
               <span v-if="request.isReady" class="badge badge-success">Ready</span>
-              <span v-else class="badge badge-warning">
+              <span v-else-if="request.estimatedTimeRemaining !== null && request.estimatedTimeRemaining !== undefined" class="badge badge-warning">
                 {{ formatTimeRemaining(request.estimatedTimeRemaining) }}
               </span>
+              <span v-else class="badge badge-neutral">Pending</span>
             </td>
             <td>
               <button
@@ -72,6 +73,7 @@
 <script setup>
 import { ref, computed } from 'vue'
 import { formatEther } from 'viem'
+import { formatBeraDisplay } from '../../utils/format.js'
 
 const props = defineProps({
   isConnected: { type: Boolean, default: false },
@@ -90,7 +92,8 @@ const readyRequests = computed(() => {
 })
 
 function formatAssets(assets) {
-  return parseFloat(formatEther(assets)).toFixed(4)
+  const s = formatEther(assets)
+  return formatBeraDisplay(s, { decimals: 4 }) || '0.0000'
 }
 
 function formatTimeRemaining(seconds) {
@@ -133,7 +136,7 @@ async function handleFinalizeAll() {
 
 <style scoped>
 .withdraw-queue {
-  margin-top: var(--space-6);
+  margin-top: 0;
 }
 
 .queue-header {

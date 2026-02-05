@@ -279,7 +279,7 @@ test.describe('Staking Pool Frontend (Single Pool)', () => {
               name: 'Bepolia',
               chainId: 80069,
               rpcUrl: 'https://bepolia.rpc.berachain.com',
-              explorerUrl: 'https://bepolia.berascan.com'
+              explorerUrl: 'https://testnet.berascan.com'
             },
             contracts: {
               withdrawalVault: '0xAFAc2f11Cb39F0521b22494F6101002ce653D2f4',
@@ -342,7 +342,7 @@ test.describe('Staking Pool Frontend (Single Pool)', () => {
               name: 'Bepolia',
               chainId: 80069,
               rpcUrl: 'https://bepolia.rpc.berachain.com',
-              explorerUrl: 'https://bepolia.berascan.com'
+              explorerUrl: 'https://testnet.berascan.com'
             },
             contracts: {
               withdrawalVault: '0xAFAc2f11Cb39F0521b22494F6101002ce653D2f4',
@@ -400,7 +400,7 @@ test.describe('Staking Pool Frontend (Single Pool)', () => {
               name: 'Bepolia',
               chainId: 80069,
               rpcUrl: 'https://bepolia.rpc.berachain.com',
-              explorerUrl: 'https://bepolia.berascan.com'
+              explorerUrl: 'https://testnet.berascan.com'
             },
             contracts: {
               withdrawalVault: '0xAFAc2f11Cb39F0521b22494F6101002ce653D2f4',
@@ -476,7 +476,7 @@ test.describe('Staking Pool Frontend (Single Pool)', () => {
                 name: 'Bepolia',
                 chainId: 80069,
                 rpcUrl: 'https://bepolia.rpc.berachain.com',
-                explorerUrl: 'https://bepolia.berascan.com'
+                explorerUrl: 'https://testnet.berascan.com'
               },
               contracts: {
                 withdrawalVault: '0xAFAc2f11Cb39F0521b22494F6101002ce653D2f4',
@@ -553,7 +553,7 @@ test.describe('Staking Pool Frontend (Single Pool)', () => {
                 name: 'Bepolia',
                 chainId: 80069,
                 rpcUrl: 'https://bepolia.rpc.berachain.com',
-                explorerUrl: 'https://bepolia.berascan.com'
+                explorerUrl: 'https://testnet.berascan.com'
               },
               contracts: {
                 withdrawalVault: '0xAFAc2f11Cb39F0521b22494F6101002ce653D2f4',

@@ -8,12 +8,12 @@
     
     <div v-else-if="hasPosition" class="position-stats">
       <div class="stat">
-        <span class="stat-label">Shares</span>
-        <span class="stat-value">{{ formattedShares }} stBERA</span>
+        <span class="stat-label">stBERA</span>
+        <span class="stat-value stat-value-muted">{{ formattedShares }}</span>
       </div>
       <div class="stat">
-        <span class="stat-label">Value</span>
-        <span class="stat-value text-accent">{{ formattedAssets }} BERA</span>
+        <span class="stat-label">BERA</span>
+        <span class="stat-value text-accent">{{ formattedAssets }}</span>
       </div>
     </div>
     
@@ -74,5 +74,9 @@ const hasPosition = computed(() => {
 .stat-value {
   font-size: var(--font-size-2xl);
   font-weight: 700;
+}
+
+.stat-value-muted {
+  color: var(--color-text-secondary);
 }
 </style>
