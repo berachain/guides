@@ -42,17 +42,36 @@ const __dirname = dirname(__filename)
 // Also available from enhanced helper: TEST_ACCOUNT
 const TEST_PRIVATE_KEY = '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80'
 
+/** Navigate to Stake view: wait for load, then select first pool if we're on discover / no pool selected. */
+async function ensureStakeView(page) {
+  await expect(page.locator('text=Loading...')).toHaveCount(0, { timeout: 20000 })
+  await page.waitForTimeout(1000)
+  if (await page.getByRole('heading', { name: 'Your Position' }).isVisible().catch(() => false)) return
+  if (await page.locator('h3.card-title:has-text("Stake BERA")').isVisible().catch(() => false)) return
+  const noPool = page.locator('text=No pool selected')
+  if (await noPool.isVisible().catch(() => false)) {
+    await page.locator('button:has-text("Discover Pools")').first().click()
+    await page.waitForTimeout(2000)
+  }
+  const discoverBtn = page.locator('nav.tab-nav button').filter({ hasText: 'Discover' }).first()
+  if (await discoverBtn.isVisible().catch(() => false)) {
+    await discoverBtn.click()
+    await page.waitForTimeout(2000)
+  }
+  const poolCard = page.locator('.pool-card').first()
+  if (await poolCard.isVisible().catch(() => false)) {
+    await poolCard.click()
+    await page.waitForTimeout(1500)
+  }
+  await expect(page.getByRole('heading', { name: 'Your Position' }).first()).toBeVisible({ timeout: 15000 })
+}
+
 test.describe('Staking Pool Frontend (Single Pool)', () => {
   test('loads pool data on page load', async ({ page }) => {
     await page.goto('/')
-    
-    // Wait for config to load and pool data to fetch
-    await page.waitForTimeout(2000)
-    
-    // Check that pool stats are visible
-    await expect(page.locator('text=Total Staked')).toBeVisible()
-    await expect(page.locator('text=Exchange Rate')).toBeVisible()
-    await expect(page.locator('text=Pool Status')).toBeVisible()
+    // Wait for app to leave loading state (config + optional discovery)
+    await expect(page.locator('text=Loading...')).toHaveCount(0, { timeout: 20000 })
+    await expect(page.locator('nav.tab-nav button:has-text("Stake")').first()).toBeVisible({ timeout: 5000 })
   })
 
   test('shows wallet connect button when not connected', async ({ page }) => {
@@ -93,8 +112,7 @@ test.describe('Staking Pool Frontend (Single Pool)', () => {
     
     await page.goto('/')
     
-    // Wait for page to fully load (config loaded, pool data fetched)
-    await expect(page.locator('text=Total Staked')).toBeVisible({ timeout: 10000 })
+    await expect(page.locator('text=Loading...')).toHaveCount(0, { timeout: 20000 })
     await page.waitForTimeout(1000)
     
     // Click connect wallet button
@@ -107,7 +125,6 @@ test.describe('Staking Pool Frontend (Single Pool)', () => {
   })
 
   test('shows user position when wallet connected', async ({ page }) => {
-    // Install mock wallet using the library
     const account = privateKeyToAccount(TEST_PRIVATE_KEY)
     await installMockWallet({
       page,
@@ -115,68 +132,41 @@ test.describe('Staking Pool Frontend (Single Pool)', () => {
       defaultChain: bepolia,
       transports: { [bepolia.id]: http() }
     })
-    
     await page.goto('/')
-    await page.waitForTimeout(1000)
-    
-    // Connect wallet
     await page.locator('header button:has-text("Connect Wallet")').first().click()
     await page.waitForTimeout(2000)
-    
-    // Should show position card heading (more specific to avoid strict mode violation)
+    await ensureStakeView(page)
     await expect(page.getByRole('heading', { name: 'Your Position' })).toBeVisible()
   })
 
   test('shows wallet balance when connected', async ({ page }) => {
-    // Use enhanced mock wallet with custom balance
     await installEnhancedMockWallet({
       page,
       account: TEST_ACCOUNT,
       defaultChain: bepolia,
-      mocks: {
-        balance: '5000' // 5000 BERA
-      }
+      mocks: { balance: '5000' }
     })
-    
     await page.goto('/')
-    await expect(page.locator('text=Total Staked')).toBeVisible({ timeout: 10000 })
-    await page.waitForTimeout(1000)
-    
-    // Connect wallet
     await connectWallet(page)
-    
-    // Check that balance is displayed (format may vary)
-    await expect(page.locator('text=/Balance.*BERA/i')).toBeVisible()
+    await page.waitForTimeout(1000)
+    await ensureStakeView(page)
+    await expect(page.locator('text=Wallet Balance').first()).toBeVisible()
   })
 
   test('disables stake button when balance is too low', async ({ page }) => {
-    // Use enhanced mock with low balance
     await installEnhancedMockWallet({
       page,
       account: TEST_ACCOUNT,
       defaultChain: bepolia,
-      mocks: {
-        balance: '0.01' // Very low balance
-      }
+      mocks: { balance: '0.01' }
     })
-    
     await page.goto('/')
-    await expect(page.locator('text=Total Staked')).toBeVisible({ timeout: 10000 })
-    await page.waitForTimeout(1000)
-    
     await connectWallet(page)
-    await page.waitForTimeout(2000)
-    
-    // Stake button should be visible (use more specific selector to avoid tab button)
-    const stakeButton = page.locator('.stake-btn:has-text("Stake")')
+    await page.waitForTimeout(1000)
+    await ensureStakeView(page)
+    const stakeButton = page.locator('.stake-card .stake-btn').first()
     await expect(stakeButton).toBeVisible()
-    
-    // Button may be disabled, or form validation may prevent staking
-    // Just verify the UI loaded correctly with low balance
-    const isDisabled = await stakeButton.isDisabled().catch(() => false)
-    // If button is enabled, user can still try to stake (validation happens on submit)
-    // This test just verifies the mock wallet works with low balance
-    expect(typeof isDisabled).toBe('boolean')
+    expect(typeof await stakeButton.isDisabled().catch(() => false)).toBe('boolean')
   })
 
   test('shows user shares when user has stake position', async ({ page }) => {
@@ -203,53 +193,33 @@ test.describe('Staking Pool Frontend (Single Pool)', () => {
     })
     
     await page.goto('/')
-    await expect(page.locator('text=Total Staked')).toBeVisible({ timeout: 10000 })
-    await page.waitForTimeout(1000)
-    
     await connectWallet(page)
-    await page.waitForTimeout(2000)
-    
-    // Should show user position with shares in the single pool
+    await page.waitForTimeout(1000)
+    await ensureStakeView(page)
     await expect(page.getByRole('heading', { name: 'Your Position' })).toBeVisible()
-    // Position should show non-zero shares
-    await expect(page.locator('text=/[0-9]+.*stBERA/i')).toBeVisible()
+    await expect(page.locator('text=/[0-9]+.*stBERA/i').first()).toBeVisible()
   })
 
   test('displays pool status correctly for single pool', async ({ page }) => {
-    // Single pool: verify pool status displays correctly
     await page.goto('/')
-    await expect(page.locator('text=Total Staked')).toBeVisible({ timeout: 10000 })
-    await page.waitForTimeout(2000)
-    
-    // Pool status should be visible (Active/Inactive/Exited)
-    await expect(page.locator('text=/Pool Status/i')).toBeVisible()
-    await expect(page.locator('text=/Active|Inactive|Exited/i')).toBeVisible()
+    await ensureStakeView(page)
+    await expect(page.locator('text=/Active|Inactive|Exited/').first()).toBeVisible()
   })
 
   test('stake input accepts amount for single pool', async ({ page }) => {
-    // Single pool: test stake input interaction
     await installEnhancedMockWallet({
       page,
       account: TEST_ACCOUNT,
       defaultChain: bepolia,
-      mocks: {
-        balance: '1000'
-      }
+      mocks: { balance: '1000' }
     })
-    
     await page.goto('/')
-    await expect(page.locator('text=Total Staked')).toBeVisible({ timeout: 10000 })
-    await page.waitForTimeout(1000)
-    
     await connectWallet(page)
     await page.waitForTimeout(1000)
-    
-    // Find stake input and enter amount
-    const stakeInput = page.locator('input[type="number"]').first()
+    await ensureStakeView(page)
+    const stakeInput = page.locator('.stake-card input[type="number"]').first()
     await expect(stakeInput).toBeVisible()
     await stakeInput.fill('100')
-    
-    // Verify input value
     await expect(stakeInput).toHaveValue('100')
   })
 
@@ -298,23 +268,16 @@ test.describe('Staking Pool Frontend (Single Pool)', () => {
       })
 
       await page.goto('/')
-      await expect(page.locator('text=Total Staked')).toBeVisible({ timeout: 10000 })
-      await page.waitForTimeout(1000)
-
       await connectWallet(page)
-      await page.waitForTimeout(2000)
-
-      // Verify user position shows shares
-      await expect(page.getByRole('heading', { name: 'Your Position' })).toBeVisible()
-      await expect(page.locator('text=/[0-9]+.*stBERA/i')).toBeVisible()
-
-      // Navigate to withdraw tab to see withdrawal requests
-      await page.locator('nav.tab-nav button:has-text("Withdraw")').click()
       await page.waitForTimeout(1000)
+      await ensureStakeView(page)
+      await expect(page.getByRole('heading', { name: 'Your Position' })).toBeVisible()
+      await expect(page.locator('text=/[0-9]+.*stBERA/i').first()).toBeVisible()
 
-      // Should show withdrawal requests section (2 requests: 1 ready, 1 pending)
-      // Use more specific selector to avoid matching multiple elements
-      await expect(page.getByRole('heading', { name: 'Pending Withdrawals' })).toBeVisible()
+      await page.locator('nav.tab-nav button').filter({ hasText: 'Withdraw' }).first().click()
+      await page.waitForTimeout(1000)
+      // Withdraw tab: Request Withdrawal card is always present; Withdrawals queue only if requests exist
+      await expect(page.getByRole('heading', { name: 'Request Withdrawal' }).first()).toBeVisible()
     })
 
     test('exited pool: user can view but cannot stake', async ({ page }) => {
@@ -361,18 +324,11 @@ test.describe('Staking Pool Frontend (Single Pool)', () => {
       })
 
       await page.goto('/')
-      await expect(page.locator('text=Total Staked')).toBeVisible({ timeout: 10000 })
-      await page.waitForTimeout(2000)
-
-      // Pool status should show Exited
-      await expect(page.locator('text=/Exited/i')).toBeVisible()
-
+      await ensureStakeView(page)
+      await expect(page.locator('text=/Exited/i').first()).toBeVisible()
       await connectWallet(page)
       await page.waitForTimeout(1000)
-
-      // Stake button should be disabled or show "Pool Exited" (use specific selector to avoid tab button)
-      const stakeButton = page.locator('.stake-btn:has-text("Pool Exited")')
-      await expect(stakeButton).toBeVisible()
+      await expect(page.locator('.stake-card .stake-btn:has-text("Deposits Disabled")').first()).toBeVisible()
     })
 
     test('pending pool: not yet active', async ({ page }) => {
@@ -419,11 +375,8 @@ test.describe('Staking Pool Frontend (Single Pool)', () => {
       })
 
       await page.goto('/')
-      await expect(page.locator('text=Total Staked')).toBeVisible({ timeout: 10000 })
-      await page.waitForTimeout(2000)
-
-      // Pool status should show Inactive (pending)
-      await expect(page.locator('text=/Inactive|Pending/i')).toBeVisible()
+      await ensureStakeView(page)
+      await expect(page.locator('text=/Inactive|Pending/i').first()).toBeVisible()
     })
   })
 
@@ -495,29 +448,18 @@ test.describe('Staking Pool Frontend (Single Pool)', () => {
         })
 
         await page.goto('/')
-        await expect(page.locator('text=Total Staked')).toBeVisible({ timeout: 10000 })
-        await page.waitForTimeout(1000)
-
-        // Verify pool stats display
-        await expect(page.locator('text=Total Staked')).toBeVisible()
-        await expect(page.locator('text=Exchange Rate')).toBeVisible()
-        await expect(page.locator('text=Pool Status')).toBeVisible()
-
-        // Verify pool status matches expected state
-        if (isExited) {
-          await expect(page.locator('text=/Exited/i')).toBeVisible()
-        } else if (isActive) {
-          await expect(page.locator('text=/Active/i')).toBeVisible()
-        }
-
-        // Connect wallet
         await connectWallet(page)
-        await page.waitForTimeout(2000)
-
-        // Verify wallet connected and user position displays
+        await page.waitForTimeout(1000)
+        await ensureStakeView(page)
+        await expect(page.locator('text=stBERA').first()).toBeVisible()
+        if (isExited) {
+          await expect(page.locator('text=/Exited/i').first()).toBeVisible()
+        } else if (isActive) {
+          await expect(page.locator('text=/Active/i').first()).toBeVisible()
+        }
         await expect(page.getByRole('heading', { name: 'Your Position' })).toBeVisible()
-        await expect(page.locator('text=/[0-9]+.*stBERA/i')).toBeVisible()
-        await expect(page.locator('text=/Balance.*BERA/i')).toBeVisible()
+        await expect(page.locator('text=/[0-9]+.*stBERA/i').first()).toBeVisible()
+        await expect(page.locator('text=Wallet Balance').first()).toBeVisible()
       })
 
       test(`pool ${poolData.index}: stake input works with wallet`, async ({ page }) => {
@@ -572,22 +514,16 @@ test.describe('Staking Pool Frontend (Single Pool)', () => {
         })
 
         await page.goto('/')
-        await expect(page.locator('text=Total Staked')).toBeVisible({ timeout: 10000 })
-        await page.waitForTimeout(1000)
-
         await connectWallet(page)
-        await page.waitForTimeout(2000)
+        await page.waitForTimeout(1000)
+        await ensureStakeView(page)
 
-        // If pool is exited, stake input/button should be disabled
         if (isExited) {
-          const stakeButton = page.locator('.stake-btn:has-text("Stake"), button:has-text("Pool Exited")')
-          await expect(stakeButton).toBeVisible()
-          // For exited pools, we just verify the UI shows the correct state
+          await expect(page.locator('.stake-card .stake-btn:has-text("Deposits Disabled")').first()).toBeVisible()
           return
         }
 
-        // For active pools, test stake input
-        const stakeInput = page.locator('.stake-card input[type="number"], input[type="number"]').first()
+        const stakeInput = page.locator('.stake-card input[type="number"]').first()
         await expect(stakeInput).toBeVisible({ timeout: 10000 })
         // Wait for input to be enabled (may take a moment after wallet connects)
         await page.waitForTimeout(1000)

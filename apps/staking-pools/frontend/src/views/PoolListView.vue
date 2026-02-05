@@ -45,7 +45,7 @@
         
         <div class="pool-info">
           <div class="info-row">
-            <span class="label">Pool TVL:</span>
+            <span class="label">Assets:</span>
             <span class="value">{{ formatNumber(pool.totalAssets) }} BERA</span>
           </div>
           <div v-if="hasUserPosition(pool)" class="info-row">
