@@ -115,6 +115,7 @@ import { useStakingPool } from './composables/useStakingPool.js'
 import { useWithdrawals } from './composables/useWithdrawals.js'
 import { DELEGATION_HANDLER_FACTORY_ABI, STAKING_POOL_FACTORY_ABI } from './utils/abis.js'
 import { getChainConstants } from './constants/chains.js'
+import { isValidAddress, isValidValidatorPubkey } from './constants/addresses.js'
 import { REFRESH_INTERVAL_MS } from './constants/thresholds.js'
 import WalletConnect from './components/common/WalletConnect.vue'
 import TabNav from './components/common/TabNav.vue'
@@ -143,11 +144,18 @@ const hubBoostUrl = computed(() => {
   return `${chain.hubBaseUrl}/boost/${encodeURIComponent(pubkey)}`
 })
 
-const tabs = computed(() => [
-  { id: 'discover', label: 'Discover', icon: '🔍' },
-  { id: 'stake', label: 'Stake', icon: '📥' },
-  { id: 'withdraw', label: 'Withdraw', icon: '📤', badge: withdrawals.pendingCount.value || null }
-])
+const tabs = computed(() => {
+  const count = withdrawals.pendingCount.value
+  const showBadge =
+    (activeTab.value === 'stake' || activeTab.value === 'withdraw') &&
+    poolAddress.value &&
+    count > 0
+  return [
+    { id: 'discover', label: 'Discover', icon: '🔍' },
+    { id: 'stake', label: 'Stake', icon: '📥' },
+    { id: 'withdraw', label: 'Withdraw', icon: '📤', badge: showBadge ? count : null }
+  ]
+})
 
 function normalizeTab(tab) {
   if (tab === 'discover' || tab === 'stake' || tab === 'withdraw') return tab
@@ -166,7 +174,7 @@ function defaultPoolName(stakingPoolAddress) {
   if (!stakingPoolAddress || typeof stakingPoolAddress !== 'string') return 'Staking Pool'
   const a = stakingPoolAddress.toLowerCase()
   if (!a.startsWith('0x') || a.length < 6) return 'Staking Pool'
-  return `Staking Pool ${a.slice(0, 6)}`
+  return `Staking Pool ${a.slice(-4)}`
 }
 
 function writeUrlState(next, mode = 'push') {
@@ -191,8 +199,10 @@ async function applyUrlState(state) {
   try {
     if (state.tab) activeTab.value = state.tab
 
-    // If URL specifies a pool, select it (works in discovery mode too).
-    if (state.pool && state.pubkey) {
+    // If URL specifies a pool, select it (works in discovery mode too). Validate before use.
+    const poolValid = state.pool && isValidAddress(state.pool)
+    const pubkeyValid = state.pubkey && isValidValidatorPubkey(state.pubkey)
+    if (poolValid && pubkeyValid) {
       poolAddress.value = state.pool
       poolConfig.value = {
         name: poolConfig.value?.name || defaultPoolName(state.pool),
@@ -431,8 +441,8 @@ async function handleRequestRedeem(shares, maxFee, { resolve, reject }) {
 }
 
 async function handlePreviewRedeem(shares, callback) {
-  const assets = await pool.previewRedeem(shares)
-  callback(assets)
+  const result = await pool.previewRedeem(shares)
+  callback(result.success ? result.assets : 0n)
 }
 
 async function handleFinalize(requestId, { resolve, reject }) {
@@ -463,7 +473,9 @@ watch(() => wallet.isConnected.value, async (connected) => {
       loadWalletBalance(),
       pool.loadUserData(),
       withdrawals.loadWithdrawalRequests(),
-      poolDiscovery.discoverPools()
+      activeTab.value === 'discover'
+        ? poolDiscovery.discoverPoolsFromApi()
+        : poolDiscovery.discoverPools()
     ])
   }
 })
@@ -473,9 +485,10 @@ watch(activeTab, async (tab) => {
   if (!wallet.isConnected.value && tab !== 'discover') return
   
   if (tab === 'discover') {
-    // Discover pools when discover tab is opened
-    await poolDiscovery.discoverPools()
-  } else if (tab === 'withdraw') {
+    // Always load all pools from chain API so Discover shows every pool (not just config in single mode)
+    await poolDiscovery.discoverPoolsFromApi()
+  } else if (tab === 'stake' || tab === 'withdraw') {
+    // Refresh pending count for current pool so badge is correct
     await withdrawals.loadWithdrawalRequests()
   }
 })
@@ -531,8 +544,9 @@ async function handleSelectPool(selectedPool) {
   await pool.loadPoolData()
   if (wallet.isConnected.value) {
     await pool.loadUserData()
+    await withdrawals.loadWithdrawalRequests()
   }
-  
+
   // Switch to stake tab
   activeTab.value = 'stake'
 }

@@ -55,7 +55,7 @@
       <div class="error-summary">{{ errorSummary }}</div>
       <details class="error-details">
         <summary>Technical details</summary>
-        <pre class="error-full">{{ error }}</pre>
+        <pre class="error-full">{{ errorMessage }}</pre>
       </details>
       <button type="button" class="error-dismiss" @click="error = null">Dismiss</button>
     </div>
@@ -73,6 +73,7 @@
 import { ref, computed, watch, onUnmounted } from 'vue'
 import { formatEther } from 'viem'
 import { validateAmount } from '../../utils/format.js'
+import { parseError } from '../../utils/errors.js'
 import { GAS_RESERVE_BERA, DEBOUNCE_MS } from '../../constants/thresholds.js'
 
 const props = defineProps({
@@ -98,16 +99,18 @@ const canStake = computed(() => {
   return true
 })
 
-function getErrorSummary(raw) {
-  if (!raw || typeof raw !== 'string') return 'Transaction failed.'
-  const s = raw.toLowerCase()
-  if (s.includes('user rejected the request')) return 'Transaction declined in wallet.'
-  if (s.includes('user denied') || s.includes('rejected')) return 'Transaction declined in wallet.'
-  if (s.includes('insufficient funds') || s.includes('insufficient balance')) return 'Insufficient balance for gas or stake.'
-  return 'Transaction failed.'
-}
-
-const errorSummary = computed(() => getErrorSummary(error.value))
+const errorSummary = computed(() => {
+  const e = error.value
+  if (!e) return ''
+  if (typeof e === 'object' && e.summary) return e.summary
+  return typeof e === 'string' ? e : 'Transaction failed.'
+})
+const errorMessage = computed(() => {
+  const e = error.value
+  if (!e) return ''
+  if (typeof e === 'object' && e.message) return e.message
+  return typeof e === 'string' ? e : ''
+})
 const amountValidation = computed(() => validateAmount(amount.value))
 const amountError = computed(() => (amount.value ? amountValidation.value.error : null))
 
@@ -140,7 +143,7 @@ async function handleStake() {
     amount.value = ''
     previewShares.value = null
   } catch (err) {
-    error.value = err.message || 'Stake failed'
+    error.value = parseError(err)
   }
 }
 

@@ -16,7 +16,7 @@ export function usePoolDiscovery(publicClient, chainId, configPools = null, conf
     if (!stakingPoolAddress || typeof stakingPoolAddress !== 'string') return 'Staking Pool'
     const a = stakingPoolAddress.toLowerCase()
     if (!a.startsWith('0x') || a.length < 6) return 'Staking Pool'
-    return `Staking Pool ${a.slice(0, 6)}`
+    return `Staking Pool ${a.slice(-4)}`
   }
 
   // Mode detection:
@@ -64,6 +64,17 @@ export function usePoolDiscovery(publicClient, chainId, configPools = null, conf
       await loadPoolsFromConfig(configPoolList)
     } else {
       await loadPoolsFromDiscovery()
+    }
+  }
+
+  /** Always load all pools from the chain API. Use when the user opens the Discover tab so they see every pool regardless of config mode. */
+  async function discoverPoolsFromApi() {
+    isLoading.value = true
+    error.value = null
+    try {
+      await loadPoolsFromDiscovery()
+    } finally {
+      isLoading.value = false
     }
   }
 
@@ -429,6 +440,7 @@ export function usePoolDiscovery(publicClient, chainId, configPools = null, conf
     pools,
     isLoading,
     error,
-    discoverPools
+    discoverPools,
+    discoverPoolsFromApi
   }
 }

@@ -27,7 +27,7 @@ A Vue.js frontend for Berachain staking pools. Users can stake BERA, view positi
 
 ## Configuration
 
-**See [user-docs/CONFIG_GUIDE.md](./user-docs/CONFIG_GUIDE.md) for detailed configuration instructions.**
+**See [docs/CONFIG_GUIDE.md](./docs/CONFIG_GUIDE.md) for detailed configuration instructions.** For deployment, see [docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md).
 
 Quick summary:
 - **Single Pool Mode**: Set `"mode": "single"` and add your pool to `pools` section
@@ -37,7 +37,7 @@ Quick summary:
 ## Development
 
 - Dev server: `npx vite` (runs on port 3001)
-- Tests: `npm run test:e2e` (Playwright E2E tests)
+- Unit tests: `npm run test` or `npm run test:unit` (Vitest). E2E: `npm run test:e2e` (Playwright)
 - Build: `npm run build` (outputs to `dist/`)
 
 ## Project Structure
@@ -45,7 +45,7 @@ Quick summary:
 - `src/` - Vue application source
 - `public/` - Static assets and config files
 - `tests/` - Playwright E2E tests (includes TEST_PLAN.md)
-- `user-docs/` - User-facing documentation (configuration guides)
+- `docs/` - Configuration, deployment, and developer guides
 
 ## Features
 
@@ -59,4 +59,4 @@ Quick summary:
 
 ## Support
 
-For configuration help, see [user-docs/CONFIG_GUIDE.md](./user-docs/CONFIG_GUIDE.md).
+For configuration help, see [docs/CONFIG_GUIDE.md](./docs/CONFIG_GUIDE.md).
