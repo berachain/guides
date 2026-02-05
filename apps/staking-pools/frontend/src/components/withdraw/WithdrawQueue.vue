@@ -72,8 +72,7 @@
 
 <script setup>
 import { ref, computed } from 'vue'
-import { formatEther } from 'viem'
-import { formatBeraDisplay } from '../../utils/format.js'
+import { formatAssets, formatTimeRemaining } from '../../utils/format.js'
 
 const props = defineProps({
   isConnected: { type: Boolean, default: false },
@@ -90,19 +89,6 @@ const txHash = ref(null)
 const readyRequests = computed(() => {
   return props.requests.filter(r => r.isReady)
 })
-
-function formatAssets(assets) {
-  const s = formatEther(assets)
-  return formatBeraDisplay(s, { decimals: 4 }) || '0.0000'
-}
-
-function formatTimeRemaining(seconds) {
-  if (seconds <= 0) return 'Ready'
-  const hours = Math.floor(seconds / 3600)
-  const minutes = Math.floor((seconds % 3600) / 60)
-  if (hours > 0) return `~${hours}h ${minutes}m`
-  return `~${minutes}m`
-}
 
 async function handleFinalize(requestId) {
   error.value = null

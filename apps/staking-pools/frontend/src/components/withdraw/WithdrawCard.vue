@@ -39,9 +39,10 @@
           <span class="input-suffix">stBERA</span>
         </div>
         
-        <div v-if="previewAssets" class="preview text-secondary">
-          This creates a claim for ≈ {{ previewAssets }} BERA.
-        </div>
+      <div v-if="previewAssets" class="preview text-secondary">
+        This creates a claim for ≈ {{ previewAssets }} BERA.
+      </div>
+      <div v-if="amountError" class="input-error">{{ amountError }}</div>
       </div>
       
       <button
@@ -70,7 +71,8 @@
 <script setup>
 import { ref, computed, watch } from 'vue'
 import { parseEther, formatEther } from 'viem'
-import { formatBeraDisplay } from '../../utils/format.js'
+import { formatAssets, validateAmount } from '../../utils/format.js'
+import { DEBOUNCE_MS } from '../../constants/thresholds.js'
 
 const props = defineProps({
   isConnected: { type: Boolean, default: false },
@@ -99,7 +101,7 @@ const canWithdraw = computed(() => {
   if (!props.isConnected) return false
   if (props.isLoading) return false
   if (!hasPosition.value) return false
-  if (!sharesAmount.value || parseFloat(sharesAmount.value) <= 0) return false
+  if (!amountValidation.value.valid) return false
   return true
 })
 
@@ -121,11 +123,15 @@ const delaySuffix = computed(() => {
   return `after ${blocksStr} blocks (${approx})`
 })
 
+const amountValidation = computed(() => validateAmount(sharesAmount.value))
+const amountError = computed(() => (sharesAmount.value ? amountValidation.value.error : null))
+
 function setMax() {
   sharesAmount.value = formatEther(props.userShares)
 }
 
 async function handleRequestRedeem() {
+  if (!amountValidation.value.valid) return
   error.value = null
   txHash.value = null
   
@@ -146,18 +152,18 @@ async function handleRequestRedeem() {
 let previewTimeout = null
 watch(sharesAmount, (newAmount) => {
   if (previewTimeout) clearTimeout(previewTimeout)
-  
-  if (!newAmount || parseFloat(newAmount) <= 0) {
+
+  const validation = validateAmount(newAmount)
+  if (!validation.valid) {
     previewAssets.value = null
     return
   }
   
   previewTimeout = setTimeout(() => {
     emit('previewRedeem', parseEther(String(newAmount)), (assets) => {
-      const s = formatEther(assets)
-      previewAssets.value = formatBeraDisplay(s, { decimals: 4 }) || '0.0000'
+      previewAssets.value = formatAssets(assets)
     })
-  }, 300)
+  }, DEBOUNCE_MS)
 })
 </script>
 
@@ -244,6 +250,12 @@ watch(sharesAmount, (newAmount) => {
 
 .preview {
   margin-top: var(--space-2);
+  font-size: var(--font-size-sm);
+}
+
+.input-error {
+  margin-top: var(--space-2);
+  color: var(--color-error);
   font-size: var(--font-size-sm);
 }
 

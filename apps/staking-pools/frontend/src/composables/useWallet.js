@@ -1,16 +1,16 @@
 import { ref, computed } from 'vue'
 import { createWalletClient, createPublicClient, custom, http, defineChain } from 'viem'
 
-const account = ref(null)
-const walletClient = ref(null)
-const publicClient = ref(null)
-const chain = ref(null)
-const isConnecting = ref(false)
-const error = ref(null)
-
 const MULTICALL3_ADDRESS = '0xcA11bde05977b3631167028862bE2a173976CA11'
 
 export function useWallet() {
+  const account = ref(null)
+  const walletClient = ref(null)
+  const publicClient = ref(null)
+  const chain = ref(null)
+  const isConnecting = ref(false)
+  const error = ref(null)
+
   const isConnected = computed(() => !!account.value)
   const shortAddress = computed(() => {
     if (!account.value) return ''

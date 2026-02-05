@@ -1,6 +1,7 @@
 import { ref, computed } from 'vue'
 import { formatEther, parseEther } from 'viem'
 import { STAKING_POOL_ABI, DELEGATION_HANDLER_ABI, INCENTIVE_COLLECTOR_ABI } from '../utils/abis.js'
+import { formatNumber } from '../utils/format.js'
 
 export function useStakingPool(publicClient, walletClient, poolAddress, account, delegationHandlerAddress, incentiveCollectorAddress) {
   const isLoading = ref(false)
@@ -80,16 +81,6 @@ export function useStakingPool(publicClient, walletClient, poolAddress, account,
     if (!isActive.value) return 'inactive'
     return 'active'
   })
-
-  function formatNumber(num, decimals = 2) {
-    if (num >= 1_000_000) {
-      return (num / 1_000_000).toFixed(2) + 'M'
-    }
-    if (num >= 1_000) {
-      return (num / 1_000).toFixed(2) + 'K'
-    }
-    return num.toFixed(decimals)
-  }
 
   async function loadPoolData() {
     if (!publicClient.value || !poolAddress.value) return
