@@ -107,17 +107,17 @@
             :nosy-data="nosyData"
             :scan-status="nosyScan.scanStatus?.value"
             :scan-error="nosyScan.scanError?.value"
-            :scanned-ranges="nosyScan.scannedRanges?.value ?? []"
             :events="nosyScan.events?.value ?? []"
             :last-scanned-block="nosyScan.lastScannedBlock?.value"
             :scan-start-block="nosyScan.scanStartBlock?.value"
             :tip-watcher-active="nosyScan.tipWatcherActive?.value"
             :tip-blocks-scanned="nosyScan.tipBlocksScanned?.value ?? 0"
             :can-scan="nosyCanScan?.value ?? nosyCanScan"
-            :start-scan="nosyScan.startScan"
-            :stop-scan="nosyScan.stopScan"
-            :start-tip-watcher="nosyScan.startTipWatcher"
-            :reset-nosy-browser-state="resetNosyBrowserState"
+            :has-reset="true"
+            @start-scan="nosyScan.startScan"
+            @stop-scan="nosyScan.stopScan"
+            @start-tip-watcher="nosyScan.startTipWatcher"
+            @reset="resetNosyBrowserState"
           />
 
           <!-- Nosy mode disabled: redirect to stake -->
