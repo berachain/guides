@@ -2,7 +2,7 @@
   "_comment": "Rhino single-pool on mainnet. Set pools.default.validatorPubkey to Rhino beacon pubkey (98 hex chars); stakingPool and contracts derived.",
   "mode": "single",
   "network": { "chainId": 80094 },
-  "branding": { "name": "Rhino Staking Pool", "logo": null, "theme": "slate" },
+  "branding": { "name": "Rhino Staking Pool", "logo": "/branding/logo-fake.svg", "theme": "slate" },
   "pools": {
     "default": {
       "name": "Rhino",

@@ -33,7 +33,7 @@ export function useWallet() {
     chain.value = customChain
     publicClient.value = createPublicClient({
       chain: customChain,
-      transport: http()
+      transport: http(config.network.rpcUrl)
     })
   }
 

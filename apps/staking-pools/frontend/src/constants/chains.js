@@ -15,7 +15,7 @@ export const CHAIN_IDS = {
   BEPOLIA: 80069
 }
 
-/** @type {Record<number, { name: string, rpcUrl: string, stakingPoolFactoryAddress: string, delegationHandlerFactoryAddress: string, graphqlEndpoint: string, hubBaseUrl: string, explorerUrl: string, chainEnum: string }>} */
+/** @type {Record<number, { name: string, rpcUrl: string, stakingPoolFactoryAddress: string, delegationHandlerFactoryAddress: string, graphqlEndpoint: string, hubBaseUrl: string, explorerUrl: string, chainEnum: string, bgtAddress?: string, knownIncentiveTokenAddresses?: string[] }>} */
 export const CHAINS = {
   [CHAIN_IDS.MAINNET]: {
     name: 'Berachain',
@@ -25,7 +25,9 @@ export const CHAINS = {
     graphqlEndpoint: 'https://api.berachain.com/graphql',
     hubBaseUrl: 'https://hub.berachain.com',
     explorerUrl: 'https://berascan.com',
-    chainEnum: 'BERACHAIN'
+    chainEnum: 'BERACHAIN',
+    bgtAddress: '0x656b95E550C07a9ffe548bd4085c72418Ceb1dba',
+    knownIncentiveTokenAddresses: ['0xFCBD14DC51f0A4d49d5E53C2E0950e0bC26d0Dce'] // HONEY
   },
   [CHAIN_IDS.BEPOLIA]: {
     name: 'Bepolia',
@@ -35,7 +37,9 @@ export const CHAINS = {
     graphqlEndpoint: 'https://bepolia-api.berachain.com/graphql',
     hubBaseUrl: 'https://bepolia.hub.berachain.com',
     explorerUrl: 'https://testnet.berascan.com',
-    chainEnum: 'BEPOLIA'
+    chainEnum: 'BEPOLIA',
+    bgtAddress: null,
+    knownIncentiveTokenAddresses: []
   }
 }
 

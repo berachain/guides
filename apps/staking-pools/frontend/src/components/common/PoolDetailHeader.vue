@@ -394,10 +394,9 @@ async function copyText(text) {
   text-decoration: none;
   color: var(--color-text-secondary);
   font-size: var(--font-size-xs);
-  border: 1px solid var(--color-border);
-  background: var(--color-bg-input);
-  padding: 0 6px;
-  border-radius: var(--radius-sm);
+  border: none;
+  background: transparent;
+  padding: 0;
   line-height: 18px;
 }
 

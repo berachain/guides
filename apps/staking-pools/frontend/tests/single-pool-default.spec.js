@@ -9,10 +9,12 @@ import { test, expect } from '@playwright/test'
 import { installEnhancedMockWallet, TEST_ACCOUNT, bepolia } from './helpers/mock-wallet-enhanced.js'
 
 test.describe('Single Pool Default Loading', () => {
-  test('should load configured pool automatically on page load', async ({ page, context }) => {
-    await installEnhancedMockWallet(page, context, {
-      chainId: bepolia.id,
-      account: TEST_ACCOUNT.address
+  test('should load configured pool automatically on page load', async ({ page }) => {
+    await installEnhancedMockWallet({
+      page,
+      account: TEST_ACCOUNT,
+      defaultChain: bepolia,
+      mocks: {}
     })
 
     const singlePoolConfig = {
@@ -50,7 +52,7 @@ test.describe('Single Pool Default Loading', () => {
       })
     })
 
-    await page.goto('http://localhost:5173/')
+    await page.goto('/')
     
     // Wait for loading to complete
     await expect(page.locator('text=Loading...')).toHaveCount(0, { timeout: 10000 })
@@ -70,10 +72,12 @@ test.describe('Single Pool Default Loading', () => {
     await expect(page.getByRole('button', { name: /withdraw/i })).toBeVisible()
   })
 
-  test('should load pool when navigating with pubkey in URL', async ({ page, context }) => {
-    await installEnhancedMockWallet(page, context, {
-      chainId: bepolia.id,
-      account: TEST_ACCOUNT.address
+  test('should load pool when navigating with pubkey in URL', async ({ page }) => {
+    await installEnhancedMockWallet({
+      page,
+      account: TEST_ACCOUNT,
+      defaultChain: bepolia,
+      mocks: {}
     })
 
     const singlePoolConfig = {
@@ -98,7 +102,7 @@ test.describe('Single Pool Default Loading', () => {
     })
 
     // Navigate with pubkey in URL (simulating deep link)
-    await page.goto('http://localhost:5173/?tab=stake&pubkey=0xa6ce5adefe9d089ffd772297d77d147beff8fa8bf3c1b5a6b8ff204fc168a026968278214a8dd1624cb5947bb009d70f')
+    await page.goto('/?tab=stake&pubkey=0xa6ce5adefe9d089ffd772297d77d147beff8fa8bf3c1b5a6b8ff204fc168a026968278214a8dd1624cb5947bb009d70f')
     
     await expect(page.locator('text=Loading...')).toHaveCount(0, { timeout: 10000 })
     
