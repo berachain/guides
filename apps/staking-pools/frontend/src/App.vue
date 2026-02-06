@@ -52,7 +52,7 @@
             :pool-address="poolAddress"
             :validator-pubkey="poolConfig?.validatorPubkey"
             :is-connected="wallet.isConnected.value"
-            :is-loading="pool.isLoading.value"
+            :is-loading="pool.isTxPending.value"
             :wallet-balance="walletBalance"
             :explorer-url="explorerUrl"
             :hub-boost-url="hubBoostUrl"
@@ -77,7 +77,7 @@
             :pool-address="poolAddress"
             :validator-pubkey="poolConfig?.validatorPubkey"
             :is-connected="wallet.isConnected.value"
-            :is-loading="withdrawals.isLoading.value"
+            :is-loading="withdrawals.isTxPending.value"
             :explorer-url="explorerUrl"
             :hub-boost-url="hubBoostUrl"
             :finalization-delay-blocks="withdrawals.finalizationDelayBlocks.value"
@@ -107,17 +107,17 @@
             :nosy-data="nosyData"
             :scan-status="nosyScan.scanStatus?.value"
             :scan-error="nosyScan.scanError?.value"
+            :scanned-ranges="nosyScan.scannedRanges?.value ?? []"
             :events="nosyScan.events?.value ?? []"
             :last-scanned-block="nosyScan.lastScannedBlock?.value"
             :scan-start-block="nosyScan.scanStartBlock?.value"
             :tip-watcher-active="nosyScan.tipWatcherActive?.value"
             :tip-blocks-scanned="nosyScan.tipBlocksScanned?.value ?? 0"
             :can-scan="nosyCanScan?.value ?? nosyCanScan"
-            :has-reset="true"
-            @start-scan="nosyScan.startScan"
-            @stop-scan="nosyScan.stopScan"
-            @start-tip-watcher="nosyScan.startTipWatcher"
-            @reset="resetNosyBrowserState"
+            :start-scan="nosyScan.startScan"
+            :stop-scan="nosyScan.stopScan"
+            :start-tip-watcher="nosyScan.startTipWatcher"
+            :reset-nosy-browser-state="resetNosyBrowserState"
           />
 
           <!-- Nosy mode disabled: redirect to stake -->
@@ -135,11 +135,13 @@
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { formatEther } from 'viem'
 import { loadConfig, loadTheme } from './utils/config.js'
+import { defaultPoolName } from './utils/format.js'
 import { useWallet } from './composables/useWallet.js'
 import { useStakingPool } from './composables/useStakingPool.js'
 import { useWithdrawals } from './composables/useWithdrawals.js'
-import { DELEGATION_HANDLER_FACTORY_ABI, STAKING_POOL_FACTORY_ABI } from './utils/abis.js'
+import { STAKING_POOL_FACTORY_ABI } from './utils/abis.js'
 import { getChainConstants } from './constants/chains.js'
+import { resolveCoreContracts, resolveDelegationHandler } from './utils/contracts.js'
 import { isValidAddress, isValidValidatorPubkey } from './constants/addresses.js'
 import { REFRESH_INTERVAL_MS } from './constants/thresholds.js'
 import WalletConnect from './components/common/WalletConnect.vue'
@@ -208,13 +210,6 @@ function getUrlState() {
   return { tab, pool, pubkey }
 }
 
-function defaultPoolName(stakingPoolAddress) {
-  if (!stakingPoolAddress || typeof stakingPoolAddress !== 'string') return 'Staking Pool'
-  const a = stakingPoolAddress.toLowerCase()
-  if (!a.startsWith('0x') || a.length < 6) return 'Staking Pool'
-  return `Staking Pool ${a.slice(-4)}`
-}
-
 function writeUrlState(next, mode = 'push') {
   const params = new URLSearchParams(window.location.search)
   if (next.tab) params.set('tab', next.tab)
@@ -249,50 +244,24 @@ async function applyUrlState(state) {
         enabled: true
       }
 
-      // Best-effort: fetch incentive collector address for deep links.
+      // Best-effort: fetch core contracts and delegation handler for deep links.
       if (wallet.publicClient.value) {
         try {
-          const chain = getChainConstants(config.value?.network?.chainId)
-          const factoryAddress = chain?.stakingPoolFactoryAddress
-          if (!factoryAddress) throw new Error('Chain not configured')
-
-          const core = await wallet.publicClient.value.readContract({
-            address: factoryAddress,
-            abi: STAKING_POOL_FACTORY_ABI,
-            functionName: 'getCoreContracts',
-            args: [state.pubkey]
-          })
-
+          const core = await resolveCoreContracts(wallet.publicClient.value, config.value?.network?.chainId, state.pubkey)
           if (core) {
             poolConfig.value = {
               ...poolConfig.value,
-              smartOperator: core[0] || poolConfig.value?.smartOperator,
-              stakingRewardsVault: core[2] || poolConfig.value?.stakingRewardsVault,
-              ...(core[3] && { incentiveCollector: core[3] })
+              smartOperator: core.smartOperator || poolConfig.value?.smartOperator,
+              stakingRewardsVault: core.stakingRewardsVault || poolConfig.value?.stakingRewardsVault,
+              ...(core.incentiveCollector && { incentiveCollector: core.incentiveCollector })
             }
           }
         } catch {
           // ignore: deep link may point at unknown validator/pool combination
         }
-      }
 
-      // Try to set delegation handler for this pubkey.
-      if (wallet.publicClient.value) {
         try {
-          const chain = getChainConstants(config.value?.network?.chainId)
-          const factoryAddress = chain?.delegationHandlerFactoryAddress
-          if (!factoryAddress) throw new Error('Chain not configured')
-
-          const handlerAddr = await wallet.publicClient.value.readContract({
-            address: factoryAddress,
-            abi: DELEGATION_HANDLER_FACTORY_ABI,
-            functionName: 'delegationHandlers',
-            args: [state.pubkey]
-          })
-          delegationHandlerAddress.value =
-            handlerAddr && handlerAddr !== '0x0000000000000000000000000000000000000000'
-              ? handlerAddr
-              : null
+          delegationHandlerAddress.value = await resolveDelegationHandler(wallet.publicClient.value, config.value?.network?.chainId, state.pubkey)
         } catch {
           delegationHandlerAddress.value = null
         }
@@ -435,45 +404,32 @@ async function initialize() {
         throw new Error('Single pool mode requires a valid validatorPubkey (98 hex chars) in the pool config.')
       }
       
-      // Derive pool address from pubkey if not provided in config
+      // Derive pool address and core contracts from factory if not fully specified in config
       let poolAddr = firstEnabledPool.stakingPool
       let incentiveCollector = firstEnabledPool.incentiveCollector
-      if (!poolAddr || poolAddr === '0x0000000000000000000000000000000000000000') {
-        let core
-        try {
-          const chain = getChainConstants(cfg.network?.chainId)
-          core = await wallet.publicClient.value.readContract({
-            address: chain.stakingPoolFactoryAddress,
-            abi: STAKING_POOL_FACTORY_ABI,
-            functionName: 'getCoreContracts',
-            args: [pubkey]
-          })
-        } catch (err) {
-          throw new Error('Could not resolve staking pool from chain. Check RPC and chain ID (80069 or 80094).')
-        }
-        const resolvedPool = core?.stakingPool ?? core?.[1]
-        if (!resolvedPool || resolvedPool === '0x0000000000000000000000000000000000000000') {
-          throw new Error('No staking pool found for this validator. Ensure the pool is deployed on this chain.')
-        }
-        poolAddr = resolvedPool
-        incentiveCollector = core?.incentiveCollector ?? core?.[3] ?? null
-      }
-
       let smartOperator = firstEnabledPool.smartOperator
       let stakingRewardsVault = firstEnabledPool.stakingRewardsVault
-      if ((!smartOperator || !stakingRewardsVault) && wallet.publicClient.value) {
+
+      const needsPoolAddr = !poolAddr || poolAddr === '0x0000000000000000000000000000000000000000'
+      const needsCoreFields = !smartOperator || !stakingRewardsVault
+
+      if ((needsPoolAddr || needsCoreFields) && wallet.publicClient.value) {
+        let core
         try {
-          const chain = getChainConstants(cfg.network?.chainId)
-          const core = await wallet.publicClient.value.readContract({
-            address: chain.stakingPoolFactoryAddress,
-            abi: STAKING_POOL_FACTORY_ABI,
-            functionName: 'getCoreContracts',
-            args: [firstEnabledPool.validatorPubkey]
-          })
-          smartOperator = core?.[0] ?? smartOperator
-          stakingRewardsVault = core?.[2] ?? stakingRewardsVault
-        } catch {
-          // leave from config if present
+          core = await resolveCoreContracts(wallet.publicClient.value, cfg.network?.chainId, pubkey)
+        } catch (err) {
+          if (needsPoolAddr) throw new Error('Could not resolve staking pool from chain. Check RPC and chain ID (80069 or 80094).')
+        }
+        if (core) {
+          if (needsPoolAddr) {
+            if (!core.stakingPool) {
+              throw new Error('No staking pool found for this validator. Ensure the pool is deployed on this chain.')
+            }
+            poolAddr = core.stakingPool
+            incentiveCollector = core.incentiveCollector ?? incentiveCollector
+          }
+          smartOperator = core.smartOperator ?? smartOperator
+          stakingRewardsVault = core.stakingRewardsVault ?? stakingRewardsVault
         }
       }
       
@@ -515,23 +471,13 @@ async function initialize() {
     const handlerPubkey = firstEnabledPool?.validatorPubkey
     if ((!handlerAddr || handlerAddr === '0x0000000000000000000000000000000000000000') && handlerPubkey && wallet.publicClient.value) {
       try {
-        const chain = getChainConstants(cfg.network?.chainId)
-        const factoryAddress = chain?.delegationHandlerFactoryAddress
-        if (!factoryAddress) {
-          throw new Error('Delegation handler factory address not configured for this chain.')
-        }
-        handlerAddr = await wallet.publicClient.value.readContract({
-          address: factoryAddress,
-          abi: DELEGATION_HANDLER_FACTORY_ABI,
-          functionName: 'delegationHandlers',
-          args: [handlerPubkey]
-        })
+        handlerAddr = await resolveDelegationHandler(wallet.publicClient.value, cfg.network?.chainId, handlerPubkey)
       } catch (err) {
         throw new Error('Could not resolve delegation handler from factory. Check RPC and chain ID.')
       }
     }
     
-    delegationHandlerAddress.value = handlerAddr && handlerAddr !== '0x0000000000000000000000000000000000000000' ? handlerAddr : null
+    delegationHandlerAddress.value = handlerAddr || null
     
     // Apply URL state after pool initialization (but only for discovery mode or tab changes)
     const urlState = getUrlState()
@@ -697,20 +643,8 @@ async function handleSelectPool(selectedPool) {
   // Try to get delegation handler
   if (selectedPool.validator.pubkey && wallet.publicClient.value) {
     try {
-      const chain = getChainConstants(config.value?.network?.chainId)
-      const factoryAddress = chain?.delegationHandlerFactoryAddress
-      if (!factoryAddress) {
-        delegationHandlerAddress.value = null
-      } else {
-        const handlerAddr = await wallet.publicClient.value.readContract({
-          address: factoryAddress,
-          abi: DELEGATION_HANDLER_FACTORY_ABI,
-          functionName: 'delegationHandlers',
-          args: [selectedPool.validator.pubkey]
-        })
-        delegationHandlerAddress.value = handlerAddr && handlerAddr !== '0x0000000000000000000000000000000000000000' ? handlerAddr : null
-      }
-    } catch (err) {
+      delegationHandlerAddress.value = await resolveDelegationHandler(wallet.publicClient.value, config.value?.network?.chainId, selectedPool.validator.pubkey)
+    } catch {
       delegationHandlerAddress.value = null
     }
   }

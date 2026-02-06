@@ -10,6 +10,33 @@ export function useWallet() {
   const isConnecting = ref(false)
   const error = ref(null)
 
+  let accountsHandler = null
+
+  function removeAccountsListener() {
+    if (accountsHandler && window.ethereum?.removeListener) {
+      window.ethereum.removeListener('accountsChanged', accountsHandler)
+      accountsHandler = null
+    }
+  }
+
+  function registerAccountsListener() {
+    removeAccountsListener()
+    accountsHandler = (newAccounts) => {
+      if (newAccounts.length === 0) {
+        disconnect()
+      } else {
+        account.value = newAccounts[0]
+        localStorage.setItem('wallet_connected_account', newAccounts[0])
+        walletClient.value = createWalletClient({
+          account: newAccounts[0],
+          chain: chain.value,
+          transport: custom(window.ethereum)
+        })
+      }
+    }
+    window.ethereum.on('accountsChanged', accountsHandler)
+  }
+
   const isConnected = computed(() => !!account.value)
   const shortAddress = computed(() => {
     if (!account.value) return ''
@@ -72,19 +99,7 @@ export function useWallet() {
         transport: custom(window.ethereum)
       })
 
-      window.ethereum.on('accountsChanged', (newAccounts) => {
-        if (newAccounts.length === 0) {
-          disconnect()
-        } else {
-          account.value = newAccounts[0]
-          localStorage.setItem('wallet_connected_account', newAccounts[0])
-          walletClient.value = createWalletClient({
-            account: newAccounts[0],
-            chain: chain.value,
-            transport: custom(window.ethereum)
-          })
-        }
-      })
+      registerAccountsListener()
 
     } catch (err) {
       error.value = err.message || 'Failed to connect wallet'
@@ -112,19 +127,7 @@ export function useWallet() {
         transport: custom(window.ethereum)
       })
 
-      window.ethereum.on('accountsChanged', (newAccounts) => {
-        if (newAccounts.length === 0) {
-          disconnect()
-        } else {
-          account.value = newAccounts[0]
-          localStorage.setItem('wallet_connected_account', newAccounts[0])
-          walletClient.value = createWalletClient({
-            account: newAccounts[0],
-            chain: chain.value,
-            transport: custom(window.ethereum)
-          })
-        }
-      })
+      registerAccountsListener()
     } catch (err) {
       localStorage.removeItem('wallet_connected_account')
     }
@@ -167,6 +170,7 @@ export function useWallet() {
   }
 
   function disconnect() {
+    removeAccountsListener()
     account.value = null
     walletClient.value = null
     error.value = null

@@ -33,7 +33,7 @@ async function fetchValidatorNamesByPubkeys(chainId, pubkeys) {
 }
 
 export function useWithdrawals(publicClient, walletClient, withdrawalVaultAddress, poolAddress, validatorPubkey, account, chainId = null) {
-  const isLoading = ref(false)
+  const isTxPending = ref(false)
   const error = ref(null)
   
   // User's withdrawal requests (NFTs)
@@ -207,7 +207,7 @@ export function useWithdrawals(publicClient, walletClient, withdrawalVaultAddres
       throw new Error('Wallet not connected')
     }
     
-    isLoading.value = true
+    isTxPending.value = true
     error.value = null
     
     try {
@@ -232,7 +232,7 @@ export function useWithdrawals(publicClient, walletClient, withdrawalVaultAddres
       error.value = err.message || 'Request redeem failed'
       throw err
     } finally {
-      isLoading.value = false
+      isTxPending.value = false
     }
   }
 
@@ -241,7 +241,7 @@ export function useWithdrawals(publicClient, walletClient, withdrawalVaultAddres
       throw new Error('Wallet not connected')
     }
     
-    isLoading.value = true
+    isTxPending.value = true
     error.value = null
     
     try {
@@ -263,7 +263,7 @@ export function useWithdrawals(publicClient, walletClient, withdrawalVaultAddres
       error.value = err.message || 'Finalize withdrawal failed'
       throw err
     } finally {
-      isLoading.value = false
+      isTxPending.value = false
     }
   }
 
@@ -276,7 +276,7 @@ export function useWithdrawals(publicClient, walletClient, withdrawalVaultAddres
       throw new Error('No requests to finalize')
     }
     
-    isLoading.value = true
+    isTxPending.value = true
     error.value = null
     
     try {
@@ -298,12 +298,12 @@ export function useWithdrawals(publicClient, walletClient, withdrawalVaultAddres
       error.value = err.message || 'Finalize withdrawals failed'
       throw err
     } finally {
-      isLoading.value = false
+      isTxPending.value = false
     }
   }
 
   return {
-    isLoading,
+    isTxPending,
     error,
     withdrawalRequests,
     pendingCount,

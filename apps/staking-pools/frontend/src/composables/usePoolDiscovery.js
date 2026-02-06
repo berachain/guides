@@ -1,7 +1,7 @@
 import { ref, toValue } from 'vue'
 import { formatEther } from 'viem'
 import { STAKING_POOL_FACTORY_ABI, STAKING_POOL_ABI } from '../utils/abis.js'
-import { calculateExchangeRate } from '../utils/format.js'
+import { calculateExchangeRate, defaultPoolName } from '../utils/format.js'
 import { getChainConstants } from '../constants/chains.js'
 import { DEAD_POOL_THRESHOLD_WEI } from '../constants/thresholds.js'
 import { isZeroAddress } from '../constants/addresses.js'
@@ -11,13 +11,6 @@ export function usePoolDiscovery(publicClient, chainId, configPools = null, conf
   const pools = ref([])
   const isLoading = ref(false)
   const error = ref(null)
-
-  function defaultPoolName(stakingPoolAddress) {
-    if (!stakingPoolAddress || typeof stakingPoolAddress !== 'string') return 'Staking Pool'
-    const a = stakingPoolAddress.toLowerCase()
-    if (!a.startsWith('0x') || a.length < 6) return 'Staking Pool'
-    return `Staking Pool ${a.slice(-4)}`
-  }
 
   // Mode detection:
   // - Explicit mode: "single" or "discovery" in config.mode
