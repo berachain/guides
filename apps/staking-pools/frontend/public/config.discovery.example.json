@@ -20,6 +20,6 @@
     "delegationHandler": "0x0000000000000000000000000000000000000000"
   },
   
-  "_pools_comment": "Leave empty for discovery mode - pools loaded from JSON file",
+  "_pools_comment": "Leave empty for discovery mode - pools discovered via GraphQL + on-chain factory calls",
   "pools": {}
 }

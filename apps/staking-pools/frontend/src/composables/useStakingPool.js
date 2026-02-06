@@ -4,7 +4,7 @@ import { STAKING_POOL_ABI, DELEGATION_HANDLER_ABI, INCENTIVE_COLLECTOR_ABI } fro
 import { formatNumber, calculateExchangeRate } from '../utils/format.js'
 
 export function useStakingPool(publicClient, walletClient, poolAddress, account, delegationHandlerAddress, incentiveCollectorAddress) {
-  const isLoading = ref(false)
+  const isTxPending = ref(false)
   const error = ref(null)
   
   // Pool state
@@ -73,82 +73,56 @@ export function useStakingPool(publicClient, walletClient, poolAddress, account,
     if (!publicClient.value || !poolAddress.value) return
     
     try {
-      const promises = [
-        publicClient.value.readContract({
-          address: poolAddress.value,
-          abi: STAKING_POOL_ABI,
-          functionName: 'totalAssets'
-        }),
-        publicClient.value.readContract({
-          address: poolAddress.value,
-          abi: STAKING_POOL_ABI,
-          functionName: 'totalSupply'
-        }),
-        publicClient.value.readContract({
-          address: poolAddress.value,
-          abi: STAKING_POOL_ABI,
-          functionName: 'isActive'
-        }),
-        publicClient.value.readContract({
-          address: poolAddress.value,
-          abi: STAKING_POOL_ABI,
-          functionName: 'isFullyExited'
-        }),
-        publicClient.value.readContract({
-          address: poolAddress.value,
-          abi: STAKING_POOL_ABI,
-          functionName: 'activeThresholdReached'
-        })
+      const contracts = [
+        { address: poolAddress.value, abi: STAKING_POOL_ABI, functionName: 'totalAssets' },
+        { address: poolAddress.value, abi: STAKING_POOL_ABI, functionName: 'totalSupply' },
+        { address: poolAddress.value, abi: STAKING_POOL_ABI, functionName: 'isActive' },
+        { address: poolAddress.value, abi: STAKING_POOL_ABI, functionName: 'isFullyExited' },
+        { address: poolAddress.value, abi: STAKING_POOL_ABI, functionName: 'activeThresholdReached' }
       ]
-      
+
       // Load delegation if handler address is available
       if (delegationHandlerAddress?.value) {
-        promises.push(
-          publicClient.value.readContract({
-            address: delegationHandlerAddress.value,
-            abi: DELEGATION_HANDLER_ABI,
-            functionName: 'delegatedAmount'
-          }).catch((err) => {
-            // Error handling: Log delegation query failures for debugging
-            // This is expected if handler doesn't exist or contract call fails
-            console.warn('Failed to query delegation amount:', err)
-            return 0n
-          })
-        )
-      } else {
-        promises.push(Promise.resolve(0n))
+        contracts.push({
+          address: delegationHandlerAddress.value,
+          abi: DELEGATION_HANDLER_ABI,
+          functionName: 'delegatedAmount'
+        })
       }
 
       if (incentiveCollectorAddress?.value) {
-        promises.push(
-          publicClient.value.readContract({
-            address: incentiveCollectorAddress.value,
-            abi: INCENTIVE_COLLECTOR_ABI,
-            functionName: 'payoutAmount'
-          }).catch(() => null)
+        contracts.push(
+          { address: incentiveCollectorAddress.value, abi: INCENTIVE_COLLECTOR_ABI, functionName: 'payoutAmount' },
+          { address: incentiveCollectorAddress.value, abi: INCENTIVE_COLLECTOR_ABI, functionName: 'feePercentage' }
         )
-        promises.push(
-          publicClient.value.readContract({
-            address: incentiveCollectorAddress.value,
-            abi: INCENTIVE_COLLECTOR_ABI,
-            functionName: 'feePercentage'
-          }).catch(() => null)
-        )
-      } else {
-        promises.push(Promise.resolve(null))
-        promises.push(Promise.resolve(null))
       }
-      
-      const [assets, supply, active, exited, threshold, delegation, payoutAmount, feePercentage] = await Promise.all(promises)
-      
-      totalAssets.value = assets
-      totalSupply.value = supply
-      isActive.value = active
-      isFullyExited.value = exited
-      activeThresholdReached.value = threshold
-      totalDelegation.value = delegation || 0n
-      incentivePayoutAmount.value = payoutAmount
-      incentiveFeePercentage.value = feePercentage
+
+      const results = await publicClient.value.multicall({ contracts, allowFailure: true })
+
+      // Core pool calls: use previous value as fallback on failure
+      if (results[0].status === 'success') totalAssets.value = results[0].result
+      if (results[1].status === 'success') totalSupply.value = results[1].result
+      if (results[2].status === 'success') isActive.value = results[2].result
+      if (results[3].status === 'success') isFullyExited.value = results[3].result
+      if (results[4].status === 'success') activeThresholdReached.value = results[4].result
+
+      let idx = 5
+      if (delegationHandlerAddress?.value) {
+        totalDelegation.value = results[idx]?.status === 'success' ? results[idx].result : 0n
+        idx++
+      } else {
+        totalDelegation.value = 0n
+      }
+
+      if (incentiveCollectorAddress?.value) {
+        incentivePayoutAmount.value = results[idx]?.status === 'success' ? results[idx].result : null
+        idx++
+        incentiveFeePercentage.value = results[idx]?.status === 'success' ? results[idx].result : null
+        idx++
+      } else {
+        incentivePayoutAmount.value = null
+        incentiveFeePercentage.value = null
+      }
     } catch (err) {
       console.error('Failed to load pool data:', err)
       error.value = 'Failed to load pool data'
@@ -243,7 +217,7 @@ export function useStakingPool(publicClient, walletClient, poolAddress, account,
       throw new Error('Pool has exited, deposits are disabled')
     }
     
-    isLoading.value = true
+    isTxPending.value = true
     error.value = null
     
     try {
@@ -275,13 +249,13 @@ export function useStakingPool(publicClient, walletClient, poolAddress, account,
       error.value = err.message || 'Stake failed'
       throw err
     } finally {
-      isLoading.value = false
+      isTxPending.value = false
     }
   }
 
   return {
     // State
-    isLoading,
+    isTxPending,
     error,
     totalAssets,
     totalSupply,

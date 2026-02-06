@@ -28,7 +28,7 @@ In the pools section, add your pool details. Set `mode` to `"single"` and add a 
 
 Set `branding.name` to your pool's display name and `branding.logo` to the logo path (or `null`). Logo paths are relative to `public`, so `/branding/logo.svg` references `public/branding/logo.svg`.
 
-For theme colors, set `branding.theme` to a preset (`"blue"`, `"purple"`, `"green"`, `"orange"`, `"teal"`, `"coral"`, `"indigo"`, `"emerald"`, `"cyan"`, or `"slate"`). Each preset includes a matching example logo in `public/branding/` and theme files. For custom colors, leave `theme` as `null` and edit `public/theme-overrides.css` to override CSS variables. The override file loads after preset themes, so you can customize a preset or start from scratch. See [CONFIG_GUIDE.md](./CONFIG_GUIDE.md#branding) for details.
+For theme colors, set `branding.theme` to a preset (`"blue"`, `"purple"`, `"green"`, `"orange"`, `"teal"`, `"coral"`, `"indigo"`, `"emerald"`, `"cyan"`, or `"slate"`). Presets correspond to `public/theme-overrides.example-<theme>.css` files. For custom colors, leave `theme` as `null` and edit `public/theme-overrides.css` to override CSS variables. See [CONFIG_GUIDE.md](./CONFIG_GUIDE.md#branding) for details.
 
 ## Build
 

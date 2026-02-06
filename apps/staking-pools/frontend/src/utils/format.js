@@ -84,6 +84,13 @@ export function shortAddress(address, prefixLen = 6, suffixLen = 4) {
   return `${address.slice(0, prefixLen)}…${address.slice(-suffixLen)}`
 }
 
+export function defaultPoolName(stakingPoolAddress) {
+  if (!stakingPoolAddress || typeof stakingPoolAddress !== 'string') return 'Staking Pool'
+  const a = stakingPoolAddress.toLowerCase()
+  if (!a.startsWith('0x') || a.length < 6) return 'Staking Pool'
+  return `Staking Pool ${a.slice(-4)}`
+}
+
 export function validateAmount(input) {
   if (input === null || input === undefined) {
     return { valid: false, value: null, error: 'Enter an amount.' }

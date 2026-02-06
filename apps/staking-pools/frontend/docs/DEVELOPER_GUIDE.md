@@ -17,7 +17,7 @@ App.vue (layout + orchestration)
   - Loads config, initializes wallet chain, applies URL state
   - Owns: activeTab, poolAddress, poolConfig, refs for composables
   - Passes refs/computed into composables; handles stake/withdraw events
-  - URL state: ?tab=stake|withdraw|discover &pool=0x... &pubkey=0x...
+  - URL state: ?tab=stake|withdraw|discover|nosy &pool=0x... &pubkey=0x... (nosy tab requires config.nosyMode)
   - Periodic refresh (visibility-aware) and popstate for back/forward
         |
         +-- useWallet()           -> account, connect, disconnect, publicClient, walletClient
