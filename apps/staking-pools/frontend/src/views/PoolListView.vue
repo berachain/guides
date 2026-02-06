@@ -310,6 +310,8 @@ function getViewButtonClass(pool) {
 .pool-card {
   cursor: pointer;
   transition: transform 0.2s, box-shadow 0.2s;
+  display: flex;
+  flex-direction: column;
 }
 
 .pool-card:hover {
@@ -339,8 +341,9 @@ function getViewButtonClass(pool) {
 }
 
 .status-badge.active {
-  background: var(--color-success-light);
+  background: rgba(34, 197, 94, 0.1);
   color: var(--color-success);
+  border: 1px solid rgba(34, 197, 94, 0.3);
 }
 
 .status-badge.inactive {
@@ -351,6 +354,7 @@ function getViewButtonClass(pool) {
 .status-badge.exited {
   background: rgba(239, 68, 68, 0.1);
   color: var(--color-error);
+  border: 1px solid rgba(239, 68, 68, 0.3);
 }
 
 .status-badge.dead {
@@ -365,6 +369,7 @@ function getViewButtonClass(pool) {
 
 .pool-info {
   margin-bottom: var(--space-4);
+  flex-grow: 1;
 }
 
 .info-row {
@@ -372,7 +377,7 @@ function getViewButtonClass(pool) {
   justify-content: space-between;
   margin-bottom: var(--space-2);
   gap: var(--space-3);
-  align-items: center;
+  align-items: baseline;
 }
 
 .info-row .label {

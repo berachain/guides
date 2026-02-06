@@ -99,6 +99,31 @@
             @finalize="handleFinalize"
             @finalize-multiple="handleFinalizeMultiple"
           />
+
+          <NosyView
+            v-else-if="activeTab === 'nosy' && poolAddress && nosyModeEnabled"
+            :pool-address="poolAddress"
+            :explorer-url="explorerUrl"
+            :nosy-data="nosyData"
+            :scan-status="nosyScan.scanStatus?.value"
+            :scan-error="nosyScan.scanError?.value"
+            :scanned-ranges="nosyScan.scannedRanges?.value ?? []"
+            :events="nosyScan.events?.value ?? []"
+            :last-scanned-block="nosyScan.lastScannedBlock?.value"
+            :scan-start-block="nosyScan.scanStartBlock?.value"
+            :tip-watcher-active="nosyScan.tipWatcherActive?.value"
+            :tip-blocks-scanned="nosyScan.tipBlocksScanned?.value ?? 0"
+            :can-scan="nosyCanScan?.value ?? nosyCanScan"
+            :start-scan="nosyScan.startScan"
+            :stop-scan="nosyScan.stopScan"
+            :start-tip-watcher="nosyScan.startTipWatcher"
+            :reset-nosy-browser-state="resetNosyBrowserState"
+          />
+
+          <!-- Nosy mode disabled: redirect to stake -->
+          <div v-else-if="activeTab === 'nosy' && !nosyModeEnabled" class="nosy-disabled-notice">
+            <p>Nosy Mode is disabled.</p>
+          </div>
           
         </template>
       </div>
@@ -122,7 +147,11 @@ import TabNav from './components/common/TabNav.vue'
 import StakeView from './views/StakeView.vue'
 import WithdrawView from './views/WithdrawView.vue'
 import PoolListView from './views/PoolListView.vue'
+import NosyView from './views/NosyView.vue'
 import { usePoolDiscovery } from './composables/usePoolDiscovery.js'
+import { usePoolEventScan } from './composables/usePoolEventScan.js'
+import { useNosyData } from './composables/useNosyData.js'
+import { deleteNosyDb } from './utils/nosyDb.js'
 
 // App state
 const config = ref(null)
@@ -135,6 +164,7 @@ const isApplyingUrlState = ref(false)
 
 // Computed
 const explorerUrl = computed(() => getChainConstants(config.value?.network?.chainId)?.explorerUrl || 'https://berascan.com')
+const stakingPoolFactoryAddress = computed(() => getChainConstants(config.value?.network?.chainId)?.stakingPoolFactoryAddress ?? null)
 const hubBoostUrl = computed(() => {
   const pubkey = poolConfig.value?.validatorPubkey
   const chainId = config.value?.network?.chainId
@@ -143,6 +173,8 @@ const hubBoostUrl = computed(() => {
   if (!chain?.hubBaseUrl) return null
   return `${chain.hubBaseUrl}/boost/${encodeURIComponent(pubkey)}`
 })
+
+const nosyModeEnabled = computed(() => config.value?.nosyMode === true)
 
 const tabs = computed(() => {
   const count = withdrawals.pendingCount.value
@@ -154,7 +186,8 @@ const tabs = computed(() => {
   const allTabs = [
     { id: 'discover', label: 'Discover', icon: '🔍' },
     { id: 'stake', label: 'Stake', icon: '📥' },
-    { id: 'withdraw', label: 'Withdraw', icon: '📤', badge: showBadge ? count : null }
+    { id: 'withdraw', label: 'Withdraw', icon: '📤', badge: showBadge ? count : null },
+    ...(nosyModeEnabled.value ? [{ id: 'nosy', label: 'Nosy', icon: '👁' }] : [])
   ]
   return mode === 'single' ? allTabs.filter(t => t.id !== 'discover') : allTabs
 })
@@ -162,7 +195,8 @@ const tabs = computed(() => {
 function normalizeTab(tab) {
   const mode = config.value?.mode || 'single'
   if (mode === 'single' && tab === 'discover') return 'stake'
-  if (tab === 'discover' || tab === 'stake' || tab === 'withdraw') return tab
+  if (tab === 'nosy' && !nosyModeEnabled.value) return 'stake'
+  if (tab === 'discover' || tab === 'stake' || tab === 'withdraw' || tab === 'nosy') return tab
   return null
 }
 
@@ -229,10 +263,12 @@ async function applyUrlState(state) {
             args: [state.pubkey]
           })
 
-          if (core && core[3]) {
+          if (core) {
             poolConfig.value = {
               ...poolConfig.value,
-              incentiveCollector: core[3]
+              smartOperator: core[0] || poolConfig.value?.smartOperator,
+              stakingRewardsVault: core[2] || poolConfig.value?.stakingRewardsVault,
+              ...(core[3] && { incentiveCollector: core[3] })
             }
           }
         } catch {
@@ -295,6 +331,48 @@ const withdrawals = useWithdrawals(
   wallet.account,
   computed(() => config.value?.network?.chainId || null)
 )
+
+const nosyScan = usePoolEventScan(
+  wallet.publicClient,
+  computed(() => config.value?.network?.chainId ?? null),
+  poolAddress,
+  computed(() => poolConfig.value?.smartOperator ?? null),
+  withdrawalVaultAddress,
+  stakingPoolFactoryAddress
+)
+
+const nosyCanScan = computed(() =>
+  !!poolAddress.value &&
+  !!poolConfig.value?.smartOperator &&
+  !!withdrawalVaultAddress.value
+)
+
+const nosyDataEnabled = computed(() => activeTab.value === 'nosy' && !!poolAddress.value)
+const nosyData = useNosyData(
+  wallet.publicClient,
+  computed(() => config.value?.network?.chainId ?? null),
+  poolAddress,
+  computed(() => poolConfig.value?.smartOperator ?? null),
+  computed(() => poolConfig.value?.stakingRewardsVault ?? null),
+  withdrawalVaultAddress,
+  incentiveCollectorAddress,
+  delegationHandlerAddress,
+  computed(() => poolConfig.value?.validatorPubkey ?? null),
+  nosyDataEnabled
+)
+
+async function resetNosyBrowserState() {
+  // Reset everything Nosy sets in the browser: IndexedDB + module-level caches + in-memory scan state.
+  try {
+    nosyScan.resetState?.()
+    await deleteNosyDb()
+    await nosyScan.loadEventsFromDb?.()
+    await nosyData.fetch?.()
+  } catch (e) {
+    console.warn('[App] resetNosyBrowserState failed:', e)
+    throw e
+  }
+}
 
 // Pool discovery - respects explicit mode or auto-detects
 const poolDiscovery = usePoolDiscovery(
@@ -380,12 +458,32 @@ async function initialize() {
         poolAddr = resolvedPool
         incentiveCollector = core?.incentiveCollector ?? core?.[3] ?? null
       }
+
+      let smartOperator = firstEnabledPool.smartOperator
+      let stakingRewardsVault = firstEnabledPool.stakingRewardsVault
+      if ((!smartOperator || !stakingRewardsVault) && wallet.publicClient.value) {
+        try {
+          const chain = getChainConstants(cfg.network?.chainId)
+          const core = await wallet.publicClient.value.readContract({
+            address: chain.stakingPoolFactoryAddress,
+            abi: STAKING_POOL_FACTORY_ABI,
+            functionName: 'getCoreContracts',
+            args: [firstEnabledPool.validatorPubkey]
+          })
+          smartOperator = core?.[0] ?? smartOperator
+          stakingRewardsVault = core?.[2] ?? stakingRewardsVault
+        } catch {
+          // leave from config if present
+        }
+      }
       
       poolAddress.value = poolAddr
       poolConfig.value = {
         ...firstEnabledPool,
         stakingPool: poolAddr,
-        incentiveCollector: incentiveCollector || firstEnabledPool.incentiveCollector
+        incentiveCollector: incentiveCollector || firstEnabledPool.incentiveCollector,
+        smartOperator: smartOperator || firstEnabledPool.smartOperator,
+        stakingRewardsVault: stakingRewardsVault || firstEnabledPool.stakingRewardsVault
       }
     } else {
       // Discovery mode: pools will be loaded when discover tab is opened
@@ -553,12 +651,11 @@ watch(() => wallet.isConnected.value, async (connected) => {
 
 // Watch for tab changes to refresh data
 watch(activeTab, async (tab) => {
-  if (!wallet.isConnected.value && tab !== 'discover') return
-  
   if (tab === 'discover') {
     // Always load all pools from chain API so Discover shows every pool (not just config in single mode)
+    // This will include user positions if wallet is connected
     await poolDiscovery.discoverPoolsFromApi()
-  } else if (tab === 'stake' || tab === 'withdraw') {
+  } else if (wallet.isConnected.value && (tab === 'stake' || tab === 'withdraw')) {
     // Refresh pending count for current pool so badge is correct
     await withdrawals.loadWithdrawalRequests()
   }
