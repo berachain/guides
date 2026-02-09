@@ -10,9 +10,6 @@
     "preview": "vite preview",
     "test:e2e": "NO_COLOR= playwright test",
     "test:e2e:ui": "NO_COLOR= playwright test --ui",
-    "config:single": "node scripts/switch-mode.js single",
-    "config:discovery": "node scripts/switch-mode.js discovery",
-    "test:nosy-scan": "node scripts/test-nosy-scan.js",
     "test": "vitest run",
     "test:unit": "vitest run",
     "test:watch": "vitest"

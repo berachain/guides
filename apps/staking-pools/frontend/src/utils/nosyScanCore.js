@@ -1,6 +1,6 @@
 /**
  * Shared Nosy scan logic: chunked getLogs with delay and log normalization.
- * Used by usePoolEventScan (browser) and scripts/test-nosy-scan.js (CLI).
+ * Used by usePoolEventScan (browser).
  * See project/briefs/staking-pool-nosy-mode.md.
  */
 
