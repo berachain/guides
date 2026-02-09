@@ -111,16 +111,18 @@ Metrics include a `worker` label to track each worker independently.
 ## Monitoring
 
 Query failed blocks:
+
 ```sql
-SELECT * FROM failed_blocks 
+SELECT * FROM failed_blocks
 WHERE module = 'blocks_el' AND resolved_at IS NULL
 ORDER BY first_failed_at DESC;
 ```
 
 Check cursor positions:
+
 ```sql
-SELECT module, last_processed_height, updated_at 
-FROM ingest_cursors 
+SELECT module, last_processed_height, updated_at
+FROM ingest_cursors
 ORDER BY module;
 ```
 

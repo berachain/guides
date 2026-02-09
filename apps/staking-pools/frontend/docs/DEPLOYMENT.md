@@ -23,7 +23,6 @@ Set the network section to match your deployment target. See [CONFIG_GUIDE.md](.
 
 In the pools section, add your pool details. Set `mode` to `"single"` and add a pool entry under the `pools` object. The `name` field is what users see, `stakingPool` is your contract address, `validatorPubkey` is the 98-character hex public key, and `enabled` should be `true`. The delegation handler can be left as `0x0000000000000000000000000000000000000000` if you're not running a delegated pool or don't want to mention it.
 
-
 ## Branding
 
 Set `branding.name` to your pool's display name and `branding.logo` to the logo path (or `null`). Logo paths are relative to `public`, so `/branding/logo.svg` references `public/branding/logo.svg`.
@@ -69,7 +68,7 @@ For HTTPS, consider using Let's Encrypt with certbot to obtain certificates, the
 
 1. **RPC connection failures:** Verify the URL in `config.json` is correct and accessible from your deployment environment. Test with `curl` to confirm it responds. Some providers require API keys or have rate limits that kick in at the worst possible moment. CORS errors mean the RPC server isn't allowing requests from your domain; contact your provider or use one that supports browser requests.
 
-2. **Contract address mistakes:** Verify the staking pool address matches your deployed contract and is correct for the network in your config. The validator pubkey must be exactly 98 hex characters (0x prefix plus 96 characters). 
+2. **Contract address mistakes:** Verify the staking pool address matches your deployed contract and is correct for the network in your config. The validator pubkey must be exactly 98 hex characters (0x prefix plus 96 characters).
 
 3. **Build failures:** Validate `config.json` syntax with a linter before building. If `npm install` fails, check your Node.js version (18+ recommended). Missing file warnings mean referenced assets in `public/` don't exist.
 

@@ -379,17 +379,10 @@ export async function ingestEl(
               );
 
               // Record failed block (transaction fetch failure)
-              await recordFailedBlock(
-                pg,
-                bn,
-                "blocks_el",
-                "tx_fetch",
-                err,
-                {
-                  tx_hash: h,
-                  rpc_duration_ms: Date.now() - rpcStart,
-                },
-              );
+              await recordFailedBlock(pg, bn, "blocks_el", "tx_fetch", err, {
+                tx_hash: h,
+                rpc_duration_ms: Date.now() - rpcStart,
+              });
             }
           }),
         );
@@ -569,15 +562,17 @@ export async function ingestEl(
 
       // Validation: Ensure all expected transactions have both tx and receipt
       const expectedTxCount = blk.transactions.length;
-      const actualTxCount = allItems.filter((item) => item !== null && item.tx && item.receipt).length;
-      
+      const actualTxCount = allItems.filter(
+        (item) => item !== null && item.tx && item.receipt,
+      ).length;
+
       if (actualTxCount !== expectedTxCount) {
         // Block is incomplete - don't write it, record as failed
         const missingCount = expectedTxCount - actualTxCount;
         console.error(
           `EL: Block ${bn} incomplete: expected ${expectedTxCount} transactions, got ${actualTxCount} (missing ${missingCount})`,
         );
-        
+
         // Record failed block
         await recordFailedBlock(
           pg,
@@ -637,9 +632,13 @@ export async function ingestEl(
             await cleanupClient.query("BEGIN");
           }
 
-          await cleanupClient.query(`DELETE FROM blocks WHERE height = $1`, [bn]);
+          await cleanupClient.query(`DELETE FROM blocks WHERE height = $1`, [
+            bn,
+          ]);
           if (cfg.log) {
-            console.log(`EL: Deleted existing data for failed block ${bn} before retry`);
+            console.log(
+              `EL: Deleted existing data for failed block ${bn} before retry`,
+            );
           }
 
           await cleanupClient.query("COMMIT");
@@ -799,9 +798,12 @@ export async function ingestEl(
               const queryStart = Date.now();
               // Delete existing transaction first if retrying (to ensure clean state)
               if (isRetry) {
-                await transactionClient.query(`DELETE FROM transactions WHERE hash = $1`, [tx.hash]);
+                await transactionClient.query(
+                  `DELETE FROM transactions WHERE hash = $1`,
+                  [tx.hash],
+                );
               }
-              
+
               await transactionClient.query(
                 `INSERT INTO transactions(hash, block_height, from_address, to_address, value_wei, gas_limit, max_fee_per_gas_wei, max_priority_fee_per_gas_wei, type, selector, input_size, creates_contract, created_contract_address, state_change_accounts, erc20_transfer_count, erc20_unique_token_count, status, gas_used, cumulative_gas_used, effective_gas_price_wei, total_fee_wei, priority_fee_per_gas_wei, transaction_category, access_list, blob_versioned_hashes, max_fee_per_blob_gas_wei, blob_gas_used, eip_7702_authorization, eip_7702_contract_code_hash, eip_7702_delegation_address)
                VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30)
@@ -966,7 +968,9 @@ export async function ingestEl(
               [bn],
             );
             if (cfg.log) {
-              console.log(`EL: Successfully retried block ${bn}, removed from failed_blocks`);
+              console.log(
+                `EL: Successfully retried block ${bn}, removed from failed_blocks`,
+              );
             }
           }
 
@@ -1111,14 +1115,9 @@ export async function ingestEl(
         );
 
         // Record failed block
-        await recordFailedBlock(
-          pg,
-          bn,
-          "blocks_el",
-          "db_write",
-          err,
-          { error_context: "client_acquisition" },
-        );
+        await recordFailedBlock(pg, bn, "blocks_el", "db_write", err, {
+          error_context: "client_acquisition",
+        });
 
         // Update cursor to continue processing despite failure
         if (cfg.advanceCursor !== false) {
