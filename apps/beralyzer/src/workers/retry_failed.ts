@@ -154,12 +154,9 @@ export async function retryFailedBlocks(
         const tokenSet = new Set<string>();
         if (receipt && Array.isArray(receipt.logs)) {
           for (const log of receipt.logs) {
-            if (
-              (log.topics?.[0] || "").toLowerCase() === TRANSFER_TOPIC
-            ) {
+            if ((log.topics?.[0] || "").toLowerCase() === TRANSFER_TOPIC) {
               transferCount++;
-              if (log.address)
-                tokenSet.add(log.address.toLowerCase());
+              if (log.address) tokenSet.add(log.address.toLowerCase());
             }
           }
         }
@@ -168,14 +165,11 @@ export async function retryFailedBlocks(
         const gasUsedHex = receipt.gasUsed;
         const effPrice = effPriceHex ? BigInt(effPriceHex) : 0n;
         const gasUsed = gasUsedHex ? BigInt(gasUsedHex) : 0n;
-        const prioPerGas =
-          effPrice > baseFeeWei ? effPrice - baseFeeWei : 0n;
+        const prioPerGas = effPrice > baseFeeWei ? effPrice - baseFeeWei : 0n;
         const totalFee = gasUsed * effPrice;
         const totalPrioFee = gasUsed * prioPerGas;
         const statusHex = receipt.status;
-        const statusBool = statusHex
-          ? parseInt(statusHex, 16) === 1
-          : null;
+        const statusBool = statusHex ? parseInt(statusHex, 16) === 1 : null;
         const gasUsedHexR = receipt.gasUsed;
         const cumGasHex = receipt.cumulativeGasUsed;
         const effPriceHexR = receipt.effectiveGasPrice;
