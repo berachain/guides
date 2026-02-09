@@ -372,7 +372,6 @@ export function usePoolDiscovery(publicClient, chainId, configPools = null, conf
       const a = toValue(account)
       return typeof a === 'string' ? a : null
     })()
-    console.log('[usePoolDiscovery] loadPoolsFromApi: account =', accountValue, 'pools =', discovered.length)
     const userCalls = []
     if (accountValue) {
       for (const p of discovered) {
@@ -419,9 +418,6 @@ export function usePoolDiscovery(publicClient, chainId, configPools = null, conf
           const assets = (totalAssets * shares) / totalSupply
           discovered[i].userAssetsWei = assets
           discovered[i].userAssets = formatEther(assets)
-          if (assets > 0n) {
-            console.log(`[Discovery] Pool ${discovered[i].stakingPool}: ${formatEther(shares)} shares = ${formatEther(assets)} BERA`)
-          }
         } else {
           discovered[i].userAssetsWei = 0n
           discovered[i].userAssets = '0'
