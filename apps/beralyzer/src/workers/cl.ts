@@ -35,13 +35,13 @@ export async function ingestClAbsences(
 
   const latest = await clClient.getLatestHeight();
   chainHeadHeight.set({ type: "cl" }, latest);
-  
+
   // Get CL cursor
   const curRes = await pg.query(
     "SELECT last_processed_height FROM ingest_cursors WHERE module=$1",
     ["cl_absences"],
   );
-  
+
   // Get EL cursor to ensure we don't process blocks that don't exist yet
   const elCursorRes = await pg.query(
     "SELECT last_processed_height FROM ingest_cursors WHERE module=$1",
@@ -50,7 +50,7 @@ export async function ingestClAbsences(
   const elCursor = elCursorRes.rows[0]
     ? Number(elCursorRes.rows[0].last_processed_height)
     : 0;
-  
+
   // We ingest stats for block H using last_commit from H+1, so our max H is latest-1
   // But we can't process beyond what EL has indexed
   const start = (() => {
@@ -61,18 +61,20 @@ export async function ingestClAbsences(
     }
     return 1;
   })();
-  
+
   // Don't process beyond EL cursor - CL needs blocks to exist first
   const maxProcessable = Math.max(0, elCursor - 1); // H+1 needed, so max H is elCursor-1
   const end = Math.min(Math.max(1, latest - 1), maxProcessable);
-  
+
   currentBlockHeight.set({ type: "cl" }, start - 1);
   blocksBehind.set({ type: "cl" }, end - start + 1);
-  
+
   if (start > end) {
     // Caught up - sleep for a bit before next iteration
     if (cfg.log) {
-      console.log(`CL: Caught up to EL cursor (${elCursor}), waiting for more blocks...`);
+      console.log(
+        `CL: Caught up to EL cursor (${elCursor}), waiting for more blocks...`,
+      );
     }
     return;
   }
@@ -190,7 +192,7 @@ export async function ingestClAbsences(
        ON CONFLICT (module) DO UPDATE SET last_processed_height=EXCLUDED.last_processed_height, updated_at=NOW()`,
       ["cl_absences", nextCursor],
     );
-    
+
     // Update metrics for this batch
     const batchDuration = (Date.now() - t0) / 1000;
     blocksProcessDuration.observe({ type: "cl" }, batchDuration);
@@ -200,17 +202,20 @@ export async function ingestClAbsences(
     }
     currentBlockHeight.set({ type: "cl" }, nextCursor);
     blocksBehind.set({ type: "cl" }, end - nextCursor);
-    
+
     if (cfg.log)
       console.log(`CL: absences ${from}-${to} in ${Date.now() - t0}ms`);
   }
-  
+
   // Update final metrics
   const totalDuration = (Date.now() - t0All) / 1000;
   if (totalDuration > 0 && blocksProcessedCount > 0) {
-    blockProcessingRate.set({ type: "cl" }, blocksProcessedCount / totalDuration);
+    blockProcessingRate.set(
+      { type: "cl" },
+      blocksProcessedCount / totalDuration,
+    );
   }
-  
+
   if (cfg.log)
     console.log(`CL: window ${start}-${end} in ${Date.now() - t0All}ms`);
 }
