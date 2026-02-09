@@ -165,14 +165,7 @@ function addressExplorerUrl(address) {
 }
 
 function docsUrl(contractName) {
-  let base = 'https://docs.berachain.com'
-  if (typeof window !== 'undefined') {
-    const host = window.location.hostname
-    if (host === 'localhost' || host === '127.0.0.1') {
-      base = 'http://localhost:5173'
-    }
-  }
-  return `${base}/nodes/staking-pools/contracts/${encodeURIComponent(contractName)}`
+  return `https://docs.berachain.com/nodes/staking-pools/contracts/${encodeURIComponent(contractName)}`
 }
 
 async function copyText(text) {
