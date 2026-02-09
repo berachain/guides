@@ -1,3 +1,10 @@
+/**
+ * Black-box unit tests for computeShareholderRegistry.
+ * Input: array of events as produced by the nosy pipeline (eventName, blockNumber, args).
+ * Output: ShareholderStatus[] (address, sharesAcquired, sharesDisposed, currentShares, firstBlock, zeroedBlock).
+ * Implementation only reacts to SharesMinted (to, amount), SharesBurned (from, amount), Transfer (from, to, value).
+ */
+
 import { describe, it, expect } from 'vitest'
 import { computeShareholderRegistry } from '../../src/utils/shareholderFromEvents.js'
 
@@ -11,9 +18,9 @@ describe('computeShareholderRegistry', () => {
     expect(computeShareholderRegistry(undefined)).toEqual([])
   })
 
-  it('computes single DepositSubmitted', () => {
+  it('computes single SharesMinted as one shareholder', () => {
     const events = [
-      { eventName: 'DepositSubmitted', blockNumber: 100, args: { receiver: '0xAlice', shares: 1000n } }
+      { eventName: 'SharesMinted', blockNumber: 100, args: { to: '0xAlice', amount: 1000n } }
     ]
     const out = computeShareholderRegistry(events)
     expect(out).toHaveLength(1)
@@ -25,9 +32,9 @@ describe('computeShareholderRegistry', () => {
     expect(out[0].zeroedBlock).toBeNull()
   })
 
-  it('computes Transfer in/out', () => {
+  it('computes Transfer between two addresses', () => {
     const events = [
-      { eventName: 'DepositSubmitted', blockNumber: 1, args: { receiver: '0xA', shares: 100n } },
+      { eventName: 'SharesMinted', blockNumber: 1, args: { to: '0xA', amount: 100n } },
       { eventName: 'Transfer', blockNumber: 2, args: { from: '0xA', to: '0xB', value: 50n } }
     ]
     const out = computeShareholderRegistry(events)
@@ -43,10 +50,10 @@ describe('computeShareholderRegistry', () => {
     expect(b.firstBlock).toBe(2)
   })
 
-  it('records zeroedBlock when shares drop below dust', () => {
+  it('records zeroedBlock when shares drop below dust after SharesBurned', () => {
     const events = [
-      { eventName: 'DepositSubmitted', blockNumber: 1, args: { receiver: '0xUser', shares: 1000n } },
-      { eventName: 'WithdrawalRequested', blockNumber: 2, args: { user: '0xUser', amountOfShares: 1000n } }
+      { eventName: 'SharesMinted', blockNumber: 1, args: { to: '0xUser', amount: 1000n } },
+      { eventName: 'SharesBurned', blockNumber: 2, args: { from: '0xUser', amount: 1000n } }
     ]
     const out = computeShareholderRegistry(events)
     expect(out).toHaveLength(1)
@@ -57,10 +64,31 @@ describe('computeShareholderRegistry', () => {
   it('ignores non-share events', () => {
     const events = [
       { eventName: 'StakingPoolActivated', blockNumber: 1, args: {} },
-      { eventName: 'DepositSubmitted', blockNumber: 2, args: { receiver: '0xC', shares: 1n } }
+      { eventName: 'SharesMinted', blockNumber: 2, args: { to: '0xC', amount: 1n } }
     ]
     const out = computeShareholderRegistry(events)
     expect(out).toHaveLength(1)
     expect(out[0].address.toLowerCase()).toBe('0xc')
+  })
+
+  it('sorts by block order when events are out of order', () => {
+    const events = [
+      { eventName: 'SharesMinted', blockNumber: 20, args: { to: '0xLate', amount: 10n } },
+      { eventName: 'SharesMinted', blockNumber: 10, args: { to: '0xEarly', amount: 5n } }
+    ]
+    const out = computeShareholderRegistry(events)
+    expect(out).toHaveLength(2)
+    const early = out.find((x) => x.address.toLowerCase() === '0xearly')
+    const late = out.find((x) => x.address.toLowerCase() === '0xlate')
+    expect(early.firstBlock).toBe(10)
+    expect(late.firstBlock).toBe(20)
+  })
+
+  it('outputs addresses with 0x prefix', () => {
+    const events = [
+      { eventName: 'SharesMinted', blockNumber: 1, args: { to: '0xabc', amount: 1n } }
+    ]
+    const out = computeShareholderRegistry(events)
+    expect(out[0].address).toMatch(/^0x/)
   })
 })
