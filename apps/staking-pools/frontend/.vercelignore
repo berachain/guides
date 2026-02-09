@@ -1,0 +1,8 @@
+node_modules
+.git
+tests
+docs
+scripts
+public/config.example*.json
+public/config.discovery.example.json
+public/theme-overrides.example-*.css
