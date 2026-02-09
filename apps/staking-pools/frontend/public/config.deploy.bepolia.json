@@ -1,6 +1,7 @@
 {
   "_comment": "Discovery: Bepolia. Only chainId required; name/rpcUrl/explorerUrl and contracts derived.",
   "mode": "discovery",
+  "nosyMode": "true",
   "network": { "chainId": 80069 },
   "branding": { "name": "Staking Pools — Bepolia", "logo": "/branding/logo-kaboom.svg", "theme": "teal" },
   "pools": {}
