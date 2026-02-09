@@ -18,25 +18,25 @@ Separately from `mode`, you can enable an optional **Nosy** tab by setting `"nos
 
 ### Top-level fields
 
-| Field       | Description |
-|------------|-------------|
-| `mode`     | `"single"` or `"discovery"` |
-| `nosyMode` | Optional boolean. When `true`, enables the Nosy tab for deeper inspection and historical event scanning. |
-| `network`  | Network connection settings (chain + RPC). |
-| `branding` | App name, logo, and theme preset/overrides. |
-| `contracts`| Optional overrides for addresses (most can be derived from chain constants and/or the on-chain factory). |
-| `pools`    | Pool config (required for single-pool deployments; empty for discovery). |
+| Field       | Description                                                                                              |
+| ----------- | -------------------------------------------------------------------------------------------------------- |
+| `mode`      | `"single"` or `"discovery"`                                                                              |
+| `nosyMode`  | Optional boolean. When `true`, enables the Nosy tab for deeper inspection and historical event scanning. |
+| `network`   | Network connection settings (chain + RPC).                                                               |
+| `branding`  | App name, logo, and theme preset/overrides.                                                              |
+| `contracts` | Optional overrides for addresses (most can be derived from chain constants and/or the on-chain factory). |
+| `pools`     | Pool config (required for single-pool deployments; empty for discovery).                                 |
 
 ### Network Settings
 
 The network section defines which blockchain network the frontend connects to. At minimum you need `chainId`; the app will fill missing fields from built-in chain presets when it recognizes the chain ID.
 
-| Field          | Description |
-|----------------|-------------|
-| `chainId`      | Network chain ID (80069 for Bepolia, 80094 for mainnet) |
-| `rpcUrl`       | RPC endpoint. Must be accessible from browsers (CORS) and support `eth_call`, `eth_getBalance`, and `eth_getLogs` (Nosy mode). |
-| `name`         | Optional display name. Defaults from chain presets. |
-| `explorerUrl`  | Optional block explorer base URL. Defaults from chain presets. |
+| Field         | Description                                                                                                                    |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `chainId`     | Network chain ID (80069 for Bepolia, 80094 for mainnet)                                                                        |
+| `rpcUrl`      | RPC endpoint. Must be accessible from browsers (CORS) and support `eth_call`, `eth_getBalance`, and `eth_getLogs` (Nosy mode). |
+| `name`        | Optional display name. Defaults from chain presets.                                                                            |
+| `explorerUrl` | Optional block explorer base URL. Defaults from chain presets.                                                                 |
 
 Public RPC endpoints work, but consider using a dedicated endpoint for production to avoid rate limits that appear during peak usage, because that's when they always appear.
 
@@ -77,10 +77,10 @@ Nosy mode is intentionally demanding: it can generate a lot of RPC traffic and w
 
 ## Network Presets
 
-| Network  | Chain ID | RPC URL                             | Explorer                      | Staking Pool Factory             | Delegation Handler Factory       |
-|----------|----------|-------------------------------------|-------------------------------|----------------------------------|----------------------------------|
-| Bepolia  | 80069    | `https://bepolia.rpc.berachain.com` | `https://testnet.berascan.com` | `0x176c081E95C82CA68DEa20CA419C7506Aa063C24` | `0x8b472791aC2f9e9Bd85f8919401b8Ce3bdFd464c` |
-| Mainnet  | 80094    | `https://rpc.berachain.com`         | `https://berascan.com`        | `0xb79b43dBA821Cb67751276Ce050fF4111445fB99` | `0xAd17932a5B1aaeEa73D277a6AE670623F176E0D0` |
+| Network | Chain ID | RPC URL                             | Explorer                       | Staking Pool Factory                         | Delegation Handler Factory                   |
+| ------- | -------- | ----------------------------------- | ------------------------------ | -------------------------------------------- | -------------------------------------------- |
+| Bepolia | 80069    | `https://bepolia.rpc.berachain.com` | `https://testnet.berascan.com` | `0x176c081E95C82CA68DEa20CA419C7506Aa063C24` | `0x8b472791aC2f9e9Bd85f8919401b8Ce3bdFd464c` |
+| Mainnet | 80094    | `https://rpc.berachain.com`         | `https://berascan.com`         | `0xb79b43dBA821Cb67751276Ce050fF4111445fB99` | `0xAd17932a5B1aaeEa73D277a6AE670623F176E0D0` |
 
 ## Getting Your Pool Address
 

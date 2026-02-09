@@ -5,17 +5,20 @@ A Vue.js frontend for Berachain staking pools. Users can stake BERA, view positi
 ## Quick Start
 
 1. **Install dependencies:**
+
    ```bash
    npm install
    ```
 
 2. **Configure:**
+
    ```bash
    cp public/config.example.json public/config.json
    # Edit public/config.json with your settings
    ```
 
 3. **Run dev server:**
+
    ```bash
    npx vite
    ```
@@ -30,9 +33,9 @@ A Vue.js frontend for Berachain staking pools. Users can stake BERA, view positi
 **See [docs/CONFIG_GUIDE.md](./docs/CONFIG_GUIDE.md) for detailed configuration instructions.** For deployment, see [docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md).
 
 Quick summary:
+
 - **Single Pool Mode**: Set `"mode": "single"` and add your pool to `pools` section
 - **Discovery Mode**: Set `"mode": "discovery"` and leave `pools` empty
-
 
 ## Development
 

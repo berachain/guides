@@ -521,10 +521,7 @@ async function runFailedBlocksRetry(
   cfg: ReturnType<typeof loadConfig>,
 ): Promise<void> {
   const workerName = "FailedBlocksRetry";
-  const pollMs = parseInt(
-    process.env.BERALYZER_RETRY_POLL_MS || "60000",
-    10,
-  ); // Default 60s
+  const pollMs = parseInt(process.env.BERALYZER_RETRY_POLL_MS || "60000", 10); // Default 60s
 
   while (!isShuttingDown) {
     const loopStart = Date.now();

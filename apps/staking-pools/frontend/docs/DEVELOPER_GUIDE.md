@@ -90,13 +90,13 @@ src/
 ### Loading state
 
 ```js
-const isLoading = ref(false)
+const isLoading = ref(false);
 async function fetchData() {
-  isLoading.value = true
+  isLoading.value = true;
   try {
     // ...
   } finally {
-    isLoading.value = false
+    isLoading.value = false;
   }
 }
 ```
@@ -104,21 +104,21 @@ async function fetchData() {
 ### Error + retry (with ErrorDisplay)
 
 ```js
-import { parseError } from '../utils/errors.js'
-import ErrorDisplay from '../components/common/ErrorDisplay.vue'
+import { parseError } from "../utils/errors.js";
+import ErrorDisplay from "../components/common/ErrorDisplay.vue";
 
-const error = ref(null)
+const error = ref(null);
 async function operation() {
-  error.value = null
+  error.value = null;
   try {
     // ...
   } catch (err) {
-    error.value = parseError(err)
+    error.value = parseError(err);
   }
 }
 function retry() {
-  error.value = null
-  operation()
+  error.value = null;
+  operation();
 }
 ```
 

@@ -35,6 +35,7 @@ Or to preview transactions without executing (show calldata only):
 ```
 
 The script will:
+
 1. Connect to your configured network (mainnet or Bepolia)
 2. Detect your validator pubkey from beacond
 3. Look up your SmartOperator contract address from the factory
@@ -85,18 +86,21 @@ The script includes error handling and validation. Preflight checks simulate tra
 ## Examples
 
 **Check pool status:**
+
 ```bash
 ./smart-operator-manager.py
 # Select "📊 View Status"
 ```
 
 **Queue a boost:**
+
 ```bash
 ./smart-operator-manager.py
 # Select "⬆️  Queue Boost (unboosted → boosted)"
 ```
 
 **Set protocol fee:**
+
 ```bash
 ./smart-operator-manager.py
 # Select "💸 Set Protocol Fee Percentage"
@@ -104,6 +108,7 @@ The script includes error handling and validation. Preflight checks simulate tra
 ```
 
 **Manage roles:**
+
 ```bash
 ./smart-operator-manager.py
 # Select "🔑 Manage Roles"
@@ -114,4 +119,3 @@ The script includes error handling and validation. Preflight checks simulate tra
 ## Tips
 
 Run with `--show-calldata` first to review transactions before executing. Use the status view regularly to monitor pool health. Check role permissions if an operation isn't available in the menu. The script automatically detects your network and validator from beacond configuration. All operations require appropriate role permissions as enforced by the SmartOperator contract.
-
