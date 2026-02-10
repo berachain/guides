@@ -61,6 +61,13 @@ if [[ ! -f "$INSTALLATION_TOML" ]]; then
     exit 1
 fi
 
+# Ensure repositories match configuration (handles URL changes)
+BB_CONFIG_INSTALLATIONS_DIR="$BERABOX_ROOT/installations"
+if ! bb_ensure_repos_match_config "$INSTALLATION"; then
+    log_error "Failed to ensure repositories match configuration"
+    exit 1
+fi
+
 # Function to read version from installation.toml
 load_component_version() {
     local component="$1"

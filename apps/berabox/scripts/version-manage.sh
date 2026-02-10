@@ -25,6 +25,12 @@ show_tags() {
         return 1
     fi
     
+    # Ensure repositories match configuration before showing tags
+    if ! bb_ensure_repos_match_config "$installation"; then
+        log_error "Failed to ensure repositories match configuration"
+        return 1
+    fi
+    
     # Determine which EL client this installation uses
     local el_client=$(bb_parse_toml_value "$installation_toml" "el_client")
     if [[ -z "$el_client" ]]; then

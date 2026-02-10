@@ -192,6 +192,51 @@ lease_time = 86400
 
 - `upnp.lease_time`: Port forwarding lease time in seconds. 86400 = 24 hours, 0 = permanent mapping. Default: 86400
 
+### Custom Repository URLs
+
+Each installation can use custom repository URLs for the consensus layer (beacon-kit) and execution layer (bera-geth/bera-reth). This allows testing with forks or private repositories.
+
+```toml
+[repositories]
+cl_repo = "https://github.com/berachain/beacon-kit.git"
+el_repo = "https://github.com/berachain/bera-geth.git"
+```
+
+**Changing repository URLs:**
+
+1. Edit `installation.toml` and modify the `[repositories]` section
+2. Run any git-interacting command (build, version show-tags, etc.)
+3. BeraBox detects the URL mismatch and automatically:
+   - Removes the old checkout
+   - Clones from the new repository URL
+   - Checks out the version from `[versions]` section
+
+**Example workflow:**
+
+```bash
+# Edit installation configuration
+vim installations/bb-testnet-geth/installation.toml
+
+# Change:
+# [repositories]
+# cl_repo = "https://github.com/myorg/beacon-kit-fork.git"
+
+# Next build detects and handles the change automatically
+bb bb-testnet-geth build
+# Output:
+#   [BB-WARN] Repository URL mismatch detected for beacon-kit
+#   [BB-INFO]   Configured: https://github.com/myorg/beacon-kit-fork.git
+#   [BB-INFO]   Current:    https://github.com/berachain/beacon-kit.git
+#   [BB-STEP] Removing old beacon-kit checkout...
+#   [BB-STEP] Cloning https://github.com/myorg/beacon-kit-fork.git...
+```
+
+**Notes:**
+- Repository validation happens automatically before build and version operations
+- Changing URLs destroys the local checkout (commit any local changes first)
+- The `[versions]` section continues to control which branch/tag is checked out
+- Existing installations without `[repositories]` section continue using defaults
+
 ## Debugging
 
 Berabox is designed debug-first with full VS Code integration and automatic configuration generation.
