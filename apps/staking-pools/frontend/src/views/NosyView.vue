@@ -849,13 +849,13 @@ function onDrawerFocusOut(e) {
 }
 
 function formatWei(wei) {
-  if (wei == null || wei === undefined) return '—'
+  if (wei == null) return '—'
   const ether = Number(formatEther(wei))
   return formatBeraDisplay(ether) ?? '—'
 }
 
 function formatWeiCompact(wei) {
-  if (wei == null || wei === undefined) return '—'
+  if (wei == null) return '—'
   const ether = Number(formatEther(wei))
   return formatNumber(ether, 1)
 }
