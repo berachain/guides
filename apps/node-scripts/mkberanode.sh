@@ -323,6 +323,23 @@ stream_extract() {
   curl -Lf "$url" | lz4 -d | tar -xf - -C "$dest"
 }
 
+stream_extract_el() {
+  local url="$1" el_client="$2" el_home="$3" description="$4"
+  # EL snapshots are now flat (contain db/, blobstore/, etc. directly)
+  # Reth and geth need different target directories to match their expected layouts
+  if [[ "$el_client" == "reth" ]]; then
+    # Reth: extract to data/ subdirectory
+    # Expected structure: $el_home/data/db/, $el_home/data/static_files/, etc.
+    mkdir -p "$el_home/data"
+    curl -Lf "$url" | lz4 -d | tar -xf - -C "$el_home/data"
+  else
+    # Geth: extract to el_home root
+    # Expected structure: $el_home/bera-geth/chaindata/, $el_home/keystore/, etc.
+    mkdir -p "$el_home"
+    curl -Lf "$url" | lz4 -d | tar -xf - -C "$el_home"
+  fi
+}
+
 install_snapshots() {
   if [[ $USE_SNAPSHOT -eq 0 ]]; then
     return 0
@@ -357,7 +374,7 @@ install_snapshots() {
     
     if [[ $should_skip -eq 0 ]]; then
       info "Streaming beacon snapshot"
-      if stream_extract "$BEACON_URL" "$CL_HOME/" "beacon snapshot"; then
+      if stream_extract "$BEACON_URL" "$CL_HOME/data" "beacon snapshot"; then
         chown -R berachain:berachain "$CL_HOME" 2>/dev/null || warn "Failed to set ownership for CL snapshot data"
       else
         warn "Beacon snapshot streaming failed; will sync from genesis"
@@ -376,7 +393,7 @@ install_snapshots() {
         should_skip=1
       fi
     else
-      if [[ -d "$EL_HOME/bera-geth/geth/chaindata" && -n "$(ls -A "$EL_HOME/bera-geth/geth/chaindata" 2>/dev/null)" ]]; then
+      if [[ -d "$EL_HOME/bera-geth/chaindata" && -n "$(ls -A "$EL_HOME/bera-geth/chaindata" 2>/dev/null)" ]]; then
         should_skip=1
       fi
     fi
@@ -385,7 +402,7 @@ install_snapshots() {
       info "Detected existing EL data; skipping execution snapshot"
     else
       info "Streaming execution layer snapshot"
-      if stream_extract "$EL_URL" "$EL_HOME" "execution layer snapshot"; then
+      if stream_extract_el "$EL_URL" "$EL_CHOICE" "$EL_HOME" "execution layer snapshot"; then
         chown -R berachain:berachain "$EL_HOME" 2>/dev/null || warn "Failed to set ownership for EL snapshot data"
       else
         warn "Execution snapshot streaming failed; will sync from genesis"
