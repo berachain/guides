@@ -4,7 +4,7 @@ This guide covers all configuration options for the staking pool frontend. For d
 
 ## Quick Start
 
-Copy `public/config.example.json` to `public/config.json` and edit with your settings. The helper scripts `npm run config:single` and `npm run config:discovery` switch modes, or edit the `mode` field directly.
+Copy `public/config.example.json` to `public/config.json` and edit with your settings, including setting the `mode` field to `"single"` or `"discovery"` as described below.
 
 ## Configuration Modes
 
