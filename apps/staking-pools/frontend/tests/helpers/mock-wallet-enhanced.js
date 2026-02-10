@@ -13,7 +13,7 @@
 
 import { installMockWallet } from '@finn_gal/patchright-wallet-mock-ts'
 import { privateKeyToAccount } from 'viem/accounts'
-import { defineChain, http, custom, parseEther, encodeFunctionData } from 'viem'
+import { defineChain, custom, parseEther, encodeFunctionData } from 'viem'
 import { STAKING_POOL_ABI, WITHDRAWAL_VAULT_ABI } from '../../src/utils/abis.js'
 
 // Define Bepolia chain for testing
@@ -51,11 +51,12 @@ export async function installEnhancedMockWallet({
   // Create custom transport that intercepts and mocks specific calls
   const customTransport = custom({
     request: async ({ method, params }) => {
-      // Mock balance if provided
+      // Mock balance if provided (RPC expects hex quantity string)
       if (method === 'eth_getBalance' && balance !== null) {
         const address = params?.[0]
         if (address?.toLowerCase() === account.address.toLowerCase()) {
-          return parseEther(balance)
+          const wei = parseEther(balance)
+          return '0x' + wei.toString(16)
         }
       }
 
@@ -136,8 +137,19 @@ export async function installEnhancedMockWallet({
         }
       }
 
-      // Pass through to real RPC for everything else
-      return await http()({ method, params })
+      // Pass through to real RPC for unmocked methods
+      const url = defaultChain.rpcUrls?.default?.http?.[0]
+      if (url) {
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params })
+        })
+        const data = await res.json()
+        if (data.error) throw new Error(data.error.message || 'RPC error')
+        return data.result
+      }
+      throw new Error('No RPC URL configured for passthrough')
     }
   })
 
