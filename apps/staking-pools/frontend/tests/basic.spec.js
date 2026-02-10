@@ -18,8 +18,6 @@ import { test, expect } from '@playwright/test'
 import { installMockWallet } from '@finn_gal/patchright-wallet-mock-ts'
 import { privateKeyToAccount } from 'viem/accounts'
 import { http } from 'viem'
-import { readFileSync } from 'fs'
-import { join } from 'path'
 import { fileURLToPath } from 'url'
 import { dirname } from 'path'
 import { 
@@ -33,6 +31,7 @@ import {
   TestPoolScenarios, 
   createPoolScenario 
 } from './helpers/pool-scenarios.js'
+import { isExitedStatus, isActiveStatus } from '../src/constants/validator-status.js'
 
 // Get test directory for loading JSON files
 const __filename = fileURLToPath(import.meta.url)
@@ -491,8 +490,8 @@ test.describe('Staking Pool Frontend (Single Pool)', () => {
 
     for (const poolData of allPools) {
       const poolAddress = poolData.stakingPool.toLowerCase()
-      const isExited = poolData.status?.includes('exited')
-      const isActive = poolData.status === 'active_ongoing'
+      const isExited = isExitedStatus(poolData.status)
+      const isActive = isActiveStatus(poolData.status)
 
       test(`pool ${poolData.index}: loads and displays correctly with wallet`, async ({ page }) => {
         // Create mock pool scenario based on live pool data

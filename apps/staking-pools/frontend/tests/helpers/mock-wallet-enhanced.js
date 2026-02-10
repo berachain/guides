@@ -13,7 +13,7 @@
 
 import { installMockWallet } from '@finn_gal/patchright-wallet-mock-ts'
 import { privateKeyToAccount } from 'viem/accounts'
-import { defineChain, http, custom, formatEther, parseEther, encodeFunctionData, decodeFunctionResult } from 'viem'
+import { defineChain, http, custom, parseEther, encodeFunctionData } from 'viem'
 import { STAKING_POOL_ABI, WITHDRAWAL_VAULT_ABI } from '../../src/utils/abis.js'
 
 // Define Bepolia chain for testing
@@ -46,7 +46,6 @@ export async function installEnhancedMockWallet({
     balance = null, // Mock balance in BERA (e.g., '1000')
     contractReads = {}, // Mock contract reads: { '0x...': { 'totalAssets()': '1000000000000000000' } }
     transactionResults = {}, // Mock transaction results: { 'submit': '0x...' }
-    autoApprove = true, // Auto-approve all transactions
   } = mocks
 
   // Create custom transport that intercepts and mocks specific calls

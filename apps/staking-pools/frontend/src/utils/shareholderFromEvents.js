@@ -47,7 +47,7 @@ export function computeShareholderRegistry(events) {
   }
 
   function toBigInt(v) {
-    if (v == null || v === undefined) return 0n
+    if (v == null) return 0n
     if (typeof v === 'bigint') return v
     if (typeof v === 'number' && Number.isFinite(v)) return BigInt(Math.floor(v))
     if (typeof v === 'string') {

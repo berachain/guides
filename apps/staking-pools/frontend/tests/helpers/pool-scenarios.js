@@ -3,8 +3,9 @@
  * Historical data, embedded so we don't ship snapshots.
  */
 
-import { parseEther, encodeAbiParameters, decodeAbiParameters } from 'viem'
+import { parseEther, encodeAbiParameters, formatEther } from 'viem'
 import { createPoolStateMocks } from './mock-wallet-enhanced.js'
+import { VALIDATOR_STATUS, isExitedStatus, isActiveStatus } from '../../src/constants/validator-status.js'
 
 // Live bepolia pool addresses from snapshot 2026-01-27
 export const BEPOLIA_POOLS = {
@@ -59,22 +60,19 @@ export function createPoolScenario(pool, userState = {}) {
   // Calculate pool state from live data
   const totalAssets = parseEther((BigInt(pool.balanceGwei) / BigInt(1e9)).toString()) // Convert gwei to BERA
   const totalSupply = totalAssets * BigInt(95) / BigInt(100) // Assume 95% exchange rate
-  const isActive = pool.status === 'active_ongoing'
-  const isFullyExited = pool.status.includes('exited')
-  const activeThresholdReached = pool.status === 'active_ongoing' // Active pools have reached threshold
 
   // Pool state mocks
   const poolMocks = createPoolStateMocks(pool.stakingPool.toLowerCase(), {
-    totalAssets: (Number(totalAssets) / 1e18).toString(),
-    totalSupply: (Number(totalSupply) / 1e18).toString(),
-    isActive: pool.status === 'active_ongoing', // Only active_ongoing pools are active
-    isFullyExited: pool.status.includes('exited'),
+    totalAssets: formatEther(totalAssets),
+    totalSupply: formatEther(totalSupply),
+    isActive: isActiveStatus(pool.status),
+    isFullyExited: isExitedStatus(pool.status),
     userShares,
     userAddress
   })
   
   // For pending pools, override isActive and activeThresholdReached
-  if (pool.status === 'pending_initialized') {
+  if (pool.status === VALIDATOR_STATUS.PENDING_INITIALIZED) {
     const poolAddr = pool.stakingPool.toLowerCase()
     if (poolMocks[poolAddr]) {
       poolMocks[poolAddr].isActive = 0n
@@ -108,10 +106,6 @@ export function createPoolScenario(pool, userState = {}) {
  * @returns {Object} Contract read mocks
  */
 function createWithdrawalVaultMocks(vaultAddress, poolAddress, requests, userAddress) {
-  // Mock current block (high enough that old requests are ready)
-  const CURRENT_BLOCK = 15350000n
-  const FINALIZATION_DELAY = 7200n // ~24 hours at 12s blocks
-
   const mocks = {
     [vaultAddress.toLowerCase()]: {
       // ERC721: balanceOf returns number of withdrawal requests
