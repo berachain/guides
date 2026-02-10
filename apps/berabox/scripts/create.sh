@@ -209,6 +209,10 @@ el_logs_dir = "$INSTALLATION_DIR/logs/el"
 beacon_kit = "main"
 bera_$EL_CLIENT = "main"
 
+[repositories]
+cl_repo = "https://github.com/berachain/beacon-kit.git"
+el_repo = "https://github.com/berachain/bera-$EL_CLIENT.git"
+
 [options]
 # Archive mode: true = keep all historical data, false = prune old data
 archive_mode = false

@@ -520,6 +520,92 @@ bb_git_checkout_safe() {
     popd >/dev/null
 }
 
+# Repository configuration management
+bb_ensure_repos_match_config() {
+    local installation="$1"
+    local installation_dir="$BB_CONFIG_INSTALLATIONS_DIR/$installation"
+    local installation_toml="$installation_dir/installation.toml"
+    
+    if [[ ! -f "$installation_toml" ]]; then
+        log_error "Installation configuration not found: $installation_toml"
+        return 1
+    fi
+    
+    # If no [repositories] section, nothing to enforce
+    if ! grep -q '^\[repositories\]' "$installation_toml"; then
+        log_debug "No [repositories] section in $installation, skipping repo validation"
+        return 0
+    fi
+    
+    # Get EL client type to determine repo directory name
+    local el_client=$(bb_parse_toml_value "$installation_toml" "el_client")
+    if [[ -z "$el_client" ]]; then
+        log_error "Could not determine EL client from installation.toml"
+        return 1
+    fi
+    
+    # Get source directory
+    local src_dir="$installation_dir/src"
+    
+    # Process both CL and EL repos
+    local -A repo_map=(
+        ["cl_repo"]="beacon-kit"
+        ["el_repo"]="bera-$el_client"
+    )
+    
+    for repo_key in cl_repo el_repo; do
+        local configured_url=$(bb_parse_toml_value "$installation_toml" "$repo_key" 2>/dev/null || echo "")
+        
+        # Skip if no URL configured
+        if [[ -z "$configured_url" ]]; then
+            log_debug "No $repo_key configured, skipping"
+            continue
+        fi
+        
+        local repo_name="${repo_map[$repo_key]}"
+        local repo_dir="$src_dir/$repo_name"
+        
+        # Only check if directory exists
+        if [[ -d "$repo_dir" ]]; then
+            local actual_url=$(git -C "$repo_dir" config --get remote.origin.url 2>/dev/null || echo "")
+            
+            if [[ "$actual_url" != "$configured_url" ]]; then
+                log_warn "Repository URL mismatch detected for $repo_name"
+                log_info "  Configured: $configured_url"
+                log_info "  Current:    $actual_url"
+                log_step "Removing old $repo_name checkout..."
+                rm -rf "$repo_dir"
+                
+                log_step "Cloning $configured_url..."
+                if git clone "$configured_url" "$repo_dir"; then
+                    log_info "✓ $repo_name cloned from new repository"
+                    
+                    # Checkout the version from [versions] section
+                    local version_key=""
+                    if [[ "$repo_key" == "cl_repo" ]]; then
+                        version_key="beacon_kit"
+                    else
+                        version_key="bera_$el_client"
+                    fi
+                    
+                    local version=$(bb_parse_toml_value "$installation_toml" "$version_key" 2>/dev/null || echo "")
+                    if [[ -n "$version" ]]; then
+                        log_step "Checking out version: $version"
+                        bb_git_checkout_safe "$repo_dir" "$version" false
+                    fi
+                else
+                    log_error "Failed to clone from $configured_url"
+                    return 1
+                fi
+            else
+                log_debug "$repo_name repository URL matches configuration"
+            fi
+        fi
+    done
+    
+    return 0
+}
+
 # Path loading functions for installation configuration
 bb_load_installation_paths() {
     local installation_toml="$1"
@@ -674,7 +760,7 @@ export -f bb_validate_installation bb_get_installation_toml bb_get_installation_
 export -f bb_parse_toml_value bb_parse_toml_array bb_iterate_all_installations_with_errors
 export -f bb_get_service_status bb_get_installation_status
 export -f bb_parse_boolean_arg
-export -f bb_ensure_directory bb_backup_file bb_git_checkout_safe bb_get_external_ip
+export -f bb_ensure_directory bb_backup_file bb_git_checkout_safe bb_git_refresh_refs bb_ensure_repos_match_config bb_get_external_ip
 export -f bb_require_arg bb_require_file bb_require_directory
 export -f bb_load_installation_paths bb_get_installation_path
 export -f bb_check_cl_initialized bb_get_validator_keys bb_get_el_enode
