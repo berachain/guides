@@ -277,7 +277,7 @@ parse_snapshot_urls() {
   # Sort by created_at descending and take first match for each type
   local beacon_url el_url beacon_name el_name
   
-  beacon_url=$(echo "$csv_data" | jq -R -r --arg type "$beacon_type" '
+  beacon_url=$(echo "$csv_data" | jq -sR -r --arg type "$beacon_type" '
     split("\n") | 
     map(select(. != "" and (. | startswith("type,") | not))) |
     map(split(",")) |
@@ -286,7 +286,7 @@ parse_snapshot_urls() {
     if . then .[6] // "" else "" end
   ' | tr -d '\r\n' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
   
-  el_url=$(echo "$csv_data" | jq -R -r --arg type "$el_type" '
+  el_url=$(echo "$csv_data" | jq -sR -r --arg type "$el_type" '
     split("\n") | 
     map(select(. != "" and (. | startswith("type,") | not))) |
     map(split(",")) |
