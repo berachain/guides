@@ -116,6 +116,15 @@ export function usePoolEventScan(publicClient, chainId, poolAddress, smartOperat
       const existing = await getScannedRanges(db, key)
       const existingRanges = existing?.ranges || []
       if (existingRanges.length > 0) {
+        // First, fill the gap between current block and max cached block
+        const maxTo = Math.max(...existingRanges.map((r) => r.toBlock))
+        if (currentBlock > maxTo) {
+          console.log(`[Nosy] Filling gap: scanning blocks ${maxTo + 1} to ${currentBlock}`)
+          await scanBackwardsBatch(client, chainIdVal, poolAddr, operatorAddr, vaultAddr, factoryAddr, maxTo + 1, currentBlock)
+          console.log(`[Nosy] Gap filled, reloading events from DB`)
+          await loadEventsFromDb()
+        }
+        // Then resume backwards scan from oldest cached block
         const minFrom = Math.min(...existingRanges.map((r) => r.fromBlock))
         toBlock = minFrom - 1
         if (toBlock < STAKING_POOL_GENESIS_BLOCK) {
@@ -171,6 +180,16 @@ export function usePoolEventScan(publicClient, chainId, poolAddress, smartOperat
       events.value = eventList
       scannedRanges.value = rangesRecord?.ranges || []
 
+      // Debug logging
+      console.log(`[Nosy DB] Pool: ${poolAddr}`)
+      console.log(`[Nosy DB] Events cached: ${eventList.length}`)
+      console.log(`[Nosy DB] Ranges:`, rangesRecord?.ranges || [])
+      if (eventList.length > 0) {
+        console.log(`[Nosy DB] Block range: ${eventList[0].blockNumber} to ${eventList[eventList.length - 1].blockNumber}`)
+        const sharesMinted = eventList.filter(e => e.eventName === 'SharesMinted')
+        console.log(`[Nosy DB] SharesMinted events: ${sharesMinted.length}`)
+      }
+
       // If pool's Initialized event is cached, scan is already complete
       const hasInitialized = eventList.some((e) => e.eventName === 'Initialized' && e.sourceAddress?.toLowerCase() === poolAddr.toLowerCase())
       if (hasInitialized && scanStatus.value === 'idle') {
@@ -188,6 +207,7 @@ export function usePoolEventScan(publicClient, chainId, poolAddress, smartOperat
     const poolAddr = toValue(poolAddress)
     const operatorAddr = toValue(smartOperatorAddress)
     const vaultAddr = toValue(withdrawalVaultAddress)
+    const factoryAddr = toValue(factoryAddress)
     if (!client || chainIdVal == null || !poolAddr || !operatorAddr || !vaultAddr) return
     try {
       const database = await ensureDb()
@@ -199,7 +219,7 @@ export function usePoolEventScan(publicClient, chainId, poolAddress, smartOperat
       if (currentBlock <= maxTo) return
       const fromBlock = maxTo + 1
       const toBlock = currentBlock
-      await scanBackwardsBatch(client, chainIdVal, poolAddr, operatorAddr, vaultAddr, fromBlock, toBlock)
+      await scanBackwardsBatch(client, chainIdVal, poolAddr, operatorAddr, vaultAddr, factoryAddr, fromBlock, toBlock)
       tipBlocksScanned.value += (toBlock - fromBlock + 1)
       await loadEventsFromDb()
     } catch (err) {
