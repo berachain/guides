@@ -231,6 +231,13 @@ if [[ -f "$CL_CONFIG_DIR/config.toml" ]]; then
     else
         sed -i "s|^pprof_laddr = \".*\"|pprof_laddr = \"127.0.0.1:$CL_PPROF_PORT\"|" "$CL_CONFIG_DIR/config.toml"
     fi
+    
+    # Configure persistent_peers from installation.toml
+    CL_PERSISTENT_PEERS=$(awk '/^\[peers\]/,/^$/ {if ($0 ~ /^cl_persistent_peers = \[/) {flag=1} if (flag) {print} if ($0 ~ /\]$/ && flag) {exit}}' "$INSTALLATION_TOML" | grep -oE '"[^"]+"' | tr '\n' ',' | sed 's/,$//' | tr -d '"')
+    if [[ -n "$CL_PERSISTENT_PEERS" ]]; then
+        sed -i "s|^persistent_peers = \".*\"|persistent_peers = \"$CL_PERSISTENT_PEERS\"|" "$CL_CONFIG_DIR/config.toml"
+        log_info "✓ Configured $(echo "$CL_PERSISTENT_PEERS" | tr ',' '\n' | wc -l) persistent peers"
+    fi
 fi
 
 # Optional: display genesis validator root for operator confirmation (as in guides)

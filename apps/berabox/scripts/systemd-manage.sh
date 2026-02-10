@@ -226,6 +226,45 @@ install_services() {
     log_step "Generating service files..."
     generate_service_files "$installation_name"
     
+    log_step "Configuring trusted peers..."
+    # Create trusted-nodes.json for geth from el_persistent_peers in installation.toml
+    load_installation_config "$installation_name"
+    if [[ "$EL_CLIENT" == "geth" ]]; then
+        el_datadir="$INSTALLATION_DIR/data/el/chain"
+        trusted_nodes_file="$el_datadir/trusted-nodes.json"
+        
+        # Read el_persistent_peers array from installation.toml
+        trusted_peers=$(bb_parse_toml_array "$INSTALLATION_DIR/installation.toml" "el_persistent_peers" 2>/dev/null || true)
+        
+        if [[ -n "$trusted_peers" ]]; then
+            log_info "Creating trusted-nodes.json for geth..."
+            
+            # Ensure datadir exists
+            mkdir -p "$el_datadir"
+            
+            # Build JSON array
+            echo "[" > "$trusted_nodes_file"
+            first=true
+            while IFS= read -r peer; do
+                if [[ -n "$peer" ]]; then
+                    if [[ "$first" == "true" ]]; then
+                        echo "  \"$peer\"" >> "$trusted_nodes_file"
+                        first=false
+                    else
+                        echo "  ,\"$peer\"" >> "$trusted_nodes_file"
+                    fi
+                fi
+            done <<< "$trusted_peers"
+            echo "]" >> "$trusted_nodes_file"
+            
+            log_info "✓ Created trusted-nodes.json with $(echo "$trusted_peers" | grep -c '^enode://') peer(s)"
+        else
+            log_info "No persistent peers configured in installation.toml"
+        fi
+    else
+        log_info "Trusted peers for reth configured via --trusted-peers flag"
+    fi
+    
     log_step "Creating runtime directories..."
     # Ensure runtime directories exist before service installation
     # IPC socket will be created at runtime/admin.ipc

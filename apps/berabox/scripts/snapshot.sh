@@ -159,7 +159,7 @@ if [[ -z "$cl_url" ]]; then
     exit 1
 fi
 
-stream_snapshot "$cl_url" "$CL_DATA_DIR" "CL"
+stream_snapshot "$cl_url" "$CL_DATA_DIR/data" "CL"
 
 # Process EL snapshot unless --skip-el
 if [[ "$SKIP_EL" != "true" ]]; then
