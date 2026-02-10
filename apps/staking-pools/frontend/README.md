@@ -1,59 +1,65 @@
-# Staking Pools Frontend
+# Staking Pool Frontend
 
-Boilerplate user-facing web interface for staking into a single StakingPool and requesting withdrawals on Berachain.
+A Vue.js frontend for Berachain staking pools. Users can stake BERA, view positions, and manage withdrawals.
 
 ## Quick Start
 
-```bash
-cd /home/cam/src/contracts-staking-pools/script/frontend
-npm install
-npm run dev
-```
+1. **Install dependencies:**
 
-The app will open automatically at http://localhost:3000
+   ```bash
+   npm install
+   ```
+
+2. **Configure:**
+
+   ```bash
+   cp public/config.example.json public/config.json
+   # Edit public/config.json with your settings
+   ```
+
+3. **Run dev server:**
+
+   ```bash
+   npx vite
+   ```
+
+4. **Build for production:**
+   ```bash
+   npm run build
+   ```
 
 ## Configuration
 
-This app loads `/config.json` at runtime. Serve or edit `config.json` to set:
+**See [docs/CONFIG_GUIDE.md](./docs/CONFIG_GUIDE.md) for detailed configuration instructions.** For deployment, see [docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md).
 
-- **Network**: `rpcUrl`, `chainId`, `explorerUrl`
-- **Contracts**: `withdrawalVault` (required), `stakingPoolFactory` (optional)
-- **Pools**: one or more pools with `name`, `validatorPubkey`, `stakingPool`, `enabled`
+Quick summary:
 
-## Features
-
-### User Page (👤)
-
-- Connect wallet (MetaMask)
-- Select configured pool
-- Deposit BERA via `submit(receiver)`
-- View stBERA balance, pool total assets, and your position value (BERA)
-- Request withdrawals:
-  - by assets: `WithdrawalVault.requestWithdrawal(pubkey, assetsInGWei, maxFeeToPay)`
-  - by shares: `WithdrawalVault.requestRedeem(pubkey, shares, maxFeeToPay)`
-  - finalize: `WithdrawalVault.finalizeWithdrawalRequest(requestId)` after cooldown
-
-Operator and delegator views were removed to keep this a minimal end‑user example.
-
-## External Access
-
-To run on an external IP:
-
-```bash
-npm run dev -- --host 0.0.0.0 --port 3000
-```
-
-Then access at: `http://YOUR_IP:3000`
-
-## Tech Stack
-
-- **React 18** - UI framework
-- **Vite** - Build tool (fast HMR)
-- **Viem** - Ethereum interactions
-- **MetaMask** - Wallet connection
+- **Single Pool Mode**: Set `"mode": "single"` and add your pool to `pools` section
+- **Discovery Mode**: Set `"mode": "discovery"` and leave `pools` empty
 
 ## Development
 
-- `npm run dev` - Start development server
-- `npm run build` - Build for production
-- `npm run preview` - Preview production build
+- Dev server: `npx vite` (runs on port 3001)
+- Unit tests: `npm run test` or `npm run test:unit` (Vitest). E2E: `npm run test:e2e` (Playwright)
+- Build: `npm run build` (outputs to `dist/`)
+
+## Project Structure
+
+- `src/` - Vue application source
+- `public/` - Static assets and config files
+- `tests/` - Playwright E2E tests (includes TEST_PLAN.md)
+- `docs/` - Configuration, deployment, and developer guides
+
+## Features
+
+- ✅ Single pool staking interface
+- ✅ Multi-pool discovery (optional)
+- ✅ Wallet connection (MetaMask, WalletConnect, etc.)
+- ✅ Stake BERA to receive stBERA
+- ✅ Request and finalize withdrawals
+- ✅ Delegation badge display
+- ✅ Real-time pool data updates
+
+## Support
+
+For configuration help, see [docs/CONFIG_GUIDE.md](./docs/CONFIG_GUIDE.md).

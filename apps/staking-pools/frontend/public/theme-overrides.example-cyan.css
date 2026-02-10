@@ -1,0 +1,12 @@
+/* 
+ * Example Theme Override: Cyan Accent
+ * 
+ * This is an example override file showing how to customize the accent color.
+ * Matches branding/logo-tech.png
+ * To use: Copy this file to theme-overrides.css and modify as needed.
+ */
+
+:root {
+  --color-accent: #06b6d4;
+  --color-accent-hover: #22d3ee;
+}

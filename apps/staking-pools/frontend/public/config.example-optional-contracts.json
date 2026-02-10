@@ -1,0 +1,20 @@
+{
+  "_comment": "Same as config.example.json but contracts omitted; app derives withdrawalVault and delegationHandler from chain factories. See CONFIG_GUIDE.md.",
+  "mode": "single",
+  "network": {
+    "name": "Bepolia",
+    "chainId": 80069,
+    "rpcUrl": "https://bepolia.rpc.berachain.com",
+    "explorerUrl": "https://testnet.berascan.com"
+  },
+  "branding": { "name": "Staking Pool", "logo": null, "theme": null },
+  "contracts": {},
+  "pools": {
+    "default": {
+      "name": "Staking Pool",
+      "stakingPool": "0x15aA5162f4c7915edc209296Cd366eBb4658c520",
+      "validatorPubkey": "0xa6ce5adefe9d089ffd772297d77d147beff8fa8bf3c1b5a6b8ff204fc168a026968278214a8dd1624cb5947bb009d70f",
+      "enabled": true
+    }
+  }
+}

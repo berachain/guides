@@ -1,0 +1,7 @@
+{
+  "_comment": "Discovery: Mainnet. Only chainId required; name/rpcUrl/explorerUrl and contracts derived.",
+  "mode": "discovery",
+  "network": { "chainId": 80094 },
+  "branding": { "name": "Staking Pools — Mainnet", "logo": "/branding/logo-bear.svg", "theme": "coral" },
+  "pools": {}
+}
