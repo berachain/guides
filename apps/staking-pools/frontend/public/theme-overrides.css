@@ -1,0 +1,18 @@
+/* 
+ * Theme Overrides
+ * 
+ * Customize your branding colors here without modifying theme.css.
+ * Note: when branding.theme is set, the preset theme CSS is loaded dynamically and may override values set here.
+ * For full control via this file, set branding.theme to null.
+ * 
+ * To use a preset theme, set "branding.theme" in config.json to:
+ * "blue", "purple", "green", "orange", "teal", "coral", "indigo", "emerald", "cyan", or "slate"
+ * 
+ * To create a custom theme, uncomment and modify below.
+ */
+
+/* Example: Override accent color to a custom brand color */
+/* :root {
+ *   --color-accent: #3b82f6;
+ *   --color-accent-hover: #60a5fa;
+ * } */

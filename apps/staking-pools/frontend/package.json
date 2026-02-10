@@ -1,21 +1,28 @@
 {
-  "name": "staking-pools-frontend",
+  "name": "staking-pool-frontend",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.3.0",
   "type": "module",
+  "packageManager": "npm@10.0.0",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:e2e": "NO_COLOR= playwright test",
+    "test:e2e:ui": "NO_COLOR= playwright test --ui",
+    "test": "vitest run",
+    "test:unit": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "viem": "^2.21.45"
+    "viem": "^2.21.0",
+    "vue": "^3.4.0"
   },
   "devDependencies": {
-    "@vitejs/plugin-react": "^4.3.4",
-    "vite": "^6.0.5"
+    "@finn_gal/patchright-wallet-mock-ts": "^1.0.0",
+    "@playwright/test": "^1.58.0",
+    "@vitejs/plugin-vue": "^5.0.0",
+    "vite": "^6.0.0",
+    "vitest": "^2.1.9"
   }
 }
-

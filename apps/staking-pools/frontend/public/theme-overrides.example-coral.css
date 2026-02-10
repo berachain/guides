@@ -1,0 +1,12 @@
+/* 
+ * Example Theme Override: Coral Accent
+ * 
+ * This is an example override file showing how to customize the accent color.
+ * Matches branding/logo-organic.png
+ * To use: Copy this file to theme-overrides.css and modify as needed.
+ */
+
+:root {
+  --color-accent: #f87171;
+  --color-accent-hover: #fb8585;
+}

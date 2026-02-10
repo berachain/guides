@@ -1,0 +1,371 @@
+<template>
+  <div class="card withdraw-card">
+    <h3 class="card-title">Request Withdrawal</h3>
+    
+    <div v-if="!isConnected" class="connect-prompt">
+      <p class="text-secondary">Connect your wallet to request withdrawals</p>
+      <button class="btn btn-primary" @click="$emit('connect')">Connect Wallet</button>
+    </div>
+    
+    <template v-else>
+      <div class="available-balance">
+        <span class="label">Available to withdraw</span>
+        <span class="balance-value">{{ formattedShares }} stBERA</span>
+        <span class="balance-subvalue text-muted">≈ {{ formattedAssets }} BERA</span>
+      </div>
+      
+      <div class="input-group">
+        <div class="input-header">
+          <label class="label">stBERA to redeem</label>
+        </div>
+        
+        <div class="input-wrapper">
+          <input
+            type="number"
+            class="input amount-input"
+            v-model="sharesAmount"
+            placeholder="0.0"
+            step="0.0001"
+            min="0"
+            :disabled="!hasPosition"
+          />
+          <button 
+            v-if="hasPosition" 
+            class="max-btn"
+            @click="setMax"
+          >
+            MAX
+          </button>
+          <span class="input-suffix">stBERA</span>
+        </div>
+        
+      <div v-if="previewAssets" class="preview text-secondary">
+        This creates a claim for ≈ {{ previewAssets }} BERA.
+      </div>
+      <div v-if="amountError" class="input-error">{{ amountError }}</div>
+      </div>
+      
+      <button
+        class="btn btn-primary withdraw-btn"
+        @click="handleRequestRedeem"
+        :disabled="!canWithdraw"
+      >
+        <span v-if="isLoading">Requesting...</span>
+        <span v-else-if="!hasPosition">No shares to withdraw</span>
+        <span v-else>Request Withdrawal</span>
+      </button>
+      
+      <p class="info-text text-muted">
+        You can finalize the claim {{ delaySuffix }} to receive BERA.
+      </p>
+      
+      <div v-if="error" class="error-message">
+        <div class="error-summary">{{ errorSummary }}</div>
+        <details v-if="errorMessage && errorMessage !== errorSummary" class="error-details">
+          <summary>Technical details</summary>
+          <pre class="error-full">{{ errorMessage }}</pre>
+        </details>
+        <button type="button" class="error-dismiss" @click="error = null">Dismiss</button>
+      </div>
+      <div v-if="txHash" class="success-message">
+        Withdrawal requested! 
+        <a :href="explorerUrl + '/tx/' + txHash" target="_blank" rel="noopener">View tx</a>
+      </div>
+    </template>
+  </div>
+</template>
+
+<script setup>
+import { ref, computed, watch, onUnmounted } from 'vue'
+import { parseEther, formatEther } from 'viem'
+import { formatAssets, validateAmount } from '../../utils/format.js'
+import { parseError } from '../../utils/errors.js'
+import { DEBOUNCE_MS } from '../../constants/thresholds.js'
+
+const props = defineProps({
+  isConnected: { type: Boolean, default: false },
+  isLoading: { type: Boolean, default: false },
+  userShares: { type: BigInt, default: 0n },
+  formattedShares: { type: String, default: '0' },
+  formattedAssets: { type: String, default: '0' },
+  explorerUrl: { type: String, default: 'https://berascan.com' },
+  finalizationDelayBlocks: { type: [BigInt, Number], default: null },
+  secondsPerBlock: { type: Number, default: 2 }
+})
+
+const emit = defineEmits(['connect', 'requestRedeem', 'previewRedeem'])
+
+const sharesAmount = ref('')
+const previewAssets = ref(null)
+const error = ref(null)
+const txHash = ref(null)
+const maxFee = ref('0.01')
+
+const hasPosition = computed(() => {
+  return props.userShares > 0n
+})
+
+const canWithdraw = computed(() => {
+  if (!props.isConnected) return false
+  if (props.isLoading) return false
+  if (!hasPosition.value) return false
+  if (!amountValidation.value.valid) return false
+  return true
+})
+
+const delaySuffix = computed(() => {
+  const blocksRaw = props.finalizationDelayBlocks
+  if (blocksRaw === null || blocksRaw === undefined) return 'after a delay'
+
+  const blocks = typeof blocksRaw === 'bigint' ? blocksRaw : BigInt(blocksRaw)
+  if (blocks <= 0n) return 'after a delay'
+
+  const blocksStr = blocks.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+
+  // approximate wall-clock time assuming fixed block time
+  const totalSeconds = Number(blocks) * (Number.isFinite(props.secondsPerBlock) ? props.secondsPerBlock : 2)
+  const hours = Math.floor(totalSeconds / 3600)
+  const minutes = Math.floor((totalSeconds % 3600) / 60)
+  const approx = hours > 0 ? `≈ ${hours}h ${minutes}m` : `≈ ${Math.max(1, minutes)}m`
+
+  return `after ${blocksStr} blocks (${approx})`
+})
+
+const amountValidation = computed(() => validateAmount(sharesAmount.value))
+const amountError = computed(() => (sharesAmount.value ? amountValidation.value.error : null))
+
+const errorSummary = computed(() => {
+  const e = error.value
+  if (!e) return ''
+  if (typeof e === 'object' && e.summary) return e.summary
+  return typeof e === 'string' ? e : 'Request failed.'
+})
+const errorMessage = computed(() => {
+  const e = error.value
+  if (!e) return ''
+  if (typeof e === 'object' && e.message) return e.message
+  return typeof e === 'string' ? e : ''
+})
+
+function setMax() {
+  sharesAmount.value = formatEther(props.userShares)
+}
+
+async function handleRequestRedeem() {
+  if (!amountValidation.value.valid) return
+  error.value = null
+  txHash.value = null
+  
+  try {
+    const shares = parseEther(String(sharesAmount.value))
+    const result = await new Promise((resolve, reject) => {
+      emit('requestRedeem', shares, parseEther(maxFee.value), { resolve, reject })
+    })
+    txHash.value = result.hash
+    sharesAmount.value = ''
+    previewAssets.value = null
+  } catch (err) {
+    error.value = parseError(err)
+  }
+}
+
+// Debounced preview
+let previewTimeout = null
+watch(sharesAmount, (newAmount) => {
+  if (previewTimeout) clearTimeout(previewTimeout)
+
+  const validation = validateAmount(newAmount)
+  if (!validation.valid) {
+    previewAssets.value = null
+    return
+  }
+
+  previewTimeout = setTimeout(() => {
+    emit('previewRedeem', parseEther(String(newAmount)), (assets) => {
+      previewAssets.value = formatAssets(assets)
+    })
+  }, DEBOUNCE_MS)
+})
+
+onUnmounted(() => {
+  if (previewTimeout) clearTimeout(previewTimeout)
+})
+</script>
+
+<style scoped>
+.withdraw-card {
+  height: fit-content;
+}
+
+.card-title {
+  font-size: var(--font-size-lg);
+  font-weight: 600;
+  margin: 0 0 var(--space-4) 0;
+}
+
+.connect-prompt {
+  text-align: center;
+  padding: var(--space-4) 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  align-items: center;
+}
+
+.available-balance {
+  background: var(--color-bg-secondary);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+  margin-bottom: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.balance-value {
+  font-size: var(--font-size-2xl);
+  font-weight: 700;
+}
+
+.balance-subvalue {
+  font-size: var(--font-size-sm);
+}
+
+.input-group {
+  margin-bottom: var(--space-4);
+}
+
+.input-header {
+  margin-bottom: var(--space-2);
+}
+
+.input-wrapper {
+  position: relative;
+}
+
+.amount-input {
+  padding-right: 120px;
+  font-size: var(--font-size-lg);
+}
+
+.max-btn {
+  position: absolute;
+  right: 80px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  color: var(--color-accent);
+  cursor: pointer;
+}
+
+.input-suffix {
+  position: absolute;
+  right: var(--space-4);
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--color-text-secondary);
+  font-weight: 500;
+  font-size: var(--font-size-sm);
+}
+
+.preview {
+  margin-top: var(--space-2);
+  font-size: var(--font-size-sm);
+}
+
+.input-error {
+  margin-top: var(--space-2);
+  color: var(--color-error);
+  font-size: var(--font-size-sm);
+}
+
+.withdraw-btn {
+  width: 100%;
+  padding: var(--space-4);
+  font-size: var(--font-size-lg);
+}
+
+.info-text {
+  margin-top: var(--space-3);
+  font-size: var(--font-size-sm);
+  text-align: center;
+}
+
+.error-message {
+  margin-top: var(--space-4);
+  padding: var(--space-3);
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid var(--color-error);
+  border-radius: var(--radius-md);
+  color: var(--color-error);
+  font-size: var(--font-size-sm);
+}
+
+.error-summary {
+  font-weight: 500;
+  margin-bottom: var(--space-2);
+}
+
+.error-details {
+  margin-top: var(--space-2);
+}
+
+.error-details summary {
+  cursor: pointer;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  user-select: none;
+}
+
+.error-full {
+  margin: var(--space-2) 0 0 0;
+  padding: var(--space-2);
+  max-height: 120px;
+  overflow-y: auto;
+  font-family: ui-monospace, monospace;
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--color-text-secondary);
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.error-dismiss {
+  margin-top: var(--space-3);
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.error-dismiss:hover {
+  color: var(--color-text-primary);
+  border-color: var(--color-border-focus);
+}
+
+.success-message {
+  margin-top: var(--space-4);
+  padding: var(--space-3);
+  background: rgba(34, 197, 94, 0.1);
+  border: 1px solid var(--color-success);
+  border-radius: var(--radius-md);
+  color: var(--color-success);
+  font-size: var(--font-size-sm);
+}
+
+.success-message a {
+  color: inherit;
+  text-decoration: underline;
+}
+</style>

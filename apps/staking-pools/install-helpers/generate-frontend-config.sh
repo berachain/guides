@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# One-off generator for the staking pools frontend config.
+# One-off generator for the staking pools frontend config (Vue `apps/staking-pools/frontend/`).
 # - Detects network and validator pubkey from beacond
-# - Queries factory for pool and withdrawal vault addresses
-# - Writes a draft config.json to be renamed by the operator
+# - Queries factory for pool, withdrawal vault, and delegation handler addresses
+# - Writes a draft config.json compatible with the frontend
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/lib-common.sh"
@@ -14,7 +14,7 @@ load_env "$SCRIPT_DIR"
 
 # Defaults
 FRONTEND_DIR="../frontend"
-OUT_FILE_DEFAULT="$FRONTEND_DIR/config.draft.json"
+OUT_FILE_DEFAULT="$FRONTEND_DIR/public/config.draft.json"
 
 usage() {
   cat <<'USAGE'
@@ -27,7 +27,7 @@ Environment:
   BEACOND_BIN             Optional, defaults to "beacond" in PATH
 
 Options:
-  --out PATH              Output path (default: .../script/frontend/config.draft.json)
+  --out PATH              Output path (default: .../frontend/public/config.draft.json)
   -h, --help              Show this help
 
 Note: RPC is selected automatically based on the detected network.
@@ -69,7 +69,7 @@ fi
 EXP_MAINNET="https://berascan.com"
 EXP_BEPOLIA="https://testnet.berascan.com"
 NAME_MAINNET="Berachain"
-NAME_BEPOLIA="Berachain Bepolia"
+NAME_BEPOLIA="Bepolia"
 CHAINID_MAINNET=80094
 CHAINID_BEPOLIA=80069
 
@@ -138,8 +138,12 @@ fi
 # Query withdrawal vault from factory
 WITHDRAWAL_VAULT=$(cast call "$FACTORY" "withdrawalVault()(address)" -r "$RPC_URL" 2>/dev/null || echo "0x0000000000000000000000000000000000000000")
 
-POOL_KEY="generated"
-POOL_NAME="Validator Pool (${PUBKEY:0:10}...)"
+# Query delegation handler from DelegationHandlerFactory (may not exist)
+DH_FACTORY=$(get_delegation_handler_factory_for_network "$NETWORK")
+DELEGATION_HANDLER=$(get_delegation_handler "${DH_FACTORY:-0x0}" "$PUBKEY" "$RPC_URL")
+
+POOL_KEY="default"
+POOL_NAME="Staking Pool"
 
 TMP_JSON=$(mktemp)
 
@@ -148,26 +152,29 @@ jq -n \
   --argjson chainId "$CHAIN_ID" \
   --arg rpc "$RPC_URL" \
   --arg exp "$EXPLORER_URL" \
-  --arg factory "$FACTORY" \
   --arg wv "$WITHDRAWAL_VAULT" \
+  --arg dh "$DELEGATION_HANDLER" \
   --arg poolKey "$POOL_KEY" \
   --arg poolName "$POOL_NAME" \
   --arg pubkey "$PUBKEY" \
   --arg pool "$STAKING_POOL" \
-  --arg op "$SMART_OPERATOR" \
-  --arg srv "$STAKING_REWARDS_VAULT" \
-  --arg ic "$INCENTIVE_COLLECTOR" \
   --argjson enabled $([[ "$STAKING_POOL" == "0x0000000000000000000000000000000000000000" ]] && echo false || echo true) \
   '{
+    mode: "single",
     network: { name: $name, chainId: $chainId, rpcUrl: $rpc, explorerUrl: $exp },
-    contracts: { stakingPoolFactory: $factory, withdrawalVault: $wv },
+    branding: {
+      name: $poolName,
+      logo: null,
+      theme: null
+    },
+    contracts: {
+      withdrawalVault: $wv,
+      delegationHandler: $dh
+    },
     pools: ({} | .[$poolKey] = {
       name: $poolName,
       validatorPubkey: $pubkey,
       stakingPool: $pool,
-      smartOperator: $op,
-      stakingRewardsVault: $srv,
-      incentiveCollector: $ic,
       enabled: $enabled
     })
   }' > "$TMP_JSON"
