@@ -11,7 +11,7 @@ Deploy a branded staking pool frontend from clone to live site. This guide focus
 - Pool name for branding
 - Logo file (optional; SVG recommended, 48x48px works well)
 
-If you're unsure about the pool address or validator pubkey, check your deployment records or use the factory contract's `getCoreContracts(bytes pubkey)` function. The `generate-frontend-config.sh` script in `guides/apps/staking-pools/install-helpers/` can also generate these values for you.
+If you're unsure about the pool address or validator pubkey, check your deployment records or use the factory contract's `getCoreContracts(bytes pubkey)` function. The `generate-frontend-config.sh` script in `apps/staking-pools/install-helpers/` can also generate these values for you.
 
 ## Clone and Configure
 
