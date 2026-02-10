@@ -182,6 +182,52 @@ bb_parse_toml_value() {
     echo "$value"
 }
 
+bb_parse_toml_array() {
+    local toml_file="$1"
+    local key="$2"
+    
+    if [[ ! -f "$toml_file" ]]; then
+        log_error "Configuration file not found: $toml_file"
+        return 1
+    fi
+    
+    # Extract array values between [ and ], handling multi-line arrays
+    local array_content=$(awk -v key="$key" '
+        $0 ~ "^" key " = \\[" {
+            # Single-line array
+            if ($0 ~ /\]/) {
+                gsub(/.*\[/, "")
+                gsub(/\].*/, "")
+                print $0
+                exit
+            }
+            # Multi-line array start
+            in_array = 1
+            gsub(/.*\[/, "")
+            line = $0
+            next
+        }
+        in_array {
+            if ($0 ~ /\]/) {
+                # End of array
+                gsub(/\].*/, "")
+                line = line "\n" $0
+                print line
+                exit
+            }
+            line = line "\n" $0
+        }
+    ' "$toml_file")
+    
+    if [[ -z "$array_content" ]]; then
+        log_debug "Array key '$key' not found in $toml_file"
+        return 1
+    fi
+    
+    # Extract quoted strings, one per line, filter out empty lines and comma-only lines
+    echo "$array_content" | grep -oP '"\K[^"]+' | grep -vE '^[,[:space:]]*$' || true
+}
+
 # Installation iteration utilities
 bb_iterate_all_installations_with_errors() {
     local command_name="$1"
@@ -625,7 +671,7 @@ bb_get_el_enode() {
 export -f log_info log_result log_operation log_warn log_error log_debug log_step log_substep
 export -f run_quiet debug_echo
 export -f bb_validate_installation bb_get_installation_toml bb_get_installation_dir bb_installation_exists
-export -f bb_parse_toml_value bb_iterate_all_installations_with_errors
+export -f bb_parse_toml_value bb_parse_toml_array bb_iterate_all_installations_with_errors
 export -f bb_get_service_status bb_get_installation_status
 export -f bb_parse_boolean_arg
 export -f bb_ensure_directory bb_backup_file bb_git_checkout_safe bb_get_external_ip

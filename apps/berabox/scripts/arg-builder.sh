@@ -67,6 +67,21 @@ _build_el_args_core() {
         fi
     fi
 
+    # Build trusted peers option from installation.toml
+    local trusted_peers_option=""
+    local installation_toml="$installation_dir/installation.toml"
+    if [[ -f "$installation_toml" ]]; then
+        # Read el_persistent_peers array from [peers] section
+        local trusted_peers=$(bb_parse_toml_array "$installation_toml" "el_persistent_peers" 2>/dev/null || true)
+        if [[ -n "$trusted_peers" ]]; then
+            # Convert newline-separated list to comma-separated for command line
+            trusted_peers=$(echo "$trusted_peers" | tr '\n' ',' | sed 's/,$//')
+            if [[ -n "$trusted_peers" ]]; then
+                trusted_peers_option="--trusted-peers $trusted_peers"
+            fi
+        fi
+    fi
+
     case "$el_client" in
         "reth")
             # For reth: archive mode removes --full flag, standard mode adds --full
@@ -78,7 +93,7 @@ _build_el_args_core() {
             # Keep: txpool (transaction pool), net::tx::propagation (propagation), reth_node_events (blocks)
             # Suppress: jsonrpsee (RPC HTTP), rpc::eth (RPC serving), libp2p (peer churn)
             local log_filter="warn,txpool=trace,net::tx::propagation=trace,reth_node_events=info,jsonrpsee=off,rpc::eth=off,libp2p=off,libp2p_swarm=off,discv5=off,reth_network::peers=off"
-            local args="node -vvvvv --datadir $installation_dir/data/el/chain --chain $installation_dir/data/el/config/genesis.json $archive_option $bootnodes_option --authrpc.addr 127.0.0.1 --authrpc.port $el_authrpc_port --authrpc.jwtsecret $installation_dir/data/cl/config/jwt.hex --port $el_p2p_port --rpc.max-logs-per-response 1000000 --metrics $el_prometheus_port --http --http.addr 0.0.0.0 --http.port $el_rpc_port --ws --ws.addr 0.0.0.0 --ws.port $el_ws_port --ipcpath $installation_dir/runtime/admin.ipc --discovery.port $el_p2p_port --http.corsdomain '*' --log.file.max-files 0 --log.stdout.filter '$log_filter' $ip_option --max-inbound-peers 300"
+            local args="node -vv --datadir $installation_dir/data/el/chain --chain $installation_dir/data/el/config/genesis.json $archive_option $bootnodes_option $trusted_peers_option --authrpc.addr 127.0.0.1 --authrpc.port $el_authrpc_port --authrpc.jwtsecret $installation_dir/data/cl/config/jwt.hex --port $el_p2p_port --rpc.max-logs-per-response 1000000 --metrics $el_prometheus_port --http --http.addr 0.0.0.0 --http.port $el_rpc_port --ws --ws.addr 0.0.0.0 --ws.port $el_ws_port --ipcpath $installation_dir/runtime/admin.ipc --discovery.port $el_p2p_port --http.corsdomain '*' --log.file.max-files 0 --log.stdout.filter '$log_filter' $ip_option --max-inbound-peers 300"
             if [[ "$include_binary_path" == "true" ]]; then
                 echo "$(get_el_binary_path reth "$installation_dir") $args"
             else
@@ -91,7 +106,7 @@ _build_el_args_core() {
             if [[ "$archive_mode" == "true" ]]; then
                 archive_option="--history.logs 0 --history.state 0 --history.transactions 0 --gcmode archive"
             fi
-            local args="--verbosity 3 --datadir $installation_dir/data/el/chain --syncmode full --state.scheme path --ipcpath $installation_dir/runtime/admin.ipc --rpc.batch-response-max-size 100000000 --miner.gasprice 1 $archive_option $bootnodes_option --metrics --metrics.addr 127.0.0.1 --metrics.port $el_prometheus_port --http --http.addr 0.0.0.0 --http.port $el_rpc_port --ws --ws.addr 0.0.0.0 --ws.port $el_ws_port --port $el_p2p_port --discovery.port $el_p2p_port --authrpc.addr 127.0.0.1 --authrpc.port $el_authrpc_port --authrpc.jwtsecret $installation_dir/data/cl/config/jwt.hex --authrpc.vhosts localhost $ip_option"
+            local args="--verbosity 2 --datadir $installation_dir/data/el/chain --syncmode full --state.scheme path --ipcpath $installation_dir/runtime/admin.ipc --rpc.batch-response-max-size 100000000 --miner.gasprice 1 $archive_option $bootnodes_option --metrics --metrics.addr 127.0.0.1 --metrics.port $el_prometheus_port --http --http.addr 0.0.0.0 --http.port $el_rpc_port --ws --ws.addr 0.0.0.0 --ws.port $el_ws_port --port $el_p2p_port --discovery.port $el_p2p_port --authrpc.addr 127.0.0.1 --authrpc.port $el_authrpc_port --authrpc.jwtsecret $installation_dir/data/cl/config/jwt.hex --authrpc.vhosts localhost $ip_option"
             if [[ "$include_binary_path" == "true" ]]; then
                 echo "$(get_el_binary_path geth "$installation_dir") $args"
             else
