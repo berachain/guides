@@ -2,19 +2,31 @@
 pragma solidity ^0.8.13;
 
 import {Script, console} from "forge-std/Script.sol";
-import {SimpleDelegatePart2} from "../src/SimpleDelegatePart2.sol";
+import {SimpleDelegatePart3} from "../src/SimpleDelegatePart3.sol";
 import {MessageHashUtils} from "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import {Vm} from "forge-std/Vm.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
-/// @dev Run script on Bepolia: `source .env && forge script script/SimpleDelegatePart2.s.sol:SimpleDelegate2Script --rpc-url $BEPOLIA_RPC_URL --broadcast -vvvv`
-/// @dev Run script on anvil fork: `source .env && forge script script/SimpleDelegatePart2.s.sol:SimpleDelegate2Script --rpc-url $TEST_RPC_URL --broadcast -vvvv`
-contract SimpleDelegate2Script is Script {
+/// @notice TestTokenContract
+contract TestToken is ERC20 {
+    constructor() ERC20("TestToken", "TTKN") {
+        _mint(msg.sender, 1000e18);
+    }
+}
+
+/// @dev Run script on Bepolia: `source .env && forge script script/SimpleDelegatePart3.s.sol:SimpleDelegate3Script --rpc-url $BEPOLIA_RPC_URL --broadcast -vvvv`
+/// @dev Run script on anvil fork: `source .env && forge script script/SimpleDelegatePart3.s.sol:SimpleDelegate3Script --rpc-url $TEST_RPC_URL --broadcast -vvvv`
+contract SimpleDelegate3Script is Script {
     address payable EOA;
     uint256 EOA_PK;
     address payable SPONSOR;
     uint256 SPONSOR_PK;
-    SimpleDelegatePart2 public simpleDelegate;
+    SimpleDelegatePart3 public simpleDelegate;
+    address TOKEN;
+    uint256 constant TOKEN_TRANSFER_AMOUNT = 5e18;
+    ERC20 public testToken;
 
     function run() public {
         EOA = payable(vm.envAddress("EOA_WALLET1_ADDRESS"));
@@ -23,8 +35,11 @@ contract SimpleDelegate2Script is Script {
         SPONSOR_PK = vm.envUint("SPONSOR_WALLET2_PK");
 
         vm.startBroadcast(EOA_PK);
-        simpleDelegate = new SimpleDelegatePart2();
+        simpleDelegate = new SimpleDelegatePart3();
+        testToken = new TestToken();
         vm.stopBroadcast();
+
+        TOKEN = address(testToken);
 
         Vm.SignedDelegation memory signedDelegation = vm.signDelegation(address(simpleDelegate), EOA_PK);
 
@@ -35,7 +50,7 @@ contract SimpleDelegate2Script is Script {
         console.log("Sponsor balance (wei):", SPONSOR.balance);
         require(SPONSOR.balance >= transferAmount, "Sponsor too poor for tx + value");
 
-        SimpleDelegatePart2.Call memory call = SimpleDelegatePart2.Call({
+        SimpleDelegatePart3.Call memory call = SimpleDelegatePart3.Call({
             to: EOA,
             value: burnAmount,
             data: abi.encodeWithSelector(simpleDelegate.burnNative.selector)
@@ -50,6 +65,14 @@ contract SimpleDelegate2Script is Script {
         uint256 sponsorBefore = SPONSOR.balance;
         uint256 eoaBefore = EOA.balance;
 
+        uint256 eoaTokenBefore = IERC20(TOKEN).balanceOf(EOA);
+        uint256 sponsorTokenBefore = IERC20(TOKEN).balanceOf(SPONSOR);
+        uint256 sponsorBalanceBefore = SPONSOR.balance;
+
+        console.log("EOA token balance before:", eoaTokenBefore);
+        console.log("Sponsor token balance before:", sponsorTokenBefore);
+        console.log("Sponsor native balance before:", sponsorBalanceBefore);
+
         vm.startBroadcast(SPONSOR_PK);
         vm.attachDelegation(signedDelegation);
 
@@ -57,11 +80,21 @@ contract SimpleDelegate2Script is Script {
         require(code.length > 0, "no code written to EOA");
 
         (bool success,) = EOA.call{value: transferAmount}(
-            abi.encodeWithSelector(SimpleDelegatePart2.execute.selector, call, SPONSOR, nonce, signature)
+            abi.encodeWithSelector(
+                SimpleDelegatePart3.execute.selector, call, SPONSOR, nonce, signature, TOKEN, TOKEN_TRANSFER_AMOUNT
+            )
         );
         require(success, "Call to EOA smart account failed");
 
         vm.stopBroadcast();
+
+        uint256 eoaTokenAfter = IERC20(TOKEN).balanceOf(EOA);
+        uint256 sponsorTokenAfter = IERC20(TOKEN).balanceOf(SPONSOR);
+        uint256 sponsorBalanceAfter = SPONSOR.balance;
+
+        console.log("EOA token balance after:", eoaTokenAfter);
+        console.log("Sponsor token balance after:", sponsorTokenAfter);
+        console.log("Sponsor native balance after:", sponsorBalanceAfter);
 
         uint256 sponsorAfter = SPONSOR.balance;
         uint256 eoaAfter = EOA.balance;
@@ -81,15 +114,16 @@ contract SimpleDelegate2Script is Script {
         console.log("---- Test Case 1: Replay with Same Nonce ----");
 
         vm.startBroadcast(SPONSOR_PK);
+        // vm.attachDelegation(signedDelegation);
 
         (bool replaySuccess,) = EOA.call{value: transferAmount}(
-            abi.encodeWithSelector(SimpleDelegatePart2.execute.selector, call, SPONSOR, nonce, signature)
+            abi.encodeWithSelector(SimpleDelegatePart3.execute.selector, call, SPONSOR, nonce, signature)
         );
 
         if (replaySuccess) {
             console.log("Replay succeeded unexpectedly (should have failed due to nonce reuse).");
         } else {
-            console.log("Replay failed as expected (Same Nonce).");
+            console.log("");
         }
 
         vm.stopBroadcast();
@@ -105,9 +139,10 @@ contract SimpleDelegate2Script is Script {
         bytes memory forgedSignature = abi.encodePacked(fr, fs, fv);
 
         vm.startBroadcast(SPONSOR_PK);
+        // vm.attachDelegation(signedDelegation);
 
         (bool forgedSuccess,) = EOA.call{value: transferAmount}(
-            abi.encodeWithSelector(SimpleDelegatePart2.execute.selector, call, SPONSOR, nonce, forgedSignature)
+            abi.encodeWithSelector(SimpleDelegatePart3.execute.selector, call, SPONSOR, nonce, forgedSignature)
         );
 
         if (forgedSuccess) {

@@ -15,10 +15,11 @@ head:
 
 This quickstart gives you everything you need to simulate gas sponsorship on an Anvil fork using EIP-7702. A comprehensive guide with context on EIP-7702 and gas sponsorship can be found within our [docs](https://docs.berachain.com/developers/).
 
-There are two parts to this guide:
+There are three parts to this guide:
 
 - **Part A**: Use `cast` to simulate a minimal EIP-7702 sponsorship flow with empty calldata.
 - **Part B**: Use a full Solidity script to simulate delegation, signer validation, calldata execution, and sponsor reimbursement.
+- **Part C**: Demonstrate ERC20-based gas reimbursement from EOA to Sponsor as part of the transaction.
 
 ---
 
@@ -271,7 +272,7 @@ Using a Foundry Solidity script gives you a lot:
 The file is `SimpleDelegatePart2.s.sol`, and the main entry point is the `SimpleDelegate2Script` contract. You can run it using:
 
 ```bash
-source .env && forge script script/SimpleDelegatePart2.s.sol:SimpleDelegate2Script \
+source .env && forge script script/SimpleDelegatePart3.s.sol:SimpleDelegate2Script \
   --rpc-url $TEST_RPC_URL \
   --broadcast -vvvv
 ```
@@ -399,3 +400,132 @@ The below snippit from the output shows chat the EOA successfully burns a small 
 ```
 
 Finally, we have walked through the second part of gas sponsorship. Congrats! In the next gas-sponsorship guide expansion, we will walk through support for ERC20 payment flows.
+
+### Part C — Sponsorship with ERC20 Token Reimbursement
+
+This section showcases how an EOA can reimburse its sponsor in ERC20 tokens while the sponsor pays native gas. The flow combines EIP-7702 delegation, signed execution, and an ERC20 `transfer()` made within the implementation logic.
+
+The changes in the solidity code, within `SimpleDelegatePart3.sol` are outlined below.
+
+```solidity
+function execute(
+    Call memory userCall,
+    address sponsor,
+    uint256 nonce,
+    bytes calldata signature,
+    address _token,
+    uint256 _tokenAmount
+) external payable {
+
+...
+        if(_tokenAmount > 0) {
+        bool tokenTransfer = IERC20(_token).transfer(sponsor, _tokenAmount);
+        if (!tokenTransfer) revert ERC20TokenPaymentFailed();
+        }
+
+}
+```
+
+We have prepared a script to run that carried out all other steps mentioned in Parts B, and does so around this new implementation logic with a test token $TTKN, to showcase ERC20 transference within gas sponsored EIP-7702 transactions.
+
+#### Step 1 — Run Script
+
+```bash-vue
+# FROM ./
+source .env && forge script script/SimpleDelegatePart3.s.sol:SimpleDelegate3Script \
+  --rpc-url $TEST_RPC_URL \
+  --broadcast -vvvv
+```
+
+This script will:
+
+- Deploy a test ERC20 token with `mint()` support
+- Mint tokens to the EOA so it can transfer some to the Sponsor later
+- Deploy the EIP-7702 implementation (`SimpleDelegatePart3`)
+- Prepare a `burnNative()` call from EOA to Sponsor as the userCall
+- Sign the call digest, and broadcast from the SPONSOR
+- Observe gas reimbursement and ERC20 token payment
+
+#### Step 2 - Check Results
+
+Output includes:
+
+```bash
+source .env && forge script script/SimpleDelegatePart3.s.sol:SimpleDelegate3Script --rpc-url $TEST_RPC_URL --broadcast -vv
+b4f2846fcf5e0785c863bb05ef86dc03784beaee71d64f5ad195c0364b61461c, 0x0000000000000000000000000000000000000060, 570334188278029218423514361678308014246523497324 [5.703e47])                    └─ ← [Revert] EvmError: Revert
+
+Error: Simulated execution failed.
+Ichiraku-Macbook-Air:eip-7702-gas-sponsorship ichiraku$ source
+ .env && forge script script/SimpleDelegatePart3.s.sol:SimpleDelegate3Script --rpc-url $TEST_RPC_URL --broadcast -vv        [⠊] Compiling...
+No files changed, compilation skipped
+Warning: EIP-3855 is not supported in one or more of the RPCs 
+used.                                                         Unsupported Chain IDs: 80069.
+Contracts deployed with a Solidity version equal or higher tha
+n 0.8.20 might not work properly.                             For more information, please see https://eips.ethereum.org/EIP
+S/eip-3855                                                    Script ran successfully.
+
+== Logs ==
+  Sponsor balance (wei): 19997231719999031102
+  EOA token balance before: 1000000000000000000000
+  Sponsor token balance before: 0
+  Sponsor native balance before: 19997231719999031102
+  EOA token balance after: 995000000000000000000
+  Sponsor token balance after: 5000000000000000000
+  Sponsor native balance after: 19997156892998507313
+  ---- Execution Summary ----
+  Sponsor Gas Spent (wei): 74827000523789
+  EOA Delta (wei): 0
+  Amount reimbursed to Sponsor (wei): 29925172999476211
+  ---- Test Case 1: Replay with Same Nonce ----
+  
+  ---- Test Case 2: Replay with Wrong ChainID ----
+  Cross-chain replay failed as expected (invalid chainId in si
+gnature).                                                     
+## Setting up 1 EVM.
+  [45] 0x63E6ab65010C695805a3049546EF71e4A242EB6C::execute{val
+ue: 30000000000000000}(Call({ data: 0xfbc7c433, to: 0x63E6ab65010C695805a3049546EF71e4A242EB6C, value: 10000000000000000 [1e16] }), 0x00195EFB66D39809EcE9AaBDa38172A5e603C0dE, 24, 0xee88108053564eb1d1d93025ca580847bdb0267102f71efb7ab19632a67508cf4707d6b5262a72bec4dbec17bc6ceb7808046e1051959db5acf508a195bd57731b, TestToken: [0xb7046b684d1D45B144964e5F12D85C60B65d864E], 5000000000000000000 [5e18])                                        └─ ← [Revert] EvmError: Revert
+
+  [45] 0x63E6ab65010C695805a3049546EF71e4A242EB6C::execute{val
+ue: 30000000000000000}(Call({ data: 0xfbc7c433, to: 0x63E6ab65010C695805a3049546EF71e4A242EB6C, value: 10000000000000000 [1e16] }), 0x00195EFB66D39809EcE9AaBDa38172A5e603C0dE, 24, 0xee88108053564eb1d1d93025ca580847bdb0267102f71efb7ab19632a67508cf4707d6b5262a72bec4dbec17bc6ceb7808046e1051959db5acf508a195bd57731b, 0x0000000000000000000000000000000000000060, 570334188278029218423514361678308014246523497324 [5.703e47])                    └─ ← [Revert] EvmError: Revert
+
+  [45] 0x63E6ab65010C695805a3049546EF71e4A242EB6C::execute{val
+ue: 30000000000000000}(Call({ data: 0xfbc7c433, to: 0x63E6ab65
+
+```
+
+This proves the EOA reimbursed the SPONSOR in ERC20 while gas was paid in native currency by the SPONSOR. A transfer of 5e18 $TTKN was made from the EOA to the SPONSOR.
+
+---
+
+#### Step 3 - A Word on Batch and Inner Calls for Token Transferrence
+
+Not only singular, but multiple token transfers can be carried out with EIP-7702 using batched inner calls. One could actually carry out ERC20 gas sponsorship via batched transactions. This guide does not walk through that execution path, but will touch on how it could be carried out. For more information on batched transactions, make sure to check out our other guide [here](https://docs.berachain.com/developers/guides/eip7702-batch-transactions).
+
+
+**Example**
+
+If `userCall.data` contains logic to execute multiple transfers or call other internal functions, they all run within the EOA context:
+
+```solidity
+Call[] memory calls = new Call[](2);
+calls[0] = Call({
+  to: address(token1),
+  value: 0,
+  data: abi.encodeWithSelector(IERC20.transfer.selector, sponsor1, 1e18)
+});
+calls[1] = Call({
+  to: address(token2),
+  value: 0,
+  data: abi.encodeWithSelector(IERC20.transfer.selector, sponsor2, 2e18)
+});
+
+// Implementation logic loops through and executes each
+for (uint256 i = 0; i < calls.length; i++) {
+  (bool ok, ) = calls[i].to.call{value: calls[i].value}(calls[i].data);
+  require(ok, "Inner call failed");
+}
+```
+
+These patterns unlock multi-party sponsorship, ERC20 + native splits, and more, all enforceable inside the 7702 authorized contract code.
+
+Congrats on getting through all three parts of the EIP-7702 Gas Sponsorship Guide! As always, make sure to provide any feedback to better improve this and all other guides.
