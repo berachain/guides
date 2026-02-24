@@ -1,0 +1,462 @@
+{% import "snapshot_macros.j2" as snap %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ site_title }}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #E17726;
+            --primary-light: #F89D4E;
+            --primary-dark: #C96516;
+            --bg: #ffffff;
+            --bg-subtle: #fafafa;
+            --bg-muted: #f4f4f5;
+            --border: #e4e4e7;
+            --border-subtle: #f0f0f0;
+            --text: #0e0c0c;
+            --text-muted: #6b7280;
+            --text-subtle: #9ca3af;
+            --sidebar-bg: #0e0c0c;
+            --sidebar-text: #f9f9f9;
+            --sidebar-muted: rgba(255,255,255,0.5);
+            --radius: 8px;
+            --shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.06);
+            --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.08), 0 2px 4px -1px rgba(0,0,0,0.04);
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: var(--bg-subtle);
+            color: var(--text);
+            line-height: 1.6;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* ── Top nav ── */
+        nav {
+            background: var(--sidebar-bg);
+            border-bottom: 1px solid rgba(255,255,255,0.08);
+            padding: 0 2rem;
+            height: 56px;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            position: sticky;
+            top: 0;
+            z-index: 50;
+        }
+
+        nav img.logo {
+            height: 24px;
+            width: auto;
+        }
+
+        nav .nav-divider {
+            width: 1px;
+            height: 20px;
+            background: rgba(255,255,255,0.15);
+            margin: 0 0.25rem;
+        }
+
+        nav .nav-title {
+            color: rgba(255,255,255,0.82);
+            font-size: 1.05rem;
+            font-weight: 500;
+            letter-spacing: 0.01em;
+        }
+
+        nav .nav-links {
+            margin-left: auto;
+            display: flex;
+            gap: 1.5rem;
+        }
+
+        nav .nav-links a {
+            color: rgba(255,255,255,0.55);
+            text-decoration: none;
+            font-size: 0.8rem;
+            font-weight: 500;
+            transition: color 0.15s;
+        }
+
+        nav .nav-links a:hover { color: white; }
+
+        /* ── Layout ── */
+        main {
+            flex: 1;
+            max-width: 860px;
+            width: 100%;
+            margin: 0 auto;
+            padding: 2.5rem 1.5rem 4rem;
+        }
+
+        /* ── Page header ── */
+        .page-header {
+            margin-bottom: 2.5rem;
+        }
+
+        .page-header h1 {
+            font-size: 1.75rem;
+            font-weight: 700;
+            color: var(--text);
+            margin-bottom: 0.4rem;
+            letter-spacing: -0.02em;
+        }
+
+        .page-header p {
+            color: var(--text-muted);
+            font-size: 0.9rem;
+        }
+
+        .page-header p a {
+            color: var(--primary);
+            text-decoration: none;
+        }
+
+        .page-header p a:hover { text-decoration: underline; }
+
+        /* ── Section headings ── */
+
+        /* ── Section labels ── */
+        .section-label {
+            font-size: 1rem;
+            font-weight: 700;
+            letter-spacing: -0.01em;
+            color: var(--text);
+            margin: 2.5rem 0 0.75rem;
+        }
+
+        /* ── Cards ── */
+        .card {
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+            overflow: hidden;
+            margin-bottom: 0.75rem;
+        }
+
+        .card-header {
+            padding: 0.7rem 1.1rem;
+            border-bottom: 1px solid var(--border-subtle);
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            background: var(--bg);
+        }
+
+        .card-header-icon {
+            font-size: 0.95rem;
+            line-height: 1;
+        }
+
+        .card-header-title {
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: var(--text);
+        }
+
+        .card-header-badge {
+            margin-left: auto;
+            font-size: 0.7rem;
+            font-weight: 500;
+            color: var(--text-subtle);
+            background: var(--bg-muted);
+            padding: 0.15rem 0.5rem;
+            border-radius: 99px;
+            border: 1px solid var(--border);
+        }
+
+        .card-header-badge.deprecated {
+            color: #b45309;
+            background: #fef3c7;
+            border-color: #fde68a;
+        }
+
+        /* ── Run status bar ── */
+        .run-status {
+            padding: 0.3rem 1.1rem;
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            background: var(--bg-subtle);
+            border-bottom: 1px solid var(--border-subtle);
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+        }
+
+        .run-status::before {
+            content: '';
+            display: inline-block;
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: #d1d5db;
+            flex-shrink: 0;
+        }
+
+        .run-status.success::before { background: #22c55e; }
+        .run-status.failed::before  { background: #ef4444; }
+        .run-status.running::before { background: #f59e0b; }
+
+        /* ── Snapshot table ── */
+        .snapshot-list { padding: 0; }
+
+        .snapshot-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.85rem;
+        }
+
+        .snapshot-table tr {
+            border-bottom: 1px solid var(--border-subtle);
+        }
+
+        .snapshot-table tr:last-child { border-bottom: none; }
+
+        .snapshot-table td {
+            padding: 0.7rem 1.1rem;
+            vertical-align: middle;
+        }
+
+        .snapshot-file { width: 60%; }
+
+        .snapshot-file-name {
+            margin-bottom: 0.2rem;
+        }
+
+        .snapshot-file-name a {
+            color: var(--primary-dark);
+            text-decoration: none;
+            font-weight: 500;
+            font-size: 0.82rem;
+            word-break: break-all;
+        }
+
+        .snapshot-file-name a:hover {
+            color: var(--primary);
+            text-decoration: underline;
+        }
+
+        .snapshot-meta-line {
+            font-size: 0.75rem;
+            color: var(--text-subtle);
+            display: flex;
+            gap: 0.75rem;
+        }
+
+        .snapshot-meta-label {
+            color: var(--text-muted);
+            font-weight: 500;
+            margin-right: 0.3em;
+        }
+
+        .snapshot-info {
+            text-align: right;
+            color: var(--text-muted);
+        }
+
+        .snapshot-info-line {
+            font-size: 0.78rem;
+            margin-bottom: 0.2rem;
+            white-space: nowrap;
+        }
+
+        .snapshot-sep { color: var(--border); margin: 0 0.2rem; }
+
+        .snapshot-hash {
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            gap: 0.35rem;
+            font-size: 0.72rem;
+            color: var(--text-subtle);
+        }
+
+        .snapshot-hash .snapshot-meta-label {
+            font-size: 0.72rem;
+        }
+
+        .hash-short {
+            font-family: 'SF Mono', ui-monospace, Consolas, monospace;
+            background: var(--bg-muted);
+            border: 1px solid var(--border);
+            padding: 0.1rem 0.35rem;
+            border-radius: 4px;
+            font-size: 0.7rem;
+            color: var(--text-muted);
+        }
+
+        .copy-btn {
+            background: none;
+            border: 1px solid var(--border);
+            padding: 0.1rem 0.35rem;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            transition: all 0.12s;
+            line-height: 1.4;
+        }
+
+        .copy-btn:hover {
+            background: var(--primary);
+            border-color: var(--primary);
+            color: white;
+        }
+
+        /* ── Empty / deprecated state ── */
+        .empty-state {
+            padding: 1.25rem 1.1rem;
+            font-size: 0.82rem;
+            color: var(--text-subtle);
+        }
+
+        .empty-state.deprecated {
+            color: #b45309;
+            font-style: normal;
+        }
+
+        /* ── Footer ── */
+        footer {
+            text-align: center;
+            padding: 1.5rem;
+            font-size: 0.78rem;
+            color: var(--text-subtle);
+            border-top: 1px solid var(--border);
+            background: var(--bg);
+        }
+
+        footer a { color: var(--primary); text-decoration: none; }
+        footer a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+
+    <nav>
+        <img class="logo" src="{{ logo_url }}" alt="Berachain">
+        <div class="nav-divider"></div>
+        <span class="nav-title">{{ nav_title }}</span>
+        <div class="nav-links">
+            <a href="{{ docs_url }}" target="_blank">Docs ↗</a>
+        </div>
+    </nav>
+
+    <main>
+        <div class="section-label">Pruned Nodes</div>
+
+        <div class="card">
+            <div class="card-header">
+                <span class="card-header-icon">🔗</span>
+                <span class="card-header-title">Consensus Layer &mdash; beacon-kit</span>
+            </div>
+            {% if runs['beacon-kit-pruned'] %}
+            {{ snap.run_status(runs['beacon-kit-pruned']) }}
+            {% endif %}
+            {% if snapshots['beacon-kit-pruned'] %}
+            <div class="snapshot-list">
+                {{ snap.snapshot_table(snapshots['beacon-kit-pruned'], 'beacon-kit-pruned', 'slot', 'cl_version') }}
+            </div>
+            {% else %}
+            <div class="empty-state">No snapshots available yet</div>
+            {% endif %}
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <span class="card-header-icon">🦀</span>
+                <span class="card-header-title">Execution Layer &mdash; Reth</span>
+            </div>
+            {% if runs['reth-pruned'] %}
+            {{ snap.run_status(runs['reth-pruned']) }}
+            {% endif %}
+            {% if snapshots['reth-pruned'] %}
+            <div class="snapshot-list">
+                {{ snap.snapshot_table(snapshots['reth-pruned'], 'reth-pruned', 'block', 'el_version') }}
+            </div>
+            {% else %}
+            <div class="empty-state">No snapshots available yet</div>
+            {% endif %}
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <span class="card-header-icon">🔷</span>
+                <span class="card-header-title">Execution Layer &mdash; Geth</span>
+                <span class="card-header-badge deprecated">deprecated</span>
+            </div>
+            <div class="empty-state deprecated">Geth snapshots are deprecated and not produced by this service.</div>
+        </div>
+
+        <div class="section-label">Archive Nodes</div>
+
+        <div class="card">
+            <div class="card-header">
+                <span class="card-header-icon">🔗</span>
+                <span class="card-header-title">Consensus Layer &mdash; beacon-kit</span>
+            </div>
+            {% if runs['beacon-kit-archive'] %}
+            {{ snap.run_status(runs['beacon-kit-archive']) }}
+            {% endif %}
+            {% if snapshots['beacon-kit-archive'] %}
+            <div class="snapshot-list">
+                {{ snap.snapshot_table(snapshots['beacon-kit-archive'], 'beacon-kit-archive', 'slot', 'cl_version') }}
+            </div>
+            {% else %}
+            <div class="empty-state">No snapshots available yet</div>
+            {% endif %}
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <span class="card-header-icon">🦀</span>
+                <span class="card-header-title">Execution Layer &mdash; Reth</span>
+            </div>
+            {% if runs['reth-archive'] %}
+            {{ snap.run_status(runs['reth-archive']) }}
+            {% endif %}
+            {% if snapshots['reth-archive'] %}
+            <div class="snapshot-list">
+                {{ snap.snapshot_table(snapshots['reth-archive'], 'reth-archive', 'block', 'el_version') }}
+            </div>
+            {% else %}
+            <div class="empty-state">No snapshots available yet</div>
+            {% endif %}
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <span class="card-header-icon">🔷</span>
+                <span class="card-header-title">Execution Layer &mdash; Geth</span>
+                <span class="card-header-badge deprecated">deprecated</span>
+            </div>
+            <div class="empty-state deprecated">Geth snapshots are deprecated and not produced by this service.</div>
+        </div>
+
+    </main>
+
+    <footer>
+        Generated {{ generated_at }} &middot;
+        <a href="/index.csv">index.csv</a> &middot;
+        <a href="/metrics.txt">metrics.txt</a>
+    </footer>
+
+    <script>
+        function copyHash(hash) {
+            navigator.clipboard.writeText(hash).then(() => {
+                event.target.textContent = 'copied';
+                setTimeout(() => event.target.textContent = '📋', 1500);
+            });
+        }
+    </script>
+</body>
+</html>
