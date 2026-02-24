@@ -1,0 +1,14 @@
+{
+  "name": "@berachain/honey-x402-demo",
+  "module": "index.ts",
+  "type": "module",
+  "scripts": {
+    "clean": "rm -rf node_modules; rm -rf out; rm -rf cache; rm -rf .turbo; rm bun.lockb; rm -rf frontend/node_modules; rm -rf contracts/cache; rm -rf contracts/out; rm -rf contracts/lib; rm -rf contracts/deployments.json"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5.0.0"
+  }
+}
