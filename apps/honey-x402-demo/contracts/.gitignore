@@ -1,0 +1,7 @@
+# Foundry
+out/
+cache/
+lib/
+
+# Deployment
+deployments.json
