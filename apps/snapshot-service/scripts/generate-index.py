@@ -49,17 +49,41 @@ def _load_env_file() -> None:
 
 _load_env_file()
 
-DB_PATH = Path(os.getenv("SNAPSHOT_DB_PATH", "/srv/snapshots/snapshots.db"))
-PUBLIC_ROOT = Path(os.getenv("SNAPSHOT_PUBLIC_ROOT", "/srv/snapshots/public"))
+
+def _require_env(name: str, allow_empty: bool = False) -> str:
+    """Return env var value; exit with clear error if missing or (when allow_empty=False) empty."""
+    value = os.getenv(name)
+    if value is None:
+        raise SystemExit(
+            f"ERROR: {name} is required. Set it in the config file pointed to by SNAPSHOT_CONFIG_FILE."
+        )
+    value = value.strip()
+    if not allow_empty and not value:
+        raise SystemExit(f"ERROR: {name} must be non-empty. Set it in your config env file.")
+    return value
+
+
+# Required: no defaults; fail if unset or invalid
+SNAPSHOT_DB_PATH = _require_env("SNAPSHOT_DB_PATH")
+SNAPSHOT_PUBLIC_ROOT = _require_env("SNAPSHOT_PUBLIC_ROOT")
+_raw_base = _require_env("SNAPSHOT_PUBLIC_URL_BASE").rstrip("/")
+if "localhost" in _raw_base or not _raw_base.startswith("https://"):
+    raise SystemExit(
+        f"ERROR: SNAPSHOT_PUBLIC_URL_BASE must be an https URL and not localhost (got: {_raw_base}). "
+        "Set it in your config env file (e.g. config/bepolia.env)."
+    )
+
+DB_PATH = Path(SNAPSHOT_DB_PATH)
+PUBLIC_ROOT = Path(SNAPSHOT_PUBLIC_ROOT)
 OUTPUT_PATH = PUBLIC_ROOT / "index.html"
 CSV_PATH = PUBLIC_ROOT / "index.csv"
 METRICS_PATH = PUBLIC_ROOT / "metrics.txt"
-PUBLIC_URL_BASE = os.getenv("SNAPSHOT_PUBLIC_URL_BASE", "https://snapshots.berachain.com").rstrip("/")
-SITE_TITLE = os.getenv("SNAPSHOT_SITE_TITLE", "Berachain Snapshots")
-NAV_TITLE = os.getenv("SNAPSHOT_NAV_TITLE", "Snapshots")
-DOCS_URL = os.getenv("SNAPSHOT_DOCS_URL", "https://docs.berachain.com")
-LOGO_URL = os.getenv("SNAPSHOT_LOGO_URL", "/logo-white.svg")
-ENV_NAME = os.getenv("SNAPSHOT_ENV_NAME", "unknown")
+PUBLIC_URL_BASE = _raw_base
+SITE_TITLE = _require_env("SNAPSHOT_SITE_TITLE")
+NAV_TITLE = _require_env("SNAPSHOT_NAV_TITLE")
+DOCS_URL = _require_env("SNAPSHOT_DOCS_URL")
+LOGO_URL = _require_env("SNAPSHOT_LOGO_URL")
+ENV_NAME = _require_env("SNAPSHOT_ENV_NAME")
 
 
 def human_size(size_bytes: int) -> str:

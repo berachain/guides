@@ -53,6 +53,16 @@ bash scripts/bootstrap-db.sh
 This applies `sql/schema.sql` and ensures `snapshots` and `snapshot_runs` plus indexes are present.
 The scheduler no longer embeds schema DDL; it fails fast if the schema is missing.
 
+## Manual index regeneration
+
+To regenerate the HTML/CSV index and metrics without running the full snapshot pipeline:
+
+```bash
+SNAPSHOT_CONFIG_FILE=/opt/snapshot-service/config/bepolia.env /opt/snapshot-service/scripts/regenerate-index.sh
+```
+
+The script prints the DB and output paths, prompts for confirmation, then runs `generate-index.py`.
+
 ## Deployment Notes
 
 Use `infra/cron/snapshot-scheduler.cron` for the scheduler crontab line and `infra/nginx/snapshots.berachain.com.conf` as the public serving template. These are checked in as templates so infra can be reviewed and reproduced in code review.
