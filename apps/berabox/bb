@@ -168,7 +168,7 @@ bb_cmd_help() {
     echo "  <installation> version show-tags     Show available Git tags and branches"
     echo "  <installation> status [cl|el]        Show service status"
     echo "  <installation> logs [cl|el]          Follow service logs with multitail"
-    echo "  <installation> attach                Attach geth console to running EL (works with geth or reth via IPC)"
+    echo "  <installation> attach                Attach reth-console to running EL via IPC"
     echo "  <installation> remove                Remove installation completely"
     echo "  <installation> snapshot [--skip-el]  Restore CL/EL snapshots (BB stops services first)"
 }
@@ -187,12 +187,7 @@ bb_load_installation_config() {
     config_ref[beacon_kit_version]=$(bb_parse_toml_value "$toml_file" "beacon_kit" || echo "Unknown")
     config_ref[base_port]=$(bb_parse_toml_value "$toml_file" "base_port" || echo "Unknown")
     
-    # Set EL client version based on client type
-    if [[ "${config_ref[el_client]}" == "reth" ]]; then
-        config_ref[el_version]=$(bb_parse_toml_value "$toml_file" "bera_reth" || echo "Unknown")
-    else
-        config_ref[el_version]=$(bb_parse_toml_value "$toml_file" "bera_geth" || echo "Unknown")
-    fi
+    config_ref[el_version]=$(bb_parse_toml_value "$toml_file" "bera_reth" || echo "Unknown")
 }
 
 bb_get_service_status() {
@@ -503,7 +498,7 @@ bb_cmd_debug_all() {
     fi
 }
 
-# Attach command - Connect geth console to installation's EL
+# Attach command - Connect reth-console to installation's EL
 bb_cmd_attach() {
     local installation="$1"
     
@@ -511,77 +506,26 @@ bb_cmd_attach() {
         return 1
     fi
     
+    if ! command -v reth-console >/dev/null 2>&1; then
+        log_error "reth-console is not installed"
+        echo ""
+        echo "Install it from: https://github.com/camembera/reth-console"
+        echo "  git clone https://github.com/camembera/reth-console.git"
+        echo "  cd reth-console && cargo build --release"
+        echo "  sudo cp target/release/reth-console /usr/local/bin/"
+        return 1
+    fi
+    
     local installation_dir=$(bb_get_installation_dir "$installation")
-    local config_file="$installation_dir/installation.toml"
+    local ipc_path="$installation_dir/runtime/admin.ipc"
     
-    # Get EL client type
-    local el_client=$(bb_parse_toml_value "$config_file" "el_client" || echo "unknown")
-    
-    # Determine IPC path based on client type
-    local ipc_path
-    case "$el_client" in
-        "reth")
-            ipc_path="$installation_dir/runtime/admin.ipc"
-            ;;
-        "geth")
-            ipc_path="$installation_dir/runtime/admin.ipc"
-            ;;
-        *)
-            log_error "Unknown EL client type: $el_client"
-            return 1
-            ;;
-    esac
-    
-    # Check if IPC file exists (indicates EL is running)
     if [[ ! -S "$ipc_path" ]]; then
         log_error "EL IPC socket not found: $ipc_path"
         log_info "Is the EL service running? Check with: $0 $installation status el"
         return 1
     fi
     
-    # Find geth binary (any geth can attach to any EL)
-    local geth_binary=""
-    
-    # First, try to find geth in installations
-    log_debug "Searching for geth binary in installations..."
-    for inst_dir in "${BB_CONFIG[installations_dir]}"/*; do
-        if [[ -d "$inst_dir" && -f "$inst_dir/src/bera-geth/geth-debug" ]]; then
-            geth_binary="$inst_dir/src/bera-geth/geth-debug"
-            log_debug "Found geth-debug in installation: $inst_dir"
-            break
-        elif [[ -d "$inst_dir" && -f "$inst_dir/src/bera-geth/geth" ]]; then
-            geth_binary="$inst_dir/src/bera-geth/geth"
-            log_debug "Found geth in installation: $inst_dir"
-            break
-        fi
-    done
-    
-    # Fallback to system PATH
-    if [[ -z "$geth_binary" ]] && command -v geth >/dev/null 2>&1; then
-        geth_binary="geth"
-        log_debug "Using system geth from PATH"
-    fi
-    
-    # Handle case where no geth is available
-    if [[ -z "$geth_binary" ]]; then
-        log_error "No geth binary found for IPC attachment"
-        echo ""
-        echo "💡 Build geth in any installation to enable EL attachment:"
-        echo "   $0 create testnet geth && $0 \$(whoami)-testnet-geth build"
-        echo "   # Or if you have a geth installation:"
-        echo "   $0 \$(whoami)-<existing>-geth build"
-        return 1
-    fi
-    
-    log_info "Attaching to $installation EL ($el_client) using: $(basename "$geth_binary")"
-    log_info "IPC path: $ipc_path"
-    echo ""
-    echo "🔗 Starting geth console session..."
-    echo "   Type 'exit' or Ctrl+D to disconnect"
-    echo ""
-    
-    # Execute the attach command
-    "$geth_binary" attach "ipc://$ipc_path"
+    reth-console "$ipc_path"
 }
 
 # Version management commands
