@@ -159,6 +159,12 @@ if "${SCRIPT_DIR}/systemd-manage.sh" install "$INSTALLATION_NAME"; then
     # Setup UPnP port forwarding if enabled
     setup_upnp_forwarding "$INSTALLATION_NAME"
     
+    # Ensure host firewall allows external ports (same as bb <installation> info); report if any were closed
+    if [[ -f "${SCRIPT_DIR}/firewall-ports.sh" ]]; then
+        BB_CONFIG_INSTALLATIONS_DIR="${BB_CONFIG_INSTALLATIONS_DIR:-$BERABOX_ROOT/installations}" \
+            "${SCRIPT_DIR}/firewall-ports.sh" --installation "$INSTALLATION_NAME" || true
+    fi
+    
     log_result "✓ Installation complete. Next steps: start → status → logs"
 else
     log_error "Failed to install systemd services for $INSTALLATION_NAME"
