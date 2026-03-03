@@ -1,6 +1,6 @@
 # 🐻 Berabox - Multi-User Node Management
 
-Multi-user, multi-installation, debug-first node management for Beacon-Kit + Bera-Reth/Geth. Each user gets their own isolated berabox in their home directory with automatic port allocation and debug configurations.
+Multi-user, multi-installation, debug-first node management for Beacon-Kit + Bera-Reth. Each user gets their own isolated berabox in their home directory with automatic port allocation and debug configurations.
 
 ## Features
 
@@ -16,15 +16,14 @@ Multi-user, multi-installation, debug-first node management for Beacon-Kit + Ber
 ```
 ~/berabox/                     # User's personal berabox
 ├── installations/             # User-prefixed installations
-│   ├── bb-testnet-geth/       # Automatic user prefix (bb = username)
+│   ├── bb-testnet-reth/       # Automatic user prefix (bb = username)
 │   │   ├── data/cl|el/        # Separate CL/EL data & config
 │   │   ├── logs/cl|el/        # Separate CL/EL logs
 │   │   ├── systemd/           # Generated user service files
-│   │   ├── runtime/           # Runtime files
-│   │   │   └── ipc/           # IPC sockets (geth.ipc, reth.ipc)
+│   │   ├── runtime/           # Runtime files (IPC sockets, etc.)
 │   │   ├── src/               # Per-installation source code & debug binaries
 │   │   │   ├── beacon-kit/    # Installation-specific beacon-kit clone (with beacond-debug)
-│   │   │   └── bera-geth/     # Installation-specific bera-geth clone (with geth-debug)
+│   │   │   └── bera-reth/     # Installation-specific bera-reth clone (with reth-debug)
 │   │   └── installation.toml  # Installation metadata & versions
 │   └── bb-mainnet-reth/       # Independent second installation
 │       ├── data/cl|el/        # Independent data
@@ -60,8 +59,7 @@ bb bb-testnet-reth attach
 bb debug
 code bb-berabox.code-workspace
 
-bb create mainnet geth && bb create testnet reth
-bb bb-mainnet-geth version set --cl v1.3.2 --el v1.19.5
+bb create testnet reth
 bb bb-testnet-reth version set --cl v1.4.0-rc1 --el v1.20.0-rc5
 bb build
 bb init
@@ -76,7 +74,7 @@ bb start
 **`create <chain> <el-client> [name] [--port-base <port>]`** - Create a new installation
 
 - `chain`: `mainnet` or `testnet`
-- `el-client`: `reth` or `geth`
+- `el-client`: `reth`
 - `name`: Optional custom name (defaults to `{chain}-{el-client}`, gets user prefix)
 
 **`list`** - Show all installations with status summary
@@ -129,9 +127,9 @@ Displays detailed information about an installation including versions, service 
 
 - Exit: Press `Ctrl+C`, Switch windows: `<Tab>`, Scroll: arrow keys, Search: `/`, Pause: `b`, Help: `h`
 
-**`<installation> attach`** - Attach geth console to running EL (works with geth or reth via IPC)
+**`<installation> attach`** - Attach reth-console to running EL via IPC
 
-- Requires a geth installation to provide the console used for attachment
+- Requires `reth-console` ([github.com/camembera/reth-console](https://github.com/camembera/reth-console))
 
 **`<installation> remove`** - Remove installation completely
 
@@ -194,12 +192,12 @@ lease_time = 86400
 
 ### Custom Repository URLs
 
-Each installation can use custom repository URLs for the consensus layer (beacon-kit) and execution layer (bera-geth/bera-reth). This allows testing with forks or private repositories.
+Each installation can use custom repository URLs for the consensus layer (beacon-kit) and execution layer (bera-reth/bera-reth). This allows testing with forks or private repositories.
 
 ```toml
 [repositories]
 cl_repo = "https://github.com/berachain/beacon-kit.git"
-el_repo = "https://github.com/berachain/bera-geth.git"
+el_repo = "https://github.com/berachain/bera-reth.git"
 ```
 
 **Changing repository URLs:**
@@ -215,14 +213,14 @@ el_repo = "https://github.com/berachain/bera-geth.git"
 
 ```bash
 # Edit installation configuration
-vim installations/bb-testnet-geth/installation.toml
+vim installations/bb-testnet-reth/installation.toml
 
 # Change:
 # [repositories]
 # cl_repo = "https://github.com/myorg/beacon-kit-fork.git"
 
 # Next build detects and handles the change automatically
-bb bb-testnet-geth build
+bb bb-testnet-reth build
 # Output:
 #   [BB-WARN] Repository URL mismatch detected for beacon-kit
 #   [BB-INFO]   Configured: https://github.com/myorg/beacon-kit-fork.git
@@ -275,9 +273,9 @@ code bb-berabox.code-workspace
 
 **Debugging Modes**:
 
-The debug system configures VS Code to attach to running processes using their debug symbols, enabling seamless debugging of beacon-kit, bera-reth, and bera-geth. Some Cursor/VS Code plugins are required; choose wisely.
+The debug system configures VS Code to attach to running processes using their debug symbols, enabling seamless debugging of beacon-kit and bera-reth. Some Cursor/VS Code plugins are required; choose wisely.
 
-- **Process Attachment**: Attach the VS Code/Cursor debugger to a running process—`beacond-debug` (CL/beacon-kit) via PID selection, `reth-debug` (EL/reth) via lldb, or `geth-debug` (EL/geth) via dlv. VS Code/Cursor lists relevant processes for easy attachment. (Just don’t get too attached, or you might start debugging your own life choices.)
+- **Process Attachment**: Attach the VS Code/Cursor debugger to a running process—`beacond-debug` (CL/beacon-kit) via PID selection, `reth-debug` (EL/reth) via lldb. VS Code/Cursor lists relevant processes for easy attachment. (Just don’t get too attached, or you might start debugging your own life choices.)
 - **Startup Launch Debugging**: Launch CL/EL processes directly in the debugger for startup and initialization debugging. Berabox automatically stops any running services before launching in debug mode to prevent port conflicts—because two processes fighting over a port is a real socket drama.
 
 ### Monitoring
@@ -293,23 +291,9 @@ bb bb-testnet-reth attach
 multitail installations/bb-testnet-reth/logs/*/*.log
 ```
 
-### Geth Console Attachment
+### EL Console Attachment
 
-The `attach` command uses a clever cross-client compatibility trick: **any geth binary can attach to any execution layer client** (whether geth or reth) via IPC.
-
-**How it works:**
-
-1. Berabox finds any available `geth` binary (from any installation or system PATH)
-2. Uses it to connect via IPC to the target installation's execution layer
-3. Provides full JavaScript console access regardless of the underlying EL client
-
-```
-# Inside any console session:
-eth.blockNumber               # Current block height
-net.peerCount                # Number of connected peers
-txpool.status                # Transaction pool status
-admin.nodeInfo               # Node information
-```
+The `attach` command uses [reth-console](https://github.com/camembera/reth-console) to connect to the running execution layer via IPC. Run `reth-console --help` to learn the available commands.
 
 ## Development Environment
 
