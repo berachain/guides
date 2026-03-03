@@ -31,9 +31,9 @@ clean_installation_artifacts() {
         for target in "${rust_targets[@]}"; do
             rm -rf "$target"
         done
-        log_substep "✓ Cleaned ${#rust_targets[@]} Rust target directories (EL: reth/geth)"
+        log_substep "✓ Cleaned ${#rust_targets[@]} Rust target directories"
     else
-        log_info "- No Rust target directories found (EL: reth/geth)"
+        log_info "- No Rust target directories found"
     fi
     
     # Clean Go artifacts  

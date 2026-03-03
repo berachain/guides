@@ -448,9 +448,9 @@ bb_git_refresh_refs() {
     fi
 
     pushd "$repo_dir" >/dev/null || return 1
-    # Fetch branches and tags quietly; show details only in BB_DEBUG
-    if run_quiet git fetch "$remote_name" --prune --tags; then
-        log_info "✓ Refreshed git refs (branches and tags) in $repo_dir"
+    # Fetch branches only; --tags can exit non-zero when remote tags would clobber local (same name, different commit)
+    if run_quiet git fetch "$remote_name" --prune; then
+        log_info "✓ Refreshed git refs in $repo_dir"
     else
         log_warn "Failed to refresh git refs in $repo_dir"
         popd >/dev/null
@@ -714,35 +714,18 @@ bb_get_el_enode() {
     local installation_dir=$(bb_get_installation_dir "$installation")
     local ipc_path="$installation_dir/runtime/admin.ipc"
     
-    # Check if IPC socket exists (indicates EL is running)
     if [[ ! -S "$ipc_path" ]]; then
         log_debug "EL IPC socket not found at $ipc_path"
         return 1
     fi
     
-    # Find a geth binary to use for attachment (can attach to any EL client)
-    local geth_binary=""
-    
-    # Try to find geth in any installation
-    for inst_dir in "$BB_CONFIG_INSTALLATIONS_DIR"/*; do
-        if [[ -f "$inst_dir/src/bera-geth/geth-debug" ]]; then
-            geth_binary="$inst_dir/src/bera-geth/geth-debug"
-            break
-        fi
-    done
-    
-    # Fallback to system geth
-    if [[ -z "$geth_binary" ]]; then
-        geth_binary=$(command -v geth 2>/dev/null || echo "")
-    fi
-    
-    if [[ -z "$geth_binary" ]]; then
-        log_debug "No geth binary found for IPC attachment"
+    if ! command -v reth-console >/dev/null 2>&1; then
+        log_debug "reth-console not installed (https://github.com/camembera/reth-console)"
         return 1
     fi
     
-    # Get enode via IPC
-    local enode=$(echo 'admin.nodeInfo.enode' | "$geth_binary" attach "$ipc_path" 2>/dev/null | grep -E '^"enode://' | tr -d '"')
+    local enode
+    enode=$(reth-console --exec "admin.nodeInfo" "$ipc_path" 2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin)['enode'])" 2>/dev/null)
     
     if [[ -n "$enode" ]]; then
         echo "$enode"

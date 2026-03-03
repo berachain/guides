@@ -68,6 +68,58 @@ if ! bb_ensure_repos_match_config "$INSTALLATION"; then
     exit 1
 fi
 
+# Download a pre-built release binary from GitHub instead of building from source.
+# Usage: download_release_binary <github_repo> <target_dir> <target_binary_name>
+# Resolves the latest release tag via the GitHub API, downloads the linux-amd64
+# asset, extracts it, and places the binary at <target_dir>/<target_binary_name>.
+download_release_binary() {
+    local repo="$1"
+    local target_dir="$2"
+    local target_name="$3"
+
+    log_step "Resolving latest release for $repo..."
+    local tag
+    tag=$(curl -sfL "https://api.github.com/repos/berachain/$repo/releases/latest" \
+        | python3 -c "import sys,json; print(json.load(sys.stdin)['tag_name'])")
+    if [[ -z "$tag" ]]; then
+        log_error "Failed to resolve latest release tag for $repo"
+        exit 1
+    fi
+    log_substep "Latest release: $tag"
+
+    local asset_name=""
+    case "$repo" in
+        beacon-kit)  asset_name="beacond-${tag}-linux-amd64.tar.gz" ;;
+        bera-reth)   asset_name="bera-reth-${tag}-x86_64-unknown-linux-gnu.tar.gz" ;;
+        *)           log_error "No release asset pattern for $repo"; exit 1 ;;
+    esac
+
+    local url="https://github.com/berachain/$repo/releases/download/$tag/$asset_name"
+    local tmp_dir
+    tmp_dir=$(mktemp -d)
+    trap "rm -rf '$tmp_dir'" RETURN
+
+    log_step "Downloading $asset_name..."
+    if ! curl -sfL "$url" -o "$tmp_dir/$asset_name"; then
+        log_error "Download failed: $url"
+        exit 1
+    fi
+
+    tar -xzf "$tmp_dir/$asset_name" -C "$tmp_dir"
+    rm "$tmp_dir/$asset_name"
+
+    local extracted
+    extracted=$(find "$tmp_dir" -type f ! -name '*.txt' | head -1)
+    if [[ -z "$extracted" ]]; then
+        log_error "No binary found in release archive"
+        exit 1
+    fi
+
+    chmod +x "$extracted"
+    mv "$extracted" "$target_dir/$target_name"
+    log_substep "✓ $target_name installed at $target_dir/$target_name (release $tag)"
+}
+
 # Function to read version from installation.toml
 load_component_version() {
     local component="$1"
@@ -121,120 +173,81 @@ IFS=',' read -ra COMPONENT_ARRAY <<< "$COMPONENTS"
 for component in "${COMPONENT_ARRAY[@]}"; do
     case "$component" in
         "beacon-kit")
-            # Check if per-installation repository exists
-            if [[ ! -d "$SRC_DIR/beacon-kit" ]]; then
-                log_error "beacon-kit source not found at $SRC_DIR/beacon-kit"
-                log_error "Run 'bb create' to set up per-installation source trees"
-                exit 1
-            fi
-            
-            cd "$SRC_DIR/beacon-kit"
-            
-            # Load and checkout component version
             BEACON_KIT_VERSION=$(load_component_version "beacon_kit")
-            log_substep "Switching beacon-kit to version: $BEACON_KIT_VERSION"
-            bb_git_checkout_safe "$SRC_DIR/beacon-kit" "$BEACON_KIT_VERSION" "$NO_PULL"
 
-            # Build with debug symbols and reduced optimizations
-            log_step "Building beacond (Go build with debug symbols) from $BEACON_KIT_VERSION..."
-            
-            # Use a temporary file to capture errors only
-            build_log=$(mktemp)
-            go_output=""
-            [[ "$QUIET" == "true" ]] && go_output=">/dev/null"
-            
-            # Set build flags for debug build
-            go_gcflags="-gcflags=all=-N"
-            go_ldflags="-ldflags=-s=false"
-            binary_name="beacond-debug"
-            
-            if eval go build $go_gcflags $go_ldflags -o "$binary_name" ./cmd/beacond 2> "$build_log" $go_output; then
-                rm -f "$build_log"
-                log_substep "✓ $binary_name built at $(pwd)/$binary_name"
+            if [[ "$BEACON_KIT_VERSION" == "latest" ]]; then
+                mkdir -p "$SRC_DIR/beacon-kit"
+                download_release_binary "beacon-kit" "$SRC_DIR/beacon-kit" "beacond-debug"
             else
-                log_error "Failed to build $binary_name:"
-                tail -10 "$build_log" | sed 's/^/    /'
-                rm -f "$build_log"
-                exit 1
+                if [[ ! -d "$SRC_DIR/beacon-kit" ]]; then
+                    log_error "beacon-kit source not found at $SRC_DIR/beacon-kit"
+                    log_error "Run 'bb create' to set up per-installation source trees"
+                    exit 1
+                fi
+
+                cd "$SRC_DIR/beacon-kit"
+
+                log_substep "Switching beacon-kit to version: $BEACON_KIT_VERSION"
+                bb_git_checkout_safe "$SRC_DIR/beacon-kit" "$BEACON_KIT_VERSION" "$NO_PULL"
+
+                log_step "Building beacond (Go build with debug symbols) from $BEACON_KIT_VERSION..."
+
+                build_log=$(mktemp)
+                go_output=""
+                [[ "$QUIET" == "true" ]] && go_output=">/dev/null"
+
+                go_gcflags="-gcflags=all=-N"
+                go_ldflags="-ldflags=-s=false"
+                binary_name="beacond-debug"
+
+                if eval go build $go_gcflags $go_ldflags -o "$binary_name" ./cmd/beacond 2> "$build_log" $go_output; then
+                    rm -f "$build_log"
+                    log_substep "✓ $binary_name built at $(pwd)/$binary_name"
+                else
+                    log_error "Failed to build $binary_name:"
+                    tail -10 "$build_log" | sed 's/^/    /'
+                    rm -f "$build_log"
+                    exit 1
+                fi
             fi
             ;;
             
         "bera-reth")
-            # Check if per-installation repository exists
-            if [[ ! -d "$SRC_DIR/bera-reth" ]]; then
-                log_error "bera-reth source not found at $SRC_DIR/bera-reth"
-                log_error "Run 'bb create' to set up per-installation source trees"
-                exit 1
-            fi
-            
-            cd "$SRC_DIR/bera-reth"
-            
-            # Load and checkout component version
             BERA_RETH_VERSION=$(load_component_version "bera_reth")
-            log_substep "Switching bera-reth to version: $BERA_RETH_VERSION"
-            bb_git_checkout_safe "$SRC_DIR/bera-reth" "$BERA_RETH_VERSION" "$NO_PULL"
 
-            # Set build flags for debug build
-            cargo_flags=""
-            binary_path="target/debug/bera-reth"
-            binary_name="reth-debug"
-            build_type="Cargo debug build"
-            
-            [[ "$QUIET" == "true" ]] && cargo_flags="$cargo_flags --quiet"
-            
-            log_step "Building bera-reth ($build_type) from $BERA_RETH_VERSION..."
-            
-            cargo build --bin bera-reth $cargo_flags
-            
-            # Copy binary with appropriate name
-            cp "$binary_path" "$binary_name"
-            log_substep "✓ $binary_name built at $(pwd)/$binary_name"
-            ;;
-            
-        "bera-geth")
-            # Check if per-installation repository exists
-            if [[ ! -d "$SRC_DIR/bera-geth" ]]; then
-                log_error "bera-geth source not found at $SRC_DIR/bera-geth"
-                log_error "Run 'bb create' to set up per-installation source trees"
-                exit 1
-            fi
-            
-            cd "$SRC_DIR/bera-geth"
-            
-            # Load and checkout component version
-            BERA_GETH_VERSION=$(load_component_version "bera_geth")
-            log_substep "Switching bera-geth to version: $BERA_GETH_VERSION"
-            bb_git_checkout_safe "$SRC_DIR/bera-geth" "$BERA_GETH_VERSION" "$NO_PULL"
-
-            # Build with debug symbols
-            log_step "Building bera-geth (Go build with debug symbols) from $BERA_GETH_VERSION..."
-            
-            # Use a temporary file to capture errors only
-            build_log=$(mktemp)
-            go_output=""
-            [[ "$QUIET" == "true" ]] && go_output=">/dev/null"
-            
-            # Set build flags for debug build
-            go_gcflags="-gcflags=all=-N"
-            go_ldflags="-ldflags=-s=false"
-            binary_name="geth-debug"
-            
-            log_step "Building bera-geth (Go debug build) from $BERA_GETH_VERSION..."
-            
-            if eval go build $go_gcflags $go_ldflags -o "$binary_name" ./cmd/bera-geth 2> "$build_log" $go_output; then
-                rm -f "$build_log"
-                log_substep "✓ $binary_name built at $(pwd)/$binary_name"
+            if [[ "$BERA_RETH_VERSION" == "latest" ]]; then
+                mkdir -p "$SRC_DIR/bera-reth"
+                download_release_binary "bera-reth" "$SRC_DIR/bera-reth" "reth-debug"
             else
-                log_error "Failed to build $binary_name:"
-                tail -10 "$build_log" | sed 's/^/    /'
-                rm -f "$build_log"
-                exit 1
+                if [[ ! -d "$SRC_DIR/bera-reth" ]]; then
+                    log_error "bera-reth source not found at $SRC_DIR/bera-reth"
+                    log_error "Run 'bb create' to set up per-installation source trees"
+                    exit 1
+                fi
+
+                cd "$SRC_DIR/bera-reth"
+
+                log_substep "Switching bera-reth to version: $BERA_RETH_VERSION"
+                bb_git_checkout_safe "$SRC_DIR/bera-reth" "$BERA_RETH_VERSION" "$NO_PULL"
+
+                cargo_flags=""
+                binary_path="target/debug/bera-reth"
+                binary_name="reth-debug"
+
+                [[ "$QUIET" == "true" ]] && cargo_flags="$cargo_flags --quiet"
+
+                log_step "Building bera-reth (Cargo debug build) from $BERA_RETH_VERSION..."
+
+                cargo build --bin bera-reth $cargo_flags
+
+                cp "$binary_path" "$binary_name"
+                log_substep "✓ $binary_name built at $(pwd)/$binary_name"
             fi
             ;;
             
         *)
             log_error "Unknown component: $component"
-            log_warn "Valid components: beacon-kit, bera-reth, bera-geth"
+            log_warn "Valid components: beacon-kit, bera-reth"
             exit 1
             ;;
     esac

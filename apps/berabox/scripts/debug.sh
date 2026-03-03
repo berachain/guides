@@ -159,9 +159,6 @@ EOF
             if [[ "$el_port" != "0" ]]; then
                 # Determine metrics path based on client type
                 local metrics_path="/metrics"
-                if [[ "$el_client" == "geth" ]]; then
-                    metrics_path="/debug/metrics/prometheus"
-                fi
                 
                 cat >> "$prometheus_yml" << EOF
   # $name EL (uses $metrics_path)
@@ -244,8 +241,7 @@ EOF
             local el_src_dir=""
             if [[ "$el_client" == "reth" && -d "$INSTALLATIONS_DIR/$installation/src/bera-reth" ]]; then
                 el_src_dir="bera-reth"
-            elif [[ "$el_client" == "geth" && -d "$INSTALLATIONS_DIR/$installation/src/bera-geth" ]]; then
-                el_src_dir="bera-geth"
+
             fi
             
             if [[ -n "$el_src_dir" ]]; then
@@ -519,81 +515,7 @@ EOF
         }
 EOF
                 
-            # EL Debug Configurations (Go - for geth)  
-            elif [[ "$el_client" == "geth" ]]; then
-                echo "," >> "$launch_json"
-                if [[ -n "$el_pid" && "$el_pid" -gt 0 ]] 2>/dev/null; then
-                    cat >> "$launch_json" << EOF
-        {
-            "name": "$name Geth - PID $el_pid",
-            "type": "go",
-            "request": "attach", 
-            "mode": "local",
-            "processId": $el_pid,
-            "cwd": "$installation_dir/src/bera-geth",
-            "showLog": true
-        }
-EOF
-                else
-                    cat >> "$launch_json" << EOF
-        {
-            "name": "$name Geth - Not Running",
-            "type": "go",
-            "request": "attach", 
-            "mode": "local",
-            "processId": 0,
-            "cwd": "$installation_dir/src/bera-geth",
-            "showLog": true
-        }
-EOF
-                fi
 
-                # Get EL args using build_el_args function
-                local ports=$(get_installation_ports "$installation")
-                IFS='|' read -r cl_prometheus_port el_prometheus_port <<< "$ports"
-                
-                local el_rpc_port=$(bb_parse_toml_value "$installation_dir/installation.toml" "el_rpc_port" || echo "8545")
-                local el_authrpc_port=$(bb_parse_toml_value "$installation_dir/installation.toml" "el_authrpc_port" || echo "8551")
-                local el_ws_port=$(bb_parse_toml_value "$installation_dir/installation.toml" "el_ws_port")
-                local el_p2p_port=$(bb_parse_toml_value "$installation_dir/installation.toml" "el_p2p_port" || echo "30303")
-                local base_port=$(bb_parse_toml_value "$installation_dir/installation.toml" "base_port" || echo "")
-                local el_ws_port=$(bb_parse_toml_value "$installation_dir/installation.toml" "el_ws_port" || echo "")
-                local archive_mode=$(bb_parse_toml_value "$installation_dir/installation.toml" "archive_mode" || echo "false")
-
-                # Build EL command using arg-builder
-                local el_command=$(build_el_args "geth" "$installation_dir" "$el_rpc_port" "$el_ws_port" "$el_authrpc_port" "$el_p2p_port" "$el_prometheus_port" "$installation" "$archive_mode" "0")
-                
-                # Extract program and args from the command
-                local el_program=$(echo "$el_command" | awk '{print $1}')
-                local el_args_raw=$(echo "$el_command" | cut -d' ' -f2-)
-                
-                # Convert space-separated args to JSON array format
-                local el_args_json=""
-                local first_arg=true
-                while IFS= read -r arg; do
-                    if [[ "$first_arg" == "true" ]]; then
-                        el_args_json="\"$arg\""
-                        first_arg=false
-                    else
-                        el_args_json="$el_args_json, \"$arg\""
-                    fi
-                done < <(echo "$el_args_raw" | xargs -n1)
-
-                echo "," >> "$launch_json"
-                cat >> "$launch_json" << EOF
-        {
-            "name": "$name Geth - Debug Launch",
-            "type": "go",
-            "request": "launch",
-            "mode": "exec",
-            "program": "$el_program",
-            "args": [$el_args_json],
-            "cwd": "$installation_dir/src/bera-geth",
-            "showLog": true,
-            "preLaunchTask": "Stop $name services if running",
-            "stopOnEntry": true
-        }
-EOF
             fi
         fi
     done

@@ -51,21 +51,8 @@ show_tags() {
     fi
     
     # Show EL client tags
-    local el_client_dir=""
-    case "$el_client" in
-        "reth")
-            el_client_dir="$installation_dir/src/bera-reth"
-            echo "=== Bera-Reth (EL) Tags ==="
-            ;;
-        "geth")
-            el_client_dir="$installation_dir/src/bera-geth"
-            echo "=== Bera-Geth (EL) Tags ==="
-            ;;
-        *)
-            log_error "Unsupported EL client: $el_client"
-            return 1
-            ;;
-    esac
+    local el_client_dir="$installation_dir/src/bera-reth"
+    echo "=== Bera-Reth (EL) Tags ==="
     
     if [[ -d "$el_client_dir" ]]; then
         log_info "Refreshing ${el_client} git tags..."
@@ -141,19 +128,7 @@ set_versions() {
             return 1
         fi
         
-        local version_key=""
-        case "$el_client" in
-            "reth")
-                version_key="bera_reth"
-                ;;
-            "geth")
-                version_key="bera_geth"
-                ;;
-            *)
-                log_error "Unsupported EL client: $el_client"
-                return 1
-                ;;
-        esac
+        local version_key="bera_reth"
         
         if sed -i "s/^${version_key} = \".*\"/${version_key} = \"$el_version\"/" "$installation_toml"; then
             log_info "Updated ${version_key} version to: $el_version"
@@ -178,7 +153,7 @@ show_usage() {
     echo "Examples:"
     echo "  $0 show-tags bb-mainnet-reth"
     echo "  $0 set bb-mainnet-reth --cl v1.3.1 --el v1.0.1"
-    echo "  $0 set bb-mainnet-geth --cl main --el v1.16.2"
+    echo "  $0 set bb-mainnet-reth --el v1.3.1"
 }
 
 # Main script logic

@@ -1,30 +1,22 @@
-# 🐻 Berabox - Multi-User Node Management
+# 🐻 Berabox
 
-Multi-user, multi-installation, debug-first node management for Beacon-Kit + Bera-Reth/Geth. Each user gets their own isolated berabox in their home directory with automatic port allocation and debug configurations.
+Multi-installation node management for Beacon-Kit + Bera-Reth. Each user gets an isolated berabox with automatic port allocation, per-installation versioning, and debug configurations. Every installation carries its own binaries, data, config, and logs -- nothing is shared.
 
-## Features
-
-- **🏠 Per-User Isolation**: Each user operates independently in their home directory with automatic user prefixing
-- **📊 Per-Installation Versioning**: Independent component versions in each installation
-- **🧊 Complete Instance Isolation**: Each installation has its own binaries, data, configuration, and logs—no sharing, no cross-contamination, not even if you bribe the sysadmin with cookies!
-- **🔌 Automatic Port Management**: User ID-based port ranges prevent conflicts between users
-- **🐛 Debug-First Design**: Always builds debug binaries (Go: full symbols, Rust: unoptimized debug)
-- **⚙️ VS Code Integration**: Auto-generates debug configurations and workspace
+Builds produce debug binaries by default (Go with full symbols, Rust unoptimized). VS Code/Cursor debug configurations are auto-generated.
 
 ## Architecture
 
 ```
 ~/berabox/                     # User's personal berabox
 ├── installations/             # User-prefixed installations
-│   ├── bb-testnet-geth/       # Automatic user prefix (bb = username)
+│   ├── bb-testnet-reth/       # Automatic user prefix (bb = username)
 │   │   ├── data/cl|el/        # Separate CL/EL data & config
 │   │   ├── logs/cl|el/        # Separate CL/EL logs
 │   │   ├── systemd/           # Generated user service files
-│   │   ├── runtime/           # Runtime files
-│   │   │   └── ipc/           # IPC sockets (geth.ipc, reth.ipc)
+│   │   ├── runtime/           # Runtime files (IPC sockets, etc.)
 │   │   ├── src/               # Per-installation source code & debug binaries
 │   │   │   ├── beacon-kit/    # Installation-specific beacon-kit clone (with beacond-debug)
-│   │   │   └── bera-geth/     # Installation-specific bera-geth clone (with geth-debug)
+│   │   │   └── bera-reth/     # Installation-specific bera-reth clone (with reth-debug)
 │   │   └── installation.toml  # Installation metadata & versions
 │   └── bb-mainnet-reth/       # Independent second installation
 │       ├── data/cl|el/        # Independent data
@@ -32,6 +24,9 @@ Multi-user, multi-installation, debug-first node management for Beacon-Kit + Ber
 │       │   ├── beacon-kit/    # Independent beacon-kit clone (with beacond-debug)
 │       │   └── bera-reth/     # Independent bera-reth clone (with reth-debug)
 │       └── installation.toml  # Independent configuration
+├── keep/                      # Persistent identity keys (survive reset/init)
+│   ├── cl-keys/               # CL validator + P2P node keys (.json)
+│   └── el-keys/               # EL discovery keys (.nodekey)
 ├── debug/                     # Auto-generated debug configs
 │   └── vscode/                # VS Code launch configurations
 ├── bb-berabox.code-workspace  # VS Code workspace
@@ -47,26 +42,13 @@ cd ~
 git clone https://github.com/berachain/berabox.git
 cd berabox
 
-bb create testnet reth
-bb bb-testnet-reth info
-bb bb-testnet-reth version set --cl v1.3.1 --el v1.0.1
-bb bb-testnet-reth build
-bb bb-testnet-reth init
-bb bb-testnet-reth install
-bb bb-testnet-reth start
-bb bb-testnet-reth logs
-bb bb-testnet-reth attach
-
-bb debug
-code bb-berabox.code-workspace
-
-bb create mainnet geth && bb create testnet reth
-bb bb-mainnet-geth version set --cl v1.3.2 --el v1.19.5
-bb bb-testnet-reth version set --cl v1.4.0-rc1 --el v1.20.0-rc5
-bb build
-bb init
-bb install
-bb start
+bb create mainnet reth
+bb bb-mainnet-reth version set --cl latest --el latest
+bb bb-mainnet-reth build
+bb bb-mainnet-reth init
+bb bb-mainnet-reth install
+bb bb-mainnet-reth start
+bb bb-mainnet-reth logs
 ```
 
 ## Commands
@@ -76,7 +58,7 @@ bb start
 **`create <chain> <el-client> [name] [--port-base <port>]`** - Create a new installation
 
 - `chain`: `mainnet` or `testnet`
-- `el-client`: `reth` or `geth`
+- `el-client`: `reth`
 - `name`: Optional custom name (defaults to `{chain}-{el-client}`, gets user prefix)
 
 **`list`** - Show all installations with status summary
@@ -87,11 +69,11 @@ bb start
 
 ### Installation Commands
 
-**`[installation] info`** - Show installation information
+**`[installation] info`** - Show installation information (versions, ports, service status, validator keys, enode)
 
-Displays detailed information about an installation including versions, service status, port allocations, validator keys (if CL is initialized), and the execution layer enode (if EL is running). The validator keys include the CometBFT validator address and public key along with the Ethereum/Beacon pubkey used for block proposals. The enode is retrieved directly from the running execution layer via IPC and can be shared for P2P peering.
+**`[installation] build [--no-pull] [--quiet] [--release] [clean]`** - Build or fetch binaries
 
-**`[installation] build [--no-pull] [--quiet] [--release] [clean]`** - Build binaries
+If the component version in `installation.toml` is set to `"latest"`, build downloads the most recent GitHub release binary instead of compiling from source. Otherwise it performs a full debug build from the checked-out source tree.
 
 - `--no-pull`: Skip git pull before switching branches (default: always pull)
 - `--release`: Build optimized release binaries instead of debug binaries
@@ -119,7 +101,7 @@ Displays detailed information about an installation including versions, service 
 - `bb reset` - Reset ALL installations
 - `bb <installation> reset` - Reset specific installation
 
-**`<installation> version set --cl <version> --el <version>`** - Set component versions
+**`<installation> version set --cl <version> --el <version>`** - Set component versions. Accepts a git tag, branch name, or `latest` (download pre-built release binary on next build).
 
 **`<installation> version show-tags`** - Show available Git tags and branches
 
@@ -129,16 +111,13 @@ Displays detailed information about an installation including versions, service 
 
 - Exit: Press `Ctrl+C`, Switch windows: `<Tab>`, Scroll: arrow keys, Search: `/`, Pause: `b`, Help: `h`
 
-**`<installation> attach`** - Attach geth console to running EL (works with geth or reth via IPC)
+**`<installation> attach`** - Attach reth-console to running EL via IPC
 
-- Requires a geth installation to provide the console used for attachment
+- Requires `reth-console` ([github.com/camembera/reth-console](https://github.com/camembera/reth-console))
 
 **`<installation> remove`** - Remove installation completely
 
-**`<installation> snapshot [--skip-el]`** - Restore CL and/or EL snapshots via HTTP streaming. BB stops the installation's services before invoking the snapshot script. Fetches latest snapshot from `https://snapshots.berachain.com/index.csv`, streams via HTTP with lz4 decompression directly to target directories (zero intermediate copies). Respects `archive_mode` in `installation.toml` to fetch archive or pruned snapshots.
-
-- `--skip-el`: Skip EL snapshot restore (CL only)
-- Environment: Set `SNAPSHOT_INDEX_URL` to override default index URL
+**`<installation> snapshot [--skip-el]`** - Restore CL/EL snapshots. Stops services, streams the latest snapshot from the Berachain snapshot index (lz4, zero intermediate copies), and respects `archive_mode` to pick the right snapshot type. Use `--skip-el` for CL-only restore. Override the index URL with `SNAPSHOT_INDEX_URL`.
 
 ## Configuration
 
@@ -165,120 +144,93 @@ Displays detailed information about an installation including versions, service 
 
 Use `bb info` for all installations or `bb <installation> info` for specific installation details to see port allocations.
 
-**Automatic Port Conflict Avoidance**: BeraBox automatically detects port conflicts with existing installations and system services. When creating a new installation, if the requested port base conflicts with existing ports, BeraBox automatically bumps the port base by 20 until it finds a clear range. This ensures installations never have port conflicts and can be created seamlessly.
+Port conflicts are detected automatically at creation time; the base is bumped by 20 until a clear range is found.
 
-### `installation.toml`
+### `installation.toml` Reference
 
-Each installation has an `installation.toml` file that contains all configuration including ports, paths, and component versions. Noteworthy things in there:
+Every installation is fully described by a single `installation.toml`. The file is created by `bb create` and consumed by every other command. You can edit it directly; there is no separate config layer. Sections are listed below in the order they appear.
 
+**`[installation]`** -- Identity metadata, set at creation time.
+
+| Key | Example | Description |
+|-----|---------|-------------|
+| `name` | `"bb-mainnet-reth"` | Installation name (user-prefixed by `create`) |
+| `chain` | `"mainnet"` | Network: `mainnet` or `testnet` |
+| `el_client` | `"reth"` | Execution-layer client |
+| `created` | `"2026-01-13T21:46:11+01:00"` | ISO-8601 creation timestamp |
+
+**`[ports]`** -- Port allocations. `base_port` is the anchor; the rest are derived from it by fixed offsets (see port layout table above). You normally only set `base_port` via `--port-base` at creation time and leave the rest alone.
+
+**`[paths]`** -- Absolute paths to every directory the installation uses (`installation_dir`, `src_dir`, `cl_data_dir`, `el_data_dir`, `cl_config_dir`, `el_config_dir`, `cl_logs_dir`, `el_logs_dir`). Set at creation time; only edit if you physically relocate directories.
+
+**`[versions]`** -- Component versions used by `build`.
+
+```toml
+[versions]
+beacon_kit = "v1.3.6"
+bera_reth = "v1.3.1"
 ```
-[options]
-archive_mode = false
 
-[identity]
-cl_key_name = ""
-el_key_name = ""
+Each value can be a git tag, a branch name, or the special string `"latest"`. When set to `latest`, `bb build` skips the source checkout and compilation entirely and instead downloads the most recent GitHub release binary for that component (linux-amd64). This is much faster than a debug build and useful for production deployments or quick testing.
 
-[upnp]
-enabled = false
-lease_time = 86400
-```
+Set versions with `bb <installation> version set --cl <ver> --el <ver>`.
 
-- `cl_key_name`: The name of the consensus layer validator key to use for signing blocks and attestations. If left blank, the node will not run as a validator (it will operate in non-validator mode, just observing the chain and producing metrics, but not proposing or voting on blocks). Set this to the name of a key you have generated or imported. Place it in `keep/cl-keys/<cl_key_name>.json`
-
-- `el_key_name`: The name of the execution layer node key to preserve ENODE identity across rebuilds. If left blank, a random key is generated. This ensures your published mainnet ENODEs remain predictable for peer connections. Place keys in `keep/el-keys/<el_key_name>.nodekey`
-
-- `upnp.enabled`: Enable UPnP automatic port forwarding for P2P ports (improves network connectivity). Forwards both TCP and UDP protocols on P2P ports only, never RPC or admin ports. Requires router/gateway with UPnP support. The lease is obtained when you install, and released when you uninstall. Default: false
-
-- `upnp.lease_time`: Port forwarding lease time in seconds. 86400 = 24 hours, 0 = permanent mapping. Default: 86400
-
-### Custom Repository URLs
-
-Each installation can use custom repository URLs for the consensus layer (beacon-kit) and execution layer (bera-geth/bera-reth). This allows testing with forks or private repositories.
+**`[repositories]`** -- Optional. Override the default GitHub clone URLs for CL and EL source trees. Useful for testing forks or private repos. When you change a URL, the next `build` or `version show-tags` detects the mismatch, removes the stale checkout, and clones the new one automatically.
 
 ```toml
 [repositories]
 cl_repo = "https://github.com/berachain/beacon-kit.git"
-el_repo = "https://github.com/berachain/bera-geth.git"
+el_repo = "https://github.com/berachain/bera-reth.git"
 ```
 
-**Changing repository URLs:**
+Installations created without this section use the defaults above. Changing a URL destroys the local checkout, so commit any local work first.
 
-1. Edit `installation.toml` and modify the `[repositories]` section
-2. Run any git-interacting command (build, version show-tags, etc.)
-3. BeraBox detects the URL mismatch and automatically:
-   - Removes the old checkout
-   - Clones from the new repository URL
-   - Checks out the version from `[versions]` section
+**`[options]`**
 
-**Example workflow:**
+| Key | Default | Description |
+|-----|---------|-------------|
+| `archive_mode` | `false` | `true` keeps all historical state (full archive); `false` prunes. Archive nodes use significantly more disk. |
 
-```bash
-# Edit installation configuration
-vim installations/bb-testnet-geth/installation.toml
+**`[identity]`** -- Persistent P2P identity keys, preserved across `init` cycles so your node ID and enode stay stable.
 
-# Change:
-# [repositories]
-# cl_repo = "https://github.com/myorg/beacon-kit-fork.git"
+| Key | Description |
+|-----|-------------|
+| `cl_key_name` | Name of the CL validator signing key. Looked up as `keep/cl-keys/<name>.json` (`priv_validator_key.json`) and optionally `<name>.node_key.json` (CometBFT P2P identity). Leave blank to use ephemeral keys from `beacond init`. |
+| `el_key_name` | Name of the EL node key. Looked up as `keep/el-keys/<name>.nodekey` (`discovery-secret`). Leave blank for a random key each init. Setting this keeps your published enode stable for peer connections. |
 
-# Next build detects and handles the change automatically
-bb bb-testnet-geth build
-# Output:
-#   [BB-WARN] Repository URL mismatch detected for beacon-kit
-#   [BB-INFO]   Configured: https://github.com/myorg/beacon-kit-fork.git
-#   [BB-INFO]   Current:    https://github.com/berachain/beacon-kit.git
-#   [BB-STEP] Removing old beacon-kit checkout...
-#   [BB-STEP] Cloning https://github.com/myorg/beacon-kit-fork.git...
+**`[peers]`** -- Persistent peers injected into CL `config.toml` and EL command-line arguments at init time. CL peers use CometBFT `node_id@host:port` format; EL peers use `enode://` URLs.
+
+```toml
+[peers]
+cl_persistent_peers = [
+  "7f402e44...@95.217.193.152:42301"
+]
+el_persistent_peers = [
+  "enode://2ec46b2e...@95.217.193.152:42311"
+]
 ```
 
-**Notes:**
-- Repository validation happens automatically before build and version operations
-- Changing URLs destroys the local checkout (commit any local changes first)
-- The `[versions]` section continues to control which branch/tag is checked out
-- Existing installations without `[repositories]` section continue using defaults
+**`[upnp]`** -- Automatic UPnP port forwarding for P2P ports only (never RPC or admin ports). The lease is obtained on `install` and released on `uninstall`.
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `enabled` | `false` | Enable UPnP. Requires a gateway that supports it. |
+| `lease_time` | `86400` | Lease duration in seconds (86400 = 24h, 0 = permanent). |
 
 ## Debugging
 
-Berabox is designed debug-first with full VS Code integration and automatic configuration generation.
+Debug builds include full symbols: Go (`-gcflags="all=-N"`), Rust (unoptimized debug). Pass `--release` for optimized production binaries.
 
-**Debug builds include full symbols**: Go (`-gcflags="all=-N"`), Rust (unoptimized debug). Use `--release` flag for optimized production builds without debug symbols.
+`bb debug` generates a VS Code/Cursor workspace (`bb-berabox.code-workspace`) and `.vscode/launch.json` with two modes:
 
-### VS Code/Cursor Debugging
-
-Berabox provides comprehensive VS Code/Cursor debugging with remote debugging capabilities, process attachment via PID selection, and an integrated workspace that includes all source code and installations.
-
-**Generate debug workspace for all installations**:
+- **Process Attachment** -- attach to a running `beacond-debug` (Go, PID selection) or `reth-debug` (Rust, lldb).
+- **Startup Launch** -- launch CL/EL directly in the debugger. Berabox stops running services first to prevent port conflicts.
 
 ```bash
-bb debug
-code bb-berabox.code-workspace
-cursor bb-berabox.code-workspace
-```
-
-**Debug configurations are pre-configured for**:
-
-- **Process Attachment**: Attach debugger to running CL/EL processes via PID selection
-- **Launch Debugging**: Start processes directly in debug mode with wait-for-debugger
-
-**Generated debug files**:
-
-- `bb-berabox.code-workspace` - Multi-folder workspace with all installations and source code
-- `.vscode/launch.json` - Launch configurations for attaching/launching CL/EL processes
-
-**Debug workflow**:
-
-```bash
-bb bb-testnet-reth start
+bb <installation> start
 bb debug
 code bb-berabox.code-workspace
 ```
-
-**Debugging Modes**:
-
-The debug system configures VS Code to attach to running processes using their debug symbols, enabling seamless debugging of beacon-kit, bera-reth, and bera-geth. Some Cursor/VS Code plugins are required; choose wisely.
-
-- **Process Attachment**: Attach the VS Code/Cursor debugger to a running process—`beacond-debug` (CL/beacon-kit) via PID selection, `reth-debug` (EL/reth) via lldb, or `geth-debug` (EL/geth) via dlv. VS Code/Cursor lists relevant processes for easy attachment. (Just don’t get too attached, or you might start debugging your own life choices.)
-- **Startup Launch Debugging**: Launch CL/EL processes directly in the debugger for startup and initialization debugging. Berabox automatically stops any running services before launching in debug mode to prevent port conflicts—because two processes fighting over a port is a real socket drama.
 
 ### Monitoring
 
@@ -293,22 +245,24 @@ bb bb-testnet-reth attach
 multitail installations/bb-testnet-reth/logs/*/*.log
 ```
 
-### Geth Console Attachment
+### EL Console Attachment
 
-The `attach` command uses a clever cross-client compatibility trick: **any geth binary can attach to any execution layer client** (whether geth or reth) via IPC.
+The `attach` command uses [reth-console](https://github.com/camembera/reth-console) to connect to the running execution layer via IPC. It provides direct RPC invocation with a REPL, history, and a compact JSON query language -- no JS runtime or web3 object model.
 
-**How it works:**
+Install from source (requires Rust toolchain):
 
-1. Berabox finds any available `geth` binary (from any installation or system PATH)
-2. Uses it to connect via IPC to the target installation's execution layer
-3. Provides full JavaScript console access regardless of the underlying EL client
-
+```bash
+git clone https://github.com/camembera/reth-console.git
+cd reth-console
+make all
+cp target/debug/reth-console ~/.cargo/bin/
 ```
-# Inside any console session:
-eth.blockNumber               # Current block height
-net.peerCount                # Number of connected peers
-txpool.status                # Transaction pool status
-admin.nodeInfo               # Node information
+
+Usage outside berabox:
+
+```bash
+reth-console --datadir /path/to/reth
+reth-console --exec "eth.blockNumber"
 ```
 
 ## Development Environment

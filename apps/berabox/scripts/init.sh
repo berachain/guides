@@ -110,7 +110,7 @@ fi
 INSTALLATION_TOML="$INSTALLATION_DIR/installation.toml"
 if [[ -f "$INSTALLATION_TOML" ]]; then
     # Parse CL key name from installation.toml
-    VALIDATOR_KEY_NAME=$(awk '/^\[identity\]/{flag=1;next}/^\[/{flag=0}flag && /^cl_key_name/{gsub(/.*= *"?|"?.*$/,"");print}' "$INSTALLATION_TOML" 2>/dev/null || true)
+    VALIDATOR_KEY_NAME=$(awk -F'"' '/^\[identity\]/{flag=1;next}/^\[/{flag=0}flag && /^cl_key_name/{print $2}' "$INSTALLATION_TOML" 2>/dev/null || true)
     
     if [[ -n "$VALIDATOR_KEY_NAME" && "$VALIDATOR_KEY_NAME" != "" ]]; then
         VALIDATOR_KEY_FILE="$BERABOX_ROOT/keep/cl-keys/${VALIDATOR_KEY_NAME}.json"
@@ -128,35 +128,26 @@ if [[ -f "$INSTALLATION_TOML" ]]; then
             ls -1 "$BERABOX_ROOT/keep/cl-keys/"*.json 2>/dev/null | basename -a -s .json | sed 's/^/  - /' || echo "  (none found)"
             exit 1
         fi
+
+        NODE_KEY_FILE="$BERABOX_ROOT/keep/cl-keys/${VALIDATOR_KEY_NAME}.node_key.json"
+        if [[ -f "$NODE_KEY_FILE" ]]; then
+            cp "$CL_CONFIG_DIR/node_key.json" "$CL_CONFIG_DIR/node_key.json.generated"
+            cp "$NODE_KEY_FILE" "$CL_CONFIG_DIR/node_key.json"
+            log_info "CL P2P NODE KEY DEPLOYED: $VALIDATOR_KEY_NAME"
+        fi
     fi
 fi
 
 # Deploy custom EL node key if specified
-EL_KEY_NAME=$(awk '/^\[identity\]/{flag=1;next}/^\[/{flag=0}flag && /^el_key_name/{gsub(/.*= *"?|"?.*$/,"");print}' "$INSTALLATION_TOML" 2>/dev/null || true)
+EL_KEY_NAME=$(awk -F'"' '/^\[identity\]/{flag=1;next}/^\[/{flag=0}flag && /^el_key_name/{print $2}' "$INSTALLATION_TOML" 2>/dev/null || true)
 
 if [[ -n "$EL_KEY_NAME" && "$EL_KEY_NAME" != "" ]]; then
     EL_KEY_FILE="$BERABOX_ROOT/keep/el-keys/${EL_KEY_NAME}.nodekey"
     
     if [[ -f "$EL_KEY_FILE" ]]; then
-        # Determine target location based on EL client
-        if [[ "$EL_CLIENT" == "geth" ]]; then
-            EL_KEY_TARGET="$INSTALLATION_DIR/data/el/chain/bera-geth/nodekey"
-            EL_KEY_DIR="$INSTALLATION_DIR/data/el/chain/bera-geth"
-        elif [[ "$EL_CLIENT" == "reth" ]]; then
-            EL_KEY_TARGET="$INSTALLATION_DIR/data/el/chain/discovery-secret"
-            EL_KEY_DIR="$INSTALLATION_DIR/data/el/chain"
-        else
-            log_error "❌ Unknown EL client type: $EL_CLIENT"
-            exit 1
-        fi
-        
-        # Ensure target directory exists
+        EL_KEY_TARGET="$INSTALLATION_DIR/data/el/chain/discovery-secret"
+        EL_KEY_DIR="$INSTALLATION_DIR/data/el/chain"
         bb_ensure_directory "$EL_KEY_DIR"
-        
-        # Backup generated key if it exists and deploy custom key
-        if [[ -f "$EL_KEY_TARGET" ]]; then
-            cp "$EL_KEY_TARGET" "$EL_KEY_TARGET.generated"
-        fi
         cp "$EL_KEY_FILE" "$EL_KEY_TARGET"
         log_info "🔗 EL NODE KEY DEPLOYED: $EL_KEY_NAME"
     else
@@ -233,7 +224,7 @@ if [[ -f "$CL_CONFIG_DIR/config.toml" ]]; then
     fi
     
     # Configure persistent_peers from installation.toml
-    CL_PERSISTENT_PEERS=$(awk '/^\[peers\]/,/^$/ {if ($0 ~ /^cl_persistent_peers = \[/) {flag=1} if (flag) {print} if ($0 ~ /\]$/ && flag) {exit}}' "$INSTALLATION_TOML" | grep -oE '"[^"]+"' | tr '\n' ',' | sed 's/,$//' | tr -d '"')
+    CL_PERSISTENT_PEERS=$(awk '/^\[peers\]/,/^$/ {if ($0 ~ /^cl_persistent_peers = \[/) {flag=1} if (flag) {print} if ($0 ~ /\]$/ && flag) {exit}}' "$INSTALLATION_TOML" | grep -oE '"[^"]+"' | tr '\n' ',' | sed 's/,$//' | tr -d '"') || true
     if [[ -n "$CL_PERSISTENT_PEERS" ]]; then
         sed -i "s|^persistent_peers = \".*\"|persistent_peers = \"$CL_PERSISTENT_PEERS\"|" "$CL_CONFIG_DIR/config.toml"
         log_info "✓ Configured $(echo "$CL_PERSISTENT_PEERS" | tr ',' '\n' | wc -l) persistent peers"
@@ -281,21 +272,7 @@ case "$el_client" in
             cd - > /dev/null
         fi
         ;;
-    "geth")
-        if [[ ! -d "$EL_DATA_DIR/chain/bera-geth" ]]; then
-            temp_file=$(mktemp)
-            if "$EL_CLIENT_BIN" init --datadir "$EL_DATA_DIR/chain" "$EL_DATA_DIR/config/genesis.json" >"$temp_file" 2>&1; then
-                log_info "✓ Geth initialized, database at $EL_DATA_DIR/chain/bera-geth/"
-                if [[ "${BB_DEBUG:-false}" == "true" ]]; then
-                    cat "$temp_file"
-                fi
-            else
-                log_error "Failed to initialize Geth:"
-                cat "$temp_file" >&2
-            fi
-            rm -f "$temp_file"
-        fi
-        ;;
+
 esac
 
 # Step 4: Setup network connectivity files
@@ -310,4 +287,4 @@ if [[ $PEER_COUNT -gt 0 ]]; then
     log_info "✓ $PEER_COUNT network peers configured from $NETWORK_FILES_DIR/"
 fi
 
-        log_info "✓ Installation '$INSTALLATION_NAME' initialized"
+log_info "✓ Installation '$INSTALLATION_NAME' initialized"

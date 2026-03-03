@@ -1,0 +1,39 @@
+{% macro run_status(run) -%}
+{% if run.status == 'failed' %}
+<div class="run-status {{ run.status }}">
+  last run: {{ run.status }} &middot; {{ run.started_at | format_date }}{% if run.message %} &middot; {{ run.message }}{% endif %}
+</div>
+{% endif %}
+{%- endmacro %}
+
+{% macro snapshot_table(items, base_path, block_label, version_key) -%}
+<table class="snapshot-table">
+  <tbody>
+    {% for s in items %}
+    <tr>
+      <td class="snapshot-file">
+        <div class="snapshot-file-name">
+          <a href="snapshots/{{ base_path }}/{{ s.filename }}">{{ s.filename }}</a>
+        </div>
+        <div class="snapshot-meta-line">
+          <span><span class="snapshot-meta-label">{{ block_label }}</span>{{ s.block_number | format_number }}</span>
+          <span><span class="snapshot-meta-label">version</span>{{ s[version_key] }}</span>
+        </div>
+      </td>
+      <td class="snapshot-info">
+        <div class="snapshot-info-line">
+          {{ s.created_at | format_date }}
+          <span class="snapshot-sep">&middot;</span>
+          {{ s.size_human }}
+        </div>
+        <div class="snapshot-hash">
+          <span class="snapshot-meta-label">sha256</span>
+          <span class="hash-short">{{ s.sha256[:16] }}&hellip;</span>
+          <button class="copy-btn" onclick="copyHash('{{ s.sha256 }}')">📋</button>
+        </div>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{%- endmacro %}
