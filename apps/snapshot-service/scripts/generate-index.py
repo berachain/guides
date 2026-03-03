@@ -15,7 +15,6 @@ import csv
 
 SCRIPT_DIR = Path(__file__).parent.resolve()
 SERVICE_ROOT = SCRIPT_DIR.parent
-DEFAULT_CONFIG_PATH = SERVICE_ROOT / "config" / "mainnet.env"
 TEMPLATE_DIR = SCRIPT_DIR / "templates"
 
 SNAPSHOT_TYPES = [
@@ -28,9 +27,15 @@ SNAPSHOT_TYPES = [
 
 def _load_env_file() -> None:
     """Load KEY=VALUE pairs from config env file into process env."""
-    config_path = Path(os.getenv("SNAPSHOT_CONFIG_FILE", str(DEFAULT_CONFIG_PATH)))
+    raw_config_path = os.getenv("SNAPSHOT_CONFIG_FILE")
+    if not raw_config_path:
+        raise SystemExit(
+            f"ERROR: SNAPSHOT_CONFIG_FILE is required (example: {SERVICE_ROOT / 'config' / 'bepolia.env'})"
+        )
+
+    config_path = Path(raw_config_path)
     if not config_path.exists():
-        return
+        raise SystemExit(f"ERROR: snapshot config file not found: {config_path}")
 
     for line in config_path.read_text().splitlines():
         raw = line.strip()
@@ -54,7 +59,7 @@ SITE_TITLE = os.getenv("SNAPSHOT_SITE_TITLE", "Berachain Snapshots")
 NAV_TITLE = os.getenv("SNAPSHOT_NAV_TITLE", "Snapshots")
 DOCS_URL = os.getenv("SNAPSHOT_DOCS_URL", "https://docs.berachain.com")
 LOGO_URL = os.getenv("SNAPSHOT_LOGO_URL", "/logo-white.svg")
-ENV_NAME = os.getenv("SNAPSHOT_ENV_NAME", "mainnet")
+ENV_NAME = os.getenv("SNAPSHOT_ENV_NAME", "unknown")
 
 
 def human_size(size_bytes: int) -> str:

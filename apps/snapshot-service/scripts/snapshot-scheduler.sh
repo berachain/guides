@@ -312,8 +312,10 @@ generate_snapshot() {
             ;;
     esac
     
-    # Return success for EL but track CL failure for reporting
-    [[ $cl_failed -eq 0 ]]
+    # Mark the full type run as failed if CL companion snapshot failed.
+    if [[ $cl_failed -ne 0 ]]; then
+        return 1
+    fi
     return 0
 }
 

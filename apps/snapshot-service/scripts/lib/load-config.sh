@@ -8,12 +8,17 @@ load_snapshot_config() {
     local service_root
     service_root="$(cd "$lib_dir/../.." && pwd)"
 
-    local default_config="$service_root/config/mainnet.env"
-    local config_file="${SNAPSHOT_CONFIG_FILE:-$default_config}"
+    if [[ -z "${SNAPSHOT_CONFIG_FILE:-}" ]]; then
+        echo "ERROR: SNAPSHOT_CONFIG_FILE is required and must point to an env file" >&2
+        echo "Example: SNAPSHOT_CONFIG_FILE=$service_root/config/bepolia.env" >&2
+        return 1
+    fi
+
+    local config_file="$SNAPSHOT_CONFIG_FILE"
 
     if [[ ! -f "$config_file" ]]; then
         echo "ERROR: snapshot config file not found: $config_file" >&2
-        echo "Set SNAPSHOT_CONFIG_FILE or create config/mainnet.env" >&2
+        echo "Set SNAPSHOT_CONFIG_FILE to an existing config/<env>.env file" >&2
         return 1
     fi
 
@@ -34,7 +39,7 @@ load_snapshot_config() {
     : "${SNAPSHOT_FALLBACK_SIZE_GB:=500}"
     : "${SNAPSHOT_ACTIVE_TYPES:=reth-pruned,reth-archive}"
     : "${SNAPSHOT_MAX_BLOCK_LAG:=100}"
-    : "${SNAPSHOT_ENV_NAME:=mainnet}"
+    : "${SNAPSHOT_ENV_NAME:=unknown}"
     : "${SNAPSHOT_SITE_TITLE:=Berachain Snapshots}"
     : "${SNAPSHOT_NAV_TITLE:=Snapshots}"
     : "${SNAPSHOT_DOCS_URL:=https://docs.berachain.com}"

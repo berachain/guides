@@ -25,12 +25,12 @@ This spec does not deploy:
 
 The service is expected at:
 
-`/home/bb/ops/src/snapshot-service`
+`/opt/snapshot-service`
 
 Typical symlink pattern:
 
-- `/home/bb/ops/src/vendor/guides -> /home/bb/ops/guides`
-- `/home/bb/ops/src/snapshot-service -> /home/bb/ops/src/vendor/guides/apps/snapshot-service`
+- `/opt/guides` (direct checkout root)
+- `/opt/snapshot-service -> /opt/guides/apps/snapshot-service`
 
 If you do not use symlinks, use a direct checkout path and adapt commands accordingly.
 
@@ -47,7 +47,7 @@ Define these once per host:
 - `snapshot_tmp_dir`: `/var/tmp/snapshots`
 - `snapshot_chain_installations_dir`: `/srv/chain/installations`
 - `snapshot_python_bin`: `/home/bb/ops/.venv/bin/python3`
-- `snapshot_service_path`: `/home/bb/ops/src/snapshot-service`
+- `snapshot_service_path`: `/opt/snapshot-service`
 - `snapshot_config_path`: `${snapshot_service_path}/config/${snapshot_env}.env`
 - `snapshot_scheduler_cron`: `0 8,20 * * *`
 
@@ -89,7 +89,7 @@ sudo install -d -o bb -g bb /srv/snapshots /srv/snapshots/public /srv/snapshots/
 From `snapshot_service_path`:
 
 ```bash
-cd /home/bb/ops/src/snapshot-service
+cd /opt/snapshot-service
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
@@ -98,7 +98,7 @@ pip install -r requirements.txt
 If using shared ops venv:
 
 ```bash
-/home/bb/ops/.venv/bin/pip install -r /home/bb/ops/src/snapshot-service/requirements.txt
+/home/bb/ops/.venv/bin/pip install -r /opt/snapshot-service/requirements.txt
 ```
 
 ## 6. Configuration Deployment
@@ -128,7 +128,7 @@ Minimum values to verify in env:
 Run:
 
 ```bash
-bash /home/bb/ops/src/snapshot-service/scripts/bootstrap-db.sh /srv/snapshots/snapshots.db
+bash /opt/snapshot-service/scripts/bootstrap-db.sh /srv/snapshots/snapshots.db
 ```
 
 This is idempotent and safe to rerun. It creates/updates required tables and indexes.
@@ -145,20 +145,20 @@ sqlite3 /srv/snapshots/snapshots.db ".schema snapshot_runs"
 Ensure executable bits:
 
 ```bash
-chmod +x /home/bb/ops/src/snapshot-service/scripts/snapshot-scheduler.sh
-chmod +x /home/bb/ops/src/snapshot-service/scripts/snapshot-generate.sh
-chmod +x /home/bb/ops/src/snapshot-service/scripts/snapshot-publish.sh
-chmod +x /home/bb/ops/src/snapshot-service/scripts/snapshot-prune.sh
-chmod +x /home/bb/ops/src/snapshot-service/scripts/bootstrap-db.sh
+chmod +x /opt/snapshot-service/scripts/snapshot-scheduler.sh
+chmod +x /opt/snapshot-service/scripts/snapshot-generate.sh
+chmod +x /opt/snapshot-service/scripts/snapshot-publish.sh
+chmod +x /opt/snapshot-service/scripts/snapshot-prune.sh
+chmod +x /opt/snapshot-service/scripts/bootstrap-db.sh
 ```
 
 Syntax check:
 
 ```bash
-bash -n /home/bb/ops/src/snapshot-service/scripts/snapshot-scheduler.sh
-bash -n /home/bb/ops/src/snapshot-service/scripts/snapshot-generate.sh
-bash -n /home/bb/ops/src/snapshot-service/scripts/snapshot-publish.sh
-bash -n /home/bb/ops/src/snapshot-service/scripts/snapshot-prune.sh
+bash -n /opt/snapshot-service/scripts/snapshot-scheduler.sh
+bash -n /opt/snapshot-service/scripts/snapshot-generate.sh
+bash -n /opt/snapshot-service/scripts/snapshot-publish.sh
+bash -n /opt/snapshot-service/scripts/snapshot-prune.sh
 ```
 
 ## 9. Web Serving (nginx)
@@ -188,19 +188,19 @@ Recommended: run scheduler directly from vendored path.
 Install cron entry for user `bb`:
 
 ```cron
-0 8,20 * * * SNAPSHOT_CONFIG_FILE=/home/bb/ops/src/snapshot-service/config/mainnet.env /home/bb/ops/src/snapshot-service/scripts/snapshot-scheduler.sh >> /srv/snapshots/logs/cron.log 2>&1
+0 8,20 * * * SNAPSHOT_CONFIG_FILE=/opt/snapshot-service/config/mainnet.env /opt/snapshot-service/scripts/snapshot-scheduler.sh >> /srv/snapshots/logs/cron.log 2>&1
 ```
 
 For Bepolia:
 
 ```cron
-0 8,20 * * * SNAPSHOT_CONFIG_FILE=/home/bb/ops/src/snapshot-service/config/bepolia.env /home/bb/ops/src/snapshot-service/scripts/snapshot-scheduler.sh >> /srv/snapshots/logs/cron.log 2>&1
+0 8,20 * * * SNAPSHOT_CONFIG_FILE=/opt/snapshot-service/config/bepolia.env /opt/snapshot-service/scripts/snapshot-scheduler.sh >> /srv/snapshots/logs/cron.log 2>&1
 ```
 
 Install idempotently:
 
 ```bash
-(crontab -l 2>/dev/null | grep -v "snapshot-scheduler.sh" ; echo '0 8,20 * * * SNAPSHOT_CONFIG_FILE=/home/bb/ops/src/snapshot-service/config/mainnet.env /home/bb/ops/src/snapshot-service/scripts/snapshot-scheduler.sh >> /srv/snapshots/logs/cron.log 2>&1') | crontab -
+(crontab -l 2>/dev/null | grep -v "snapshot-scheduler.sh" ; echo '0 8,20 * * * SNAPSHOT_CONFIG_FILE=/opt/snapshot-service/config/mainnet.env /opt/snapshot-service/scripts/snapshot-scheduler.sh >> /srv/snapshots/logs/cron.log 2>&1') | crontab -
 ```
 
 Verify:
@@ -218,7 +218,7 @@ crontab -l
 2. index generation:
 
 ```bash
-SNAPSHOT_CONFIG_FILE=/home/bb/ops/src/snapshot-service/config/mainnet.env /home/bb/ops/.venv/bin/python3 /home/bb/ops/src/snapshot-service/scripts/generate-index.py
+SNAPSHOT_CONFIG_FILE=/opt/snapshot-service/config/mainnet.env /home/bb/ops/.venv/bin/python3 /opt/snapshot-service/scripts/generate-index.py
 ```
 
 3. confirm outputs:

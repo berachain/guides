@@ -141,7 +141,24 @@ if [[ "$LAYER" == "el" ]]; then
 fi
 
 # Get EL RPC port for installation
+get_installation_base_port() {
+    local base_port=""
+    if [[ -f "$TOML_FILE" ]]; then
+        base_port=$(awk -F'=' '/^base_port[[:space:]]*=/{gsub(/[[:space:]]/, "", $2); print $2; exit}' "$TOML_FILE" 2>/dev/null || true)
+    fi
+    if [[ "$base_port" =~ ^[0-9]+$ ]]; then
+        echo "$base_port"
+        return 0
+    fi
+    return 1
+}
+
 get_el_rpc_port() {
+    local base_port
+    if base_port=$(get_installation_base_port); then
+        echo $((base_port + 10))
+        return 0
+    fi
     case "$INSTALLATION" in
         geth-pruned) echo 42010 ;;
         geth-archive) echo 42210 ;;
@@ -152,6 +169,11 @@ get_el_rpc_port() {
 
 # Get CL API port for installation
 get_cl_api_port() {
+    local base_port
+    if base_port=$(get_installation_base_port); then
+        echo $((base_port + 5))
+        return 0
+    fi
     case "$INSTALLATION" in
         geth-pruned) echo 42005 ;;
         geth-archive) echo 42205 ;;
@@ -311,21 +333,14 @@ check_service_health() {
     
     # For CL services, check sync status via API (if available)
     if [[ "$service_type" == "cl" ]]; then
-        local port=""
-        case "$INSTALLATION" in
-            geth-pruned) port="42005" ;;
-            geth-archive) port="42205" ;;
-            reth-pruned) port="42105" ;;
-            reth-archive) port="42305" ;;
-        esac
-        
-        if [[ -n "$port" ]]; then
-            # Check if beacon API is responding (basic health check)
-            if ! curl -s --max-time 5 "http://127.0.0.1:$port/eth/v1/node/health" >/dev/null 2>&1; then
-                log "WARNING: CL service $service API not responding on port $port - may still be syncing"
-            else
-                log_detail "CL service $service API responding on port $port"
-            fi
+        local port
+        port=$(get_cl_api_port)
+
+        # Check if beacon API is responding (basic health check)
+        if ! curl -s --max-time 5 "http://127.0.0.1:$port/eth/v1/node/health" >/dev/null 2>&1; then
+            log "WARNING: CL service $service API not responding on port $port - may still be syncing"
+        else
+            log_detail "CL service $service API responding on port $port"
         fi
     fi
     
@@ -339,62 +354,45 @@ check_berabox() {
     fi
 }
 
-# Stop services in correct order: CL first, then EL (if needed)
-# Uses berabox for service management (required)
+# Stop the full installation (EL + CL) before snapshot work.
+# Uses berabox for service management (required).
 stop_services() {
     log "Stopping services for snapshot"
     
     check_berabox
     
-    # Check health before stopping
+    # Check health before stopping.
+    # We require both sides healthy because snapshot operations
+    # should run with the full installation quiesced.
     check_service_health "$CL_SERVICE" "cl"
-    if [[ "$LAYER" == "el" ]]; then
-        check_service_health "$EL_SERVICE" "el"
-    fi
+    check_service_health "$EL_SERVICE" "el"
     
     # Get PID before stopping for monitoring
     local cl_pid=$(systemctl --user show "$CL_SERVICE" --property=MainPID --value)
-    log_detail "Stopping CL: $CL_SERVICE (PID: $cl_pid)"
+    local el_pid=$(systemctl --user show "$EL_SERVICE" --property=MainPID --value)
+    log_detail "Stopping installation: CL=$CL_SERVICE (PID: $cl_pid), EL=$EL_SERVICE (PID: $el_pid)"
     
-    # Use berabox to stop services
-    if [[ "$LAYER" == "cl" ]]; then
-        # For CL-only snapshots, stop only CL
-        if ! "$BERABOX_BIN" "$INSTALLATION" stop cl; then
-            error "Failed to stop CL service via berabox"
-        fi
-    else
-        # For EL snapshots, stop both (berabox handles order)
-        if ! "$BERABOX_BIN" "$INSTALLATION" stop; then
-            error "Failed to stop services via berabox"
-        fi
+    # Stop full installation regardless of snapshot layer.
+    if ! "$BERABOX_BIN" "$INSTALLATION" stop; then
+        error "Failed to stop installation services via berabox"
     fi
     
     wait_for_stop "$CL_SERVICE"
-    if [[ "$LAYER" == "el" ]]; then
-        wait_for_stop "$EL_SERVICE"
-    fi
+    wait_for_stop "$EL_SERVICE"
     log_detail "All required services stopped"
 }
 
-# Restart services in correct order: EL first, then CL
-# Uses berabox for service management (required)
+# Restart the full installation (EL + CL) after snapshot work.
+# Uses berabox for service management (required).
 restart_services() {
     log "Restarting services"
     
     check_berabox
     
-    # Use berabox to restart services (handles correct order)
-    if [[ "$LAYER" == "el" ]]; then
-        log_detail "Starting services via berabox"
-        if ! "$BERABOX_BIN" "$INSTALLATION" start; then
-            log "WARNING: Failed to start services via berabox"
-        fi
-    else
-        # For CL-only snapshots, start only CL
-        log_detail "Starting CL via berabox"
-        if ! "$BERABOX_BIN" "$INSTALLATION" start cl; then
-            log "WARNING: Failed to start CL service via berabox"
-        fi
+    # Start full installation regardless of snapshot layer.
+    log_detail "Starting installation services via berabox"
+    if ! "$BERABOX_BIN" "$INSTALLATION" start; then
+        log "WARNING: Failed to start installation services via berabox"
     fi
     log_detail "Services restarted"
 }
@@ -431,9 +429,10 @@ if [[ "$LAYER" == "cl" && "$TYPE" == "beacon-kit-pruned" ]]; then
     SIZE_BEFORE=$(du -sh "$CL_DATA_DIR" 2>/dev/null | cut -f1 || echo "unknown")
     log_detail "Size before pruning: $SIZE_BEFORE"
     
-    # Run cosmprund with conservative settings for snapshots
-    # Keep 10 blocks and 5 versions (smaller than default for snapshot efficiency)
-    if "$COSMPRUND_BIN" prune --keep-blocks 10 --keep-versions 5 "$CL_DATA_DIR"; then
+    # Run cosmprund with conservative settings for snapshots.
+    # Berachain cosmprund main uses --keep-blocks/--keep-versions.
+    # Keep 10 blocks and 5 versions (smaller than default for snapshot efficiency).
+    if "$COSMPRUND_BIN" prune "$CL_DATA_DIR" --keep-blocks 10 --keep-versions 5; then
         SIZE_AFTER=$(du -sh "$CL_DATA_DIR" 2>/dev/null | cut -f1 || echo "unknown")
         log_detail "Size after pruning: $SIZE_AFTER"
         log_detail "Cosmprund completed successfully"
@@ -463,13 +462,13 @@ if [[ "$LAYER" == "cl" ]]; then
         --exclude='cs.wal' \
         --exclude='priv_validator_state.json' \
         blockstore.db application.db state.db deposits.db evidence.db 2>/dev/null \
-        | lz4 -9 > "$TEMP_FILE" \
+        | lz4 -3 > "$TEMP_FILE" \
     || tar -c \
         -C "$DATA_DIR" \
         --exclude='cs.wal' \
         --exclude='priv_validator_state.json' \
         . \
-        | lz4 -9 > "$TEMP_FILE"
+        | lz4 -3 > "$TEMP_FILE"
 else
     # EL: tar only the chain subdirectory (flat structure like CL)
     # For reth: archive contains db/, static_files/, blobstore/, etc. (flat)
@@ -484,7 +483,7 @@ else
     tar -c -C "$DATA_DIR" \
         --exclude='discovery-secret' \
         --exclude='*/nodekey' \
-        . | lz4 -9 > "$TEMP_FILE"
+        . | lz4 -3 > "$TEMP_FILE"
 fi
 
 END_TIME=$(date +%s)
