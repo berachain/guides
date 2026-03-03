@@ -69,7 +69,7 @@ stream_snapshot() {
 
 INSTALLATION_NAME=""
 SKIP_EL=false
-SNAPSHOT_INDEX_URL="${SNAPSHOT_INDEX_URL:-https://snapshots.berachain.com/index.csv}"
+# SNAPSHOT_INDEX_URL set below from installation chain (Bepolia vs mainnet) unless already set
 
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -116,6 +116,29 @@ if [[ -z "$chain" ]]; then
     exit 1
 fi
 
+# Snapshot index URL: Bepolia (testnet) vs mainnet; env SNAPSHOT_INDEX_URL overrides
+if [[ -z "${SNAPSHOT_INDEX_URL:-}" ]]; then
+    if [[ "$chain" == "testnet" ]]; then
+        SNAPSHOT_INDEX_URL="https://bepolia.snapshots.berachain.com/index.csv"
+        SNAPSHOT_BASE_URL="https://bepolia.snapshots.berachain.com"
+    else
+        SNAPSHOT_INDEX_URL="https://snapshots.berachain.com/index.csv"
+        SNAPSHOT_BASE_URL="https://snapshots.berachain.com"
+    fi
+else
+    SNAPSHOT_BASE_URL="${SNAPSHOT_INDEX_URL%/index.csv}"
+fi
+
+# Resolve localhost URLs from index (Bepolia index publishes http://localhost/...)
+resolve_snapshot_url() {
+    local url="$1"
+    if [[ "$url" =~ ^https?://localhost(/.*) ]]; then
+        echo "${SNAPSHOT_BASE_URL}${BASH_REMATCH[1]}"
+    else
+        echo "$url"
+    fi
+}
+
 CL_DATA_DIR="${INSTALLATION_DIR}/data/cl"
 EL_CHAIN_DIR="${INSTALLATION_DIR}/data/el/chain"
 
@@ -151,6 +174,7 @@ if [[ -z "$cl_url" ]]; then
     exit 1
 fi
 
+cl_url=$(resolve_snapshot_url "$cl_url")
 stream_snapshot "$cl_url" "$CL_DATA_DIR/data" "CL"
 
 # Process EL snapshot unless --skip-el
@@ -162,7 +186,8 @@ if [[ "$SKIP_EL" != "true" ]]; then
         log_error "No EL snapshot found for type: $el_type"
         exit 1
     fi
-    
+
+    el_url=$(resolve_snapshot_url "$el_url")
     stream_snapshot "$el_url" "$EL_CHAIN_DIR" "EL"
 fi
 

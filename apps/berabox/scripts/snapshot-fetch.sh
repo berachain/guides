@@ -1,5 +1,5 @@
 #!/bin/bash
-# Berabox Snapshot Fetching Script - Downloads and extracts snapshots from snapshots.berachain.com
+# Berabox Snapshot Fetching Script - Downloads and extracts snapshots (mainnet or Bepolia by chain)
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -7,10 +7,6 @@ BERABOX_ROOT="$(dirname "$SCRIPT_DIR")"
 
 # Source common functions and configuration
 source "$SCRIPT_DIR/common.sh"
-
-# Configuration
-SNAPSHOT_BASE_URL="https://snapshots.berachain.com"
-SNAPSHOT_INDEX_URL="$SNAPSHOT_BASE_URL/index.csv"
 
 # Parse command line arguments
 INSTALLATION_NAME=""
@@ -71,12 +67,13 @@ chain=$(bb_parse_toml_value "$INSTALLATION_TOML" "chain")
 el_client=$(bb_parse_toml_value "$INSTALLATION_TOML" "el_client")
 archive_mode=$(bb_parse_toml_value "$INSTALLATION_TOML" "options.archive_mode" || echo "false")
 
-# Only mainnet snapshots are available
-if [[ "$chain" != "mainnet" ]]; then
-    log_error "Snapshots are only available for mainnet"
-    log_info "Testnet nodes must sync from genesis using 'bb $INSTALLATION_NAME init'"
-    exit 1
+# Snapshot host by chain: Bepolia (testnet) vs mainnet; env SNAPSHOT_INDEX_URL overrides base
+if [[ "$chain" == "testnet" ]]; then
+    SNAPSHOT_BASE_URL="https://bepolia.snapshots.berachain.com"
+else
+    SNAPSHOT_BASE_URL="https://snapshots.berachain.com"
 fi
+SNAPSHOT_INDEX_URL="${SNAPSHOT_INDEX_URL:-$SNAPSHOT_BASE_URL/index.csv}"
 
 log_operation "Fetching snapshots for $INSTALLATION_NAME ($chain + $el_client)"
 
@@ -163,7 +160,7 @@ download_and_extract_snapshot() {
     
     # Stream download and extract
     log_info "Streaming download and extraction (this may take a while)..."
-    if curl -fsSL "$snapshot_url" | lz4 -d | tar -xf - -C "$target_dir"; then
+    if curl -fSL "$snapshot_url" | lz4 -d | tar -xf - -C "$target_dir"; then
         log_result "✓ Successfully extracted $snapshot_name snapshot"
         return 0
     else
