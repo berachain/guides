@@ -34,7 +34,8 @@ calculate_ports_from_base() {
 # Load ports from installation.toml
 load_ports() {
     local installation_name="$1"
-    local installation_toml="$BERABOX_ROOT/installations/$installation_name/installation.toml"
+    local installations_dir="${BB_CONFIG_INSTALLATIONS_DIR:-$BERABOX_ROOT/installations}"
+    local installation_toml="$installations_dir/$installation_name/installation.toml"
     
     if [[ ! -f "$installation_toml" ]]; then
         log_error "Installation '$installation_name' not found: $installation_toml"
