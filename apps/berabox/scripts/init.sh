@@ -110,7 +110,7 @@ fi
 INSTALLATION_TOML="$INSTALLATION_DIR/installation.toml"
 if [[ -f "$INSTALLATION_TOML" ]]; then
     # Parse CL key name from installation.toml
-    VALIDATOR_KEY_NAME=$(awk '/^\[identity\]/{flag=1;next}/^\[/{flag=0}flag && /^cl_key_name/{gsub(/.*= *"?|"?.*$/,"");print}' "$INSTALLATION_TOML" 2>/dev/null || true)
+    VALIDATOR_KEY_NAME=$(awk -F'"' '/^\[identity\]/{flag=1;next}/^\[/{flag=0}flag && /^cl_key_name/{print $2}' "$INSTALLATION_TOML" 2>/dev/null || true)
     
     if [[ -n "$VALIDATOR_KEY_NAME" && "$VALIDATOR_KEY_NAME" != "" ]]; then
         VALIDATOR_KEY_FILE="$BERABOX_ROOT/keep/cl-keys/${VALIDATOR_KEY_NAME}.json"
@@ -128,11 +128,18 @@ if [[ -f "$INSTALLATION_TOML" ]]; then
             ls -1 "$BERABOX_ROOT/keep/cl-keys/"*.json 2>/dev/null | basename -a -s .json | sed 's/^/  - /' || echo "  (none found)"
             exit 1
         fi
+
+        NODE_KEY_FILE="$BERABOX_ROOT/keep/cl-keys/${VALIDATOR_KEY_NAME}.node_key.json"
+        if [[ -f "$NODE_KEY_FILE" ]]; then
+            cp "$CL_CONFIG_DIR/node_key.json" "$CL_CONFIG_DIR/node_key.json.generated"
+            cp "$NODE_KEY_FILE" "$CL_CONFIG_DIR/node_key.json"
+            log_info "CL P2P NODE KEY DEPLOYED: $VALIDATOR_KEY_NAME"
+        fi
     fi
 fi
 
 # Deploy custom EL node key if specified
-EL_KEY_NAME=$(awk '/^\[identity\]/{flag=1;next}/^\[/{flag=0}flag && /^el_key_name/{gsub(/.*= *"?|"?.*$/,"");print}' "$INSTALLATION_TOML" 2>/dev/null || true)
+EL_KEY_NAME=$(awk -F'"' '/^\[identity\]/{flag=1;next}/^\[/{flag=0}flag && /^el_key_name/{print $2}' "$INSTALLATION_TOML" 2>/dev/null || true)
 
 if [[ -n "$EL_KEY_NAME" && "$EL_KEY_NAME" != "" ]]; then
     EL_KEY_FILE="$BERABOX_ROOT/keep/el-keys/${EL_KEY_NAME}.nodekey"
@@ -280,4 +287,4 @@ if [[ $PEER_COUNT -gt 0 ]]; then
     log_info "✓ $PEER_COUNT network peers configured from $NETWORK_FILES_DIR/"
 fi
 
-        log_info "✓ Installation '$INSTALLATION_NAME' initialized"
+log_info "✓ Installation '$INSTALLATION_NAME' initialized"
