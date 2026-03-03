@@ -448,9 +448,9 @@ bb_git_refresh_refs() {
     fi
 
     pushd "$repo_dir" >/dev/null || return 1
-    # Fetch branches and tags quietly; show details only in BB_DEBUG
-    if run_quiet git fetch "$remote_name" --prune --tags; then
-        log_info "✓ Refreshed git refs (branches and tags) in $repo_dir"
+    # Fetch branches only; --tags can exit non-zero when remote tags would clobber local (same name, different commit)
+    if run_quiet git fetch "$remote_name" --prune; then
+        log_info "✓ Refreshed git refs in $repo_dir"
     else
         log_warn "Failed to refresh git refs in $repo_dir"
         popd >/dev/null
