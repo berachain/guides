@@ -121,7 +121,7 @@ EL_CHAIN_DIR="${INSTALLATION_DIR}/data/el/chain"
 
 ensure_services_stopped "$INSTALLATION_NAME"
 
-log_operation "Fetching snapshots for $INSTALLATION_NAME ($chain + ${el_client:-geth})"
+log_operation "Fetching snapshots for $INSTALLATION_NAME ($chain + ${el_client:-reth})"
 
 # Fetch index.csv
 index_file=$(mktemp)
@@ -136,18 +136,10 @@ fi
 # Determine snapshot types based on archive_mode
 if [[ "$archive_mode" == "true" ]]; then
     cl_type="beacon-kit-archive"
-    case "$el_client" in
-        geth) el_type="geth-archive" ;;
-        reth) el_type="reth-archive" ;;
-        *) el_type="geth-archive" ;;
-    esac
+    el_type="reth-archive"
 else
     cl_type="beacon-kit-pruned"
-    case "$el_client" in
-        geth) el_type="geth-pruned" ;;
-        reth) el_type="reth-pruned" ;;
-        *) el_type="geth-pruned" ;;
-    esac
+    el_type="reth-pruned"
 fi
 
 # Process CL snapshot

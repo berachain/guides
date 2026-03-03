@@ -206,7 +206,7 @@ main() {
                 has_errors=true
             else
                 # Download and extract
-                if ! download_and_extract_snapshot "$cl_snapshot_url" "$CL_DATA_DIR" "CL"; then
+                if ! download_and_extract_snapshot "$cl_snapshot_url" "$CL_DATA_DIR/data" "CL"; then
                     has_errors=true
                 fi
             fi
@@ -222,11 +222,7 @@ main() {
         # Check if EL data already exists
         # Different clients have different data structures
         local el_check_file=""
-        if [[ "$el_client" == "reth" ]]; then
-            el_check_file="db/mdbx.dat"
-        else
-            el_check_file="geth/chaindata/CURRENT"
-        fi
+        el_check_file="db/mdbx.dat"
         
         if check_data_exists "$EL_DATA_DIR" "$el_check_file"; then
             log_warn "EL data already exists at $EL_DATA_DIR/$el_check_file"

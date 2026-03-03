@@ -22,20 +22,7 @@ clone_source_repositories() {
         log_info "beacon-kit already exists, skipping clone"
     fi
     
-    # Clone execution client based on EL_CLIENT
-    local el_repo=""
-    case "$el_client" in
-        "reth")
-            el_repo="bera-reth"
-            ;;
-        "geth")
-            el_repo="bera-geth"
-            ;;
-        *)
-            log_error "Unknown EL client: $el_client"
-            exit 1
-            ;;
-    esac
+    local el_repo="bera-reth"
     
     if [[ ! -d "$src_dir/$el_repo" ]]; then
         log_info "Cloning $el_repo..."
@@ -97,8 +84,8 @@ if [[ "$CHAIN" != "mainnet" && "$CHAIN" != "testnet" ]]; then
 fi
 
 # Validate EL client
-if [[ "$EL_CLIENT" != "reth" && "$EL_CLIENT" != "geth" ]]; then
-    log_error "Invalid EL client: $EL_CLIENT. Must be 'reth' or 'geth'"
+if [[ "$EL_CLIENT" != "reth" ]]; then
+    log_error "Invalid EL client: $EL_CLIENT. Must be 'reth'"
     exit 1
 fi
 

@@ -191,50 +191,9 @@ for component in "${COMPONENT_ARRAY[@]}"; do
             log_substep "✓ $binary_name built at $(pwd)/$binary_name"
             ;;
             
-        "bera-geth")
-            # Check if per-installation repository exists
-            if [[ ! -d "$SRC_DIR/bera-geth" ]]; then
-                log_error "bera-geth source not found at $SRC_DIR/bera-geth"
-                log_error "Run 'bb create' to set up per-installation source trees"
-                exit 1
-            fi
-            
-            cd "$SRC_DIR/bera-geth"
-            
-            # Load and checkout component version
-            BERA_GETH_VERSION=$(load_component_version "bera_geth")
-            log_substep "Switching bera-geth to version: $BERA_GETH_VERSION"
-            bb_git_checkout_safe "$SRC_DIR/bera-geth" "$BERA_GETH_VERSION" "$NO_PULL"
-
-            # Build with debug symbols
-            log_step "Building bera-geth (Go build with debug symbols) from $BERA_GETH_VERSION..."
-            
-            # Use a temporary file to capture errors only
-            build_log=$(mktemp)
-            go_output=""
-            [[ "$QUIET" == "true" ]] && go_output=">/dev/null"
-            
-            # Set build flags for debug build
-            go_gcflags="-gcflags=all=-N"
-            go_ldflags="-ldflags=-s=false"
-            binary_name="geth-debug"
-            
-            log_step "Building bera-geth (Go debug build) from $BERA_GETH_VERSION..."
-            
-            if eval go build $go_gcflags $go_ldflags -o "$binary_name" ./cmd/bera-geth 2> "$build_log" $go_output; then
-                rm -f "$build_log"
-                log_substep "✓ $binary_name built at $(pwd)/$binary_name"
-            else
-                log_error "Failed to build $binary_name:"
-                tail -10 "$build_log" | sed 's/^/    /'
-                rm -f "$build_log"
-                exit 1
-            fi
-            ;;
-            
         *)
             log_error "Unknown component: $component"
-            log_warn "Valid components: beacon-kit, bera-reth, bera-geth"
+            log_warn "Valid components: beacon-kit, bera-reth"
             exit 1
             ;;
     esac
