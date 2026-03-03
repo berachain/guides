@@ -1,1 +1,1 @@
-0 8,20 * * * SNAPSHOT_CONFIG_FILE=/home/bb/ops/src/snapshot-service/config/mainnet.env /home/bb/ops/src/snapshot-service/scripts/snapshot-scheduler.sh >> /srv/snapshots/logs/cron.log 2>&1
+0 8,20 * * * SNAPSHOT_CONFIG_FILE=/opt/snapshot-service/config/mainnet.env /opt/snapshot-service/scripts/snapshot-scheduler.sh >> /srv/snapshots/logs/cron.log 2>&1

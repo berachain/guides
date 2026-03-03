@@ -37,9 +37,9 @@ pip install -r requirements.txt
 Use one of the provided config files and export it before manual runs:
 
 ```bash
-export SNAPSHOT_CONFIG_FILE=/home/bb/ops/src/snapshot-service/config/mainnet.env
+export SNAPSHOT_CONFIG_FILE=/opt/snapshot-service/config/mainnet.env
 # or
-export SNAPSHOT_CONFIG_FILE=/home/bb/ops/src/snapshot-service/config/bepolia.env
+export SNAPSHOT_CONFIG_FILE=/opt/snapshot-service/config/bepolia.env
 ```
 
 ## Database Bootstrap
@@ -59,4 +59,4 @@ Use `infra/cron/snapshot-scheduler.cron` for the scheduler crontab line and `inf
 
 Recommended production entrypoint:
 
-`/home/bb/ops/src/snapshot-service/scripts/snapshot-scheduler.sh`
+`/opt/snapshot-service/scripts/snapshot-scheduler.sh`

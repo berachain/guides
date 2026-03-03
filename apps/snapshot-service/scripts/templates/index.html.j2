@@ -352,7 +352,7 @@
     </nav>
 
     <main>
-        <div class="section-label">Pruned Nodes</div>
+        <div class="section-label">Pruned {{ env_name|capitalize }} Node</div>
 
         <div class="card">
             <div class="card-header">
@@ -397,7 +397,7 @@
             <div class="empty-state deprecated">Geth snapshots are deprecated and not produced by this service.</div>
         </div>
 
-        <div class="section-label">Archive Nodes</div>
+        <div class="section-label">Archive {{ env_name|capitalize }} Node</div>
 
         <div class="card">
             <div class="card-header">
@@ -446,8 +446,7 @@
 
     <footer>
         Generated {{ generated_at }} &middot;
-        <a href="/index.csv">index.csv</a> &middot;
-        <a href="/metrics.txt">metrics.txt</a>
+        <a href="/index.csv">index.csv</a>
     </footer>
 
     <script>
