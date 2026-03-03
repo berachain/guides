@@ -138,25 +138,9 @@ if [[ -n "$EL_KEY_NAME" && "$EL_KEY_NAME" != "" ]]; then
     EL_KEY_FILE="$BERABOX_ROOT/keep/el-keys/${EL_KEY_NAME}.nodekey"
     
     if [[ -f "$EL_KEY_FILE" ]]; then
-        # Determine target location based on EL client
-        if [[ "$EL_CLIENT" == "geth" ]]; then
-            EL_KEY_TARGET="$INSTALLATION_DIR/data/el/chain/bera-geth/nodekey"
-            EL_KEY_DIR="$INSTALLATION_DIR/data/el/chain/bera-geth"
-        elif [[ "$EL_CLIENT" == "reth" ]]; then
-            EL_KEY_TARGET="$INSTALLATION_DIR/data/el/chain/discovery-secret"
-            EL_KEY_DIR="$INSTALLATION_DIR/data/el/chain"
-        else
-            log_error "❌ Unknown EL client type: $EL_CLIENT"
-            exit 1
-        fi
-        
-        # Ensure target directory exists
+        EL_KEY_TARGET="$INSTALLATION_DIR/data/el/chain/discovery-secret"
+        EL_KEY_DIR="$INSTALLATION_DIR/data/el/chain"
         bb_ensure_directory "$EL_KEY_DIR"
-        
-        # Backup generated key if it exists and deploy custom key
-        if [[ -f "$EL_KEY_TARGET" ]]; then
-            cp "$EL_KEY_TARGET" "$EL_KEY_TARGET.generated"
-        fi
         cp "$EL_KEY_FILE" "$EL_KEY_TARGET"
         log_info "🔗 EL NODE KEY DEPLOYED: $EL_KEY_NAME"
     else
@@ -233,7 +217,7 @@ if [[ -f "$CL_CONFIG_DIR/config.toml" ]]; then
     fi
     
     # Configure persistent_peers from installation.toml
-    CL_PERSISTENT_PEERS=$(awk '/^\[peers\]/,/^$/ {if ($0 ~ /^cl_persistent_peers = \[/) {flag=1} if (flag) {print} if ($0 ~ /\]$/ && flag) {exit}}' "$INSTALLATION_TOML" | grep -oE '"[^"]+"' | tr '\n' ',' | sed 's/,$//' | tr -d '"')
+    CL_PERSISTENT_PEERS=$(awk '/^\[peers\]/,/^$/ {if ($0 ~ /^cl_persistent_peers = \[/) {flag=1} if (flag) {print} if ($0 ~ /\]$/ && flag) {exit}}' "$INSTALLATION_TOML" | grep -oE '"[^"]+"' | tr '\n' ',' | sed 's/,$//' | tr -d '"') || true
     if [[ -n "$CL_PERSISTENT_PEERS" ]]; then
         sed -i "s|^persistent_peers = \".*\"|persistent_peers = \"$CL_PERSISTENT_PEERS\"|" "$CL_CONFIG_DIR/config.toml"
         log_info "✓ Configured $(echo "$CL_PERSISTENT_PEERS" | tr ',' '\n' | wc -l) persistent peers"
@@ -281,21 +265,7 @@ case "$el_client" in
             cd - > /dev/null
         fi
         ;;
-    "geth")
-        if [[ ! -d "$EL_DATA_DIR/chain/bera-geth" ]]; then
-            temp_file=$(mktemp)
-            if "$EL_CLIENT_BIN" init --datadir "$EL_DATA_DIR/chain" "$EL_DATA_DIR/config/genesis.json" >"$temp_file" 2>&1; then
-                log_info "✓ Geth initialized, database at $EL_DATA_DIR/chain/bera-geth/"
-                if [[ "${BB_DEBUG:-false}" == "true" ]]; then
-                    cat "$temp_file"
-                fi
-            else
-                log_error "Failed to initialize Geth:"
-                cat "$temp_file" >&2
-            fi
-            rm -f "$temp_file"
-        fi
-        ;;
+
 esac
 
 # Step 4: Setup network connectivity files

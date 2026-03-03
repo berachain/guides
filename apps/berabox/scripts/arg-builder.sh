@@ -11,22 +11,16 @@ get_el_binary_path() {
     local el_client="$1"
     local installation_dir="$2"
 
-    case "$el_client" in
-        "reth")
-            if [[ -f "$installation_dir/src/bera-reth/reth-debug" ]]; then
-                echo "$installation_dir/src/bera-reth/reth-debug"
-            else
-                echo "$installation_dir/src/bera-reth/target/debug/bera-reth"
-            fi
-            ;;
-        "geth")
-            echo "$installation_dir/src/bera-geth/geth-debug"
-            ;;
-        *)
-            echo "";
-            return 1
-            ;;
-    esac
+    if [[ "$el_client" != "reth" ]]; then
+        echo ""
+        return 1
+    fi
+
+    if [[ -f "$installation_dir/src/bera-reth/reth-debug" ]]; then
+        echo "$installation_dir/src/bera-reth/reth-debug"
+    else
+        echo "$installation_dir/src/bera-reth/target/debug/bera-reth"
+    fi
 }
 
 # Return the absolute path to the CL binary
@@ -82,38 +76,17 @@ _build_el_args_core() {
         fi
     fi
 
-    case "$el_client" in
-        "reth")
-            # For reth: archive mode removes --full flag, standard mode adds --full
-            local archive_option=""
-            if [[ "$archive_mode" != "true" ]]; then
-                archive_option="--full"
-            fi
-            # Logging filter: transaction pool, propagation, and blocks only; suppress RPC noise
-            # Keep: txpool (transaction pool), net::tx::propagation (propagation), reth_node_events (blocks)
-            # Suppress: jsonrpsee (RPC HTTP), rpc::eth (RPC serving), libp2p (peer churn)
-            local log_filter="warn,txpool=trace,net::tx::propagation=trace,reth_node_events=info,jsonrpsee=off,rpc::eth=off,libp2p=off,libp2p_swarm=off,discv5=off,reth_network::peers=off"
-            local args="node -vv --datadir $installation_dir/data/el/chain --chain $installation_dir/data/el/config/genesis.json $archive_option $bootnodes_option $trusted_peers_option --authrpc.addr 127.0.0.1 --authrpc.port $el_authrpc_port --authrpc.jwtsecret $installation_dir/data/cl/config/jwt.hex --port $el_p2p_port --rpc.max-logs-per-response 1000000 --metrics $el_prometheus_port --http --http.addr 0.0.0.0 --http.port $el_rpc_port --ws --ws.addr 0.0.0.0 --ws.port $el_ws_port --ipcpath $installation_dir/runtime/admin.ipc --discovery.port $el_p2p_port --http.corsdomain '*' --log.file.max-files 0 --log.stdout.filter '$log_filter' $ip_option --max-inbound-peers 300"
-            if [[ "$include_binary_path" == "true" ]]; then
-                echo "$(get_el_binary_path reth "$installation_dir") $args"
-            else
-                echo "$args"
-            fi
-            ;;
-        "geth")
-            # For geth: archive mode adds history parameters
-            local archive_option=""
-            if [[ "$archive_mode" == "true" ]]; then
-                archive_option="--history.logs 0 --history.state 0 --history.transactions 0 --gcmode archive"
-            fi
-            local args="--verbosity 2 --datadir $installation_dir/data/el/chain --syncmode full --state.scheme path --ipcpath $installation_dir/runtime/admin.ipc --rpc.batch-response-max-size 100000000 --miner.gasprice 1 $archive_option $bootnodes_option --metrics --metrics.addr 127.0.0.1 --metrics.port $el_prometheus_port --http --http.addr 0.0.0.0 --http.port $el_rpc_port --ws --ws.addr 0.0.0.0 --ws.port $el_ws_port --port $el_p2p_port --discovery.port $el_p2p_port --authrpc.addr 127.0.0.1 --authrpc.port $el_authrpc_port --authrpc.jwtsecret $installation_dir/data/cl/config/jwt.hex --authrpc.vhosts localhost $ip_option"
-            if [[ "$include_binary_path" == "true" ]]; then
-                echo "$(get_el_binary_path geth "$installation_dir") $args"
-            else
-                echo "$args"
-            fi
-            ;;
-    esac
+    local archive_option=""
+    if [[ "$archive_mode" != "true" ]]; then
+        archive_option="--full"
+    fi
+    local log_filter="" 
+    local args="node -v --datadir $installation_dir/data/el/chain --chain $installation_dir/data/el/config/genesis.json $archive_option $bootnodes_option $trusted_peers_option --authrpc.addr 127.0.0.1 --authrpc.port $el_authrpc_port --authrpc.jwtsecret $installation_dir/data/cl/config/jwt.hex --port $el_p2p_port --rpc.max-logs-per-response 1000000 --metrics $el_prometheus_port --http --http.addr 0.0.0.0 --http.port $el_rpc_port --ws --ws.addr 0.0.0.0 --ws.port $el_ws_port --ipcpath $installation_dir/runtime/admin.ipc --discovery.port $el_p2p_port --http.corsdomain '*' --log.file.max-files 0 --log.stdout.filter '$log_filter' $ip_option --max-inbound-peers 300"
+    if [[ "$include_binary_path" == "true" ]]; then
+        echo "$(get_el_binary_path reth "$installation_dir") $args"
+    else
+        echo "$args"
+    fi
 }
 
 # Build EL arguments only (for systemd service files)

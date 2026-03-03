@@ -52,8 +52,8 @@ create_installation() {
         return 1
     fi
     
-    if [[ "$el_client" != "reth" && "$el_client" != "geth" ]]; then
-        log_error "Invalid EL client: $el_client (must be 'reth' or 'geth')"
+    if [[ "$el_client" != "reth" ]]; then
+        log_error "Invalid EL client: $el_client (must be 'reth')"
         return 1
     fi
     
@@ -209,21 +209,7 @@ show_installation_info() {
     config_ref[beacon_kit_version]=$(bb_parse_toml_value "$config_file" "beacon_kit" || echo "Unknown")
     config_ref[base_port]=$(bb_parse_toml_value "$config_file" "base_port" || echo "Unknown")
     
-    # Get EL version based on client type
-    if [[ "${config_ref[el_client]}" == "reth" ]]; then
-        config_ref[el_version]=$(bb_parse_toml_value "$config_file" "bera_reth" || echo "Unknown")
-    elif [[ "${config_ref[el_client]}" == "geth" ]]; then
-        config_ref[el_version]=$(bb_parse_toml_value "$config_file" "bera_geth" || echo "Unknown")
-    else
-        config_ref[el_version]="Unknown"
-    fi
-    
-    # Display information
-    printf "%-20s %s\n" "Chain:" "${config_ref[chain]}"
-    printf "%-20s %s\n" "EL Client:" "${config_ref[el_client]}"
-    printf "%-20s %s\n" "Created:" "${config_ref[created]}"
-    printf "%-20s %s\n" "Base Port:" "${config_ref[base_port]}"
-    printf "%-20s %s\n" "Beacon Kit:" "${config_ref[beacon_kit_version]}"
+    config_ref[el_version]=$(bb_parse_toml_value "$config_file" "bera_reth" || echo "Unknown")
     printf "%-20s %s\n" "EL Version:" "${config_ref[el_version]}"
     echo ""
     
@@ -342,13 +328,13 @@ show_usage() {
     echo ""
     echo "Examples:"
     echo "  $0 create testnet reth my-testnet"
-    echo "  $0 create mainnet geth --port-base 30000"
+    echo "  $0 create mainnet reth --port-base 30000"
     echo "  $0 list"
     echo "  $0 info bb-mainnet-reth"
-    echo "  $0 reset bb-testnet-geth --force"
+    echo "  $0 reset bb-testnet-reth --force"
     echo ""
     echo "Chains: mainnet, testnet"
-    echo "EL Clients: reth, geth"
+    echo "EL Client: reth"
 }
 
 # Main script logic
