@@ -188,7 +188,7 @@ func main() {
 	// Get API URL from environment variable
 	apiURL := os.Getenv("CL_ETHRPC_URL")
 	if apiURL == "" {
-		apiURL = "http://37.27.231.195:59820"
+		apiURL = "http://localhost:59820"
 	}
 
 	// Get database path from environment variable or use default

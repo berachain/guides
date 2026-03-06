@@ -14,13 +14,13 @@ const config = {
   networks: {
     mainnet: {
       name: 'Berachain Mainnet',
-      el: process.env.MAINNET_EL_URL || 'http://37.27.231.195:59830',  // bb-mainnet-reth EL RPC
-      cl: process.env.MAINNET_CL_URL || 'http://37.27.231.195:59820',  // bb-mainnet-reth CL RPC
+      el: process.env.MAINNET_EL_URL || 'http://localhost:59830',  // bb-mainnet-reth EL RPC
+      cl: process.env.MAINNET_CL_URL || 'http://localhost:59820',  // bb-mainnet-reth CL RPC
     },
     bepolia: {
       name: 'Berachain Bepolia Testnet', 
-      el: process.env.BEPOLIA_EL_URL || 'http://37.27.231.195:59870',  // bb-testnet-reth EL RPC
-      cl: process.env.BEPOLIA_CL_URL || 'http://37.27.231.195:59860',  // bb-testnet-reth CL RPC
+      el: process.env.BEPOLIA_EL_URL || 'http://localhost:59870',  // bb-testnet-reth EL RPC
+      cl: process.env.BEPOLIA_CL_URL || 'http://localhost:59860',  // bb-testnet-reth CL RPC
     }
   },
   

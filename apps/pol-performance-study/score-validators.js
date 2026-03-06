@@ -21,8 +21,8 @@ const VALIDATOR_DB_PATH = ConfigHelper.getValidatorDbPath();
 const EL_ETHRPC_URL = process.env.EL_ETHRPC_URL || ConfigHelper.getRpcUrl('el', 'mainnet');
 const CL_ETHRPC_URL = process.env.CL_ETHRPC_URL || ConfigHelper.getRpcUrl('cl', 'mainnet');
 // Optional alternate RPCs. Primary remains as-is; alternates default to provided IPs if unset
-const EL_ETHRPC_URL_ALT = process.env.EL_ETHRPC_URL_ALT || 'http://37.27.231.195:59810';
-const CL_ETHRPC_URL_ALT = process.env.CL_ETHRPC_URL_ALT || 'http://37.27.231.195:59800';
+const EL_ETHRPC_URL_ALT = process.env.EL_ETHRPC_URL_ALT || 'http://localhost:59830';
+const CL_ETHRPC_URL_ALT = process.env.CL_ETHRPC_URL_ALT || 'http://localhost:59820';
 const HAS_ALTERNATE_RPCS = Boolean(EL_ETHRPC_URL_ALT && CL_ETHRPC_URL_ALT && (EL_ETHRPC_URL_ALT !== EL_ETHRPC_URL || CL_ETHRPC_URL_ALT !== CL_ETHRPC_URL));
 const HONEY_TOKEN = process.env.HONEY_TOKEN || '0xFCBD14DC51f0A4d49d5E53C2E0950e0bC26d0Dce';
 
