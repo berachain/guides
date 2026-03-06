@@ -16,7 +16,7 @@ import {
   rpcErrors,
   dbQueriesTotal,
   dbQueryDuration,
-  activeWorkers,
+  pipelineConcurrency,
   queueDepth,
 } from "../metrics.js";
 
@@ -337,7 +337,7 @@ export async function ingestEl(
       // Fetch all transactions in parallel (chunked)
       for (let i = 0; i < txHashes.length; i += cfg.txConcurrency) {
         const chunk = txHashes.slice(i, i + cfg.txConcurrency);
-        activeWorkers.set({ type: "trace" }, chunk.length);
+        pipelineConcurrency.set({ stage: "trace" }, chunk.length);
 
         await Promise.all(
           chunk.map(async (h) => {
@@ -388,7 +388,7 @@ export async function ingestEl(
         );
       }
 
-      activeWorkers.set({ type: "trace" }, 0);
+      pipelineConcurrency.set({ stage: "trace" }, 0);
       txQueue.push({ bn, blk, txHashes, txMap });
       txIndex++;
       queueDepth.set({ type: "tx_queue" }, txQueue.length);
@@ -430,7 +430,7 @@ export async function ingestEl(
       // Fetch all receipts in parallel (chunked) - use higher concurrency for receipts
       for (let i = 0; i < txHashes.length; i += cfg.receiptConcurrency) {
         const chunk = txHashes.slice(i, i + cfg.receiptConcurrency);
-        activeWorkers.set({ type: "receipt" }, chunk.length);
+        pipelineConcurrency.set({ stage: "receipt" }, chunk.length);
 
         await Promise.all(
           chunk.map(async (h) => {
@@ -488,7 +488,7 @@ export async function ingestEl(
         );
       }
 
-      activeWorkers.set({ type: "receipt" }, 0);
+      pipelineConcurrency.set({ stage: "receipt" }, 0);
 
       // Match transactions and receipts
       const allItems: Array<{ tx: any; receipt: any } | null> = txHashes.map(
@@ -727,7 +727,7 @@ export async function ingestEl(
           let totalPriorityFees = 0n;
 
           // Process ALL transactions in parallel (no chunking for DB inserts!)
-          activeWorkers.set({ type: "transactions" }, allItems.length);
+          pipelineConcurrency.set({ stage: "transactions" }, allItems.length);
           queueDepth.set({ type: "transactions" }, 0);
 
           const baseFeeWei = blk.baseFeePerGas ? BigInt(blk.baseFeePerGas) : 0n;
@@ -917,7 +917,7 @@ export async function ingestEl(
           }
 
           // All transactions processed
-          activeWorkers.set({ type: "transactions" }, 0);
+          pipelineConcurrency.set({ stage: "transactions" }, 0);
 
           // After processing txs for this block, update block aggregates if we had prices
           if (txWithPrices > 0) {

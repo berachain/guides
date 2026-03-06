@@ -121,11 +121,19 @@ export const dbQueryDuration = new Histogram({
   registers: [register],
 });
 
-// Concurrency metrics
-export const activeWorkers = new Gauge({
-  name: "beralyzer_active_workers",
-  help: "Number of active worker threads",
-  labelNames: ["type"], // el_fetch, trace, transactions
+// Concurrency metrics (EL pipeline internal concurrency)
+export const pipelineConcurrency = new Gauge({
+  name: "beralyzer_pipeline_concurrency",
+  help: "Number of concurrent RPC fetch threads in EL pipeline stages",
+  labelNames: ["stage"], // trace, receipt, transactions
+  registers: [register],
+});
+
+// Top-level worker lifecycle: 1 = running, 0 = exited
+export const workerRunning = new Gauge({
+  name: "beralyzer_worker_running",
+  help: "Whether a top-level worker is running (1) or has exited (0)",
+  labelNames: ["worker"], // EL, ERC20, CL, Decoder, Snapshots, FailedBlocksRetry, Stats
   registers: [register],
 });
 
@@ -133,5 +141,32 @@ export const queueDepth = new Gauge({
   name: "beralyzer_queue_depth",
   help: "Current queue depth",
   labelNames: ["type"], // blocks, transactions
+  registers: [register],
+});
+
+// Database inventory metrics — updated periodically by the stats worker
+export const dbRows = new Gauge({
+  name: "beralyzer_db_rows",
+  help: "Approximate row count in each indexed table",
+  labelNames: ["table"], // blocks, transactions, contracts, erc20_tokens, validators
+  registers: [register],
+});
+
+export const dbFailedBlocksUnresolved = new Gauge({
+  name: "beralyzer_db_failed_blocks_unresolved",
+  help: "Number of unresolved failed blocks",
+  registers: [register],
+});
+
+export const dbCursorHeight = new Gauge({
+  name: "beralyzer_db_cursor_height",
+  help: "Last committed block height per worker module (sourced from DB, reliable after worker exit)",
+  labelNames: ["module"], // blocks_el, cl_absences, erc20_registry
+  registers: [register],
+});
+
+export const dbDailySnapshotDays = new Gauge({
+  name: "beralyzer_db_daily_snapshot_days",
+  help: "Number of distinct days with validator set snapshots",
   registers: [register],
 });
