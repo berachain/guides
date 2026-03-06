@@ -8,7 +8,7 @@ Beralyzer indexes Berachain EL and CL data into Postgres so you can query it. Bl
 
 ## What it indexes
 
-Five workers run in parallel, each maintaining its own cursor:
+Five workers run in parallel:
 
 | Worker | What it ingests |
 |--------|----------------|

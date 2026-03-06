@@ -25,7 +25,7 @@ export async function collectDbStats(pg: Pool): Promise<void> {
         dbRows.set({ table }, parseInt(result.rows[0].count, 10));
       }
     } catch (e) {
-      // Individual table count failure; other tables still update
+      console.warn(`Stats: failed to read row count for ${table}:`, (e as Error).message);
     }
   }
 
@@ -34,8 +34,8 @@ export async function collectDbStats(pg: Pool): Promise<void> {
       `SELECT COUNT(*) AS count FROM failed_blocks WHERE resolved_at IS NULL`,
     );
     dbFailedBlocksUnresolved.set(parseInt(failedResult.rows[0].count, 10));
-  } catch (_) {
-    // failed_blocks is small; this rarely fails
+  } catch (e) {
+    console.warn("Stats: failed to read failed_blocks count:", (e as Error).message);
   }
 
   try {
@@ -48,8 +48,8 @@ export async function collectDbStats(pg: Pool): Promise<void> {
         Number(row.last_processed_height),
       );
     }
-  } catch (_) {
-    // cursor query failed; metrics stay at last-known values
+  } catch (e) {
+    console.warn("Stats: failed to read cursor heights:", (e as Error).message);
   }
 
   try {
@@ -57,7 +57,7 @@ export async function collectDbStats(pg: Pool): Promise<void> {
       `SELECT COUNT(DISTINCT day) AS count FROM validator_set_daily_snapshots`,
     );
     dbDailySnapshotDays.set(parseInt(snapshotResult.rows[0].count, 10));
-  } catch (_) {
-    // snapshot coverage query failed
+  } catch (e) {
+    console.warn("Stats: failed to read snapshot coverage:", (e as Error).message);
   }
 }

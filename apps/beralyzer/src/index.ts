@@ -667,14 +667,3 @@ main().catch(async (err) => {
   await closePool();
   process.exit(1);
 });
-
-// Cleanup pool on exit
-process.on("SIGINT", async () => {
-  await closePool();
-  process.exit(0);
-});
-
-process.on("SIGTERM", async () => {
-  await closePool();
-  process.exit(0);
-});
