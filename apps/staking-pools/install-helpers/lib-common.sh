@@ -716,3 +716,254 @@ predict_and_display_addresses() {
 }
 
 
+# === DELEGATION SIMULATION ===
+
+predict_handler_address() {
+  # Spin up a throwaway anvil fork, call deployDelegationHandler, read back the
+  # address from delegationHandlers(pubkey), then kill the fork.
+  # Returns the checksummed handler address on stdout.
+  #
+  # Args:
+  #   $1  pubkey   — validator pubkey (0x-prefixed 96 hex chars)
+  #   $2  network  — "mainnet" or "bepolia"
+  #   $3  key_file — path to private key file (used only for deploy tx on fork)
+  local pubkey="$1"
+  local network="$2"
+  local key_file="$3"
+
+  local rpc_upstream factory fork_port fork_url
+  rpc_upstream=$(get_rpc_url_for_network "$network")
+  factory=$(get_delegation_handler_factory_for_network "$network")
+  fork_port=18544
+  fork_url="http://127.0.0.1:$fork_port"
+
+  local priv_key
+  priv_key=$(cat "$key_file")
+
+  anvil --fork-url "$rpc_upstream" --port "$fork_port" &>/tmp/anvil-predict.log &
+  local anvil_pid=$!
+  # shellcheck disable=SC2064
+  trap "kill $anvil_pid 2>/dev/null; wait $anvil_pid 2>/dev/null; trap - RETURN" RETURN
+
+  local ready=false
+  for i in {1..30}; do
+    if cast block-number -r "$fork_url" &>/dev/null; then ready=true; break; fi
+    sleep 0.5
+  done
+  if [[ "$ready" == "false" ]]; then
+    log_error "predict_handler_address: anvil fork did not become ready" >&2
+    return 1
+  fi
+
+  if ! cast send "$factory" 'deployDelegationHandler(bytes)' "$pubkey" \
+      -r "$fork_url" --private-key "$priv_key" >/dev/null; then
+    log_error "predict_handler_address: deployDelegationHandler failed" >&2
+    return 1
+  fi
+
+  local handler
+  handler=$(cast call "$factory" 'delegationHandlers(bytes)(address)' "$pubkey" \
+    -r "$fork_url" 2>/dev/null | xargs)
+
+  if [[ -z "$handler" || "$handler" == "0x0000000000000000000000000000000000000000" ]]; then
+    log_error "predict_handler_address: handler address is zero after deploy" >&2
+    return 1
+  fi
+
+  echo "$handler"
+}
+
+run_delegation_simulation() {
+  # Fork mainnet/bepolia via anvil, run operator steps (deploy+fund) with the signing key,
+  # impersonate the DEFAULT_ADMIN_ROLE holder to execute the Safe payload, then verify state.
+  #
+  # Args:
+  #   $1  pubkey       — validator pubkey (0x-prefixed 96 hex chars)
+  #   $2  network      — "mainnet" or "bepolia"
+  #   $3  key_file     — path to private key file (key read only inside this function)
+  #   $4  payload_file — path to safe-multisend-payload.json
+  #
+  # Returns 0 on success, 1 on failure.
+  # Writes generated/simulation-report.txt on success.
+  local pubkey="$1"
+  local network="$2"
+  local key_file="$3"
+  local payload_file="$4"
+
+  local fork_port=18545
+  local fork_url="http://127.0.0.1:$fork_port"
+  local rpc_upstream
+  rpc_upstream=$(get_rpc_url_for_network "$network")
+  local factory
+  factory=$(get_delegation_handler_factory_for_network "$network")
+
+  if [[ ! -f "$key_file" ]]; then
+    log_error "Key file not found: $key_file"
+    return 1
+  fi
+  if [[ ! -f "$payload_file" ]]; then
+    log_error "Payload file not found: $payload_file"
+    return 1
+  fi
+  if ! have_cmd anvil; then
+    log_error "anvil not found; install foundry (https://book.getfoundry.sh/)"
+    return 1
+  fi
+
+  # Load key — not logged or echoed
+  local SIM_PRIVATE_KEY
+  SIM_PRIVATE_KEY=$(cat "$key_file")
+  local SIM_EOA
+  SIM_EOA=$(cast wallet address --private-key "$SIM_PRIVATE_KEY" 2>/dev/null | xargs)
+  log_info "Simulation signing address: $SIM_EOA"
+
+  # The handler uses plain AccessControl (not enumerable) — getRoleMember reverts.
+  # DEFAULT_ADMIN_ROLE is granted to the factory owner() at deploy time.
+  local admin
+  admin=$(cast call "$factory" 'owner()(address)' -r "$rpc_upstream" 2>/dev/null | xargs || echo "")
+  if [[ -z "$admin" || "$admin" == "0x0000000000000000000000000000000000000000" ]]; then
+    log_error "Sim: could not read factory owner (DEFAULT_ADMIN_ROLE holder)"
+    return 1
+  fi
+  log_info "DEFAULT_ADMIN_ROLE holder (factory owner): $admin"
+
+  # Start anvil fork
+  log_info "Starting anvil fork of $network ($rpc_upstream)..."
+  anvil --fork-url "$rpc_upstream" --port "$fork_port" &>/tmp/anvil-sim.log &
+  local anvil_pid=$!
+  # RETURN trap fires when this function returns; EXIT would fire in the parent shell where
+  # anvil_pid is not defined, so we use RETURN only and kill explicitly on each exit path.
+  # shellcheck disable=SC2064
+  trap "kill $anvil_pid 2>/dev/null; wait $anvil_pid 2>/dev/null; trap - RETURN" RETURN
+
+  # Wait for fork
+  local ready=false
+  for i in {1..30}; do
+    if cast block-number -r "$fork_url" &>/dev/null; then ready=true; break; fi
+    sleep 0.5
+  done
+  if [[ "$ready" == "false" ]]; then
+    log_error "Anvil fork did not become ready"
+    return 1
+  fi
+  log_success "Fork ready at $fork_url"
+  echo ""
+
+  # Step 1: Deploy handler on fork
+  log_info "Sim step 1: Deploy DelegationHandler..."
+  cast send "$factory" \
+    'deployDelegationHandler(bytes)' "$pubkey" \
+    -r "$fork_url" --private-key "$SIM_PRIVATE_KEY" >/dev/null
+
+  local handler
+  handler=$(cast call "$factory" 'delegationHandlers(bytes)(address)' "$pubkey" -r "$fork_url" | xargs)
+  if [[ -z "$handler" || "$handler" == "0x0000000000000000000000000000000000000000" ]]; then
+    log_error "Sim: handler address is zero after deploy"
+    return 1
+  fi
+  log_success "Sim: handler at $handler"
+  echo ""
+
+  # Step 2: Fund handler — parse amount from payload
+  local amount_bera
+  amount_bera=$(python3 -c "
+import json
+d = json.load(open('$payload_file'))
+txs = d.get('transactions', [])
+delegate_data = next((t['data'] for t in txs if '9fa6dd35' in t.get('data','').lower()), '')
+if delegate_data:
+    amount_wei = int(delegate_data[10:], 16)
+    print(int(amount_wei // 10**18))
+" 2>/dev/null || echo "")
+
+  if [[ -z "$amount_bera" || "$amount_bera" == "0" ]]; then
+    log_error "Sim: could not parse amount from payload"
+    return 1
+  fi
+
+  log_info "Sim step 2: Sending $amount_bera BERA to handler..."
+  cast send "$handler" \
+    --value "${amount_bera}ether" \
+    -r "$fork_url" --private-key "$SIM_PRIVATE_KEY" >/dev/null
+  log_success "Sim: handler funded"
+  echo ""
+
+  # Step 3: Impersonate DEFAULT_ADMIN_ROLE holder (factory owner), execute Safe payload txs
+  log_info "Sim step 3: Impersonating admin ($admin) for Safe payload..."
+  cast rpc anvil_impersonateAccount "$admin" -r "$fork_url" >/dev/null
+  # 1 ETH in hex for gas — use printf for portable zero-padded hex
+  cast rpc anvil_setBalance "$admin" "$(printf '0x%064x' $((10**18)))" -r "$fork_url" >/dev/null
+
+  local tx_count
+  tx_count=$(python3 -c "import json; d=json.load(open('$payload_file')); print(len(d.get('transactions',[])))" 2>/dev/null || echo "0")
+  if [[ "$tx_count" -eq 0 ]]; then
+    log_error "Sim: no transactions in payload file"
+    return 1
+  fi
+
+  for i in $(seq 0 $((tx_count - 1))); do
+    local to calldata comment
+    to=$(python3 -c "import json; d=json.load(open('$payload_file')); print(d['transactions'][$i]['to'])" 2>/dev/null)
+    calldata=$(python3 -c "import json; d=json.load(open('$payload_file')); print(d['transactions'][$i]['data'])" 2>/dev/null)
+    comment=$(python3 -c "import json; d=json.load(open('$payload_file')); print(d['transactions'][$i].get('_comment',''))" 2>/dev/null || echo "")
+    to="${to/HANDLER_ADDRESS_AFTER_DEPLOY/$handler}"
+    log_info "  Sim tx $((i+1))/$tx_count: $comment"
+    # cast send does not accept --data; pass raw calldata as the SIG positional argument
+    cast send "$to" "$calldata" -r "$fork_url" --from "$admin" --unlocked >/dev/null
+    log_success "  Sim tx $((i+1)) ok"
+  done
+
+  cast rpc anvil_stopImpersonatingAccount "$admin" -r "$fork_url" >/dev/null
+  echo ""
+
+  # Step 4: Verify final state
+  log_info "Sim: verifying final state..."
+  local delegated_amount delegated_bera
+  delegated_amount=$(cast call "$handler" 'delegatedAmount()(uint256)' -r "$fork_url" | awk '{print $1}')
+  delegated_bera=$(cast --to-unit "$delegated_amount" ether 2>/dev/null || echo "$delegated_amount wei")
+  log_success "Sim: delegatedAmount = $delegated_bera BERA"
+
+  local operator
+  operator=$(python3 -c "
+import json, sys
+d = json.load(open('$payload_file'))
+txs = d.get('transactions', [])
+grant_data = next((t['data'] for t in txs if '2f2ff15d' in t.get('data','').lower()), '')
+if not grant_data or len(grant_data) < 138:
+    sys.exit(1)
+print('0x' + grant_data[-40:])
+" 2>/dev/null || echo "")
+
+  if [[ -z "$operator" || "$operator" == "0x" ]]; then
+    log_error "Sim: grantRole tx not found in payload — cannot verify VALIDATOR_ADMIN_ROLE"
+    return 1
+  fi
+
+  local validator_admin_role has_role
+  validator_admin_role=$(cast keccak "VALIDATOR_ADMIN_ROLE" | xargs)
+  has_role=$(cast call "$handler" 'hasRole(bytes32,address)(bool)' "$validator_admin_role" "$operator" -r "$fork_url" 2>/dev/null | xargs || echo "false")
+  if [[ "$has_role" != "true" ]]; then
+    log_error "Sim: VALIDATOR_ADMIN_ROLE NOT granted to $operator"
+    return 1
+  fi
+  log_success "Sim: VALIDATOR_ADMIN_ROLE granted to $operator"
+
+  # Write simulation report
+  local report_file
+  report_file="$(dirname "$payload_file")/simulation-report.txt"
+  cat > "$report_file" <<EOF
+Simulation passed
+=================
+Timestamp:          $(date -u +"%Y-%m-%d %H:%M:%S UTC")
+Network:            $network
+Validator pubkey:   $pubkey
+Handler (fork):     $handler
+Admin impersonated: $admin
+Delegated amount:   $delegated_bera BERA
+Operator role:      VALIDATOR_ADMIN_ROLE granted to $operator
+EOF
+
+  echo ""
+  log_success "Simulation passed. Artifacts are validated."
+  return 0
+}
