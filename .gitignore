@@ -48,3 +48,9 @@ yarn-error.log*
 
 # Ignore bundled tsup config files
 tsup.config.bundled*
+
+# pnpm lock files (regenerated on install)
+pnpm-lock.yaml
+
+# Temporary var directory
+var/
