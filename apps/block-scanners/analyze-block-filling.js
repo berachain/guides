@@ -310,7 +310,7 @@ async function analyzeBlockProposers(provider, startBlock, endBlock, clRpcBaseUr
             proposerStats[proposerTitle].totalGasUsed += BigInt(result.gasUsed);
             proposerStats[proposerTitle].blockCount++;
             proposerStats[proposerTitle].blockNumbers.push(result.blockNumber);
-            if (result.transactionCount === 0) {
+            if (result.transactionCount <= 1) {
                 proposerStats[proposerTitle].emptyBlockCount++;
             }
             
