@@ -166,11 +166,22 @@ main() {
     exit 1
   fi
   
-  local CLI_FEE_WEI
-  CLI_FEE_WEI=$(cast to-wei "$CLI_FEE" 2>/dev/null)
-  
+  # Query the required EIP-7002 fee from the WithdrawalVault; overpaying is refunded
+  local withdrawal_vault CLI_FEE_WEI fee_bera
+  withdrawal_vault=$(cast_call_clean "$factory" "withdrawalVault()(address)" -r "$rpc_url" 2>/dev/null || echo "")
+  if [[ -n "$withdrawal_vault" && "$withdrawal_vault" != "0x0000000000000000000000000000000000000000" ]]; then
+    CLI_FEE_WEI=$(cast_call_clean "$withdrawal_vault" "getWithdrawalRequestFee()(uint256)" -r "$rpc_url" 2>/dev/null || echo "")
+  fi
+  if [[ -z "$CLI_FEE_WEI" || "$CLI_FEE_WEI" == "0" ]]; then
+    CLI_FEE_WEI=$(cast to-wei "$CLI_FEE" 2>/dev/null)
+    fee_bera="$CLI_FEE (fallback — fee query failed)"
+  else
+    fee_bera=$(cast from-wei "$CLI_FEE_WEI" 2>/dev/null || echo "$CLI_FEE_WEI wei")
+    CLI_FEE_WEI=$(echo "$CLI_FEE_WEI + 100000000000000" | bc)  # +0.0001 BERA buffer
+  fi
+
   log_info "DelegationHandler: $HANDLER"
-  log_info "Withdrawal fee: $CLI_FEE BERA"
+  log_info "Withdrawal fee: $fee_bera BERA (EIP-7002, queried live)"
   log_info "RPC URL: $rpc_url"
   echo ""
   
@@ -190,13 +201,13 @@ main() {
 #!/usr/bin/env bash
 # Step 1: Request principal withdrawal
 # Handler: $HANDLER
-# Fee: $CLI_FEE BERA
+# Fee: $fee_bera BERA (EIP-7002, queried at generation time — overpayment refunded)
 # Generated: $(date -u +"%Y-%m-%d %H:%M:%S UTC")
 
 # Request principal withdrawal
 tx_output=\$(cast send $HANDLER \\
   'requestDelegatedFundsWithdrawal()' \\
-  --value ${CLI_FEE}ether \\
+  --value ${CLI_FEE_WEI}wei \\
   -r $rpc_url $wallet_args --json)
 
 # Extract request ID from logs

@@ -177,11 +177,24 @@ main() {
     exit 1
   fi
   
-  local fee_wei
-  fee_wei=$(cast to-wei "$CLI_FEE" 2>/dev/null)
-  
+  # Query the required EIP-7002 fee from the WithdrawalVault; overpaying is refunded
+  local withdrawal_vault fee_wei fee_bera
+  withdrawal_vault=$(cast_call_clean "$factory" "withdrawalVault()(address)" -r "$rpc_url" 2>/dev/null || echo "")
+  if [[ -n "$withdrawal_vault" && "$withdrawal_vault" != "0x0000000000000000000000000000000000000000" ]]; then
+    fee_wei=$(cast_call_clean "$withdrawal_vault" "getWithdrawalRequestFee()(uint256)" -r "$rpc_url" 2>/dev/null || echo "")
+  fi
+  if [[ -z "$fee_wei" || "$fee_wei" == "0" ]]; then
+    # Fallback to CLI_FEE if fee query fails
+    fee_wei=$(cast to-wei "$CLI_FEE" 2>/dev/null)
+    fee_bera="$CLI_FEE (fallback — fee query failed)"
+  else
+    fee_bera=$(cast from-wei "$fee_wei" 2>/dev/null || echo "$fee_wei wei")
+    # Apply a small buffer (round up to nearest 0.0001 BERA) to avoid underpayment on race
+    fee_wei=$(echo "$fee_wei + 100000000000000" | bc)  # +0.0001 BERA buffer
+  fi
+
   log_info "DelegationHandler: $handler"
-  log_info "Withdrawal fee: $CLI_FEE BERA"
+  log_info "Withdrawal fee: $fee_bera BERA (EIP-7002, queried live)"
   log_info "RPC URL: $rpc_url"
   echo ""
   
@@ -201,13 +214,13 @@ main() {
 #!/usr/bin/env bash
 # Step 1: Request yield withdrawal
 # Handler: $handler
-# Fee: $CLI_FEE BERA
+# Fee: $fee_bera BERA (EIP-7002, queried at generation time — overpayment refunded)
 # Generated: $(date -u +"%Y-%m-%d %H:%M:%S UTC")
 
 # Request yield withdrawal
 tx_output=\$(cast send $handler \\
   'requestYieldWithdrawal()' \\
-  --value ${CLI_FEE}ether \\
+  --value ${fee_wei}wei \\
   -r $rpc_url $wallet_args --json)
 
 # Extract request ID from logs
