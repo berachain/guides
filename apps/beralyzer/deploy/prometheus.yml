@@ -1,0 +1,28 @@
+# Beralyzer Prometheus scrape configuration
+#
+# Drop this file into your Prometheus conf.d/ directory, or merge the
+# scrape_configs block into your existing prometheus.yml.
+#
+# Beralyzer binds its metrics server to 127.0.0.1 by default.
+# If Prometheus runs on a different host, either:
+#   - adjust targets below to the host running beralyzer, or
+#   - use node_exporter's textfile collector to relay metrics.
+
+scrape_configs:
+  - job_name: beralyzer
+    static_configs:
+      - targets:
+          - "127.0.0.1:9464"   # adjust port if BERALYZER_METRICS_PORT differs
+        labels:
+          chain: mainnet        # change to bepolia, etc. for other instances
+    scrape_interval: 15s
+    scrape_timeout: 10s
+
+# To monitor multiple chains, add additional jobs:
+#
+#   - job_name: beralyzer_bepolia
+#     static_configs:
+#       - targets: ["127.0.0.1:9465"]
+#         labels:
+#           chain: bepolia
+#     scrape_interval: 15s

@@ -1,0 +1,201 @@
+groups:
+  - name: beralyzer
+    rules:
+
+      # -----------------------------------------------------------------------
+      # Ingestion lag
+      # -----------------------------------------------------------------------
+
+      - alert: BeralyzerELWorkerBehind
+        expr: beralyzer_blocks_behind{type="el"} > 500
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Beralyzer EL worker is {{ $value }} blocks behind chain head"
+          description: >
+            The EL ingestion worker has been more than 500 blocks behind chain
+            head for 5 minutes. This may indicate RPC issues, high load, or a
+            stalled worker. Check logs and failed_blocks table.
+
+      - alert: BeralyzerELWorkerFarBehind
+        expr: beralyzer_blocks_behind{type="el"} > 5000
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Beralyzer EL worker is critically behind ({{ $value }} blocks)"
+          description: >
+            EL ingestion is more than 5000 blocks behind. Data is significantly
+            stale. Worker may have exited or RPC endpoint is unavailable.
+
+      - alert: BeralyzerCLWorkerBehind
+        expr: beralyzer_blocks_behind{type="cl"} > 500
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Beralyzer CL worker is {{ $value }} blocks behind"
+          description: >
+            The CL ingestion worker is behind. Validator absence and voting
+            power data will be stale. Check CL RPC endpoint availability.
+
+      # -----------------------------------------------------------------------
+      # Worker health
+      # -----------------------------------------------------------------------
+
+      # Direct lifecycle signal: beralyzer_worker_running is set to 1 on start,
+      # 0 on exit (including early return from fatal errors). This is the most
+      # reliable way to detect a dead worker.
+      - alert: BeralyzerWorkerExited
+        expr: beralyzer_worker_running == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Beralyzer {{ $labels.worker }} worker has exited"
+          description: >
+            The {{ $labels.worker }} worker is no longer running. It may have
+            exited after consecutive failures or a fatal error. Check
+            journalctl -u beralyzer for error details.
+
+      # Secondary signal: loop iterations stopped incrementing. Catches the
+      # case where the worker is stuck inside a long-running call without
+      # having exited. Window is 10m to cover the longest poll interval
+      # (snapshots at 5m).
+      - alert: BeralyzerWorkerStalled
+        expr: increase(beralyzer_loop_iterations_total[10m]) == 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Beralyzer {{ $labels.worker }} worker has not iterated in ~15 minutes"
+          description: >
+            The {{ $labels.worker }} worker's loop iteration counter has not
+            incremented in a 10-minute window, sustained for 5 minutes. The
+            worker may be stuck in a long-running RPC or DB call. Effective
+            dead time before this alert fires is ~15 minutes.
+
+      # -----------------------------------------------------------------------
+      # RPC errors
+      # -----------------------------------------------------------------------
+
+      - alert: BeralyzerRPCErrorRateHigh
+        expr: rate(beralyzer_rpc_errors_total[5m]) > 0.5
+        for: 3m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Beralyzer RPC error rate elevated on {{ $labels.endpoint }}"
+          description: >
+            RPC errors on endpoint {{ $labels.endpoint }} are occurring at more
+            than 0.5/s ({{ $value | printf "%.2f" }}/s). This may indicate
+            endpoint instability. Workers will exit after 5 consecutive failures.
+
+      - alert: BeralyzerRPCEndpointDown
+        expr: rate(beralyzer_rpc_errors_total[2m]) > 2
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Beralyzer RPC endpoint {{ $labels.endpoint }} appears down"
+          description: >
+            More than 2 RPC errors per second on {{ $labels.endpoint }} for
+            2 minutes. Ingestion is likely stalled.
+
+      # -----------------------------------------------------------------------
+      # Processing performance
+      # -----------------------------------------------------------------------
+
+      - alert: BeralyzerELBlockProcessingSlow
+        expr: >
+          histogram_quantile(0.95,
+            rate(beralyzer_blocks_process_duration_seconds_bucket{type="el"}[5m])
+          ) > 30
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Beralyzer EL block processing p95 latency is {{ $value | printf \"%.1f\" }}s"
+          description: >
+            The 95th percentile block processing time exceeds 30 seconds.
+            This may indicate DB pressure, RPC slowness, or high block tx count.
+            Check BERALYZER_CONCURRENCY_* settings and RPC latency metrics.
+
+      - alert: BeralyzerELQueueDepthHigh
+        expr: beralyzer_queue_depth{type="tx_queue"} > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Beralyzer EL tx queue depth is {{ $value }} (backpressure active)"
+          description: >
+            The EL pipeline tx queue is near its maxQueueDepth (100). Header
+            fetching is being throttled. Consider increasing
+            BERALYZER_CONCURRENCY_RECEIPT or reducing BERALYZER_CONCURRENCY_TRACE
+            if receipts are the bottleneck.
+
+      # -----------------------------------------------------------------------
+      # Database
+      # -----------------------------------------------------------------------
+
+      - alert: BeralyzerDBQuerySlow
+        expr: >
+          histogram_quantile(0.99,
+            rate(beralyzer_db_query_duration_seconds_bucket[5m])
+          ) > 5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Beralyzer DB query p99 latency is {{ $value | printf \"%.1f\" }}s"
+          description: >
+            Database query latency p99 exceeds 5 seconds. This will slow
+            all workers. Check Postgres query plans, connection pool saturation,
+            and disk I/O.
+
+      # -----------------------------------------------------------------------
+      # Indexed data inventory
+      # (sourced from beralyzer_db_rows and beralyzer_db_failed_blocks_unresolved,
+      #  updated by the stats worker every ~60s)
+      # -----------------------------------------------------------------------
+
+      - alert: BeralyzerFailedBlocksGrowing
+        expr: beralyzer_db_failed_blocks_unresolved > 50
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Beralyzer has {{ $value }} unresolved failed blocks"
+          description: >
+            More than 50 blocks remain unresolved in failed_blocks for 10 minutes.
+            The retry worker may not be keeping up, or blocks are failing persistently.
+            Query: SELECT module, failure_stage, COUNT(*) FROM failed_blocks
+            WHERE resolved_at IS NULL GROUP BY module, failure_stage;
+
+      - alert: BeralyzerFailedBlocksCritical
+        expr: beralyzer_db_failed_blocks_unresolved > 500
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Beralyzer has {{ $value }} unresolved failed blocks — data gaps likely"
+          description: >
+            More than 500 blocks are unresolved. Significant data gaps may exist.
+            Check failed_blocks for persistent failure stages and error types.
+
+      # -----------------------------------------------------------------------
+      # Process health
+      # -----------------------------------------------------------------------
+
+      - alert: BeralyzerDown
+        expr: absent(beralyzer_loop_iterations_total)
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Beralyzer process is not being scraped"
+          description: >
+            No beralyzer metrics are being received. The daemon may be down
+            or the metrics endpoint is unreachable. Check systemctl status
+            beralyzer and that port 9464 is reachable from Prometheus.

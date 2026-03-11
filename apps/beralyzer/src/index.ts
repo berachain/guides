@@ -8,6 +8,7 @@ import { ingestClAbsences } from "./workers/cl.js";
 import { snapshotTodayIfMissing } from "./workers/day_snapshots.js";
 import { runDecoderOnce } from "./workers/decoder.js";
 import { retryFailedBlocks } from "./workers/retry_failed.js";
+import { collectDbStats } from "./workers/stats.js";
 import { resolve } from "path";
 import { readFileSync, readdirSync } from "fs";
 import { createServer } from "http";
@@ -18,6 +19,7 @@ import {
   currentBlockHeight,
   chainHeadHeight,
   blocksBehind,
+  workerRunning,
 } from "./metrics.js";
 
 // Error classification for graceful handling
@@ -231,8 +233,9 @@ async function runElIngestion(
   const workerName = "EL";
   let consecutiveFailures = 0;
   const maxConsecutiveFailures = 5;
+  workerRunning.set({ worker: workerName }, 1);
 
-  while (!isShuttingDown) {
+  try { while (!isShuttingDown) {
     const loopStart = Date.now();
     loopIterations.inc({ worker: workerName });
 
@@ -291,7 +294,7 @@ async function runElIngestion(
 
     // Sleep before next iteration
     await new Promise((r) => setTimeout(r, cfg.pollMs));
-  }
+  } } finally { workerRunning.set({ worker: workerName }, 0); }
 }
 
 // ERC20 registry worker - runs independently at its own pace
@@ -302,9 +305,10 @@ async function runErc20Registry(
   const workerName = "ERC20";
   let consecutiveFailures = 0;
   const maxConsecutiveFailures = 5;
-  const pollMs = parseInt(process.env.BERALYZER_ERC20_POLL_MS || "60000", 10); // Default 60s
+  const pollMs = parseInt(process.env.BERALYZER_ERC20_POLL_MS || "60000", 10);
+  workerRunning.set({ worker: workerName }, 1);
 
-  while (!isShuttingDown) {
+  try { while (!isShuttingDown) {
     const loopStart = Date.now();
     loopIterations.inc({ worker: workerName });
 
@@ -356,7 +360,7 @@ async function runErc20Registry(
     if (isShuttingDown) break;
 
     await new Promise((r) => setTimeout(r, pollMs));
-  }
+  } } finally { workerRunning.set({ worker: workerName }, 0); }
 }
 
 // CL ingestion worker - runs independently at its own pace
@@ -367,9 +371,10 @@ async function runClIngestion(
   const workerName = "CL";
   let consecutiveFailures = 0;
   const maxConsecutiveFailures = 5;
-  const pollMs = parseInt(process.env.BERALYZER_CL_POLL_MS || "30000", 10); // Default 30s
+  const pollMs = parseInt(process.env.BERALYZER_CL_POLL_MS || "30000", 10);
+  workerRunning.set({ worker: workerName }, 1);
 
-  while (!isShuttingDown) {
+  try { while (!isShuttingDown) {
     const loopStart = Date.now();
     loopIterations.inc({ worker: workerName });
 
@@ -423,7 +428,7 @@ async function runClIngestion(
     if (isShuttingDown) break;
 
     await new Promise((r) => setTimeout(r, pollMs));
-  }
+  } } finally { workerRunning.set({ worker: workerName }, 0); }
 }
 
 // Decoder worker - runs independently at its own pace
@@ -432,9 +437,10 @@ async function runDecoder(
   cfg: ReturnType<typeof loadConfig>,
 ): Promise<void> {
   const workerName = "Decoder";
-  const pollMs = parseInt(process.env.BERALYZER_DECODER_POLL_MS || "60000", 10); // Default 60s
+  const pollMs = parseInt(process.env.BERALYZER_DECODER_POLL_MS || "60000", 10);
+  workerRunning.set({ worker: workerName }, 1);
 
-  while (!isShuttingDown) {
+  try { while (!isShuttingDown) {
     const loopStart = Date.now();
     loopIterations.inc({ worker: workerName });
 
@@ -443,7 +449,6 @@ async function runDecoder(
     } catch (e) {
       const err = e as Error;
       logDatabaseError(`${workerName} error`, err, { non_fatal: true });
-      // Decoder errors are usually not fatal, just log and continue
     } finally {
       const loopDurationSeconds = (Date.now() - loopStart) / 1000;
       loopDuration.observe({ worker: workerName }, loopDurationSeconds);
@@ -452,7 +457,7 @@ async function runDecoder(
     if (isShuttingDown) break;
 
     await new Promise((r) => setTimeout(r, pollMs));
-  }
+  } } finally { workerRunning.set({ worker: workerName }, 0); }
 }
 
 // Snapshot worker - runs independently at its own pace
@@ -466,9 +471,10 @@ async function runSnapshots(
   const pollMs = parseInt(
     process.env.BERALYZER_SNAPSHOT_POLL_MS || "300000",
     10,
-  ); // Default 5 minutes
+  );
+  workerRunning.set({ worker: workerName }, 1);
 
-  while (!isShuttingDown) {
+  try { while (!isShuttingDown) {
     const loopStart = Date.now();
     loopIterations.inc({ worker: workerName });
 
@@ -512,6 +518,37 @@ async function runSnapshots(
     if (isShuttingDown) break;
 
     await new Promise((r) => setTimeout(r, pollMs));
+  } } finally { workerRunning.set({ worker: workerName }, 0); }
+}
+
+// Stats worker - periodically collects DB inventory metrics (row counts, cursor heights, etc.)
+async function runStats(
+  pg: Pool,
+  cfg: ReturnType<typeof loadConfig>,
+): Promise<void> {
+  const workerName = "Stats";
+  const pollMs = parseInt(process.env.BERALYZER_STATS_POLL_MS || "60000", 10);
+  workerRunning.set({ worker: workerName }, 1);
+
+  try {
+    while (!isShuttingDown) {
+      const loopStart = Date.now();
+      loopIterations.inc({ worker: workerName });
+
+      try {
+        await collectDbStats(pg);
+      } catch (e) {
+        logDatabaseError(`${workerName} error`, e as Error, { non_fatal: true });
+      } finally {
+        const loopDurationSeconds = (Date.now() - loopStart) / 1000;
+        loopDuration.observe({ worker: workerName }, loopDurationSeconds);
+      }
+
+      if (isShuttingDown) break;
+      await new Promise((r) => setTimeout(r, pollMs));
+    }
+  } finally {
+    workerRunning.set({ worker: workerName }, 0);
   }
 }
 
@@ -521,9 +558,10 @@ async function runFailedBlocksRetry(
   cfg: ReturnType<typeof loadConfig>,
 ): Promise<void> {
   const workerName = "FailedBlocksRetry";
-  const pollMs = parseInt(process.env.BERALYZER_RETRY_POLL_MS || "60000", 10); // Default 60s
+  const pollMs = parseInt(process.env.BERALYZER_RETRY_POLL_MS || "60000", 10);
+  workerRunning.set({ worker: workerName }, 1);
 
-  while (!isShuttingDown) {
+  try { while (!isShuttingDown) {
     const loopStart = Date.now();
     loopIterations.inc({ worker: workerName });
 
@@ -536,7 +574,6 @@ async function runFailedBlocksRetry(
     } catch (e) {
       const err = e as Error;
       logDatabaseError(`${workerName} error`, err, { non_fatal: true });
-      // Retry errors are not fatal, just log and continue
     } finally {
       const loopDurationSeconds = (Date.now() - loopStart) / 1000;
       loopDuration.observe({ worker: workerName }, loopDurationSeconds);
@@ -545,7 +582,7 @@ async function runFailedBlocksRetry(
     if (isShuttingDown) break;
 
     await new Promise((r) => setTimeout(r, pollMs));
-  }
+  } } finally { workerRunning.set({ worker: workerName }, 0); }
 }
 
 async function main() {
@@ -588,6 +625,7 @@ async function main() {
   const decoderWorker = runDecoder(pg, cfg);
   const snapshotWorker = runSnapshots(pg, cfg);
   const retryWorker = runFailedBlocksRetry(pg, cfg);
+  const statsWorker = runStats(pg, cfg);
 
   // Track all workers for shutdown coordination
   activeWorkers.add(elWorker);
@@ -596,6 +634,7 @@ async function main() {
   activeWorkers.add(decoderWorker);
   activeWorkers.add(snapshotWorker);
   activeWorkers.add(retryWorker);
+  activeWorkers.add(statsWorker);
 
   // Wait for all workers (they run until shutdown)
   await Promise.all([
@@ -617,6 +656,9 @@ async function main() {
     retryWorker.catch((err) => {
       console.error("Failed blocks retry worker exited with error:", err);
     }),
+    statsWorker.catch((err) => {
+      console.error("Stats worker exited with error:", err);
+    }),
   ]);
 }
 
@@ -624,15 +666,4 @@ main().catch(async (err) => {
   console.error(err);
   await closePool();
   process.exit(1);
-});
-
-// Cleanup pool on exit
-process.on("SIGINT", async () => {
-  await closePool();
-  process.exit(0);
-});
-
-process.on("SIGTERM", async () => {
-  await closePool();
-  process.exit(0);
 });
