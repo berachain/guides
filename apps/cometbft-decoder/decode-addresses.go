@@ -1,9 +1,12 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
+	"crypto/sha256"
 	"database/sql"
 	"encoding/base64"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -13,6 +16,7 @@ import (
 	"strings"
 	"time"
 
+	bip39 "github.com/tyler-smith/go-bip39"
 	_ "github.com/mattn/go-sqlite3"
 	blst "github.com/supranational/blst/bindings/go"
 )
@@ -55,27 +59,21 @@ type GraphQLResponse struct {
 }
 
 func convertPubKey(base64Key string) (string, error) {
-	// Decode base64
 	keyBytes, err := base64.StdEncoding.DecodeString(base64Key)
 	if err != nil {
 		return "", fmt.Errorf("error decoding base64: %v", err)
 	}
 
-	// Create BLS public key from bytes
 	pubKey := new(blst.P1Affine).Deserialize(keyBytes)
 	if pubKey == nil {
 		return "", fmt.Errorf("invalid public key")
 	}
 
-	// Validate the key
 	if !pubKey.KeyValidate() {
 		return "", fmt.Errorf("invalid public key")
 	}
 
-	// Get compressed bytes
 	compressed := pubKey.Compress()
-
-	// Convert to hex string
 	return fmt.Sprintf("0x%x", compressed), nil
 }
 
@@ -117,10 +115,7 @@ func fetchGraphQLValidators() (*GraphQLResponse, error) {
 		return nil, fmt.Errorf("error marshaling query: %v", err)
 	}
 
-	client := &http.Client{
-		Timeout: 30 * time.Second,
-	}
-
+	client := &http.Client{Timeout: 30 * time.Second}
 	req, err := http.NewRequest("POST", "https://api.berachain.com/graphql", bytes.NewBuffer(jsonData))
 	if err != nil {
 		return nil, fmt.Errorf("error creating request: %v", err)
@@ -148,10 +143,7 @@ func fetchGraphQLValidators() (*GraphQLResponse, error) {
 }
 
 func fetchValidators(url string) (*Response, error) {
-	client := &http.Client{
-		Timeout: 10 * time.Second,
-	}
-
+	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Get(url)
 	if err != nil {
 		return nil, fmt.Errorf("error fetching validators: %v", err)
@@ -170,38 +162,84 @@ func fetchValidators(url string) (*Response, error) {
 	return &response, nil
 }
 
-// removeEmojis removes emoji characters from a string
 func removeEmojis(text string) string {
 	if text == "" {
 		return text
 	}
-
-	// Regex pattern to match emoji Unicode ranges
 	emojiRegex := regexp.MustCompile(`[\x{1F600}-\x{1F64F}]|[\x{1F300}-\x{1F5FF}]|[\x{1F680}-\x{1F6FF}]|[\x{1F1E0}-\x{1F1FF}]|[\x{2600}-\x{26FF}]|[\x{2700}-\x{27BF}]|[\x{1F900}-\x{1F9FF}]|[\x{1FA70}-\x{1FAFF}]`)
-
-	// Remove emojis and trim whitespace
 	cleaned := emojiRegex.ReplaceAllString(text, "")
 	return strings.TrimSpace(cleaned)
 }
 
+// threeWordName generates a deterministic 3-word name from a compressed pubkey hex string.
+// Uses SHA256 of the pubkey and maps 3 pairs of bytes into BIP39 word indices.
+func threeWordName(pubkeyHex string) string {
+	wordList := bip39.GetWordList()
+	listLen := uint16(len(wordList)) // 2048
+
+	hash := sha256.Sum256([]byte(pubkeyHex))
+
+	idx0 := binary.BigEndian.Uint16(hash[0:2]) % listLen
+	idx1 := binary.BigEndian.Uint16(hash[2:4]) % listLen
+	idx2 := binary.BigEndian.Uint16(hash[4:6]) % listLen
+
+	return fmt.Sprintf("%s-%s-%s", wordList[idx0], wordList[idx1], wordList[idx2])
+}
+
+// loadDelegatedPubkeys reads delegated_validators.csv and returns a set of pubkeys (column 3, 0-indexed).
+func loadDelegatedPubkeys(csvPath string) (map[string]bool, error) {
+	delegated := make(map[string]bool)
+
+	f, err := os.Open(csvPath)
+	if err != nil {
+		return delegated, fmt.Errorf("cannot open %s: %v", csvPath, err)
+	}
+	defer f.Close()
+
+	scanner := bufio.NewScanner(f)
+	firstLine := true
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" {
+			continue
+		}
+		if firstLine {
+			firstLine = false
+			continue // skip header
+		}
+		parts := strings.Split(line, ",")
+		if len(parts) < 3 {
+			continue
+		}
+		pubkey := strings.TrimSpace(parts[2])
+		if pubkey != "" {
+			delegated[strings.ToLower(pubkey)] = true
+		}
+	}
+	return delegated, scanner.Err()
+}
+
+// addColumnIfMissing runs ALTER TABLE ADD COLUMN and ignores the error if the column already exists.
+func addColumnIfMissing(db *sql.DB, table, colDef string) {
+	_, err := db.Exec(fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s", table, colDef))
+	if err != nil && !strings.Contains(err.Error(), "duplicate column name") {
+		fmt.Printf("Warning: could not add column %q to %s: %v\n", colDef, table, err)
+	}
+}
+
 func main() {
-	// Get API URL from environment variable
 	apiURL := os.Getenv("CL_ETHRPC_URL")
 	if apiURL == "" {
 		apiURL = "http://localhost:59820"
 	}
 
-	// Get database path from environment variable or use default
 	dbPath := os.Getenv("VALIDATOR_DB_PATH")
 	if dbPath == "" {
-		// Default to ../var/db/validator.sqlite relative to current working directory
-		// This assumes the script is run from apps/cometbft-decoder/ directory
 		cwd, err := os.Getwd()
 		if err != nil {
 			fmt.Printf("Error getting current directory: %v\n", err)
 			return
 		}
-		// If we're in cometbft-decoder, go up one level to apps, then into var/db
 		dbPath = filepath.Join(cwd, "..", "var", "db", "validator.sqlite")
 		dbPath, err = filepath.Abs(dbPath)
 		if err != nil {
@@ -210,14 +248,29 @@ func main() {
 		}
 	}
 
-	// Ensure the database directory exists
-	dbDir := filepath.Dir(dbPath)
-	if err := os.MkdirAll(dbDir, 0755); err != nil {
+	// Delegated validators CSV — default path relative to this binary's directory,
+	// pointing into the pol-performance-study directory.
+	delegatedCSV := os.Getenv("DELEGATED_CSV_PATH")
+	if delegatedCSV == "" {
+		cwd, _ := os.Getwd()
+		delegatedCSV = filepath.Join(cwd, "..", "pol-performance-study", "delegated_validators.csv")
+		delegatedCSV, _ = filepath.Abs(delegatedCSV)
+	}
+
+	// Load delegated pubkeys
+	delegatedPubkeys, err := loadDelegatedPubkeys(delegatedCSV)
+	if err != nil {
+		fmt.Printf("Warning: could not load delegated validators CSV (%s): %v — is_delegated will not be set\n", delegatedCSV, err)
+	} else {
+		fmt.Printf("Loaded %d delegated validator pubkeys from %s\n", len(delegatedPubkeys), delegatedCSV)
+	}
+
+	// Ensure DB directory exists
+	if err := os.MkdirAll(filepath.Dir(dbPath), 0755); err != nil {
 		fmt.Printf("Error creating database directory: %v\n", err)
 		return
 	}
 
-	// Initialize SQLite database
 	db, err := sql.Open("sqlite3", dbPath)
 	if err != nil {
 		fmt.Printf("Error opening database: %v\n", err)
@@ -243,7 +296,11 @@ func main() {
 		return
 	}
 
-	// Fetch validators from GraphQL API first
+	// Add new columns — safe if they already exist
+	addColumnIfMissing(db, "validators", "is_delegated INTEGER DEFAULT 0")
+	addColumnIfMissing(db, "validators", "exception_note TEXT")
+
+	// Fetch validators from GraphQL API
 	fmt.Println("Fetching validators from GraphQL API...")
 	graphqlResponse, err := fetchGraphQLValidators()
 	if err != nil {
@@ -251,87 +308,139 @@ func main() {
 		return
 	}
 
-	// Create a map of GraphQL validators by pubkey for quick lookup
 	graphqlValidatorMap := make(map[string]struct {
 		Name     string
 		Address  string
 		Operator string
 	})
-
-	for _, validator := range graphqlResponse.Data.Validators.Validators {
-		graphqlValidatorMap[validator.Pubkey] = struct {
+	for _, v := range graphqlResponse.Data.Validators.Validators {
+		graphqlValidatorMap[v.Pubkey] = struct {
 			Name     string
 			Address  string
 			Operator string
 		}{
-			Name:     validator.Metadata.Name,
-			Address:  validator.ID,
-			Operator: validator.Operator,
+			Name:     v.Metadata.Name,
+			Address:  v.ID,
+			Operator: v.Operator,
 		}
 	}
-
 	fmt.Printf("Found %d validators from GraphQL API\n", len(graphqlValidatorMap))
 
-	// Construct the validators endpoint URL with parameters
-	validatorsURL := fmt.Sprintf("%s/validators?per_page=99", apiURL)
-
-	// Fetch validators from CometBFT API
+	// Fetch active validators from CometBFT API
+	validatorsURL := fmt.Sprintf("%s/validators?per_page=200", apiURL)
 	fmt.Println("Fetching validators from CometBFT API...")
 	response, err := fetchValidators(validatorsURL)
 	if err != nil {
 		fmt.Printf("Error fetching validators: %v\n", err)
 		return
 	}
-
 	fmt.Printf("Found %d validators from CometBFT API\n", len(response.Result.Validators))
 
-	// Print CSV header
-	fmt.Println("proposer_address,name,address,pubkey,voting_power,operator,status")
+	fmt.Println("proposer_address,name,address,pubkey,voting_power,operator,status,is_delegated,exception_note")
 
 	matchedCount := 0
+	activeValidators := make(map[string]bool)
+	exceptionCount := 0
 
-	// Process each validator
 	for _, validator := range response.Result.Validators {
-		compressedKey, err := convertPubKey(validator.PubKey.Value)
-		if err != nil {
-			fmt.Printf("Error converting key for %s: %v\n", validator.Address, err)
+		// Per-validator error recovery — flag exceptions, never crash
+		func(v Validator) {
+			var exceptionNote string
+
+			compressedKey, convErr := convertPubKey(v.PubKey.Value)
+			if convErr != nil {
+				exceptionNote = fmt.Sprintf("pubkey decompression failed: %v", convErr)
+				fmt.Printf("Exception: %s for CometBFT address %s\n", exceptionNote, v.Address)
+				_, dbErr := db.Exec(`
+					INSERT OR REPLACE INTO validators (proposer_address, name, pubkey, voting_power, status, exception_note)
+					VALUES (?, ?, ?, ?, ?, ?)
+				`, v.Address, "", v.PubKey.Value, v.VotingPower, "active_ongoing", exceptionNote)
+				if dbErr != nil {
+					fmt.Printf("Error writing exception row for %s: %v\n", v.Address, dbErr)
+				}
+				exceptionCount++
+				return
+			}
+
+			activeValidators[compressedKey] = true
+
+			var name, address, operator string
+			if graphqlData, exists := graphqlValidatorMap[compressedKey]; exists {
+				name = graphqlData.Name
+				address = graphqlData.Address
+				operator = graphqlData.Operator
+				matchedCount++
+			}
+
+			name = removeEmojis(name)
+			name = strings.ReplaceAll(name, ",", ";")
+
+			// Auto-name validators with no metadata name
+			if name == "" {
+				name = threeWordName(compressedKey)
+				if exceptionNote == "" {
+					exceptionNote = "auto-named: not in metadata"
+				}
+			}
+
+			isDelegated := 0
+			if delegatedPubkeys[strings.ToLower(compressedKey)] {
+				isDelegated = 1
+			}
+
+			fmt.Printf("%s,%s,%s,%s,%s,%s,active_ongoing,%d,%s\n",
+				v.Address, name, address, compressedKey, v.VotingPower, operator, isDelegated, exceptionNote)
+
+			_, dbErr := db.Exec(`
+				INSERT OR REPLACE INTO validators (proposer_address, name, address, pubkey, voting_power, operator, status, is_delegated, exception_note)
+				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+			`, v.Address, name, address, compressedKey, v.VotingPower, operator, "active_ongoing", isDelegated, nullIfEmpty(exceptionNote))
+			if dbErr != nil {
+				fmt.Printf("Error inserting validator %s: %v\n", v.Address, dbErr)
+			}
+		}(validator)
+	}
+
+	// Mark GraphQL validators not in active CometBFT set as exited
+	fmt.Println("\n--- Exited Validators ---")
+	exitedCount := 0
+	for pubkey, graphqlData := range graphqlValidatorMap {
+		if activeValidators[pubkey] {
 			continue
 		}
-
-		// Look up validator in GraphQL data
-		var name, address, operator string
-		if graphqlData, exists := graphqlValidatorMap[compressedKey]; exists {
-			name = graphqlData.Name
-			address = graphqlData.Address
-			operator = graphqlData.Operator
-			matchedCount++
-		} else {
-			name = "N/A"
-			address = "N/A"
-			operator = "N/A"
-		}
-
-		// Remove emojis from the name
-		name = removeEmojis(name)
-
-		// Escape any commas in the name
+		name := removeEmojis(graphqlData.Name)
 		name = strings.ReplaceAll(name, ",", ";")
 
-		// Print to console
-		fmt.Printf("%s,%s,%s,%s,%s,%s,active_ongoing\n",
-			validator.Address, name, address, compressedKey, validator.VotingPower, operator)
+		isDelegated := 0
+		if delegatedPubkeys[strings.ToLower(pubkey)] {
+			isDelegated = 1
+		}
 
-		// Insert into database
-		_, err = db.Exec(`
-			INSERT OR REPLACE INTO validators (proposer_address, name, address, pubkey, voting_power, operator, status)
-			VALUES (?, ?, ?, ?, ?, ?, ?)
-		`, validator.Address, name, address, compressedKey, validator.VotingPower, operator, "active_ongoing")
+		fmt.Printf(",%s,%s,%s,0,%s,exited,%d,\n",
+			name, graphqlData.Address, pubkey, graphqlData.Operator, isDelegated)
+
+		_, err := db.Exec(`
+			INSERT OR REPLACE INTO validators (proposer_address, name, address, pubkey, voting_power, operator, status, is_delegated)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+		`, "", name, graphqlData.Address, pubkey, "0", graphqlData.Operator, "exited", isDelegated)
 		if err != nil {
-			fmt.Printf("Error inserting validator %s: %v\n", validator.Address, err)
+			fmt.Printf("Error inserting exited validator %s: %v\n", pubkey, err)
+		} else {
+			exitedCount++
 		}
 	}
 
-	fmt.Printf("\nSuccessfully matched: %d out of %d validators\n", matchedCount, len(response.Result.Validators))
+	fmt.Printf("\nSuccessfully matched active: %d out of %d validators\n", matchedCount, len(response.Result.Validators))
+	fmt.Printf("Auto-named (no metadata): %d validators\n", len(response.Result.Validators)-matchedCount-exceptionCount)
+	fmt.Printf("Exceptions flagged: %d validators\n", exceptionCount)
+	fmt.Printf("Marked as exited: %d validators\n", exitedCount)
 	fmt.Printf("Match rate: %.1f%%\n", float64(matchedCount)/float64(len(response.Result.Validators))*100)
 	fmt.Printf("Data has been saved to %s\n", dbPath)
+}
+
+func nullIfEmpty(s string) interface{} {
+	if s == "" {
+		return nil
+	}
+	return s
 }
