@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 
 import { ethers } from 'ethers';
-import fs from 'fs';
 import os from 'os';
 import { spawn } from 'child_process';
 import { isMainThread } from 'worker_threads';
@@ -33,14 +32,73 @@ const EMPTY_BLOCK_THRESHOLD = 1; // A block is considered empty if it has <= 1 t
 const GENESIS_TIMESTAMP = 1737382451; // 2025-01-20 14:14:11 UTC
 const BGT_CONTRACT = '0x656b95E550C07a9ffe548bd4085c72418Ceb1dba';
 const BERACHEF_CONTRACT = '0xdf960E8F3F19C481dDE769edEDD439ea1a63426a';
+const BLOCK_REWARD_CONTROLLER = '0x1AE7dD7AE06F6C58B4524d9c1f816094B1bcCD8e';
+const REWARD_VAULT_FACTORY = '0x94Ad6Ac84f6C6FbA8b8CCbD71d9f4f101def52a8';
 const ACTIVATE_EVENT_SIG = '0x09fed3850dff4fef07a5284847da937f94021882ecab1c143fcacd69e5451bd8';
 const KYBER_ROUTE_URL = 'https://gateway.mainnet.berachain.com/proxy/kyberswap/berachain/api/v1/routes';
+// Commission scale: ONE_HUNDRED_PERCENT = 1e4 in BeraChef (basis points ×100)
+const BERACHEF_COMMISSION_SCALE = 10000n;
+const BERACHEF_DEFAULT_COMMISSION_BPS = 500n; // 5%
 
 // BeraChef interface for contract calls
 const BERACHEF_IFACE = new ethers.Interface([
     'function getActiveRewardAllocation(bytes valPubkey) view returns (tuple(uint64 startBlock, tuple(address receiver, uint96 percentageNumerator)[] weights))',
-    'function getDefaultRewardAllocation() view returns (tuple(uint64 startBlock, tuple(address receiver, uint96 percentageNumerator)[] weights))'
+    'function getDefaultRewardAllocation() view returns (tuple(uint64 startBlock, tuple(address receiver, uint96 percentageNumerator)[] weights))',
+    'function getValCommissionOnIncentiveTokens(bytes valPubkey) view returns (uint96)'
 ]);
+
+/**
+ * Fetches global chain reward parameters from BlockRewardController.
+ * Returns baseRate and rewardRate as wei strings plus BERA/USD spot price.
+ */
+async function fetchChainParameters() {
+    const provider = new ethers.JsonRpcProvider(EL_ETHRPC_URL);
+    const iface = new ethers.Interface([
+        'function baseRate() view returns (uint256)',
+        'function rewardRate() view returns (uint256)'
+    ]);
+    try {
+        const [baseRaw, rewardRaw] = await Promise.all([
+            provider.call({ to: BLOCK_REWARD_CONTROLLER, data: iface.encodeFunctionData('baseRate') }),
+            provider.call({ to: BLOCK_REWARD_CONTROLLER, data: iface.encodeFunctionData('rewardRate') })
+        ]);
+        const baseRate = iface.decodeFunctionResult('baseRate', baseRaw)[0];
+        const rewardRate = iface.decodeFunctionResult('rewardRate', rewardRaw)[0];
+        // Fetch BERA/USD via Kyberswap (reuse existing getUsdRatePerToken with WBERA address)
+        const beraUsd = await getUsdRatePerToken('0x6969696969696969696969696969696969696969');
+        log(`Chain params: baseRate=${ethers.formatEther(baseRate)} BERA/block, rewardRate=${ethers.formatEther(rewardRate)} BERA/block, BERA=$${beraUsd}`);
+        return { baseRateWei: baseRate.toString(), rewardRateWei: rewardRate.toString(), beraUsd };
+    } catch (err) {
+        log(`⚠️  Failed to fetch chain parameters: ${err.message}`);
+        return { baseRateWei: '0', rewardRateWei: '0', beraUsd: 0 };
+    }
+}
+
+/**
+ * Fetches the effective commission rate (in bps, out of 10000) for each validator.
+ * Returns a Map of pubkey (0x-prefixed lowercase) -> number bps.
+ * Validators with 0 returned by contract use the default 5% (500 bps).
+ */
+async function fetchValidatorCommissions(validators) {
+    const provider = new ethers.JsonRpcProvider(EL_ETHRPC_URL);
+    const commissionMap = new Map();
+    log(`Fetching commission rates for ${validators.length} validators...`);
+    for (const v of validators) {
+        try {
+            const pk = v.pubkey?.startsWith('0x') ? v.pubkey : '0x' + (v.pubkey || '');
+            const data = BERACHEF_IFACE.encodeFunctionData('getValCommissionOnIncentiveTokens', [pk]);
+            const raw = await provider.call({ to: BERACHEF_CONTRACT, data });
+            const [bps] = BERACHEF_IFACE.decodeFunctionResult('getValCommissionOnIncentiveTokens', raw);
+            const effectiveBps = bps === 0n ? Number(BERACHEF_DEFAULT_COMMISSION_BPS) : Number(bps);
+            commissionMap.set(pk.toLowerCase(), effectiveBps);
+        } catch (err) {
+            const pk = (v.pubkey || '').toLowerCase();
+            commissionMap.set(pk, Number(BERACHEF_DEFAULT_COMMISSION_BPS));
+            log(`⚠️  Commission fetch failed for ${v.name}: ${err.message}, using default 5%`);
+        }
+    }
+    return commissionMap;
+}
 
 // Concurrency and performance constants
 const LOG_CHUNK_SIZE = 2000; // Size of each log fetching chunk in blocks
@@ -670,78 +728,33 @@ async function callContractFunction(contractAddress, functionSignature, params, 
 // Data loading and processing functions
 
 /**
-* Loads genesis validator information from genesis_validators.csv file
-* @returns {Array<Object>} Array of genesis validator objects with name, proposer, pubkey, operatorAddress
-* @throws {Error} If CSV file cannot be read or parsed
+* Loads all validators from the shared validator database, including exited ones.
+* Exited validators have voting_power=0 and are displayed as dead in the frontend.
+* @returns {Promise<Array<Object>>} Array of all validator objects from database
 */
-function loadGenesisValidators() {
-    const csvContent = fs.readFileSync('genesis_validators.csv', 'utf8');
-    const lines = csvContent.split('\n');
-    const validators = [];
-    
-    // Skip header row (i=1)
-    for (let i = 1; i < lines.length; i++) {
-        const line = lines[i].trim();
-        if (line) {
-            const [cometAddress, name, pubkey, operatorAddress] = line.split(',');
-            // Ensure pubkey always has 0x prefix - never remove it
-            const normalizedPubkey = pubkey && !pubkey.startsWith('0x') 
-                ? '0x' + pubkey 
-                : pubkey;
-            validators.push({
-                name,
-                proposer: cometAddress, // Consensus layer address
-                pubkey: normalizedPubkey,
-                operatorAddress // Execution layer address
-            });
-        }
-    }
-    
-    return validators;
-}
-
-/**
-* Loads all validators from the shared validator database
-* @returns {Promise<Array<Object>>} Array of all current validator objects from database
-*/
-async function loadAllValidatorsFromDB() {
+async function loadAllValidators() {
     try {
-        log('Loading all active validators from database...');
+        log('Loading all validators from database (active + exited)...');
         const validatorDB = new ValidatorNameDB();
-        const dbValidators = await validatorDB.getAllValidators();
-        
+        const sql = 'SELECT proposer_address, name, address, pubkey, voting_power, operator, status FROM validators ORDER BY name';
+        const dbValidators = await validatorDB.query(sql, []);
+
         if (!dbValidators || dbValidators.length === 0) {
             throw new Error('No validators found in database');
         }
-        
+
         const validators = dbValidators.map(dbValidator => ({
             name: dbValidator.name || 'Unknown',
             proposer: dbValidator.proposer_address,
             pubkey: dbValidator.pubkey || '',
             operatorAddress: dbValidator.operator || dbValidator.address || dbValidator.proposer_address
         }));
-        
+
         log(`Loaded ${validators.length} validators from database`);
         return validators;
     } catch (error) {
         log(`Error loading validators from database: ${error.message}`);
         throw error;
-    }
-}
-
-/**
-* Loads validator information based on configuration
-* @param {boolean} ignoreGenesis - If true, load all validators from database and ignore CSV entirely
-* @returns {Promise<Array<Object>>} Array of validator objects with name, proposer, pubkey, operatorAddress
-* @throws {Error} If validators cannot be loaded
-*/
-async function loadValidators(ignoreGenesis = false) {
-    if (ignoreGenesis) {
-        log('Ignoring genesis CSV, loading ALL current validators from database...');
-        return await loadAllValidatorsFromDB();
-    } else {
-        log('Loading genesis validators from CSV file...');
-        return loadGenesisValidators();
     }
 }
 
@@ -913,10 +926,39 @@ function buildPubkeyTopicSet(validators) {
         const pk = v.pubkey.startsWith('0x') ? v.pubkey : `0x${v.pubkey}`;
         const topic = ethers.keccak256(pk); // Hash pubkey for event filtering
         set.add(topic.toLowerCase()); // Normalize to lowercase
-        topicToProposer.set(topic.toLowerCase(), v.proposer); // Map hash back to proposer address
+        // Validators without a proposer address (fully exited) use their pubkey as the
+        // polDaily key so each keeps a separate bucket rather than all colliding at "".
+        const key = v.proposer || pk;
+        topicToProposer.set(topic.toLowerCase(), key);
     }
     
     return { set, topicToProposer };
+}
+
+/**
+ * Reads all vault addresses from RewardVaultFactory's on-chain allVaults array.
+ * The array is append-only, so reading at latest block gives the full universe of
+ * vaults ever created. Over-broad is acceptable for the getLogs address filter
+ * since non-whitelisted vaults produce no matching events.
+ *
+ * @param {ethers.Provider} provider - JSON-RPC provider
+ * @returns {Promise<string[]>} Array of vault addresses
+ */
+async function fetchRewardVaultAddresses(provider) {
+    const factory = new ethers.Contract(REWARD_VAULT_FACTORY, [
+        'function allVaultsLength() view returns (uint256)',
+        'function allVaults(uint256) view returns (address)'
+    ], provider);
+
+    const vaultCount = Number(await factory.allVaultsLength());
+    log(`RewardVaultFactory reports ${vaultCount} vaults`);
+
+    const addresses = await Promise.all(
+        Array.from({ length: vaultCount }, (_, i) => factory.allVaults(i))
+    );
+
+    log(`Fetched ${addresses.length} vault addresses for getLogs filter`);
+    return addresses;
 }
 
 /**
@@ -979,10 +1021,13 @@ async function indexPolEvents(validators, dayRanges) {
         
         log(`Processing ${chunks.length} chunks for ${eventType} events with max ${batchSize} concurrent requests...`);
         
-        // Worker function that processes a single chunk
+        const failedChunks = [];
+        let totalRawLogs = 0;
+        const activeVaults = new Set();
+        const matchedPubkeys = new Set();
+        
         const workerFn = async (chunk, index, provider) => {
             try {
-                // Use retry logic for getLogs calls to handle network errors
                 const chunkLogs = await withRetry(
                     () => provider.getLogs({
                         ...filter,
@@ -992,16 +1037,18 @@ async function indexPolEvents(validators, dayRanges) {
                     5, // max retries
                     1000 // initial delay
                 );
+                totalRawLogs += chunkLogs.length;
                 let processedCount = 0;
                 for (const log of chunkLogs) {
+                    activeVaults.add(log.address);
                     const topicPub = (log.topics?.[1] || '').toLowerCase();
                     if (!pubTopicSet.has(topicPub)) continue;
+                    matchedPubkeys.add(topicPub);
                     const proposer = topicToProposer.get(topicPub);
                     const date = getDateForBlock(log.blockNumber);
                     if (!date) continue;
                     const parsed = iface.parseLog(log);
                     if (!daily[date][proposer]) daily[date][proposer] = { vaultBgtBI: 0n, boosters: {} };
-                    // Only process BGTBoosterIncentivesProcessed events (Distributed events not used in scoring)
                     if (eventType === 'BGTBoosterIncentivesProcessed') {
                         const token = parsed.args.token.toLowerCase();
                         const amount = BigInt(parsed.args.amount.toString());
@@ -1011,6 +1058,7 @@ async function indexPolEvents(validators, dayRanges) {
                 }
                 return processedCount;
             } catch (e) {
+                failedChunks.push({ index, chunk, error: e.message });
                 log(`Error processing ${eventType} logs for chunk ${index + 1}/${chunks.length} (blocks ${chunk.start}-${chunk.end}): ${e.message}`);
                 return 0;
             }
@@ -1028,7 +1076,21 @@ async function indexPolEvents(validators, dayRanges) {
         // Process all chunks - pipeline maintains max parallelism at all times
         const processedCounts = await pipeline.process(chunks, true);
         const totalProcessed = processedCounts.reduce((sum, count) => sum + (count || 0), 0);
-        log(`Processed ${totalProcessed} ${eventType} events from ${chunks.length} chunks`);
+        log(`${eventType}: ${totalRawLogs} raw logs fetched, ${totalProcessed} matched ${matchedPubkeys.size}/${pubTopicSet.size} tracked validators, ${activeVaults.size} active vaults`);
+        
+        if (failedChunks.length > 0) {
+            log(`\n========== DATA LOSS REPORT ==========`);
+            log(`${failedChunks.length} of ${chunks.length} chunks failed for ${eventType}:`);
+            for (const fc of failedChunks) {
+                const startDate = getDateForBlock(fc.chunk.start) || 'unknown';
+                const endDate = getDateForBlock(fc.chunk.end) || 'unknown';
+                const dateRange = startDate === endDate ? startDate : `${startDate} to ${endDate}`;
+                log(`  chunk ${fc.index + 1}: blocks ${fc.chunk.start}-${fc.chunk.end} (${dateRange}) — ${fc.error}`);
+            }
+            log(`=======================================\n`);
+            throw new Error(`${failedChunks.length} chunks failed during ${eventType} scan — scores would be understated`);
+        }
+        
         return totalProcessed;
     }
     
@@ -1043,7 +1105,7 @@ async function indexPolEvents(validators, dayRanges) {
     const overallEndBlock = Math.max(...allRanges.map(r => r.endBlock));
     const totalBlocks = overallEndBlock - overallStartBlock + 1;
     
-        log(`Indexing POL events for all ${Object.keys(dayRanges).length} days (${totalBlocks} total blocks in parallel batches of ${MAX_WORKER_COUNT}x${LOG_CHUNK_SIZE})...`);
+    log(`Indexing POL events for all ${Object.keys(dayRanges).length} days (${totalBlocks} total blocks in parallel batches of ${MAX_WORKER_COUNT}x${LOG_CHUNK_SIZE})...`);
     
     // Helper function to determine which date a block belongs to
     function getDateForBlock(blockNumber) {
@@ -1055,16 +1117,12 @@ async function indexPolEvents(validators, dayRanges) {
         return null;
     }
     
-    // Process BGTBoosterIncentivesProcessed events (used for stake-scaled booster scoring)
-    // Note: Distributed events (vault BGT emissions) are not used in scoring, only in reporting
-    try {
-        await processLogsChunked(overallStartBlock, overallEndBlock, {
-            topics: [boosterTopic0]
-        }, 'BGTBoosterIncentivesProcessed');
-    } catch (e) {
-        log(`Error processing BGTBoosterIncentivesProcessed events: ${e.message}`);
-    }
-    
+    const vaultAddresses = await fetchRewardVaultAddresses(providerPrimary);
+
+    await processLogsChunked(overallStartBlock, overallEndBlock, {
+        address: vaultAddresses,
+        topics: [boosterTopic0]
+    }, 'BGTBoosterIncentivesProcessed');
     
     return { daily };
 }
@@ -1521,7 +1579,64 @@ async function initializeScoringSchema() {
         CREATE INDEX IF NOT EXISTS idx_validator_daily_stats_pubkey_date 
         ON validator_daily_stats(validator_pubkey, date)
     `);
-    
+
+    // Chain parameters snapshot per run (single row, replaced each run)
+    await executeSQL(`
+        CREATE TABLE IF NOT EXISTS chain_parameters (
+            id INTEGER PRIMARY KEY CHECK (id = 1),
+            base_rate_wei TEXT,
+            reward_rate_wei TEXT,
+            bera_usd_price REAL,
+            captured_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    `);
+    await executeSQL(`INSERT OR IGNORE INTO chain_parameters (id) VALUES (1)`);
+
+    // Incentive token distributions per validator per token (replaces validator_incentive_summary.csv)
+    await executeSQL(`
+        CREATE TABLE IF NOT EXISTS incentive_distributions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            pubkey TEXT NOT NULL,
+            proposer_address TEXT,
+            token_address TEXT NOT NULL,
+            token_name TEXT,
+            amount_tokens REAL,
+            amount_usd REAL,
+            usd_rate REAL,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(pubkey, token_address)
+        )
+    `);
+    await executeSQL(`
+        CREATE INDEX IF NOT EXISTS idx_incentive_dist_pubkey
+        ON incentive_distributions(pubkey)
+    `);
+
+    // Per-validator financial summary per run
+    await executeSQL(`
+        CREATE TABLE IF NOT EXISTS validator_financials (
+            pubkey TEXT PRIMARY KEY,
+            commission_rate_bps INTEGER,
+            blocks_proposed INTEGER,
+            base_bera_income REAL,
+            commission_income_usd REAL,
+            user_distributions_usd REAL,
+            total_economic_value_usd REAL,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    `);
+
+    // Clear scoring tables at schema-init time so stale data never survives a partial run
+    log('🗑️  Clearing stale scoring data...');
+    await executeSQL('DELETE FROM validator_scores');
+    await executeSQL('DELETE FROM validator_notes');
+    await executeSQL('DELETE FROM incentive_distributions');
+    await executeSQL('DELETE FROM validator_financials');
+    const isVerbose = process.env.VERBOSE === 'true' || process.env.VERBOSE === '1';
+    if (isVerbose) {
+        await executeSQL('DELETE FROM validator_daily_stats');
+    }
+
     log('✅ Scoring schema initialized');
 }
 
@@ -1606,16 +1721,7 @@ async function writeScoresToDatabase(rankings, startDate, endDate, daysAnalyzed,
     log('💾 Writing scores to database...');
     
     const isVerbose = process.env.VERBOSE === 'true' || process.env.VERBOSE === '1';
-    
-    // Clear existing scores and notes
-    await executeSQL('DELETE FROM validator_scores');
-    await executeSQL('DELETE FROM validator_notes');
-    
-    // Clear daily stats if storing new ones
-    if (isVerbose) {
-        await executeSQL('DELETE FROM validator_daily_stats');
-    }
-    
+
     // Insert new scores
     let inserted = 0;
     let dailyStatsInserted = 0;
@@ -1949,7 +2055,6 @@ async function computeUsdValuations(dailyAgg, validators, dayRanges) {
 // Command line arguments
 const args = process.argv.slice(2);
 const showHelp = args.includes('--help') || args.includes('-h');
-const ignoreGenesis = args.includes('--ignore-genesis');
 
 // Show help if requested
 if (showHelp) {
@@ -1963,7 +2068,6 @@ Usage:
     --days=N          Number of days to analyze (default: 45)
     --end-date=DATE  End date for analysis in YYYY-MM-DD format (default: yesterday)
     --to-date=DATE    Alias for --end-date (for consistency with other scripts)
-    --ignore-genesis  Ignore genesis CSV and evaluate ALL current validators from database
     --help, -h        Show this help message
          
   Examples:
@@ -1972,7 +2076,6 @@ Usage:
     node score-validators.js --days=7 --end-date=2025-01-25   # Analyze 7 days ending on Jan 25, 2025
     node score-validators.js --days=7 --to-date=2025-01-25    # Same as above, using --to-date alias
     node score-validators.js --end-date=2025-01-20            # Analyze 45 days ending on Jan 20, 2025
-    node score-validators.js --ignore-genesis                 # Analyze ALL current validators from database
     node score-validators.js                                  # Full analysis: last 45 days (default)
         
 Environment Variables:
@@ -2355,7 +2458,7 @@ function calculateStatistics(blockResults, stakeBoostData, dayBoundaries, valida
     
     // Calculate PER-DAY maximums for proper normalization
     // Each day is normalized independently so the best validator each day gets 100%
-    // IMPORTANT: Only consider study validators (genesis or all, depending on --ignore-genesis flag)
+    // Score all validators loaded from the database (active and exited)
     const dayMaxRatios = {}; // date -> max ratio for that day
     const dayMaxStakeScaledBoosterReturns = {}; // date -> max stake-scaled booster returns for that day
     
@@ -2435,7 +2538,9 @@ function calculateStatistics(blockResults, stakeBoostData, dayBoundaries, valida
         }
         
         // Add validators that weren't found in blockResults (they had 0 blocks)
+        // Skip validators with no proposer address - they are fully exited and cannot be scored
         for (const validator of validators) {
+            if (!validator.proposer) continue;
             if (!statistics[date][validator.proposer]) {
                 const polRatio = stakeBoostData[date]?.[validator.proposer]?.ratio || 0;
                 const dayMaxRatio = dayMaxRatios[date] || 0;
@@ -2451,7 +2556,7 @@ function calculateStatistics(blockResults, stakeBoostData, dayBoundaries, valida
                     totalBlocks: 0,
                     emptyBlocks: 0,
                     emptyBlockPercentage: 0,
-                    uptimeScore: 100, // Perfect uptime if no blocks
+                    uptimeScore: 0, // No blocks proposed = no uptime credit
                     polScore,
                         stakeScaledBoosterScore,
                     stake: stakeBoostData[date]?.[validator.proposer]?.stake || 0,
@@ -2500,6 +2605,8 @@ function generateReport(statistics, validators, dayBoundaries, polParticipationS
     const validatorAverages = {};
     
     for (const validator of validators) {
+        // Exited validators with no proposer address cannot be scored
+        if (!validator.proposer) continue;
         const uptimeScores = [];
         const polScores = [];
             const stakeScaledBoosterScores = [];
@@ -2624,11 +2731,6 @@ function generateReport(statistics, validators, dayBoundaries, polParticipationS
         return row;
     });
     
-    const csvContent = [csvHeader, ...csvRows].join('\n');
-    const reportFile = `validator_stats.csv`;
-    fs.writeFileSync(reportFile, csvContent);
-    log(`\nDetailed report saved to ${reportFile}`);
-    
     return rankings;
 }
 
@@ -2659,110 +2761,114 @@ function generateReport(statistics, validators, dayBoundaries, polParticipationS
      *   - Data rows: Token amounts earned by each validator
      *   - Totals: Row and column summation
      */
-    function generateSummaryCSV(statistics, validators, dayBoundaries, polDaily, tokenNameCache) {
+    async function writeIncentivesToDatabase(validators, dayBoundaries, polDaily, tokenNameCache, commissionMap, chainParams, rankings) {
         const sortedDates = Object.keys(dayBoundaries).sort();
         const datesToAnalyze = sortedDates.slice(0, sortedDates.length - 1);
-        
-        // Collect all unique tokens across all days from POL events
+
+        // Collect all unique tokens
         const allTokens = new Set();
         for (const date of datesToAnalyze) {
             const dayData = polDaily[date] || {};
             for (const proposer of Object.keys(dayData)) {
-                const proposerData = dayData[proposer];
-                if (proposerData) {
-                    // Add booster tokens (BGT vault emissions not scanned, so vaultBgtBI is always 0)
-                    if (proposerData.boosters) {
-                        Object.keys(proposerData.boosters).forEach(token => {
-                            if (proposerData.boosters[token] > 0n) {
-                                allTokens.add(token);
-                            }
-                        });
-                    }
+                const pd = dayData[proposer];
+                if (pd?.boosters) {
+                    Object.keys(pd.boosters).forEach(token => {
+                        if (pd.boosters[token] > 0n) allTokens.add(token);
+                    });
                 }
             }
         }
-        
         const tokenList = Array.from(allTokens).sort();
-        
-        
-        // Create CSV header with token names
-        let csvHeader = 'Validator Name,Validator Address,Operator Address';
-        tokenList.forEach(token => {
-            const tokenName = tokenNameCache.get(token) || token.substring(0, 8) + '...';
-            csvHeader += `,${tokenName} (${token})`;
-        });
-        csvHeader += ',Total USD';
-        
-        // Create second header row with exchange rates
-        let exchangeRateHeader = 'USD per token,,';
-        tokenList.forEach(token => {
-            const rate = tokenUsdRateCache.get(token) || 0;
-            exchangeRateHeader += `,${rate.toFixed(8)}`;
-        });
-        exchangeRateHeader += ',Total';
-        
-        // Create CSV rows
-        const csvRows = [];
-        const tokenTotals = {};
-        tokenList.forEach(token => tokenTotals[token] = 0);
-    
-    for (const validator of validators) {
-            let row = `${validator.name},${validator.proposer},${validator.operatorAddress}`;
-            let validatorTotal = 0;
-            
-            tokenList.forEach(token => {
-                let tokenAmount = 0;
-                try {
-                    // Sum up booster tokens across all days using BigInt math
-                        let totalTokenBI = 0n;
-                        const decimals = Number(tokenDecimalsCache.get(token) || 18);
-                        for (const date of datesToAnalyze) {
-                            const dayData = polDaily[date]?.[validator.proposer];
-                            if (dayData?.boosters?.[token]) {
-                                const tokenValue = dayData.boosters[token];
-                                // Ensure we're working with BigInt
-                                if (typeof tokenValue === 'bigint') {
-                                    totalTokenBI += tokenValue;
-                                } else {
-                                    log(`Warning: Non-BigInt token value for ${token}: ${typeof tokenValue} = ${tokenValue}`);
-                                }
-                            }
-                        }
-                        // Convert to number safely using string conversion
-                        const totalTokenStr = totalTokenBI.toString();
-                        const divisor = Math.pow(10, decimals);
-                        const parsedFloat = parseFloat(totalTokenStr);
-                        tokenAmount = parsedFloat / divisor;
-                } catch (error) {
-                    log(`Error processing token ${token} for validator ${validator.name}: ${error.message}`);
-                    tokenAmount = 0; // Set to 0 on error
-                }
-                
-                row += `,${tokenAmount.toFixed(6)}`;
-                validatorTotal += tokenAmount;
-                tokenTotals[token] += tokenAmount;
-            });
-            
-            row += `,${validatorTotal.toFixed(6)}`;
-            csvRows.push(row);
+
+        // Write chain parameters
+        const beraUsd = chainParams.beraUsd || 0;
+        await executeSQL(
+            `INSERT OR REPLACE INTO chain_parameters (id, base_rate_wei, reward_rate_wei, bera_usd_price, captured_at)
+             VALUES (1, ?, ?, ?, CURRENT_TIMESTAMP)`,
+            [chainParams.baseRateWei, chainParams.rewardRateWei, beraUsd]
+        );
+
+        // Build a map of proposer -> ranking for blocks_proposed lookup
+        const rankingByProposer = new Map();
+        for (const r of rankings) {
+            rankingByProposer.set((r.validatorAddress || '').toUpperCase(), r);
         }
-        
-        // Add totals row
-        let totalsRow = 'TOTALS,,';
-        let grandTotal = 0;
-        tokenList.forEach(token => {
-            totalsRow += `,${tokenTotals[token].toFixed(6)}`;
-            grandTotal += tokenTotals[token];
-        });
-        totalsRow += `,${grandTotal.toFixed(6)}`;
-        csvRows.push(totalsRow);
-        
-        const csvContent = [csvHeader, exchangeRateHeader, ...csvRows].join('\n');
-        const summaryFile = `validator_incentive_summary.csv`;
-        fs.writeFileSync(summaryFile, csvContent);
-        log(`\nIncentive summary saved to ${summaryFile}`);
-        
-        return summaryFile;
+
+        let distRows = 0;
+        let financialRows = 0;
+
+        for (const validator of validators) {
+            const normalizedPubkey = validator.pubkey?.startsWith('0x') ? validator.pubkey : '0x' + (validator.pubkey || '');
+            const commissionBps = commissionMap.get(normalizedPubkey.toLowerCase()) ?? Number(BERACHEF_DEFAULT_COMMISSION_BPS);
+            const commissionFraction = commissionBps / Number(BERACHEF_COMMISSION_SCALE);
+
+            let validatorTotalUsd = 0;
+
+            // Same key used in buildPubkeyTopicSet: proposer address or pubkey for exited validators
+            const polKey = validator.proposer || normalizedPubkey;
+
+        for (const token of tokenList) {
+                let tokenAmount = 0;
+                const decimals = Number(tokenDecimalsCache.get(token) || 18);
+                try {
+                    let totalBI = 0n;
+                    for (const date of datesToAnalyze) {
+                        const dayData = polDaily[date]?.[polKey];
+                        if (dayData?.boosters?.[token] && typeof dayData.boosters[token] === 'bigint') {
+                            totalBI += dayData.boosters[token];
+                        }
+                    }
+                    tokenAmount = parseFloat(totalBI.toString()) / Math.pow(10, decimals);
+                } catch (err) {
+                    log(`⚠️  Token amount error for ${token}/${validator.name}: ${err.message}`);
+                }
+
+                if (tokenAmount === 0) continue;
+
+                const rate = tokenUsdRateCache.get(token) || 0;
+                const tokenName = tokenNameCache.get(token) || token.substring(0, 10) + '...';
+                const amountUsd = tokenAmount * rate;
+                validatorTotalUsd += amountUsd;
+
+                await executeSQL(
+                    `INSERT OR REPLACE INTO incentive_distributions
+                     (pubkey, proposer_address, token_address, token_name, amount_tokens, amount_usd, usd_rate, updated_at)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
+                    [normalizedPubkey, validator.proposer, token, tokenName, tokenAmount, amountUsd, rate]
+                );
+                distRows++;
+            }
+
+            // Compute validator financial summary
+            const ranking = rankingByProposer.get((validator.proposer || '').toUpperCase());
+            const blocksProposed = ranking
+                ? ranking.days.reduce((sum, d) => sum + (d.totalBlocks || 0), 0)
+                : 0;
+            const baseRateEther = parseFloat(ethers.formatEther(chainParams.baseRateWei || '0'));
+            const baseBeraIncome = blocksProposed * baseRateEther;
+            // Commission income: user_usd = total * (1 - commission), so commission_usd = user_usd * commission / (1 - commission)
+            const commissionIncomeUsd = commissionFraction < 1
+                ? validatorTotalUsd * commissionFraction / (1 - commissionFraction)
+                : 0;
+
+            await executeSQL(
+                `INSERT OR REPLACE INTO validator_financials
+                 (pubkey, commission_rate_bps, blocks_proposed, base_bera_income, commission_income_usd, user_distributions_usd, total_economic_value_usd, updated_at)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
+                [
+                    normalizedPubkey,
+                    commissionBps,
+                    blocksProposed,
+                    baseBeraIncome,
+                    commissionIncomeUsd,
+                    validatorTotalUsd,
+                    commissionIncomeUsd + baseBeraIncome * beraUsd,
+                ]
+            );
+            financialRows++;
+        }
+
+        log(`✅ Wrote ${distRows} incentive distribution rows and ${financialRows} validator financial rows to database`);
     }
     
     /**
@@ -2827,7 +2933,7 @@ async function main() {
         log(`Analysis period: ${firstDay} to ${lastDay} (${daysToAnalyze} days)`);
         
         // Load validators
-        const validators = await loadValidators(ignoreGenesis);
+        const validators = await loadAllValidators();
         if (validators.length === 0) {
             throw new Error('No validators loaded');
         }
@@ -2932,8 +3038,14 @@ async function main() {
         
         // Compute USD valuations for vaults and boosters per day
         const { dailyUsd, perTokenRates } = await computeUsdValuations(polDaily, validators, dayRanges);
-        // Expose for CSV generation
         global.__DAILY_USD__ = dailyUsd;
+
+        // Fetch chain-level financial parameters and per-validator commissions
+        log('\nFetching chain parameters and commission rates...');
+        const [chainParams, commissionMap] = await Promise.all([
+            fetchChainParameters(),
+            fetchValidatorCommissions(validators)
+        ]);
 
         // Calculate statistics (unchanged scoring)
         log('\nCalculating statistics...');
@@ -2956,14 +3068,13 @@ async function main() {
             // Don't fail the entire script if DB write fails
         }
         
-        // Generate incentive summary CSV
-        log('\nGenerating incentive summary...');
+        // Write incentive distributions and financial summaries to database
+        log('\nWriting incentive and financial data to database...');
         try {
-            generateSummaryCSV(statistics, validators, dayBoundaries, polDaily, tokenNameCache);
+            await writeIncentivesToDatabase(validators, dayBoundaries, polDaily, tokenNameCache, commissionMap, chainParams, rankings);
         } catch (error) {
-            log(`Error in generateSummaryCSV: ${error.message}`);
+            log(`⚠️  Error writing incentive data to database: ${error.message}`);
             log(`Stack trace: ${error.stack}`);
-            throw error;
         }
 
         // Verbose per-day USD output per validator (if FULL_DETAIL)
