@@ -193,11 +193,13 @@ if [[ -f "$CL_CONFIG_DIR/app.toml" ]]; then
     sed -i "s|^rpc-dial-url = \".*\"|rpc-dial-url = \"http://localhost:$EL_AUTHRPC_PORT\"|" "$CL_CONFIG_DIR/app.toml"
     sed -i "s|^jwt-secret-path = \".*\"|jwt-secret-path = \"$JWT_PATH\"|" "$CL_CONFIG_DIR/app.toml"
     sed -i "s|^trusted-setup-path = \".*\"|trusted-setup-path = \"$CL_CONFIG_DIR/kzg-trusted-setup.json\"|" "$CL_CONFIG_DIR/app.toml"
-    # Ensure pruning is disabled for full archive
+    # CL pruning: archive_mode=true -> nothing (archive); archive_mode=false -> everything (pruned)
+    archive_mode=$(bb_parse_toml_value "$INSTALLATION_TOML" "archive_mode" 2>/dev/null || echo "false")
+    [ "$archive_mode" = "true" ] && pruning_value="nothing" || pruning_value="everything"
     if grep -q '^pruning\s*=\s*"' "$CL_CONFIG_DIR/app.toml"; then
-        sed -i "s|^pruning\s*=\s*\".*\"|pruning = \"nothing\"|" "$CL_CONFIG_DIR/app.toml"
+        sed -i "s|^pruning\s*=\s*\".*\"|pruning = \"$pruning_value\"|" "$CL_CONFIG_DIR/app.toml"
     else
-        echo "pruning = \"nothing\"" >> "$CL_CONFIG_DIR/app.toml"
+        echo "pruning = \"$pruning_value\"" >> "$CL_CONFIG_DIR/app.toml"
     fi
     # Ensure suggested-fee-recipient is set (align with guides setup-beacond)
     FEE_RECIPIENT_DEFAULT="0x9BcaA41DC32627776b1A4D714Eef627E640b3EF5"

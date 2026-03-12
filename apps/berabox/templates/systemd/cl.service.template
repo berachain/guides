@@ -10,7 +10,7 @@ ExecStart={CL_BIN} start --home {CL_DATA_DIR} --beacon-kit.node-api.enabled=true
 Restart=always
 RestartSec=3
 KillSignal=SIGINT
-TimeoutStopSec=60s
+TimeoutStopSec=300
 StandardOutput=append:{CL_LOGS_DIR}/beacond.log
 StandardError=append:{CL_LOGS_DIR}/beacond.log
 SyslogIdentifier=bb-{INSTALLATION_NAME}-cl
