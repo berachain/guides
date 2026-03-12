@@ -851,9 +851,12 @@ run_delegation_simulation() {
 
   # Step 1: Deploy handler on fork
   log_info "Sim step 1: Deploy DelegationHandler..."
-  cast send "$factory" \
-    'deployDelegationHandler(bytes)' "$pubkey" \
-    -r "$fork_url" --private-key "$SIM_PRIVATE_KEY" >/dev/null
+  if ! cast send "$factory" \
+      'deployDelegationHandler(bytes)' "$pubkey" \
+      -r "$fork_url" --private-key "$SIM_PRIVATE_KEY" >/dev/null; then
+    log_error "Sim: deployDelegationHandler failed"
+    return 1
+  fi
 
   local handler
   handler=$(cast call "$factory" 'delegationHandlers(bytes)(address)' "$pubkey" -r "$fork_url" | xargs)
@@ -864,27 +867,32 @@ run_delegation_simulation() {
   log_success "Sim: handler at $handler"
   echo ""
 
-  # Step 2: Fund handler — parse amount from payload
-  local amount_bera
-  amount_bera=$(python3 -c "
-import json
+  # Step 2: Fund handler — parse amount_wei from the delegate() calldata in the payload
+  local amount_wei_expected amount_bera
+  amount_wei_expected=$(python3 -c "
+import json, sys
 d = json.load(open('$payload_file'))
 txs = d.get('transactions', [])
 delegate_data = next((t['data'] for t in txs if '9fa6dd35' in t.get('data','').lower()), '')
-if delegate_data:
-    amount_wei = int(delegate_data[10:], 16)
-    print(int(amount_wei // 10**18))
+if not delegate_data:
+    sys.exit(1)
+print(int(delegate_data[10:], 16))
 " 2>/dev/null || echo "")
 
-  if [[ -z "$amount_bera" || "$amount_bera" == "0" ]]; then
-    log_error "Sim: could not parse amount from payload"
+  if [[ -z "$amount_wei_expected" || "$amount_wei_expected" == "0" ]]; then
+    log_error "Sim: could not parse delegate amount from payload"
     return 1
   fi
 
-  log_info "Sim step 2: Sending $amount_bera BERA to handler..."
-  cast send "$handler" \
-    --value "${amount_bera}ether" \
-    -r "$fork_url" --private-key "$SIM_PRIVATE_KEY" >/dev/null
+  amount_bera=$(cast --to-unit "$amount_wei_expected" ether 2>/dev/null || echo "$amount_wei_expected wei")
+
+  log_info "Sim step 2: Sending $amount_bera BERA ($amount_wei_expected wei) to handler..."
+  if ! cast send "$handler" \
+      --value "${amount_wei_expected}wei" \
+      -r "$fork_url" --private-key "$SIM_PRIVATE_KEY" >/dev/null; then
+    log_error "Sim: failed to fund handler"
+    return 1
+  fi
   log_success "Sim: handler funded"
   echo ""
 
@@ -906,10 +914,12 @@ if delegate_data:
     to=$(python3 -c "import json; d=json.load(open('$payload_file')); print(d['transactions'][$i]['to'])" 2>/dev/null)
     calldata=$(python3 -c "import json; d=json.load(open('$payload_file')); print(d['transactions'][$i]['data'])" 2>/dev/null)
     comment=$(python3 -c "import json; d=json.load(open('$payload_file')); print(d['transactions'][$i].get('_comment',''))" 2>/dev/null || echo "")
-    to="${to/HANDLER_ADDRESS_AFTER_DEPLOY/$handler}"
     log_info "  Sim tx $((i+1))/$tx_count: $comment"
     # cast send does not accept --data; pass raw calldata as the SIG positional argument
-    cast send "$to" "$calldata" -r "$fork_url" --from "$admin" --unlocked >/dev/null
+    if ! cast send "$to" "$calldata" -r "$fork_url" --from "$admin" --unlocked >/dev/null; then
+      log_error "  Sim tx $((i+1)) failed"
+      return 1
+    fi
     log_success "  Sim tx $((i+1)) ok"
   done
 
@@ -921,7 +931,12 @@ if delegate_data:
   local delegated_amount delegated_bera
   delegated_amount=$(cast call "$handler" 'delegatedAmount()(uint256)' -r "$fork_url" | awk '{print $1}')
   delegated_bera=$(cast --to-unit "$delegated_amount" ether 2>/dev/null || echo "$delegated_amount wei")
-  log_success "Sim: delegatedAmount = $delegated_bera BERA"
+  if ! python3 -c "import sys; sys.exit(0 if int(sys.argv[1]) == int(sys.argv[2]) else 1)" \
+      "$delegated_amount" "$amount_wei_expected" 2>/dev/null; then
+    log_error "Sim: delegatedAmount mismatch: got $delegated_amount, expected $amount_wei_expected"
+    return 1
+  fi
+  log_success "Sim: delegatedAmount = $delegated_bera BERA (exact match)"
 
   local operator
   operator=$(python3 -c "
@@ -959,7 +974,7 @@ Network:            $network
 Validator pubkey:   $pubkey
 Handler (fork):     $handler
 Admin impersonated: $admin
-Delegated amount:   $delegated_bera BERA
+Delegated amount:   $delegated_bera BERA ($amount_wei_expected wei)
 Operator role:      VALIDATOR_ADMIN_ROLE granted to $operator
 EOF
 

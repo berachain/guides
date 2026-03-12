@@ -98,33 +98,43 @@ get_caller_address() {
 get_handler_admin() {
   # DelegationHandler uses plain AccessControl (not enumerable), so getRoleMember reverts.
   # DEFAULT_ADMIN_ROLE is granted to DelegationHandlerFactory.owner() at deploy time.
-  # We identify the admin via the factory, not the handler itself.
-  local rpc="$2"
-  local factory
-  factory=$(get_delegation_handler_factory_for_network "${CLI_CHAIN:-mainnet}")
+  # Args: $1 factory address, $2 rpc url
+  local factory="$1" rpc="$2"
   cast call "$factory" 'owner()(address)' -r "$rpc" 2>/dev/null | xargs || echo ""
 }
 
 generate_operator_steps() {
   local factory="$1" pubkey="$2" amount="$3" rpc_url="$4"
   local needs_deployment="$5" handler="$6"
-  local wallet_args
-  wallet_args=$(get_cast_wallet_args)
   local cmd_file="generated/operator-steps.sh"
 
-  cat > "$cmd_file" <<EOF
+  cat > "$cmd_file" <<'EOF'
 #!/usr/bin/env bash
 # Operator steps: deploy DelegationHandler (if needed) + fund it with BERA.
 # delegate() and grantRole() are executed by the Foundation Safe — see
 # generated/safe-multisend-payload.json and generated/foundation-request.txt.
 #
+EOF
+  cat >> "$cmd_file" <<EOF
 # Pubkey:    $pubkey
 # Amount:    $amount BERA
 # Generated: $(date -u +"%Y-%m-%d %H:%M:%S UTC")
-# Validated: simulation passed (see generated/simulation-report.txt)
+# Validated: pending
 set -euo pipefail
 
 EOF
+  cat >> "$cmd_file" <<'SIGNING'
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+[[ -f "$SCRIPT_DIR/../env.sh" ]] && source "$SCRIPT_DIR/../env.sh"
+if [[ -n "${KEY_FILE:-}" && -f "${KEY_FILE:-}" ]]; then
+  wallet_args="--private-key $(cat "$KEY_FILE")"
+elif [[ -n "${PRIVATE_KEY:-}" ]]; then
+  wallet_args="--private-key $PRIVATE_KEY"
+else
+  wallet_args="--ledger"
+fi
+
+SIGNING
 
   if [[ "$needs_deployment" == "true" ]]; then
     cat >> "$cmd_file" <<EOF
@@ -132,7 +142,7 @@ echo "Step 1: Deploying DelegationHandler..."
 cast send $factory \\
   'deployDelegationHandler(bytes)' \\
   "$pubkey" \\
-  -r $rpc_url $wallet_args
+  -r $rpc_url \$wallet_args
 echo ""
 
 HANDLER=\$(cast call $factory 'delegationHandlers(bytes)(address)' "$pubkey" -r $rpc_url | xargs)
@@ -156,7 +166,7 @@ EOF
 echo "Step 2: Sending $amount BERA to DelegationHandler..."
 cast send \$HANDLER \\
   --value ${amount}ether \\
-  -r $rpc_url $wallet_args
+  -r $rpc_url \$wallet_args
 echo ""
 echo "Done. Handler funded."
 echo ""
@@ -203,7 +213,7 @@ EOF
 
 generate_foundation_request() {
   local handler="$1" amount_bera="$2" amount_wei="$3"
-  local validator_admin="$4" pubkey="$5" network="$6"
+  local validator_admin="$4" pubkey="$5" network="$6" role_hash="$7"
 
   local safe_addr
   if [[ "$network" == "mainnet" ]]; then
@@ -232,7 +242,7 @@ Call 1 — delegate(uint256)
   The handler must already hold this BERA before this tx executes.
 
 Call 2 — grantRole(bytes32,address)
-  Role:    VALIDATOR_ADMIN_ROLE (0xfa3e63d5771fd4999b619dee634be9dbb03c309738cc2adaadd49c4f5595adb0)
+  Role:    VALIDATOR_ADMIN_ROLE ($role_hash)
   Account: $validator_admin
 
 How to execute
@@ -326,7 +336,7 @@ main() {
   if [[ "$needs_deployment" == "false" ]]; then
     log_info "Checking DEFAULT_ADMIN_ROLE on handler..."
     local handler_admin caller_address
-    handler_admin=$(get_handler_admin "$HANDLER" "$rpc_url" | xargs | tr 'A-F' 'a-f')
+    handler_admin=$(get_handler_admin "$factory" "$rpc_url" | xargs | tr 'A-F' 'a-f')
     caller_address=$(get_caller_address | tr 'A-F' 'a-f')
     if [[ -n "$caller_address" && -n "$handler_admin" && "$caller_address" == "$handler_admin" ]]; then
       caller_is_admin=true
@@ -353,21 +363,33 @@ main() {
 
   # --- Generate artifacts ---
   if [[ "$caller_is_admin" == "true" ]]; then
-    local wallet_args cmd_file
-    wallet_args=$(get_cast_wallet_args)
+    local cmd_file
     cmd_file="generated/delegator-delegate-command.sh"
     cat > "$cmd_file" <<EOF
 #!/usr/bin/env bash
 # Combined delegation command (caller holds DEFAULT_ADMIN_ROLE)
 # Pubkey: $PUBKEY  Amount: $CLI_AMOUNT BERA  Admin: $VALIDATOR_ADMIN
 # Generated: $(date -u +"%Y-%m-%d %H:%M:%S UTC")
+# Validated: pending
 set -euo pipefail
 
 EOF
+    cat >> "$cmd_file" <<'SIGNING'
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+[[ -f "$SCRIPT_DIR/../env.sh" ]] && source "$SCRIPT_DIR/../env.sh"
+if [[ -n "${KEY_FILE:-}" && -f "${KEY_FILE:-}" ]]; then
+  wallet_args="--private-key $(cat "$KEY_FILE")"
+elif [[ -n "${PRIVATE_KEY:-}" ]]; then
+  wallet_args="--private-key $PRIVATE_KEY"
+else
+  wallet_args="--ledger"
+fi
+
+SIGNING
     if [[ "$needs_deployment" == "true" ]]; then
       cat >> "$cmd_file" <<EOF
 echo "Step 1: Deploying DelegationHandler..."
-cast send $factory 'deployDelegationHandler(bytes)' "$PUBKEY" -r $rpc_url $wallet_args
+cast send $factory 'deployDelegationHandler(bytes)' "$PUBKEY" -r $rpc_url \$wallet_args
 echo ""
 HANDLER=\$(cast call $factory 'delegationHandlers(bytes)(address)' "$PUBKEY" -r $rpc_url | xargs)
 [[ -z "\$HANDLER" || "\$HANDLER" == "0x0000000000000000000000000000000000000000" ]] && { echo "Error: handler zero"; exit 1; }
@@ -385,13 +407,13 @@ EOF
     fi
     cat >> "$cmd_file" <<EOF
 echo "Step 2: Funding handler..."
-cast send \$HANDLER --value ${CLI_AMOUNT}ether -r $rpc_url $wallet_args
+cast send \$HANDLER --value ${CLI_AMOUNT}ether -r $rpc_url \$wallet_args
 echo ""
 echo "Step 3: delegate()..."
-cast send \$HANDLER 'delegate(uint256)' "$amount_wei" -r $rpc_url $wallet_args
+cast send \$HANDLER 'delegate(uint256)' "$amount_wei" -r $rpc_url \$wallet_args
 echo ""
 echo "Step 4: grantRole(VALIDATOR_ADMIN_ROLE, $VALIDATOR_ADMIN)..."
-cast send \$HANDLER 'grantRole(bytes32,address)' "$role_hash" "$VALIDATOR_ADMIN" -r $rpc_url $wallet_args
+cast send \$HANDLER 'grantRole(bytes32,address)' "$role_hash" "$VALIDATOR_ADMIN" -r $rpc_url \$wallet_args
 echo ""
 echo "Done. Operator can run: ./delegated-create-pool.sh"
 EOF
@@ -401,7 +423,7 @@ EOF
   else
     generate_operator_steps "$factory" "$PUBKEY" "$CLI_AMOUNT" "$rpc_url" "$needs_deployment" "$HANDLER"
     generate_safe_payload "$HANDLER" "$amount_wei" "$role_hash" "$VALIDATOR_ADMIN"
-    generate_foundation_request "$HANDLER" "$CLI_AMOUNT" "$amount_wei" "$VALIDATOR_ADMIN" "$PUBKEY" "$network"
+    generate_foundation_request "$HANDLER" "$CLI_AMOUNT" "$amount_wei" "$VALIDATOR_ADMIN" "$PUBKEY" "$network" "$role_hash"
     log_success "Generated: generated/operator-steps.sh"
     log_success "Generated: generated/safe-multisend-payload.json"
     log_success "Generated: generated/foundation-request.txt"
@@ -424,6 +446,11 @@ EOF
     local payload_file="$SCRIPT_DIR/generated/safe-multisend-payload.json"
     if run_delegation_simulation "$PUBKEY" "$network" "$key_file" "$payload_file"; then
       echo ""
+      for gf in generated/operator-steps.sh generated/delegator-delegate-command.sh; do
+        if [[ -f "$gf" ]]; then
+          sed 's/# Validated: pending/# Validated: simulation passed (see generated\/simulation-report.txt)/' "$gf" > "${gf}.tmp" && mv "${gf}.tmp" "$gf"
+        fi
+      done
       log_success "Artifacts validated. Proceed with the next steps below."
     else
       echo ""
