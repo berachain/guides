@@ -192,7 +192,7 @@ query_block_number() {
 }
 
 # Get current block/slot number from the running node
-get_local_block_number() {
+get_local_block_number_once() {
     if [[ "$LAYER" == "cl" ]]; then
         local port
         port=$(get_cl_api_port)
@@ -203,6 +203,33 @@ get_local_block_number() {
         port=$(get_el_rpc_port)
         query_block_number "http://127.0.0.1:$port"
     fi
+}
+
+# CL can briefly be unavailable right after a restart, so retry slot reads.
+get_local_block_number() {
+    local block
+    block=$(get_local_block_number_once)
+    if [[ "$block" -gt 0 ]]; then
+        echo "$block"
+        return 0
+    fi
+
+    if [[ "$LAYER" == "cl" ]]; then
+        local max_attempts=12
+        local attempt=1
+        while [[ $attempt -le $max_attempts ]]; do
+            log_detail "CL API not ready yet, retrying slot query ($attempt/$max_attempts)..."
+            sleep 2
+            block=$(get_local_block_number_once)
+            if [[ "$block" -gt 0 ]]; then
+                echo "$block"
+                return 0
+            fi
+            ((attempt++))
+        done
+    fi
+
+    echo "0"
 }
 
 # Check sync status against public RPC
