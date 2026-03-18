@@ -114,9 +114,15 @@ extract_run_info() {
     if [[ -n "$lag" && ! "$lag" =~ ^[0-9]+$ ]]; then
         lag=""
     fi
+    # Capture the last error or skip message for the summary
     message=$(grep -E "SKIP:|ERROR:" "$log_file" 2>/dev/null | tail -1 | sed "s/.*] \\[snapshot-generate\\] //")
     if [[ -z "$message" ]]; then
-        message="unknown failure"
+        # If no explicit error, check if it completed successfully
+        if grep -q "Snapshot complete:" "$log_file" 2>/dev/null; then
+            message="published"
+        else
+            message="unknown failure"
+        fi
     fi
 
     echo "${local_block}|${public_block}|${lag}|${message}"
@@ -233,12 +239,15 @@ generate_and_publish_snapshot() {
         skip_flag="--skip-sync-check"
     fi
     
+    # Run generation and capture logs
+    log "Running snapshot-generate.sh for $type..."
     if snapshot_file=$(bash "$SCRIPT_DIR/snapshot-generate.sh" "$type" "$TMP_DIR" $skip_flag 2>&1 | tee -a "$LOG_FILE" | tee "$run_log" | tail -1); then
         # Check if output looks like a file path
         if [[ -f "$snapshot_file" ]]; then
             log "Snapshot generated: $snapshot_file"
             
             # Publish snapshot
+            log "Running snapshot-publish.sh for $type..."
             if bash "$SCRIPT_DIR/snapshot-publish.sh" "$type" "$snapshot_file" 2>&1 | tee -a "$LOG_FILE"; then
                 log "Snapshot published successfully: $type"
                 run_info=$(extract_run_info "$run_log")

@@ -258,10 +258,12 @@ else
     log "Skipping sync check (--skip-sync-check flag set)"
 fi
 
-# Get block/slot number for filename
+# CRITICAL: Capture block number BEFORE stopping services
 BLOCK_NUMBER=$(get_local_block_number)
 log_detail "Block/Slot for snapshot: $BLOCK_NUMBER"
-[[ "$BLOCK_NUMBER" -gt 0 ]] || error "Could not get block number from node"
+if [[ "$BLOCK_NUMBER" -le 0 ]]; then
+    error "Could not get block number from node while services are running"
+fi
 
 if [[ "$LAYER" == "cl" ]]; then
     # CL snapshot: beacon-kit-{pruned|archive}-{slot}-{cl_version}.tar.lz4
