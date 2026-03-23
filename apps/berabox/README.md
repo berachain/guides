@@ -14,15 +14,15 @@ Builds produce debug binaries by default (Go with full symbols, Rust unoptimized
 │   │   ├── logs/cl|el/        # Separate CL/EL logs
 │   │   ├── systemd/           # Generated user service files
 │   │   ├── runtime/           # Runtime files (IPC sockets, etc.)
-│   │   ├── src/               # Per-installation source code & debug binaries
-│   │   │   ├── beacon-kit/    # Installation-specific beacon-kit clone (with beacond-debug)
-│   │   │   └── bera-reth/     # Installation-specific bera-reth clone (with reth-debug)
+│   │   ├── src/               # Per-installation source code & binaries
+│   │   │   ├── beacon-kit/    # Installation-specific beacon-kit clone (with beacond)
+│   │   │   └── bera-reth/     # Installation-specific bera-reth clone (with reth)
 │   │   └── installation.toml  # Installation metadata & versions
 │   └── bb-mainnet-reth/       # Independent second installation
 │       ├── data/cl|el/        # Independent data
-│       ├── src/               # Independent source code & debug binaries
-│       │   ├── beacon-kit/    # Independent beacon-kit clone (with beacond-debug)
-│       │   └── bera-reth/     # Independent bera-reth clone (with reth-debug)
+│       ├── src/               # Independent source code & binaries
+│       │   ├── beacon-kit/    # Independent beacon-kit clone (with beacond)
+│       │   └── bera-reth/     # Independent bera-reth clone (with reth)
 │       └── installation.toml  # Independent configuration
 ├── keep/                      # Persistent identity keys (survive reset/init)
 │   ├── cl-keys/               # CL validator + P2P node keys (.json)
@@ -71,12 +71,11 @@ bb bb-mainnet-reth logs
 
 **`[installation] info`** - Show installation information (versions, ports, service status, validator keys, enode)
 
-**`[installation] build [--no-pull] [--quiet] [--release] [clean]`** - Build or fetch binaries
+**`[installation] build [--no-pull] [--quiet] [clean]`** - Build or fetch binaries
 
-If the component version in `installation.toml` is set to `"latest"`, build downloads the most recent GitHub release binary instead of compiling from source. Otherwise it performs a full debug build from the checked-out source tree.
+If the component version in `installation.toml` is set to `"latest"`, build downloads the most recent GitHub release binary instead of compiling from source. Otherwise it compiles from the checked-out source tree (Go default flags for beacond, Cargo `--release` for reth).
 
 - `--no-pull`: Skip git pull before switching branches (default: always pull)
-- `--release`: Build optimized release binaries instead of debug binaries
 - `--quiet`: Silence compiler output while keeping operational logging
 - `clean`: Remove build artifacts (preserves installed binaries)
 
@@ -219,11 +218,9 @@ el_persistent_peers = [
 
 ## Debugging
 
-Debug builds include full symbols: Go (`-gcflags="all=-N"`), Rust (unoptimized debug). Pass `--release` for optimized production binaries.
-
 `bb debug` generates a VS Code/Cursor workspace (`bb-berabox.code-workspace`) and `.vscode/launch.json` with two modes:
 
-- **Process Attachment** -- attach to a running `beacond-debug` (Go, PID selection) or `reth-debug` (Rust, lldb).
+- **Process Attachment** -- attach to a running `beacond` (Go, PID selection) or `reth` (Rust, lldb).
 - **Startup Launch** -- launch CL/EL directly in the debugger. Berabox stops running services first to prevent port conflicts.
 
 ```bash

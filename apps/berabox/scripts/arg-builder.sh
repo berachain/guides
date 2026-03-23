@@ -16,17 +16,17 @@ get_el_binary_path() {
         return 1
     fi
 
-    if [[ -f "$installation_dir/src/bera-reth/reth-debug" ]]; then
-        echo "$installation_dir/src/bera-reth/reth-debug"
+    if [[ -f "$installation_dir/src/bera-reth/reth" ]]; then
+        echo "$installation_dir/src/bera-reth/reth"
     else
-        echo "$installation_dir/src/bera-reth/target/debug/bera-reth"
+        echo "$installation_dir/src/bera-reth/target/release/bera-reth"
     fi
 }
 
 # Return the absolute path to the CL binary
 get_cl_binary_path() {
     local installation_dir="$1"
-    echo "$installation_dir/src/beacon-kit/beacond-debug"
+    echo "$installation_dir/src/beacon-kit/beacond"
 }
 
 # Build EL arguments - core function with optional binary path inclusion
@@ -80,8 +80,8 @@ _build_el_args_core() {
     if [[ "$archive_mode" != "true" ]]; then
         archive_option="--full"
     fi
-    local log_filter="" 
-    local args="node -v --datadir $installation_dir/data/el/chain --chain $installation_dir/data/el/config/genesis.json $archive_option $bootnodes_option $trusted_peers_option --authrpc.addr 127.0.0.1 --authrpc.port $el_authrpc_port --authrpc.jwtsecret $installation_dir/data/cl/config/jwt.hex --port $el_p2p_port --rpc.max-logs-per-response 1000000 --metrics $el_prometheus_port --http --http.addr 0.0.0.0 --http.port $el_rpc_port --ws --ws.addr 0.0.0.0 --ws.port $el_ws_port --ipcpath $installation_dir/runtime/admin.ipc --discovery.port $el_p2p_port --http.corsdomain '*' --log.file.max-files 0 --log.stdout.filter '$log_filter' $ip_option --max-inbound-peers 300"
+    local log_filter=""
+    local args="node -v --datadir $installation_dir/data/el/chain --chain $installation_dir/data/el/config/genesis.json $archive_option $bootnodes_option $trusted_peers_option --authrpc.addr 127.0.0.1 --authrpc.port $el_authrpc_port --authrpc.jwtsecret $installation_dir/data/cl/config/jwt.hex --port $el_p2p_port --rpc.max-logs-per-response 1000000 --metrics $el_prometheus_port --http --http.addr 0.0.0.0 --http.port $el_rpc_port --ws --ws.addr 0.0.0.0 --ws.port $el_ws_port --ipcpath $installation_dir/runtime/admin.ipc --discovery.port $el_p2p_port --http.corsdomain '*' --log.file.max-files 0 --log.stdout.filter '$log_filter' $ip_option --max-inbound-peers 30 --engine.persistence-threshold 0 --engine.memory-block-buffer-target 0"
     if [[ "$include_binary_path" == "true" ]]; then
         echo "$(get_el_binary_path reth "$installation_dir") $args"
     else

@@ -153,7 +153,7 @@ bb_cmd_help() {
     echo ""
     echo -e "${GREEN}All Other Commands:${NC}"
     echo "  [installation] info                  Show installation information"
-                echo "  [installation] build [--no-pull] [--quiet] [clean]  Build binaries (debug with symbols)"
+    echo "  [installation] build [--no-pull] [--quiet] [clean]  Build binaries"
     echo "  [installation] init                  Initialize network parameters"
     echo "  [installation] install               Install systemd services (no sudo required)"
     echo "  [installation] start [cl|el]         Start services"
@@ -287,7 +287,7 @@ bb_cmd_build() {
         # Use original bb functionality for now - this ensures compatibility
         "${BB_CONFIG[scripts_dir]}/clean-build.sh" "$installation"
     else
-        log_info "Building debug binaries for $installation"
+        log_info "Building binaries for $installation"
         
         if ! bb_validate_installation "$installation"; then
             return 1

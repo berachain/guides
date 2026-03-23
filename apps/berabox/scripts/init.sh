@@ -91,10 +91,9 @@ done
 CL_CONFIG_DIR="$INSTALLATION_DIR/data/cl/config"
 CL_DATA_DIR="$INSTALLATION_DIR/data/cl"
 
-# Check if beacond binary exists
-BEACOND_BIN="$INSTALLATION_DIR/src/beacon-kit/beacond-debug"
+BEACOND_BIN="$INSTALLATION_DIR/src/beacon-kit/beacond"
 if [[ ! -f "$BEACOND_BIN" ]]; then
-    log_error "beacond-debug binary not found. Run 'build' first."
+    log_error "beacond binary not found. Run 'build' first."
     exit 1
 fi
 
@@ -106,56 +105,9 @@ if ! BEACOND_OUTPUT=$("$BEACOND_BIN" init "$INSTALLATION_NAME-node" --beacon-kit
     exit 1
 fi
 
-# Deploy custom validator key if specified
 INSTALLATION_TOML="$INSTALLATION_DIR/installation.toml"
-if [[ -f "$INSTALLATION_TOML" ]]; then
-    # Parse CL key name from installation.toml
-    VALIDATOR_KEY_NAME=$(awk -F'"' '/^\[identity\]/{flag=1;next}/^\[/{flag=0}flag && /^cl_key_name/{print $2}' "$INSTALLATION_TOML" 2>/dev/null || true)
-    
-    if [[ -n "$VALIDATOR_KEY_NAME" && "$VALIDATOR_KEY_NAME" != "" ]]; then
-        VALIDATOR_KEY_FILE="$BERABOX_ROOT/keep/cl-keys/${VALIDATOR_KEY_NAME}.json"
-        
-        if [[ -f "$VALIDATOR_KEY_FILE" ]]; then
-            # Backup the generated key (just in case)
-            cp "$CL_CONFIG_DIR/priv_validator_key.json" "$CL_CONFIG_DIR/priv_validator_key.json.generated"
-            
-            # Deploy the custom validator key
-            cp "$VALIDATOR_KEY_FILE" "$CL_CONFIG_DIR/priv_validator_key.json"
-            log_info "🔑 VALIDATOR KEY DEPLOYED: $VALIDATOR_KEY_NAME"
-        else
-            log_error "❌ Validator key file not found: $VALIDATOR_KEY_FILE"
-            log_error "Available CL keys in keep/cl-keys/:"
-            ls -1 "$BERABOX_ROOT/keep/cl-keys/"*.json 2>/dev/null | basename -a -s .json | sed 's/^/  - /' || echo "  (none found)"
-            exit 1
-        fi
-
-        NODE_KEY_FILE="$BERABOX_ROOT/keep/cl-keys/${VALIDATOR_KEY_NAME}.node_key.json"
-        if [[ -f "$NODE_KEY_FILE" ]]; then
-            cp "$CL_CONFIG_DIR/node_key.json" "$CL_CONFIG_DIR/node_key.json.generated"
-            cp "$NODE_KEY_FILE" "$CL_CONFIG_DIR/node_key.json"
-            log_info "CL P2P NODE KEY DEPLOYED: $VALIDATOR_KEY_NAME"
-        fi
-    fi
-fi
-
-# Deploy custom EL node key if specified
-EL_KEY_NAME=$(awk -F'"' '/^\[identity\]/{flag=1;next}/^\[/{flag=0}flag && /^el_key_name/{print $2}' "$INSTALLATION_TOML" 2>/dev/null || true)
-
-if [[ -n "$EL_KEY_NAME" && "$EL_KEY_NAME" != "" ]]; then
-    EL_KEY_FILE="$BERABOX_ROOT/keep/el-keys/${EL_KEY_NAME}.nodekey"
-    
-    if [[ -f "$EL_KEY_FILE" ]]; then
-        EL_KEY_TARGET="$INSTALLATION_DIR/data/el/chain/discovery-secret"
-        EL_KEY_DIR="$INSTALLATION_DIR/data/el/chain"
-        bb_ensure_directory "$EL_KEY_DIR"
-        cp "$EL_KEY_FILE" "$EL_KEY_TARGET"
-        log_info "🔗 EL NODE KEY DEPLOYED: $EL_KEY_NAME"
-    else
-        log_error "❌ EL node key file not found: $EL_KEY_FILE"
-        log_error "Available EL keys in keep/el-keys/:"
-        ls -1 "$BERABOX_ROOT/keep/el-keys/"*.nodekey 2>/dev/null | basename -a -s .nodekey | sed 's/^/  - /' || echo "  (none found)"
-        exit 1
-    fi
+if ! bb_deploy_identity_keys "$INSTALLATION_DIR" "$INSTALLATION_NAME"; then
+    exit 1
 fi
 
 # Generate JWT secret (if not already done) 

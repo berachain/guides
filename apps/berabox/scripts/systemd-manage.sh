@@ -169,6 +169,18 @@ load_installation_config() {
     # User systemd services automatically run as the current user
 }
 
+deploy_identity_keys_for_installation() {
+    local installation_name="$1"
+    local installation_dir="$BERABOX_ROOT/installations/$installation_name"
+
+    if [[ ! -d "$installation_dir" ]]; then
+        log_error "Installation '$installation_name' not found at $installation_dir"
+        return 1
+    fi
+
+    bb_deploy_identity_keys "$installation_dir" "$installation_name"
+}
+
 # Generate systemd service files
 generate_service_files() {
     local installation_name="$1"
@@ -222,7 +234,10 @@ install_services() {
 
     # Always reload daemon before operations
     systemd_reload
-    
+
+    log_step "Deploying identity keys from keep/..."
+    deploy_identity_keys_for_installation "$installation_name"
+
     log_step "Generating service files..."
     generate_service_files "$installation_name"
     
@@ -388,10 +403,13 @@ start_services() {
 
     # Always reload daemon before operations
     systemd_reload
-    
+
+    log_step "Deploying identity keys from keep/..."
+    deploy_identity_keys_for_installation "$installation_name"
+
     local cl_service=$(get_cl_service_name "$installation_name")
     local el_service=$(get_el_service_name "$installation_name")
-    
+
     case "$component" in
         "cl")
             systemctl --user start "$cl_service"
@@ -442,7 +460,10 @@ restart_services() {
 
     # Always reload daemon before operations
     systemctl --user daemon-reload 2>/dev/null || true
-    
+
+    log_step "Deploying identity keys from keep/..."
+    deploy_identity_keys_for_installation "$installation_name"
+
     case "$component" in
         "cl")
             systemctl --user restart "$installation_name-cl"

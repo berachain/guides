@@ -38,7 +38,7 @@ clean_installation_artifacts() {
     
     # Clean Go artifacts  
     local go_bins=($(find "$installation_dir/src" -name "bin" -type d 2>/dev/null || true))
-    local go_binaries=($(find "$installation_dir/src" -name "*-debug" -type f 2>/dev/null || true))
+    local go_binaries=($(find "$installation_dir/src" \( -name "beacond" -o -name "reth" -o -name "*-debug" -o -name "*-release" \) -not -path "*/target/*" -type f 2>/dev/null || true))
     
     local go_cleaned=0
     if [[ ${#go_bins[@]} -gt 0 ]]; then

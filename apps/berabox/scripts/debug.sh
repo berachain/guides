@@ -381,7 +381,6 @@ EOF
 EOF
             fi
 
-            # CL (Beacon-Kit) Launch Configuration - Start process in debug mode
             echo "," >> "$launch_json"
             cat >> "$launch_json" << EOF
         {
@@ -389,7 +388,7 @@ EOF
             "type": "go",
             "request": "launch",
             "mode": "exec",
-            "program": "$installation_dir/src/beacon-kit/beacond-debug",
+            "program": "$installation_dir/src/beacon-kit/beacond",
             "args": ["start", "--home", "$installation_dir/data/cl"],
             "cwd": "$installation_dir/src/beacon-kit",
             "showLog": true,
@@ -750,7 +749,7 @@ generate_debug_configs() {
                 
                 # Additional check for reth processes
                 if [[ "$el_client" == "reth" ]]; then
-                    local reth_pids=$(pgrep -f "reth-debug" 2>/dev/null)
+                    local reth_pids=$(pgrep -f "bera-reth" 2>/dev/null)
                     if [[ -n "$reth_pids" ]]; then
                         echo "     ✅ Reth processes found outside systemd: $reth_pids"
                     fi
