@@ -63,7 +63,11 @@ The script provides a menu-driven interface with operations organized by categor
 
 ### Commission Management
 
-**Register as Validator Operator** registers your address as the validator operator on BeraChef and requires `COMMISSION_MANAGER_ROLE`. **Queue Validator Commission** queues a commission rate change (0-20%) and also requires `COMMISSION_MANAGER_ROLE`. Enter commission in basis points (e.g., 500 = 5%). Changes are queued and take effect after the queue delay.
+**Register as Validator Operator** registers your SmartOperator as the validator operator on BeraChef and requires `COMMISSION_MANAGER_ROLE`.
+
+**Queue Validator Commission** queues a commission rate change (0-20%) and requires `COMMISSION_MANAGER_ROLE`.
+
+**Activate Queued Validator Commission** activates the queued commission update on BeraChef and requires `COMMISSION_MANAGER_ROLE`. This is sent directly to `BERA_CHEF_ADDRESS` via `activateQueuedValCommission(bytes valPubkey)`.
 
 ### Protocol Fee Management
 
@@ -114,6 +118,13 @@ The script includes error handling and validation. Preflight checks simulate tra
 # Select "🔑 Manage Roles"
 # Enter address to manage
 # Select roles to grant/revoke
+```
+
+**Activate queued validator commission:**
+
+```bash
+./smart-operator-manager.py
+# Select "✅ Activate Queued Validator Commission"
 ```
 
 ## Tips
