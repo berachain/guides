@@ -206,6 +206,10 @@ el_repo = "https://github.com/berachain/bera-$EL_CLIENT.git"
 archive_mode = false
 # Use reth's V2 storage engine (--storage.v2). Requires fresh sync.
 storage_v2 = false
+# EL log verbosity: "" = reth default (info). Use "v", "vv", "vvv", "vvvv" for increasing detail, "q" for quiet.
+el_log_verbosity = ""
+# EL log filter: env_filter directive for --log.stdout.filter. Example: "info,reth::engine=debug"
+el_log_filter = ""
 
 [identity]
 # Persistent P2P identity keys, looked up by name in keep/ directories.

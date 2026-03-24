@@ -190,6 +190,8 @@ Installations created without this section use the defaults above. Changing a UR
 |-----|---------|-------------|
 | `archive_mode` | `false` | `true` keeps all historical state (full archive); `false` prunes. Archive nodes use significantly more disk. |
 | `storage_v2` | `false` | Use reth's V2 storage engine. Adds `--storage.v2` to reth CLI args. Requires fresh sync — do not enable on an existing datadir. |
+| `el_log_verbosity` | `""` | EL log verbosity. Empty = reth default (info). Use `"v"`, `"vv"`, `"vvv"`, `"vvvv"` for increasing detail, `"q"` for quiet. |
+| `el_log_filter` | `""` | EL log filter (`env_filter` directive for `--log.stdout.filter`). Example: `"info,reth::engine=debug"`. |
 
 **`[identity]`** -- Persistent P2P identity keys, preserved across `init` cycles so your node ID and enode stay stable.
 
