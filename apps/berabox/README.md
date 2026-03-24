@@ -151,12 +151,12 @@ Every installation is fully described by a single `installation.toml`. The file 
 
 **`[installation]`** -- Identity metadata, set at creation time.
 
-| Key | Example | Description |
-|-----|---------|-------------|
-| `name` | `"bb-mainnet-reth"` | Installation name (user-prefixed by `create`) |
-| `chain` | `"mainnet"` | Network: `mainnet` or `testnet` |
-| `el_client` | `"reth"` | Execution-layer client |
-| `created` | `"2026-01-13T21:46:11+01:00"` | ISO-8601 creation timestamp |
+| Key         | Example                       | Description                                   |
+| ----------- | ----------------------------- | --------------------------------------------- |
+| `name`      | `"bb-mainnet-reth"`           | Installation name (user-prefixed by `create`) |
+| `chain`     | `"mainnet"`                   | Network: `mainnet` or `testnet`               |
+| `el_client` | `"reth"`                      | Execution-layer client                        |
+| `created`   | `"2026-01-13T21:46:11+01:00"` | ISO-8601 creation timestamp                   |
 
 **`[ports]`** -- Port allocations. `base_port` is the anchor; the rest are derived from it by fixed offsets (see port layout table above). You normally only set `base_port` via `--port-base` at creation time and leave the rest alone.
 
@@ -186,16 +186,19 @@ Installations created without this section use the defaults above. Changing a UR
 
 **`[options]`**
 
-| Key | Default | Description |
-|-----|---------|-------------|
-| `archive_mode` | `false` | `true` keeps all historical state (full archive); `false` prunes. Archive nodes use significantly more disk. |
+| Key                | Default | Description                                                                                                                     |
+| ------------------ | ------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `archive_mode`     | `false` | `true` keeps all historical state (full archive); `false` prunes. Archive nodes use significantly more disk.                    |
+| `storage_v2`       | `false` | Use reth's V2 storage engine. Adds `--storage.v2` to reth CLI args. Requires fresh sync — do not enable on an existing datadir. |
+| `el_log_verbosity` | `""`    | EL log verbosity. Empty = reth default (info). Use `"v"`, `"vv"`, `"vvv"`, `"vvvv"` for increasing detail, `"q"` for quiet.     |
+| `el_log_filter`    | `""`    | EL log filter (`env_filter` directive for `--log.stdout.filter`). Example: `"info,reth::engine=debug"`.                         |
 
 **`[identity]`** -- Persistent P2P identity keys, preserved across `init` cycles so your node ID and enode stay stable.
 
-| Key | Description |
-|-----|-------------|
+| Key           | Description                                                                                                                                                                                                                     |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `cl_key_name` | Name of the CL validator signing key. Looked up as `keep/cl-keys/<name>.json` (`priv_validator_key.json`) and optionally `<name>.node_key.json` (CometBFT P2P identity). Leave blank to use ephemeral keys from `beacond init`. |
-| `el_key_name` | Name of the EL node key. Looked up as `keep/el-keys/<name>.nodekey` (`discovery-secret`). Leave blank for a random key each init. Setting this keeps your published enode stable for peer connections. |
+| `el_key_name` | Name of the EL node key. Looked up as `keep/el-keys/<name>.nodekey` (`discovery-secret`). Leave blank for a random key each init. Setting this keeps your published enode stable for peer connections.                          |
 
 **`[peers]`** -- Persistent peers injected into CL `config.toml` and EL command-line arguments at init time. CL peers use CometBFT `node_id@host:port` format; EL peers use `enode://` URLs.
 
@@ -211,9 +214,9 @@ el_persistent_peers = [
 
 **`[upnp]`** -- Automatic UPnP port forwarding for P2P ports only (never RPC or admin ports). The lease is obtained on `install` and released on `uninstall`.
 
-| Key | Default | Description |
-|-----|---------|-------------|
-| `enabled` | `false` | Enable UPnP. Requires a gateway that supports it. |
+| Key          | Default | Description                                             |
+| ------------ | ------- | ------------------------------------------------------- |
+| `enabled`    | `false` | Enable UPnP. Requires a gateway that supports it.       |
 | `lease_time` | `86400` | Lease duration in seconds (86400 = 24h, 0 = permanent). |
 
 ## Debugging
