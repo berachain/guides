@@ -2,10 +2,15 @@
 set -euo pipefail
 
 # snapshot-generate.sh - Generate a snapshot for a given type
-# Usage: snapshot-generate.sh <type> <output_dir> [--skip-sync-check]
+# Usage: snapshot-generate.sh <type> <output_dir> [flags...]
 # Types: geth-pruned, reth-pruned, geth-archive, reth-archive, beacon-kit-pruned, beacon-kit-archive
 # Output: Writes snapshot path to stdout on success, exits non-zero on failure
-# Note: beacon-kit snapshots are typically generated immediately after reth snapshots with --skip-sync-check
+# Flags:
+#   --skip-sync-check   Skip block-lag check against public RPC
+#   --skip-stop         Skip stopping services (caller is responsible for quiescing)
+#   --skip-restart      Skip restarting services (caller is responsible for restart)
+#   --block-number N    Use N as the snapshot block/slot (required when --skip-stop is set,
+#                       since the node RPC is unavailable while stopped)
 
 # Set up DBUS environment for systemctl --user commands in cron context
 setup_dbus_env() {
@@ -34,9 +39,12 @@ PYTHON_BIN="$SNAPSHOT_PYTHON_BIN"
 BERABOX_BIN="$SNAPSHOT_BERABOX_BIN"
 COSMPRUND_BIN="$SNAPSHOT_COSMPRUND_BIN"
 SKIP_SYNC_CHECK=0
+SKIP_STOP=0
+SKIP_RESTART=0
+OVERRIDE_BLOCK_NUMBER=""
 
 usage() {
-    echo "Usage: $0 <type> <output_dir> [--skip-sync-check]" >&2
+    echo "Usage: $0 <type> <output_dir> [--skip-sync-check] [--skip-stop] [--skip-restart] [--block-number N]" >&2
     echo "Types: reth-pruned, reth-archive, beacon-kit-pruned, beacon-kit-archive" >&2
     exit 1
 }
@@ -75,9 +83,24 @@ error_with_code() {
 TYPE="$1"
 OUTPUT_DIR="$2"
 
-# Parse optional flag
-if [[ $# -ge 3 ]] && [[ "$3" == "--skip-sync-check" ]]; then
+# Parse optional flags (all positions after the first two)
+shift 2
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --skip-sync-check) SKIP_SYNC_CHECK=1 ;;
+        --skip-stop)       SKIP_STOP=1 ;;
+        --skip-restart)    SKIP_RESTART=1 ;;
+        --block-number)    [[ $# -ge 2 ]] || usage; OVERRIDE_BLOCK_NUMBER="$2"; shift ;;
+        *) echo "Unknown flag: $1" >&2; usage ;;
+    esac
+    shift
+done
+
+# --skip-stop implies the node is already down; skip the sync check too since
+# the local RPC is unavailable. --block-number must be supplied in this case.
+if [[ $SKIP_STOP -eq 1 ]]; then
     SKIP_SYNC_CHECK=1
+    [[ -n "$OVERRIDE_BLOCK_NUMBER" ]] || { echo "ERROR: --skip-stop requires --block-number" >&2; exit 1; }
 fi
 
 [[ -d "$OUTPUT_DIR" ]] || error "Output directory does not exist: $OUTPUT_DIR"
@@ -285,11 +308,17 @@ else
     log "Skipping sync check (--skip-sync-check flag set)"
 fi
 
-# CRITICAL: Capture block number BEFORE stopping services
-BLOCK_NUMBER=$(get_local_block_number)
-log_detail "Block/Slot for snapshot: $BLOCK_NUMBER"
-if [[ "$BLOCK_NUMBER" -le 0 ]]; then
-    error "Could not get block number from node while services are running"
+# Capture block number. When --skip-stop is set, services are already down so
+# we rely on the caller-supplied --block-number instead of querying the RPC.
+if [[ -n "$OVERRIDE_BLOCK_NUMBER" ]]; then
+    BLOCK_NUMBER="$OVERRIDE_BLOCK_NUMBER"
+    log_detail "Block/Slot for snapshot (caller-supplied): $BLOCK_NUMBER"
+else
+    BLOCK_NUMBER=$(get_local_block_number)
+    log_detail "Block/Slot for snapshot: $BLOCK_NUMBER"
+    if [[ "$BLOCK_NUMBER" -le 0 ]]; then
+        error "Could not get block number from node while services are running"
+    fi
 fi
 
 if [[ "$LAYER" == "cl" ]]; then
@@ -429,15 +458,17 @@ restart_services() {
 # Global variable to store output file path for successful completion
 SUCCESS_OUTPUT_FILE=""
 
-# Trap to restart services on any exit
+# Trap to restart services on any exit (skip if caller manages lifecycle)
 cleanup() {
     local exit_code=$?
-    restart_services
+    if [[ $SKIP_RESTART -eq 0 ]]; then
+        restart_services
+    fi
     # Clean up temp file on failure
     if [[ $exit_code -ne 0 ]] && [[ -f "$TEMP_FILE" ]]; then
         rm -f "$TEMP_FILE"
     fi
-    # Output success file path after restart (only to stdout, not stderr)
+    # Output success file path (only to stdout, not stderr)
     if [[ $exit_code -eq 0 ]] && [[ -n "$SUCCESS_OUTPUT_FILE" ]]; then
         echo "$SUCCESS_OUTPUT_FILE"
     fi
@@ -445,8 +476,12 @@ cleanup() {
 }
 trap cleanup EXIT
 
-# Stop services
-stop_services
+# Stop services (skip if caller is managing service lifecycle)
+if [[ $SKIP_STOP -eq 0 ]]; then
+    stop_services
+else
+    log "Skipping service stop (--skip-stop set, caller manages lifecycle)"
+fi
 
 # Prune CL state data for pruned snapshots only
 if [[ "$LAYER" == "cl" && "$TYPE" == "beacon-kit-pruned" ]]; then
@@ -461,7 +496,7 @@ if [[ "$LAYER" == "cl" && "$TYPE" == "beacon-kit-pruned" ]]; then
     # Run cosmprund with conservative settings for snapshots.
     # Berachain cosmprund main uses --keep-blocks/--keep-versions.
     # Keep 10 blocks and 5 versions (smaller than default for snapshot efficiency).
-    if "$COSMPRUND_BIN" prune "$CL_DATA_DIR" --keep-blocks 10 --keep-versions 5; then
+    if "$COSMPRUND_BIN" prune "$CL_DATA_DIR" --keep-blocks 10 --keep-versions 5 >&2; then
         SIZE_AFTER=$(du -sh "$CL_DATA_DIR" 2>/dev/null | cut -f1 || echo "unknown")
         log_detail "Size after pruning: $SIZE_AFTER"
         log_detail "Cosmprund completed successfully"

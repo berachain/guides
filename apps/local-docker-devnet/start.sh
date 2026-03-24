@@ -283,6 +283,7 @@ for i in $(seq 0 $((NUM_VALIDATORS - 1))); do
     --port=30303 \
     --engine.persistence-threshold=0 \
     --engine.memory-block-buffer-target=0 \
+    --storage.v2 \
     --http \
     --http.api="admin,debug,eth,net,trace,txpool,web3,rpc,reth,ots,flashbots,miner,mev" \
     --http.addr=0.0.0.0 \
@@ -311,6 +312,7 @@ if [ $NUM_RPC_NODES -gt 0 ]; then
       --chain=/root/.reth/eth-genesis.json \
       --datadir=/root/.reth \
       --port=30303 \
+      --storage.v2 \
       --http \
       --http.api="admin,debug,eth,net,trace,txpool,web3,rpc,reth,ots,flashbots,miner,mev" \
       --http.addr=0.0.0.0 \
@@ -336,6 +338,7 @@ if [ $NUM_RPC_NODES -gt 0 ]; then
         --chain=/root/.reth/eth-genesis.json \
         --datadir=/root/.reth \
         --port=30303 \
+        --storage.v2 \
         --http \
         --http.addr=0.0.0.0 \
         --http.port=8545 \

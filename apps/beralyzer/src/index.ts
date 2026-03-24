@@ -235,66 +235,70 @@ async function runElIngestion(
   const maxConsecutiveFailures = 5;
   workerRunning.set({ worker: workerName }, 1);
 
-  try { while (!isShuttingDown) {
-    const loopStart = Date.now();
-    loopIterations.inc({ worker: workerName });
+  try {
+    while (!isShuttingDown) {
+      const loopStart = Date.now();
+      loopIterations.inc({ worker: workerName });
 
-    try {
-      await ingestEl(pg, {
-        elRpcUrls: cfg.elRpcUrls,
-        blockBatchSize: cfg.concurrency.blockBatchSize,
-        txConcurrency: cfg.concurrency.trace,
-        receiptConcurrency: cfg.concurrency.receipt,
-        maxQueueDepth: 100,
-        log: cfg.log,
-        advanceCursor: true,
-        shouldShutdown: () => isShuttingDown,
-      });
+      try {
+        await ingestEl(pg, {
+          elRpcUrls: cfg.elRpcUrls,
+          blockBatchSize: cfg.concurrency.blockBatchSize,
+          txConcurrency: cfg.concurrency.trace,
+          receiptConcurrency: cfg.concurrency.receipt,
+          maxQueueDepth: 100,
+          log: cfg.log,
+          advanceCursor: true,
+          shouldShutdown: () => isShuttingDown,
+        });
 
-      consecutiveFailures = 0;
-    } catch (e) {
-      const err = e as Error;
-      logDatabaseError(`${workerName} ingestion error`, err);
+        consecutiveFailures = 0;
+      } catch (e) {
+        const err = e as Error;
+        logDatabaseError(`${workerName} ingestion error`, err);
 
-      const pgError = getPostgresErrorDetails(err);
-      if (
-        pgError.code &&
-        ["23503", "23505", "23514", "23502"].includes(pgError.code)
-      ) {
-        console.error(
-          `Database constraint violation detected in ${workerName}, stopping worker`,
-        );
-        return; // Exit this worker, others continue
-      }
-
-      if (isFatalError(err)) {
-        console.error(`Fatal ${workerName} error, stopping worker`);
-        return;
-      }
-
-      if (isRetryableError(err)) {
-        consecutiveFailures++;
-        console.log(
-          `${workerName} RPC unavailable, consecutive failures: ${consecutiveFailures}/${maxConsecutiveFailures}`,
-        );
-
-        if (consecutiveFailures >= maxConsecutiveFailures) {
+        const pgError = getPostgresErrorDetails(err);
+        if (
+          pgError.code &&
+          ["23503", "23505", "23514", "23502"].includes(pgError.code)
+        ) {
           console.error(
-            `Too many consecutive failures in ${workerName} (${consecutiveFailures}), stopping worker`,
+            `Database constraint violation detected in ${workerName}, stopping worker`,
           );
+          return; // Exit this worker, others continue
+        }
+
+        if (isFatalError(err)) {
+          console.error(`Fatal ${workerName} error, stopping worker`);
           return;
         }
+
+        if (isRetryableError(err)) {
+          consecutiveFailures++;
+          console.log(
+            `${workerName} RPC unavailable, consecutive failures: ${consecutiveFailures}/${maxConsecutiveFailures}`,
+          );
+
+          if (consecutiveFailures >= maxConsecutiveFailures) {
+            console.error(
+              `Too many consecutive failures in ${workerName} (${consecutiveFailures}), stopping worker`,
+            );
+            return;
+          }
+        }
+      } finally {
+        const loopDurationSeconds = (Date.now() - loopStart) / 1000;
+        loopDuration.observe({ worker: workerName }, loopDurationSeconds);
       }
-    } finally {
-      const loopDurationSeconds = (Date.now() - loopStart) / 1000;
-      loopDuration.observe({ worker: workerName }, loopDurationSeconds);
+
+      if (isShuttingDown) break;
+
+      // Sleep before next iteration
+      await new Promise((r) => setTimeout(r, cfg.pollMs));
     }
-
-    if (isShuttingDown) break;
-
-    // Sleep before next iteration
-    await new Promise((r) => setTimeout(r, cfg.pollMs));
-  } } finally { workerRunning.set({ worker: workerName }, 0); }
+  } finally {
+    workerRunning.set({ worker: workerName }, 0);
+  }
 }
 
 // ERC20 registry worker - runs independently at its own pace
@@ -308,59 +312,63 @@ async function runErc20Registry(
   const pollMs = parseInt(process.env.BERALYZER_ERC20_POLL_MS || "60000", 10);
   workerRunning.set({ worker: workerName }, 1);
 
-  try { while (!isShuttingDown) {
-    const loopStart = Date.now();
-    loopIterations.inc({ worker: workerName });
+  try {
+    while (!isShuttingDown) {
+      const loopStart = Date.now();
+      loopIterations.inc({ worker: workerName });
 
-    try {
-      await ingestErc20Registry(pg, {
-        elRpcUrls: cfg.elRpcUrls,
-        batchSize: 500,
-      });
+      try {
+        await ingestErc20Registry(pg, {
+          elRpcUrls: cfg.elRpcUrls,
+          batchSize: 500,
+        });
 
-      consecutiveFailures = 0;
-    } catch (e) {
-      const err = e as Error;
-      logDatabaseError(`${workerName} registry error`, err);
+        consecutiveFailures = 0;
+      } catch (e) {
+        const err = e as Error;
+        logDatabaseError(`${workerName} registry error`, err);
 
-      const pgError = getPostgresErrorDetails(err);
-      if (
-        pgError.code &&
-        ["23503", "23505", "23514", "23502"].includes(pgError.code)
-      ) {
-        console.error(
-          `Database constraint violation detected in ${workerName}, stopping worker`,
-        );
-        return;
-      }
-
-      if (isFatalError(err)) {
-        console.error(`Fatal ${workerName} error, stopping worker`);
-        return;
-      }
-
-      if (isRetryableError(err)) {
-        consecutiveFailures++;
-        console.log(
-          `${workerName} RPC unavailable, consecutive failures: ${consecutiveFailures}/${maxConsecutiveFailures}`,
-        );
-
-        if (consecutiveFailures >= maxConsecutiveFailures) {
+        const pgError = getPostgresErrorDetails(err);
+        if (
+          pgError.code &&
+          ["23503", "23505", "23514", "23502"].includes(pgError.code)
+        ) {
           console.error(
-            `Too many consecutive failures in ${workerName} (${consecutiveFailures}), stopping worker`,
+            `Database constraint violation detected in ${workerName}, stopping worker`,
           );
           return;
         }
+
+        if (isFatalError(err)) {
+          console.error(`Fatal ${workerName} error, stopping worker`);
+          return;
+        }
+
+        if (isRetryableError(err)) {
+          consecutiveFailures++;
+          console.log(
+            `${workerName} RPC unavailable, consecutive failures: ${consecutiveFailures}/${maxConsecutiveFailures}`,
+          );
+
+          if (consecutiveFailures >= maxConsecutiveFailures) {
+            console.error(
+              `Too many consecutive failures in ${workerName} (${consecutiveFailures}), stopping worker`,
+            );
+            return;
+          }
+        }
+      } finally {
+        const loopDurationSeconds = (Date.now() - loopStart) / 1000;
+        loopDuration.observe({ worker: workerName }, loopDurationSeconds);
       }
-    } finally {
-      const loopDurationSeconds = (Date.now() - loopStart) / 1000;
-      loopDuration.observe({ worker: workerName }, loopDurationSeconds);
+
+      if (isShuttingDown) break;
+
+      await new Promise((r) => setTimeout(r, pollMs));
     }
-
-    if (isShuttingDown) break;
-
-    await new Promise((r) => setTimeout(r, pollMs));
-  } } finally { workerRunning.set({ worker: workerName }, 0); }
+  } finally {
+    workerRunning.set({ worker: workerName }, 0);
+  }
 }
 
 // CL ingestion worker - runs independently at its own pace
@@ -374,61 +382,65 @@ async function runClIngestion(
   const pollMs = parseInt(process.env.BERALYZER_CL_POLL_MS || "30000", 10);
   workerRunning.set({ worker: workerName }, 1);
 
-  try { while (!isShuttingDown) {
-    const loopStart = Date.now();
-    loopIterations.inc({ worker: workerName });
+  try {
+    while (!isShuttingDown) {
+      const loopStart = Date.now();
+      loopIterations.inc({ worker: workerName });
 
-    try {
-      await ingestClAbsences(pg, {
-        clRpcUrls: cfg.clRpcUrls,
-        batchSize: 100,
-        validatorRefreshInterval: 500,
-        log: cfg.log,
-      });
+      try {
+        await ingestClAbsences(pg, {
+          clRpcUrls: cfg.clRpcUrls,
+          batchSize: 100,
+          validatorRefreshInterval: 500,
+          log: cfg.log,
+        });
 
-      consecutiveFailures = 0;
-    } catch (e) {
-      const err = e as Error;
-      logDatabaseError(`${workerName} ingestion error`, err);
+        consecutiveFailures = 0;
+      } catch (e) {
+        const err = e as Error;
+        logDatabaseError(`${workerName} ingestion error`, err);
 
-      const pgError = getPostgresErrorDetails(err);
-      if (
-        pgError.code &&
-        ["23503", "23505", "23514", "23502"].includes(pgError.code)
-      ) {
-        console.error(
-          `Database constraint violation detected in ${workerName}, stopping worker`,
-        );
-        return;
-      }
-
-      if (isFatalError(err)) {
-        console.error(`Fatal ${workerName} error, stopping worker`);
-        return;
-      }
-
-      if (isRetryableError(err)) {
-        consecutiveFailures++;
-        console.log(
-          `${workerName} RPC unavailable, consecutive failures: ${consecutiveFailures}/${maxConsecutiveFailures}`,
-        );
-
-        if (consecutiveFailures >= maxConsecutiveFailures) {
+        const pgError = getPostgresErrorDetails(err);
+        if (
+          pgError.code &&
+          ["23503", "23505", "23514", "23502"].includes(pgError.code)
+        ) {
           console.error(
-            `Too many consecutive failures in ${workerName} (${consecutiveFailures}), stopping worker`,
+            `Database constraint violation detected in ${workerName}, stopping worker`,
           );
           return;
         }
+
+        if (isFatalError(err)) {
+          console.error(`Fatal ${workerName} error, stopping worker`);
+          return;
+        }
+
+        if (isRetryableError(err)) {
+          consecutiveFailures++;
+          console.log(
+            `${workerName} RPC unavailable, consecutive failures: ${consecutiveFailures}/${maxConsecutiveFailures}`,
+          );
+
+          if (consecutiveFailures >= maxConsecutiveFailures) {
+            console.error(
+              `Too many consecutive failures in ${workerName} (${consecutiveFailures}), stopping worker`,
+            );
+            return;
+          }
+        }
+      } finally {
+        const loopDurationSeconds = (Date.now() - loopStart) / 1000;
+        loopDuration.observe({ worker: workerName }, loopDurationSeconds);
       }
-    } finally {
-      const loopDurationSeconds = (Date.now() - loopStart) / 1000;
-      loopDuration.observe({ worker: workerName }, loopDurationSeconds);
+
+      if (isShuttingDown) break;
+
+      await new Promise((r) => setTimeout(r, pollMs));
     }
-
-    if (isShuttingDown) break;
-
-    await new Promise((r) => setTimeout(r, pollMs));
-  } } finally { workerRunning.set({ worker: workerName }, 0); }
+  } finally {
+    workerRunning.set({ worker: workerName }, 0);
+  }
 }
 
 // Decoder worker - runs independently at its own pace
@@ -440,24 +452,28 @@ async function runDecoder(
   const pollMs = parseInt(process.env.BERALYZER_DECODER_POLL_MS || "60000", 10);
   workerRunning.set({ worker: workerName }, 1);
 
-  try { while (!isShuttingDown) {
-    const loopStart = Date.now();
-    loopIterations.inc({ worker: workerName });
+  try {
+    while (!isShuttingDown) {
+      const loopStart = Date.now();
+      loopIterations.inc({ worker: workerName });
 
-    try {
-      await runDecoderOnce(pg);
-    } catch (e) {
-      const err = e as Error;
-      logDatabaseError(`${workerName} error`, err, { non_fatal: true });
-    } finally {
-      const loopDurationSeconds = (Date.now() - loopStart) / 1000;
-      loopDuration.observe({ worker: workerName }, loopDurationSeconds);
+      try {
+        await runDecoderOnce(pg);
+      } catch (e) {
+        const err = e as Error;
+        logDatabaseError(`${workerName} error`, err, { non_fatal: true });
+      } finally {
+        const loopDurationSeconds = (Date.now() - loopStart) / 1000;
+        loopDuration.observe({ worker: workerName }, loopDurationSeconds);
+      }
+
+      if (isShuttingDown) break;
+
+      await new Promise((r) => setTimeout(r, pollMs));
     }
-
-    if (isShuttingDown) break;
-
-    await new Promise((r) => setTimeout(r, pollMs));
-  } } finally { workerRunning.set({ worker: workerName }, 0); }
+  } finally {
+    workerRunning.set({ worker: workerName }, 0);
+  }
 }
 
 // Snapshot worker - runs independently at its own pace
@@ -474,51 +490,55 @@ async function runSnapshots(
   );
   workerRunning.set({ worker: workerName }, 1);
 
-  try { while (!isShuttingDown) {
-    const loopStart = Date.now();
-    loopIterations.inc({ worker: workerName });
+  try {
+    while (!isShuttingDown) {
+      const loopStart = Date.now();
+      loopIterations.inc({ worker: workerName });
 
-    try {
-      await snapshotTodayIfMissing(pg, { clRpcUrls: cfg.clRpcUrls });
+      try {
+        await snapshotTodayIfMissing(pg, { clRpcUrls: cfg.clRpcUrls });
 
-      consecutiveFailures = 0;
-    } catch (e) {
-      const err = e as Error;
-      logDatabaseError(`${workerName} error`, err);
+        consecutiveFailures = 0;
+      } catch (e) {
+        const err = e as Error;
+        logDatabaseError(`${workerName} error`, err);
 
-      const pgError = getPostgresErrorDetails(err);
-      if (
-        pgError.code &&
-        ["23503", "23505", "23514", "23502"].includes(pgError.code)
-      ) {
-        console.error(
-          `Database constraint violation detected in ${workerName}, stopping worker`,
-        );
-        return;
-      }
-
-      if (isRetryableError(err)) {
-        consecutiveFailures++;
-        console.log(
-          `${workerName} RPC unavailable, consecutive failures: ${consecutiveFailures}/${maxConsecutiveFailures}`,
-        );
-
-        if (consecutiveFailures >= maxConsecutiveFailures) {
+        const pgError = getPostgresErrorDetails(err);
+        if (
+          pgError.code &&
+          ["23503", "23505", "23514", "23502"].includes(pgError.code)
+        ) {
           console.error(
-            `Too many consecutive failures in ${workerName} (${consecutiveFailures}), stopping worker`,
+            `Database constraint violation detected in ${workerName}, stopping worker`,
           );
           return;
         }
+
+        if (isRetryableError(err)) {
+          consecutiveFailures++;
+          console.log(
+            `${workerName} RPC unavailable, consecutive failures: ${consecutiveFailures}/${maxConsecutiveFailures}`,
+          );
+
+          if (consecutiveFailures >= maxConsecutiveFailures) {
+            console.error(
+              `Too many consecutive failures in ${workerName} (${consecutiveFailures}), stopping worker`,
+            );
+            return;
+          }
+        }
+      } finally {
+        const loopDurationSeconds = (Date.now() - loopStart) / 1000;
+        loopDuration.observe({ worker: workerName }, loopDurationSeconds);
       }
-    } finally {
-      const loopDurationSeconds = (Date.now() - loopStart) / 1000;
-      loopDuration.observe({ worker: workerName }, loopDurationSeconds);
+
+      if (isShuttingDown) break;
+
+      await new Promise((r) => setTimeout(r, pollMs));
     }
-
-    if (isShuttingDown) break;
-
-    await new Promise((r) => setTimeout(r, pollMs));
-  } } finally { workerRunning.set({ worker: workerName }, 0); }
+  } finally {
+    workerRunning.set({ worker: workerName }, 0);
+  }
 }
 
 // Stats worker - periodically collects DB inventory metrics (row counts, cursor heights, etc.)
@@ -538,7 +558,9 @@ async function runStats(
       try {
         await collectDbStats(pg);
       } catch (e) {
-        logDatabaseError(`${workerName} error`, e as Error, { non_fatal: true });
+        logDatabaseError(`${workerName} error`, e as Error, {
+          non_fatal: true,
+        });
       } finally {
         const loopDurationSeconds = (Date.now() - loopStart) / 1000;
         loopDuration.observe({ worker: workerName }, loopDurationSeconds);
@@ -561,28 +583,32 @@ async function runFailedBlocksRetry(
   const pollMs = parseInt(process.env.BERALYZER_RETRY_POLL_MS || "60000", 10);
   workerRunning.set({ worker: workerName }, 1);
 
-  try { while (!isShuttingDown) {
-    const loopStart = Date.now();
-    loopIterations.inc({ worker: workerName });
+  try {
+    while (!isShuttingDown) {
+      const loopStart = Date.now();
+      loopIterations.inc({ worker: workerName });
 
-    try {
-      await retryFailedBlocks(pg, {
-        elRpcUrls: cfg.elRpcUrls,
-        log: cfg.log,
-        shouldShutdown: () => isShuttingDown,
-      });
-    } catch (e) {
-      const err = e as Error;
-      logDatabaseError(`${workerName} error`, err, { non_fatal: true });
-    } finally {
-      const loopDurationSeconds = (Date.now() - loopStart) / 1000;
-      loopDuration.observe({ worker: workerName }, loopDurationSeconds);
+      try {
+        await retryFailedBlocks(pg, {
+          elRpcUrls: cfg.elRpcUrls,
+          log: cfg.log,
+          shouldShutdown: () => isShuttingDown,
+        });
+      } catch (e) {
+        const err = e as Error;
+        logDatabaseError(`${workerName} error`, err, { non_fatal: true });
+      } finally {
+        const loopDurationSeconds = (Date.now() - loopStart) / 1000;
+        loopDuration.observe({ worker: workerName }, loopDurationSeconds);
+      }
+
+      if (isShuttingDown) break;
+
+      await new Promise((r) => setTimeout(r, pollMs));
     }
-
-    if (isShuttingDown) break;
-
-    await new Promise((r) => setTimeout(r, pollMs));
-  } } finally { workerRunning.set({ worker: workerName }, 0); }
+  } finally {
+    workerRunning.set({ worker: workerName }, 0);
+  }
 }
 
 async function main() {
