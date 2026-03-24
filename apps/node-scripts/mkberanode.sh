@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Berachain node installer (system-wide)
-# - Installs beacond + (bera-reth|bera-geth) under /opt/berachain
+# - Installs beacond + bera-reth under /opt/berachain
 # - Initializes for mainnet or bepolia
 # - Creates systemd services and enables them (not started by default)
 #
@@ -10,7 +10,6 @@
 # Usage:
 #   sudo ./mkberanode.sh \
 #     --chain {mainnet|bepolia} \
-#     --el {reth|geth} \
 #     --mode {archive|pruned} \
 #     [--cl-version vX.Y.Z] \
 #     [--el-version vA.B.C] \
@@ -24,7 +23,7 @@ if (set -o pipefail) 2>/dev/null; then :; fi
 # Parameters and constants
 # ------------------------------
 CHAIN=""            # mainnet|bepolia
-EL_CHOICE=""        # reth|geth
+EL_CHOICE="reth"    # reth only
 MODE=""               # archive|pruned (required)
 CL_VERSION=""       # e.g. v1.3.2 (empty: latest)
 EL_VERSION=""       # e.g. v1.20.0 (empty: latest)
@@ -58,7 +57,6 @@ CL_DEFAULT_P2P_PORT=26656
 GH_API="https://api.github.com"
 REPO_BEACOND="berachain/beacon-kit"
 REPO_RETH="berachain/bera-reth"
-REPO_GETH="berachain/bera-geth"
 
 # Network chain IDs
 CHAIN_ID_MAINNET="80094"
@@ -74,12 +72,12 @@ need_cmd() { command -v "$1" >/dev/null 2>&1 || { err "Required command '$1' not
 print_usage() {
   cat <<EOF
 Usage:
-  sudo $0 --chain {mainnet|bepolia} --el {reth|geth} --mode {archive|pruned} [--cl-version vX.Y.Z] [--el-version vA.B.C] [--no-snapshot]
+  sudo $0 --chain {mainnet|bepolia} --mode {archive|pruned} [--cl-version vX.Y.Z] [--el-version vA.B.C] [--no-snapshot]
 
 Examples:
-  sudo $0 --chain mainnet --el reth --mode archive
-  sudo $0 --chain bepolia --el geth --mode pruned --cl-version v1.3.2 --el-version v1.19.5
-  sudo $0 --chain mainnet --el reth --mode pruned --no-snapshot
+  sudo $0 --chain mainnet --mode archive
+  sudo $0 --chain bepolia --mode pruned --cl-version v1.3.2 --el-version v1.19.5
+  sudo $0 --chain mainnet --mode pruned --no-snapshot
 
 EOF
 }
@@ -101,7 +99,6 @@ fi
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --chain) CHAIN="${2:-}"; shift 2;;
-    --el) EL_CHOICE="${2:-}"; shift 2;;
     --mode) MODE="${2:-}"; shift 2;;
     --cl-version) CL_VERSION="${2:-}"; shift 2;;
     --el-version) EL_VERSION="${2:-}"; shift 2;;
@@ -120,10 +117,6 @@ fi
 case "${CHAIN:-}" in
   mainnet|bepolia) ;;
   *) err "--chain must be mainnet or bepolia"; exit 1;;
-esac
-case "${EL_CHOICE:-}" in
-  reth|geth) ;;
-  *) err "--el must be reth or geth"; exit 1;;
 esac
 case "${MODE:-}" in
   archive|pruned) ;;
@@ -222,12 +215,10 @@ case "$UNAME_M" in
   x86_64|amd64)
     BEACOND_ASSET_ARCH="linux-amd64"
     RETH_TARGET="x86_64-unknown-linux-gnu"
-    GETH_ASSET_ARCH="linux-amd64"
     ;;
   aarch64|arm64)
     BEACOND_ASSET_ARCH="linux-arm64"
     RETH_TARGET="aarch64-unknown-linux-gnu"
-    GETH_ASSET_ARCH="linux-arm64"
     ;;
   *)
     err "Unsupported architecture: $UNAME_M"
@@ -325,19 +316,8 @@ stream_extract() {
 
 stream_extract_el() {
   local url="$1" el_client="$2" el_home="$3" description="$4"
-  # EL snapshots are now flat (contain db/, blobstore/, etc. directly)
-  # Reth and geth need different target directories to match their expected layouts
-  if [[ "$el_client" == "reth" ]]; then
-    # Reth: extract to data/ subdirectory
-    # Expected structure: $el_home/data/db/, $el_home/data/static_files/, etc.
-    mkdir -p "$el_home/data"
-    curl -Lf "$url" | lz4 -d | tar -xf - -C "$el_home/data"
-  else
-    # Geth: extract to el_home root
-    # Expected structure: $el_home/bera-geth/chaindata/, $el_home/keystore/, etc.
-    mkdir -p "$el_home"
-    curl -Lf "$url" | lz4 -d | tar -xf - -C "$el_home"
-  fi
+  mkdir -p "$el_home/data"
+  curl -Lf "$url" | lz4 -d | tar -xf - -C "$el_home/data"
 }
 
 install_snapshots() {
@@ -388,14 +368,8 @@ install_snapshots() {
   if [[ -n "${EL_URL:-}" ]]; then
     # Check if we should skip due to existing data
     local should_skip=0
-    if [[ "$EL_CHOICE" == "reth" ]]; then
-      if [[ -d "$EL_HOME/data/" && -n "$(ls -A "$EL_HOME/data/db" 2>/dev/null)" ]]; then
-        should_skip=1
-      fi
-    else
-      if [[ -d "$EL_HOME/bera-geth/chaindata" && -n "$(ls -A "$EL_HOME/bera-geth/chaindata" 2>/dev/null)" ]]; then
-        should_skip=1
-      fi
+    if [[ -d "$EL_HOME/data/" && -n "$(ls -A "$EL_HOME/data/db" 2>/dev/null)" ]]; then
+      should_skip=1
     fi
     
     if [[ $should_skip -eq 1 ]]; then
@@ -473,44 +447,23 @@ install_beacond() {
 }
 
 install_el() {
-  local tag="${EL_VERSION:-}" repo="" url="" tmpdir match path
-  if [[ "$EL_CHOICE" == "reth" ]]; then
-    repo="$REPO_RETH"
-    if [[ -z "$tag" ]]; then
-      info "Resolving latest bera-reth release tag..."
-      tag="$(gh_latest_tag "$repo")"
-    fi
-    info "Installing bera-reth $tag ($RETH_TARGET)"
-    match="bera-reth-${tag}-${RETH_TARGET}\\.tar\\.gz"
-    url="$(gh_asset_url_by_tag_and_match "$repo" "$tag" "$match")"
-    [[ -n "$url" ]] || { err "Could not find bera-reth asset for $tag / $RETH_TARGET"; exit 1; }
-    tmpdir="$(mktemp -d)"
-    curl -sfSL "$url" -o "$tmpdir/reth.tgz"
-    tar -xzf "$tmpdir/reth.tgz" -C "$tmpdir"
-    path="$(find "$tmpdir" -type f -name 'bera-reth*' -perm -u+x | head -n1 || true)"
-    [[ -n "$path" ]] || { err "bera-reth binary not found in archive"; exit 1; }
-    install -m 0755 "$path" "$BIN_DIR/bera-reth"
-    chown berachain:berachain "$BIN_DIR/bera-reth"
-    rm -rf "$tmpdir"
-  else
-    repo="$REPO_GETH"
-    if [[ -z "$tag" ]]; then
-      info "Resolving latest bera-geth release tag..."
-      tag="$(gh_latest_tag "$repo")"
-    fi
-    info "Installing bera-geth $tag ($GETH_ASSET_ARCH)"
-    match="bera-geth-${GETH_ASSET_ARCH}-.*\\.tar\\.gz$"
-    url="$(gh_asset_url_by_tag_and_match "$repo" "$tag" "$match")"
-    [[ -n "$url" ]] || { err "Could not find bera-geth asset for $tag / $GETH_ASSET_ARCH"; exit 1; }
-    tmpdir="$(mktemp -d)"
-    curl -sfSL "$url" -o "$tmpdir/geth.tgz"
-    tar -xzf "$tmpdir/geth.tgz" -C "$tmpdir"
-    path="$(find "$tmpdir" -type f -name 'bera-geth*' -perm -u+x | head -n1 || true)"
-    [[ -n "$path" ]] || { err "bera-geth binary not found in archive"; exit 1; }
-    install -m 0755 "$path" "$BIN_DIR/bera-geth"
-    chown berachain:berachain "$BIN_DIR/bera-geth"
-    rm -rf "$tmpdir"
+  local tag="${EL_VERSION:-}" repo="$REPO_RETH" url="" tmpdir match path
+  if [[ -z "$tag" ]]; then
+    info "Resolving latest bera-reth release tag..."
+    tag="$(gh_latest_tag "$repo")"
   fi
+  info "Installing bera-reth $tag ($RETH_TARGET)"
+  match="bera-reth-${tag}-${RETH_TARGET}\\.tar\\.gz"
+  url="$(gh_asset_url_by_tag_and_match "$repo" "$tag" "$match")"
+  [[ -n "$url" ]] || { err "Could not find bera-reth asset for $tag / $RETH_TARGET"; exit 1; }
+  tmpdir="$(mktemp -d)"
+  curl -sfSL "$url" -o "$tmpdir/reth.tgz"
+  tar -xzf "$tmpdir/reth.tgz" -C "$tmpdir"
+  path="$(find "$tmpdir" -type f -name 'bera-reth*' -perm -u+x | head -n1 || true)"
+  [[ -n "$path" ]] || { err "bera-reth binary not found in archive"; exit 1; }
+  install -m 0755 "$path" "$BIN_DIR/bera-reth"
+  chown berachain:berachain "$BIN_DIR/bera-reth"
+  rm -rf "$tmpdir"
 }
 
 # ------------------------------
@@ -653,18 +606,9 @@ init_el() {
   fi
   
   
-  # Only initialize from genesis if no snapshot data exists
-  if [[ "$EL_CHOICE" == "reth" ]]; then
-    if ! sudo -u berachain bash -c "cd '$EL_HOME' && '$BIN_DIR/bera-reth' init --datadir $EL_HOME/data --chain $CONFIG_DIR/el/genesis.json >/dev/null 2>&1"; then
-      err "bera-reth init failed with exit code $?"
-      exit 1
-    fi
-  else
-    if ! $BIN_DIR/bera-geth init --state.scheme=path --datadir $EL_HOME $CONFIG_DIR/el/genesis.json >/dev/null 2>&1; then
-      err "bera-geth init failed with exit code $?"
-      exit 1
-    fi
-    chown -R berachain:berachain "$EL_HOME"
+  if ! sudo -u berachain bash -c "cd '$EL_HOME' && '$BIN_DIR/bera-reth' init --datadir $EL_HOME/data --chain $CONFIG_DIR/el/genesis.json >/dev/null 2>&1"; then
+    err "bera-reth init failed with exit code $?"
+    exit 1
   fi
 }
 
@@ -764,30 +708,14 @@ install_systemd_units() {
       bootnodes_arg="--bootnodes $BOOTNODES"
     fi
   fi
-  if [[ "$EL_CHOICE" == "reth" ]]; then
-    # Reth: non-archive uses --full; archive omits it
-    local reth_mode_flag=""
-    if [[ "$MODE" != "archive" ]]; then reth_mode_flag="--full"; fi
-    el_exec="$BIN_DIR/bera-reth"
-    el_args="node --datadir $EL_HOME/data \
-      --http --http.addr 0.0.0.0 --http.port $EL_HTTP_PORT \
-      --ws --ws.addr 0.0.0.0 --ws.port $EL_WS_PORT \
-      --authrpc.addr 127.0.0.1 --authrpc.port $EL_AUTHRPC_PORT --authrpc.jwtsecret $JWT_PATH \
-      --port $EL_P2P_PORT --chain $CONFIG_DIR/el/genesis.json $bootnodes_arg $reth_mode_flag"
-  else
-    # Geth: archive uses history flags; also run with PBSS and full sync
-    local geth_archive_flags=""
-    if [[ "$MODE" == "archive" ]]; then
-      geth_archive_flags="--history.logs 0 --history.state 0 --history.transactions 0"
-    fi
-    el_exec="$BIN_DIR/bera-geth"
-    el_args="--datadir $EL_HOME \
-      --syncmode full --state.scheme path \
-      --http --http.addr 0.0.0.0 --http.port $EL_HTTP_PORT \
-      --ws --ws.addr 0.0.0.0 --ws.port $EL_WS_PORT \
-      --authrpc.addr 127.0.0.1 --authrpc.port $EL_AUTHRPC_PORT --authrpc.jwtsecret $JWT_PATH \
-      --port $EL_P2P_PORT $bootnodes_arg $geth_archive_flags"
-  fi
+  local reth_mode_flag=""
+  if [[ "$MODE" != "archive" ]]; then reth_mode_flag="--full"; fi
+  el_exec="$BIN_DIR/bera-reth"
+  el_args="node --datadir $EL_HOME/data \
+    --http --http.addr 0.0.0.0 --http.port $EL_HTTP_PORT \
+    --ws --ws.addr 0.0.0.0 --ws.port $EL_WS_PORT \
+    --authrpc.addr 127.0.0.1 --authrpc.port $EL_AUTHRPC_PORT --authrpc.jwtsecret $JWT_PATH \
+    --port $EL_P2P_PORT --chain $CONFIG_DIR/el/genesis.json $bootnodes_arg $reth_mode_flag"
 
   # Append NAT external IP if available (advertise correct external address)
   NAT_IP=$(detect_external_ip)
@@ -797,7 +725,7 @@ install_systemd_units() {
 
   cat > "$SYSTEMD_DIR/$EL_SERVICE" <<UNIT
 [Unit]
-Description=Berachain Execution Layer ($EL_CHOICE)
+Description=Berachain Execution Layer (bera-reth)
 Wants=network-online.target
 After=network-online.target
 

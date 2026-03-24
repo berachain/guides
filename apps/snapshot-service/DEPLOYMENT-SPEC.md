@@ -250,7 +250,6 @@ sqlite3 /srv/snapshots/snapshots.db "select type,status,started_at,ended_at from
 ## 13. Operational Notes
 
 - Scheduler now requires schema to be pre-bootstrapped; it will fail fast if missing.
-- Geth is treated as deprecated in UI; active generation should remain reth + beacon-kit flow.
 - Re-run `bootstrap-db.sh` during upgrades; it is safe and idempotent.
 - Keep all environment-specific changes in env files, not script code.
 
