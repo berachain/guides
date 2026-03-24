@@ -204,6 +204,8 @@ el_repo = "https://github.com/berachain/bera-$EL_CLIENT.git"
 # Keep all historical state (true) or prune old data (false).
 # Archive nodes serve full history but use significantly more disk.
 archive_mode = false
+# Use reth's V2 storage engine (--storage.v2). Requires fresh sync.
+storage_v2 = false
 
 [identity]
 # Persistent P2P identity keys, looked up by name in keep/ directories.

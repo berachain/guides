@@ -76,12 +76,20 @@ _build_el_args_core() {
         fi
     fi
 
+    local storage_v2_option=""
+    if [[ -f "$installation_toml" ]]; then
+        local storage_v2=$(bb_parse_toml_value "$installation_toml" "storage_v2" 2>/dev/null || echo "false")
+        if [[ "$storage_v2" == "true" ]]; then
+            storage_v2_option="--storage.v2"
+        fi
+    fi
+
     local archive_option=""
     if [[ "$archive_mode" != "true" ]]; then
         archive_option="--full"
     fi
     local log_filter=""
-    local args="node -v --datadir $installation_dir/data/el/chain --chain $installation_dir/data/el/config/genesis.json $archive_option $bootnodes_option $trusted_peers_option --authrpc.addr 127.0.0.1 --authrpc.port $el_authrpc_port --authrpc.jwtsecret $installation_dir/data/cl/config/jwt.hex --port $el_p2p_port --rpc.max-logs-per-response 1000000 --metrics $el_prometheus_port --http --http.addr 0.0.0.0 --http.port $el_rpc_port --ws --ws.addr 0.0.0.0 --ws.port $el_ws_port --ipcpath $installation_dir/runtime/admin.ipc --discovery.port $el_p2p_port --http.corsdomain '*' --log.file.max-files 0 --log.stdout.filter '$log_filter' $ip_option --max-inbound-peers 30 --engine.persistence-threshold 0 --engine.memory-block-buffer-target 0"
+    local args="node -v --datadir $installation_dir/data/el/chain --chain $installation_dir/data/el/config/genesis.json $archive_option $storage_v2_option $bootnodes_option $trusted_peers_option --authrpc.addr 127.0.0.1 --authrpc.port $el_authrpc_port --authrpc.jwtsecret $installation_dir/data/cl/config/jwt.hex --port $el_p2p_port --rpc.max-logs-per-response 1000000 --metrics $el_prometheus_port --http --http.addr 0.0.0.0 --http.port $el_rpc_port --ws --ws.addr 0.0.0.0 --ws.port $el_ws_port --ipcpath $installation_dir/runtime/admin.ipc --discovery.port $el_p2p_port --http.corsdomain '*' --log.file.max-files 0 --log.stdout.filter '$log_filter' $ip_option --max-inbound-peers 30 --engine.persistence-threshold 0 --engine.memory-block-buffer-target 0"
     if [[ "$include_binary_path" == "true" ]]; then
         echo "$(get_el_binary_path reth "$installation_dir") $args"
     else

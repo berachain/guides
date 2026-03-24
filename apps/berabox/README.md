@@ -189,6 +189,7 @@ Installations created without this section use the defaults above. Changing a UR
 | Key | Default | Description |
 |-----|---------|-------------|
 | `archive_mode` | `false` | `true` keeps all historical state (full archive); `false` prunes. Archive nodes use significantly more disk. |
+| `storage_v2` | `false` | Use reth's V2 storage engine. Adds `--storage.v2` to reth CLI args. Requires fresh sync — do not enable on an existing datadir. |
 
 **`[identity]`** -- Persistent P2P identity keys, preserved across `init` cycles so your node ID and enode stay stable.
 
