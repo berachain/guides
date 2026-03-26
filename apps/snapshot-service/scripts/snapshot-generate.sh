@@ -3,7 +3,7 @@ set -euo pipefail
 
 # snapshot-generate.sh - Generate a snapshot for a given type
 # Usage: snapshot-generate.sh <type> <output_dir> [flags...]
-# Types: geth-pruned, reth-pruned, geth-archive, reth-archive, beacon-kit-pruned, beacon-kit-archive
+# Types: reth-pruned, reth-archive, beacon-kit-pruned, beacon-kit-archive
 # Output: Writes snapshot path to stdout on success, exits non-zero on failure
 # Flags:
 #   --skip-sync-check   Skip block-lag check against public RPC
@@ -107,16 +107,6 @@ fi
 
 # Determine installation and layer based on type
 case "$TYPE" in
-    geth-pruned)
-        INSTALLATION="geth-pruned"
-        LAYER="el"
-        SERVICE="geth-pruned-el"
-        ;;
-    geth-archive)
-        INSTALLATION="geth-archive"
-        LAYER="el"
-        SERVICE="geth-archive-el"
-        ;;
     reth-pruned)
         INSTALLATION="reth-pruned"
         LAYER="el"
@@ -128,13 +118,11 @@ case "$TYPE" in
         SERVICE="reth-archive-el"
         ;;
     beacon-kit-pruned)
-        # Use reth-pruned as source for pruned CL snapshot (geth being deprecated)
         INSTALLATION="reth-pruned"
         LAYER="cl"
         SERVICE="reth-pruned-cl"
         ;;
     beacon-kit-archive)
-        # Use reth-archive as source for archive CL snapshot (geth being deprecated)
         INSTALLATION="reth-archive"
         LAYER="cl"
         SERVICE="reth-archive-cl"
@@ -154,12 +142,7 @@ CL_VERSION=$(grep '^beacon_kit' "$TOML_FILE" | cut -d'"' -f2)
 [[ -n "$CL_VERSION" ]] || error "Could not read beacon_kit version from $TOML_FILE"
 
 if [[ "$LAYER" == "el" ]]; then
-    # Get EL version based on client type
-    if [[ "$INSTALLATION" == geth-* ]]; then
-        EL_VERSION=$(grep '^bera_geth' "$TOML_FILE" | cut -d'"' -f2)
-    else
-        EL_VERSION=$(grep '^bera_reth' "$TOML_FILE" | cut -d'"' -f2)
-    fi
+    EL_VERSION=$(grep '^bera_reth' "$TOML_FILE" | cut -d'"' -f2)
     [[ -n "$EL_VERSION" ]] || error "Could not read EL version from $TOML_FILE"
 fi
 
@@ -183,8 +166,6 @@ get_el_rpc_port() {
         return 0
     fi
     case "$INSTALLATION" in
-        geth-pruned) echo 42010 ;;
-        geth-archive) echo 42210 ;;
         reth-pruned) echo 42110 ;;
         reth-archive) echo 42310 ;;
     esac
@@ -198,8 +179,6 @@ get_cl_api_port() {
         return 0
     fi
     case "$INSTALLATION" in
-        geth-pruned) echo 42005 ;;
-        geth-archive) echo 42205 ;;
         reth-pruned) echo 42105 ;;
         reth-archive) echo 42305 ;;
     esac
@@ -326,7 +305,7 @@ if [[ "$LAYER" == "cl" ]]; then
     MODE="${TYPE#beacon-kit-}"
     FILENAME="beacon-kit-${MODE}-${BLOCK_NUMBER}-${CL_VERSION}.tar.lz4"
 else
-    # EL snapshot: bera-{geth|reth}-{pruned|archive}-{block}-{el_version}.tar.lz4
+    # EL snapshot: bera-reth-{pruned|archive}-{block}-{el_version}.tar.lz4
     CLIENT="${INSTALLATION%-*}"
     MODE="${INSTALLATION#*-}"
     FILENAME="bera-${CLIENT}-${MODE}-${BLOCK_NUMBER}-${EL_VERSION}.tar.lz4"
@@ -535,8 +514,7 @@ if [[ "$LAYER" == "cl" ]]; then
         | lz4 -3 > "$TEMP_FILE"
 else
     # EL: tar only the chain subdirectory (flat structure like CL)
-    # For reth: archive contains db/, static_files/, blobstore/, etc. (flat)
-    # For geth: archive contains bera-geth/, keystore/, etc. (flat)
+    # Archive contains db/, static_files/, blobstore/, etc. (flat)
     DATA_DIR="$INSTALL_DIR/data/el/chain"
     [[ -d "$DATA_DIR" ]] || error "EL chain directory not found: $DATA_DIR"
     

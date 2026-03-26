@@ -23,15 +23,6 @@ function parseArgs() {
                 showHelp();
                 process.exit(0);
                 break;
-            case '--client':
-            case '-c':
-                if (i + 1 < args.length) {
-                    config.el_client = args[++i];
-                } else {
-                    console.error('Error: --client requires a value (reth or geth)');
-                    process.exit(1);
-                }
-                break;
             case '--network':
             case '-n':
                 if (i + 1 < args.length) {
@@ -68,10 +59,6 @@ function parseArgs() {
     }
 
     // Validate arguments
-    if (!['reth', 'geth'].includes(config.el_client)) {
-        console.error('Error: client must be either "reth" or "geth"');
-        process.exit(1);
-    }
     if (!['na', 'eu', 'as'].includes(config.geography)) {
         console.error('Error: geography must be "na", "eu", or "as"');
         process.exit(1);
@@ -93,14 +80,12 @@ Downloads Berachain snapshots for beacon and execution clients.
 Usage: ./fetch-berachain-snapshot.js [options]
 
 Options:
-  -c, --client <client>      Execution client: reth or geth (default: reth)
   -n, --network <network>    Network: mainnet or testnet (default: mainnet)
   -t, --type <type>         Snapshot type: pruned or archive (default: pruned)
   -h, --help                Show this help message
 
 Examples:
   ./fetch-berachain-snapshot.js                    # Download reth pruned mainnet
-  ./fetch-berachain-snapshot.js -c geth            # Download geth pruned mainnet
   ./fetch-berachain-snapshot.js -n testnet -t archive  # Download reth archive testnet
     `);
 }

@@ -16,9 +16,7 @@ export BEACOND_DATA=$(pwd)/var/beacond
 export BEACOND_CONFIG=$BEACOND_DATA/config  # can't change this. sorry.
 export JWT_PATH=$BEACOND_CONFIG/jwt.hex
 
-# need at least one of these
 export RETH_BIN=$(command -v bera-reth || echo $(pwd)/bera-reth)
-export GETH_BIN=$(command -v bera-geth || echo $(pwd)/bera-geth)
 
 # Leave this blank to use the default ports for the various services.
 # Set this to a port number (for example, 30000) to 
@@ -76,15 +74,8 @@ if command >/dev/null -v $RETH_BIN; then
     export RETH_GENESIS_PATH=$(pwd)/var/reth/genesis.json
 fi  
 
-if command >/dev/null -v $GETH_BIN; then
-    export GETH_DATA=$(pwd)/var/geth
-    export GETH_GENESIS_PATH=$GETH_DATA/genesis.json
-fi  
-
-  
-
-if ! command >/dev/null -v $RETH_BIN && ! command >/dev/null -v $GETH_BIN; then
-    echo "Error: No execution client found in PATH"
-    echo "Please install either reth or geth and ensure it is available in your PATH"
+if ! command >/dev/null -v $RETH_BIN; then
+    echo "Error: bera-reth not found in PATH"
+    echo "Please install bera-reth and ensure it is available in your PATH"
     exit 1
 fi

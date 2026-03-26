@@ -37,14 +37,6 @@ SNAPSHOT_FILE="$2"
 
 # Determine public subdirectory based on type
 case "$TYPE" in
-    geth-pruned)
-        SUBDIR="geth-pruned"
-        INSTALLATION="geth-pruned"
-        ;;
-    geth-archive)
-        SUBDIR="geth-archive"
-        INSTALLATION="geth-archive"
-        ;;
     reth-pruned)
         SUBDIR="reth-pruned"
         INSTALLATION="reth-pruned"
@@ -54,12 +46,10 @@ case "$TYPE" in
         INSTALLATION="reth-archive"
         ;;
     beacon-kit-pruned)
-        # CL snapshots go in a shared location (now using reth-pruned, geth being deprecated)
         SUBDIR="beacon-kit-pruned"
         INSTALLATION="reth-pruned"
         ;;
     beacon-kit-archive)
-        # CL snapshots go in a shared location (now using reth-archive, geth being deprecated)
         SUBDIR="beacon-kit-archive"
         INSTALLATION="reth-archive"
         ;;
@@ -89,7 +79,7 @@ if [[ "$TYPE" == beacon-kit-* ]]; then
     CL_VERSION=$(echo "$FILENAME" | sed -E 's/beacon-kit-[^-]+-[0-9]+-([^.]+\.[^.]+\.[^.]+)\.tar\.lz4/\1/')
     EL_VERSION=""
 else
-    # bera-geth-pruned-12345678-v1.011607.0.tar.lz4
+    # bera-reth-pruned-12345678-v1.3.1.tar.lz4
     BLOCK_NUMBER=$(echo "$FILENAME" | sed -E 's/bera-[^-]+-[^-]+-([0-9]+)-.*/\1/')
     EL_VERSION=$(echo "$FILENAME" | sed -E 's/bera-[^-]+-[^-]+-[0-9]+-([^.]+\.[^.]+\.[^.]+)\.tar\.lz4/\1/')
     
