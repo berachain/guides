@@ -151,6 +151,30 @@ scrape_configs:
           instance: 'mainnet'
 
   # =======================================================
+  # Snapshot freshness metrics (metrics.txt, public HTTPS)
+  # =======================================================
+
+  - job_name: 'snapshot-freshness-mainnet'
+    scheme: https
+    metrics_path: /metrics.txt
+    scrape_interval: 300s
+    static_configs:
+      - targets: ['snapshots.berachain.com']
+        labels:
+          service: 'snapshot-freshness'
+          machine: mainnet
+
+  - job_name: 'snapshot-freshness-bepolia'
+    scheme: https
+    metrics_path: /metrics.txt
+    scrape_interval: 300s
+    static_configs:
+      - targets: ['bepolia.snapshots.berachain.com']
+        labels:
+          service: 'snapshot-freshness'
+          machine: bepolia
+
+  # =======================================================
   # snapshots.berachain.com — Mainnet (reth-pruned, reth-archive)
   # =======================================================
 

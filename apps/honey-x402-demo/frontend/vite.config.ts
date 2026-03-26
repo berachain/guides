@@ -1,5 +1,5 @@
-import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
+import { defineConfig } from "vite";
+import react from "@vitejs/plugin-react";
 
 // https://vite.dev/config/
 export default defineConfig({
@@ -8,7 +8,7 @@ export default defineConfig({
     port: 5173,
   },
   // Load .env from project root (parent of frontend/)
-  envDir: '../',
+  envDir: "../",
   // Expose PRIVATE_KEY* env vars to the frontend
-  envPrefix: ['VITE_', 'PRIVATE_KEY'],
-})
+  envPrefix: ["VITE_", "PRIVATE_KEY"],
+});

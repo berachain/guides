@@ -10,13 +10,13 @@ Beralyzer indexes Berachain EL and CL data into Postgres so you can query it. Bl
 
 Five workers run in parallel:
 
-| Worker | What it ingests |
-|--------|----------------|
-| EL | Block headers, transactions, receipts, contract creations, ERC-20 transfer counts |
-| CL | Validator absences and voting power per block |
-| ERC20 | ERC-20 token registry (name, symbol, decimals for newly detected contracts) |
-| Decoder | Decoded transaction data via cometbft-decoder helper |
-| Snapshots | Daily validator set snapshots |
+| Worker    | What it ingests                                                                   |
+| --------- | --------------------------------------------------------------------------------- |
+| EL        | Block headers, transactions, receipts, contract creations, ERC-20 transfer counts |
+| CL        | Validator absences and voting power per block                                     |
+| ERC20     | ERC-20 token registry (name, symbol, decimals for newly detected contracts)       |
+| Decoder   | Decoded transaction data via cometbft-decoder helper                              |
+| Snapshots | Daily validator set snapshots                                                     |
 
 A retry worker re-processes blocks that failed during ingestion, and a stats worker exports DB inventory metrics (row counts, cursor heights, failed blocks) for Prometheus.
 
