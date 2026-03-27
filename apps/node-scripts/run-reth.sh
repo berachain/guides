@@ -28,4 +28,4 @@ $RETH_BIN node 					\
 	--http.corsdomain '*'			\
 	--log.file.directory $LOG_DIR		\
 	--engine.persistence-threshold 0	\
-	--engine.memory-block-buffer-target 0 
+	--engine.memory-block-buffer-target 0	

@@ -1,0 +1,353 @@
+# Berabox Prometheus Configuration
+# Complete monitoring with human-readable labels and full installation names
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    monitor: 'berabox'
+    environment: 'development'
+
+# Disable alertmanager for now since we don't have it configured
+
+# alerting:
+#   alertmanagers:
+#   - static_configs:
+#     - targets: ['localhost:9093']
+
+rule_files:
+  # Add rule files here as needed
+
+scrape_configs:
+  # Prometheus itself
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # System metrics
+  - job_name: 'node-exporter'
+    static_configs:
+      - targets: ['localhost:9100']
+        labels:
+          service: berachain-node
+          component: system
+          installation: playground-host
+          chain: dev
+          machine: playground
+          client: node-exporter
+
+  # =======================================================
+  # Berabox Consensus Layer (Beacon-Kit) Services
+  # =======================================================
+  
+  # Mainnet Geth CL
+  - job_name: 'berabox-mainnet-geth-cl'
+    static_configs:
+      - targets: ['localhost:59803']
+        labels:
+          service: 'berachain-node'
+          component: 'consensus-layer'
+          installation: 'bb-mainnet-geth'
+          chain: 'mainnet'
+          client: 'beacon-kit'
+
+  # Mainnet Reth CL  
+  - job_name: 'berabox-mainnet-reth-cl'
+    static_configs:
+      - targets: ['localhost:59823']
+        labels:
+          service: 'berachain-node'
+          component: 'consensus-layer'
+          installation: 'bb-mainnet-reth'
+          chain: 'mainnet'
+          client: 'beacon-kit'
+
+  # Testnet Geth CL
+  - job_name: 'berabox-testnet-geth-cl'
+    static_configs:
+      - targets: ['localhost:59843']
+        labels:
+          service: 'berachain-node'
+          component: 'consensus-layer'
+          installation: 'bb-testnet-geth'
+          chain: 'testnet'
+          client: 'beacon-kit'
+
+  # Testnet Reth CL
+  - job_name: 'berabox-testnet-reth-cl'
+    static_configs:
+      - targets: ['localhost:59863']
+        labels:
+          service: 'berachain-node'
+          component: 'consensus-layer'
+          installation: 'bb-testnet-reth'
+          chain: 'testnet'
+          client: 'beacon-kit'
+
+  # =======================================================
+  # Berabox Execution Layer Services
+  # =======================================================
+  
+  # Mainnet Geth EL (uses /debug/metrics/prometheus)
+  - job_name: 'berabox-mainnet-geth-el'
+    metrics_path: /debug/metrics/prometheus
+    static_configs:
+      - targets: ['localhost:59813']
+        labels:
+          service: 'berachain-node'
+          component: 'execution-layer'
+          installation: 'bb-mainnet-geth'
+          chain: 'mainnet'
+          client: 'geth'
+
+  # Mainnet Reth EL (uses /metrics)
+  - job_name: 'berabox-mainnet-reth-el'
+    metrics_path: /metrics
+    static_configs:
+      - targets: ['localhost:59833']
+        labels:
+          service: 'berachain-node'
+          component: 'execution-layer'
+          installation: 'bb-mainnet-reth'
+          chain: 'mainnet'
+          client: 'reth'
+
+  # Testnet Geth EL (uses /debug/metrics/prometheus)
+  - job_name: 'berabox-testnet-geth-el'
+    metrics_path: /debug/metrics/prometheus
+    static_configs:
+      - targets: ['localhost:59853']
+        labels:
+          service: 'berachain-node'
+          component: 'execution-layer'
+          installation: 'bb-testnet-geth'
+          chain: 'testnet'
+          client: 'geth'
+
+  # Testnet Reth EL (uses /metrics)
+  - job_name: 'berabox-testnet-reth-el'
+    metrics_path: /metrics
+    static_configs:
+      - targets: ['localhost:59873']
+        labels:
+          service: 'berachain-node'
+          component: 'execution-layer'
+          installation: 'bb-testnet-reth'
+          chain: 'testnet'
+          client: 'reth'
+
+
+  # =======================================================
+  # Beralyzer Service Metrics
+  # =======================================================
+
+  # beralyzer-mainnet
+  - job_name: 'beralyzer-mainnet'
+    static_configs:
+      - targets: ['localhost:9464']
+        labels:
+          service: 'beralyzer'
+          chain: 'mainnet'
+          instance: 'mainnet'
+
+  # =======================================================
+  # Snapshot freshness metrics (metrics.txt, public HTTPS)
+  # =======================================================
+
+  - job_name: 'snapshot-freshness-mainnet'
+    scheme: https
+    metrics_path: /metrics.txt
+    scrape_interval: 300s
+    static_configs:
+      - targets: ['snapshots.berachain.com']
+        labels:
+          service: 'snapshot-freshness'
+          machine: mainnet
+
+  - job_name: 'snapshot-freshness-bepolia'
+    scheme: https
+    metrics_path: /metrics.txt
+    scrape_interval: 300s
+    static_configs:
+      - targets: ['bepolia.snapshots.berachain.com']
+        labels:
+          service: 'snapshot-freshness'
+          machine: bepolia
+
+  # =======================================================
+  # snapshots.berachain.com — Mainnet (reth-pruned, reth-archive)
+  # =======================================================
+
+  - job_name: 'berabox-mainnet-node-exporter'
+    scheme: http
+    basic_auth:
+      username: bops
+      password: amazeballs
+    metrics_path: /metrics/node-exporter
+    scrape_interval: 60s
+    static_configs:
+      - targets: ['snapshots.berachain.com']
+        labels:
+          service: 'berachain-node'
+          component: 'system'
+          installation: 'snapshots-host'
+          chain: 'mainnet'
+          machine: mainnet
+          client: 'node-exporter'
+
+  - job_name: 'berabox-mainnet-reth-pruned-cl'
+    scheme: http
+    basic_auth:
+      username: bops
+      password: amazeballs
+    metrics_path: /metrics/reth-pruned-cl
+    scrape_interval: 60s
+    static_configs:
+      - targets: ['snapshots.berachain.com']
+        labels:
+          service: 'berachain-node'
+          component: 'consensus-layer'
+          installation: 'reth-pruned'
+          chain: 'mainnet'
+          machine: mainnet
+          client: 'beacon-kit'
+
+  - job_name: 'berabox-mainnet-reth-pruned-el'
+    scheme: http
+    basic_auth:
+      username: bops
+      password: amazeballs
+    metrics_path: /metrics/reth-pruned-el
+    scrape_interval: 60s
+    static_configs:
+      - targets: ['snapshots.berachain.com']
+        labels:
+          service: 'berachain-node'
+          component: 'execution-layer'
+          installation: 'reth-pruned'
+          chain: 'mainnet'
+          machine: mainnet
+          client: 'reth'
+
+  - job_name: 'berabox-mainnet-reth-archive-cl'
+    scheme: http
+    basic_auth:
+      username: bops
+      password: amazeballs
+    metrics_path: /metrics/reth-archive-cl
+    scrape_interval: 60s
+    static_configs:
+      - targets: ['snapshots.berachain.com']
+        labels:
+          service: 'berachain-node'
+          component: 'consensus-layer'
+          installation: 'reth-archive'
+          chain: 'mainnet'
+          machine: mainnet
+          client: 'beacon-kit'
+
+  - job_name: 'berabox-mainnet-reth-archive-el'
+    scheme: http
+    basic_auth:
+      username: bops
+      password: amazeballs
+    metrics_path: /metrics/reth-archive-el
+    scrape_interval: 60s
+    static_configs:
+      - targets: ['snapshots.berachain.com']
+        labels:
+          service: 'berachain-node'
+          component: 'execution-layer'
+          installation: 'reth-archive'
+          chain: 'mainnet'
+          machine: mainnet
+          client: 'reth'
+
+  # =======================================================
+  # bepolia.snapshots.berachain.com — Testnet (reth-archive, reth-pruned)
+  # =======================================================
+
+  - job_name: 'berabox-testnet-node-exporter'
+    scheme: http
+    basic_auth:
+      username: bops
+      password: amazeballs
+    metrics_path: /metrics/node-exporter
+    scrape_interval: 60s
+    static_configs:
+      - targets: ['bepolia.snapshots.berachain.com']
+        labels:
+          service: 'berachain-node'
+          component: 'system'
+          installation: 'bepolia-host'
+          chain: 'testnet'
+          machine: bepolia
+          client: 'node-exporter'
+
+  - job_name: 'berabox-testnet-reth-archive-cl'
+    scheme: http
+    basic_auth:
+      username: bops
+      password: amazeballs
+    metrics_path: /metrics/reth-archive-cl
+    scrape_interval: 60s
+    static_configs:
+      - targets: ['bepolia.snapshots.berachain.com']
+        labels:
+          service: 'berachain-node'
+          component: 'consensus-layer'
+          installation: 'reth-archive'
+          chain: 'testnet'
+          machine: bepolia
+          client: 'beacon-kit'
+
+  - job_name: 'berabox-testnet-reth-archive-el'
+    scheme: http
+    basic_auth:
+      username: bops
+      password: amazeballs
+    metrics_path: /metrics/reth-archive-el
+    scrape_interval: 60s
+    static_configs:
+      - targets: ['bepolia.snapshots.berachain.com']
+        labels:
+          service: 'berachain-node'
+          component: 'execution-layer'
+          installation: 'reth-archive'
+          chain: 'testnet'
+          machine: bepolia
+          client: 'reth'
+
+  - job_name: 'berabox-testnet-reth-pruned-cl'
+    scheme: http
+    basic_auth:
+      username: bops
+      password: amazeballs
+    metrics_path: /metrics/reth-pruned-cl
+    scrape_interval: 60s
+    static_configs:
+      - targets: ['bepolia.snapshots.berachain.com']
+        labels:
+          service: 'berachain-node'
+          component: 'consensus-layer'
+          installation: 'reth-pruned'
+          chain: 'testnet'
+          machine: bepolia
+          client: 'beacon-kit'
+
+  - job_name: 'berabox-testnet-reth-pruned-el'
+    scheme: http
+    basic_auth:
+      username: bops
+      password: amazeballs
+    metrics_path: /metrics/reth-pruned-el
+    scrape_interval: 60s
+    static_configs:
+      - targets: ['bepolia.snapshots.berachain.com']
+        labels:
+          service: 'berachain-node'
+          component: 'execution-layer'
+          installation: 'reth-pruned'
+          chain: 'testnet'
+          machine: bepolia
+          client: 'reth'

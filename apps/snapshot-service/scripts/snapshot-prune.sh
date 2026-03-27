@@ -3,7 +3,7 @@ set -euo pipefail
 
 # snapshot-prune.sh - Remove the oldest snapshot of a given type
 # Usage: snapshot-prune.sh <type>
-# Types: geth-pruned, reth-pruned, geth-archive, reth-archive, beacon-kit-pruned, beacon-kit-archive
+# Types: reth-pruned, reth-archive, beacon-kit-pruned, beacon-kit-archive
 # Returns 0 if a snapshot was pruned, 1 if no snapshots to prune
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -13,7 +13,7 @@ DB_PATH="$SNAPSHOT_DB_PATH"
 
 usage() {
     echo "Usage: $0 <type>" >&2
-    echo "Types: geth-pruned, reth-pruned, geth-archive, reth-archive, beacon-kit-pruned, beacon-kit-archive" >&2
+    echo "Types: reth-pruned, reth-archive, beacon-kit-pruned, beacon-kit-archive" >&2
     exit 1
 }
 
@@ -27,7 +27,7 @@ TYPE="$1"
 
 # Validate type
 case "$TYPE" in
-    geth-pruned|geth-archive|reth-pruned|reth-archive|beacon-kit-pruned|beacon-kit-archive)
+    reth-pruned|reth-archive|beacon-kit-pruned|beacon-kit-archive)
         ;;
     *)
         echo "Unknown type: $TYPE" >&2

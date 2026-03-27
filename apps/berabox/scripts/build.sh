@@ -1,5 +1,5 @@
 #!/bin/bash
-# Berabox Build Script - Always builds debug binaries for development/debugging
+# Berabox Build Script
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -164,7 +164,7 @@ acquire_lock
 # Load paths from installation.toml
 SRC_DIR=$(bb_get_installation_path "$INSTALLATION_TOML" "src_dir")
 
-log_info "Building debug binaries: $COMPONENTS (no bin dir; using source/target locations)"
+log_info "Building: $COMPONENTS"
 log_info "Using source tree: $SRC_DIR"
 
 # Convert components to array
@@ -177,7 +177,7 @@ for component in "${COMPONENT_ARRAY[@]}"; do
 
             if [[ "$BEACON_KIT_VERSION" == "latest" ]]; then
                 mkdir -p "$SRC_DIR/beacon-kit"
-                download_release_binary "beacon-kit" "$SRC_DIR/beacon-kit" "beacond-debug"
+                download_release_binary "beacon-kit" "$SRC_DIR/beacon-kit" "beacond"
             else
                 if [[ ! -d "$SRC_DIR/beacon-kit" ]]; then
                     log_error "beacon-kit source not found at $SRC_DIR/beacon-kit"
@@ -190,17 +190,15 @@ for component in "${COMPONENT_ARRAY[@]}"; do
                 log_substep "Switching beacon-kit to version: $BEACON_KIT_VERSION"
                 bb_git_checkout_safe "$SRC_DIR/beacon-kit" "$BEACON_KIT_VERSION" "$NO_PULL"
 
-                log_step "Building beacond (Go build with debug symbols) from $BEACON_KIT_VERSION..."
+                log_step "Building beacond (Go) from $BEACON_KIT_VERSION..."
 
                 build_log=$(mktemp)
                 go_output=""
                 [[ "$QUIET" == "true" ]] && go_output=">/dev/null"
 
-                go_gcflags="-gcflags=all=-N"
-                go_ldflags="-ldflags=-s=false"
-                binary_name="beacond-debug"
+                binary_name="beacond"
 
-                if eval go build $go_gcflags $go_ldflags -o "$binary_name" ./cmd/beacond 2> "$build_log" $go_output; then
+                if eval go build -o "$binary_name" ./cmd/beacond 2> "$build_log" $go_output; then
                     rm -f "$build_log"
                     log_substep "✓ $binary_name built at $(pwd)/$binary_name"
                 else
@@ -217,7 +215,7 @@ for component in "${COMPONENT_ARRAY[@]}"; do
 
             if [[ "$BERA_RETH_VERSION" == "latest" ]]; then
                 mkdir -p "$SRC_DIR/bera-reth"
-                download_release_binary "bera-reth" "$SRC_DIR/bera-reth" "reth-debug"
+                download_release_binary "bera-reth" "$SRC_DIR/bera-reth" "reth"
             else
                 if [[ ! -d "$SRC_DIR/bera-reth" ]]; then
                     log_error "bera-reth source not found at $SRC_DIR/bera-reth"
@@ -231,14 +229,14 @@ for component in "${COMPONENT_ARRAY[@]}"; do
                 bb_git_checkout_safe "$SRC_DIR/bera-reth" "$BERA_RETH_VERSION" "$NO_PULL"
 
                 cargo_flags=""
-                binary_path="target/debug/bera-reth"
-                binary_name="reth-debug"
+                binary_path="target/release/bera-reth"
+                binary_name="reth"
 
                 [[ "$QUIET" == "true" ]] && cargo_flags="$cargo_flags --quiet"
 
-                log_step "Building bera-reth (Cargo debug build) from $BERA_RETH_VERSION..."
+                log_step "Building bera-reth (Cargo --release) from $BERA_RETH_VERSION..."
 
-                cargo build --bin bera-reth $cargo_flags
+                cargo build --release --bin bera-reth $cargo_flags
 
                 cp "$binary_path" "$binary_name"
                 log_substep "✓ $binary_name built at $(pwd)/$binary_name"
@@ -253,5 +251,5 @@ for component in "${COMPONENT_ARRAY[@]}"; do
     esac
 done
 
-log_info "Debug binaries built in-place; no bin directory used"
+log_info "Binaries built in-place; no bin directory used"
 log_info "Next steps: init → install → start"

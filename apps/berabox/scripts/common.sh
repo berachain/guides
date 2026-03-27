@@ -228,6 +228,128 @@ bb_parse_toml_array() {
     echo "$array_content" | grep -oP '"\K[^"]+' | grep -vE '^[,[:space:]]*$' || true
 }
 
+# Parse a key from the [identity] section of installation.toml.
+bb_get_identity_key_name() {
+    local toml_file="$1"
+    local key="$2"
+
+    if [[ ! -f "$toml_file" ]]; then
+        log_error "Configuration file not found: $toml_file"
+        return 1
+    fi
+
+    awk -v target="$key" -F'"' '
+        /^\[identity\]/ { in_identity=1; next }
+        /^\[/ && !/^\[identity\]/ { in_identity=0 }
+        in_identity && $0 ~ ("^" target "[[:space:]]*=") { print $2; found=1; exit }
+        END { if (!found) exit 1 }
+    ' "$toml_file"
+}
+
+# Fail if the selected EL key file duplicates another key file's contents.
+# Duplicate EL discovery secrets create identical enodes and break peer connectivity.
+bb_validate_unique_el_key_material() {
+    local key_file="$1"
+    local key_name="$2"
+    local key_dir="$3"
+
+    if [[ ! -f "$key_file" ]]; then
+        log_error "EL key file not found: $key_file"
+        return 1
+    fi
+
+    local selected
+    selected="$(tr -d '[:space:]' < "$key_file")"
+    if [[ -z "$selected" ]]; then
+        log_error "EL key file is empty: $key_file"
+        return 1
+    fi
+
+    local collisions=()
+    local other
+    shopt -s nullglob
+    for other in "$key_dir"/*.nodekey; do
+        [[ "$other" == "$key_file" ]] && continue
+        local other_content
+        other_content="$(tr -d '[:space:]' < "$other")"
+        if [[ -n "$other_content" && "$other_content" == "$selected" ]]; then
+            collisions+=("$(basename "$other")")
+        fi
+    done
+    shopt -u nullglob
+
+    if [[ ${#collisions[@]} -gt 0 ]]; then
+        log_error "EL key collision detected for '$key_name' (${key_file})"
+        log_error "Matching key material also found in: ${collisions[*]}"
+        log_error "Refusing to continue: duplicate EL discovery-secret causes enode identity collisions."
+        return 1
+    fi
+
+    return 0
+}
+
+# Deploy CL/EL identity files from keep/ into the installation data directories.
+# Overwrites whatever is in the runtime locations with the configured source of truth.
+# Safe to call repeatedly; wired into init, install, start, and restart.
+bb_deploy_identity_keys() {
+    local installation_dir="$1"
+    local installation_name="${2:-$(basename "$installation_dir")}"
+    local installation_toml="$installation_dir/installation.toml"
+
+    if [[ ! -f "$installation_toml" ]]; then
+        log_error "Installation configuration not found: $installation_toml"
+        return 1
+    fi
+
+    local cl_config_dir="$installation_dir/data/cl/config"
+    local el_chain_dir="$installation_dir/data/el/chain"
+    bb_ensure_directory "$cl_config_dir"
+    bb_ensure_directory "$el_chain_dir"
+
+    local cl_key_name=""
+    cl_key_name="$(bb_get_identity_key_name "$installation_toml" "cl_key_name" 2>/dev/null || true)"
+    if [[ -n "$cl_key_name" ]]; then
+        local validator_key_file="$BERABOX_ROOT/keep/cl-keys/${cl_key_name}.json"
+        local node_key_file="$BERABOX_ROOT/keep/cl-keys/${cl_key_name}.node_key.json"
+
+        if [[ ! -f "$validator_key_file" ]]; then
+            log_error "CL validator key file not found for '$installation_name': $validator_key_file"
+            return 1
+        fi
+
+        if [[ -f "$cl_config_dir/priv_validator_key.json" ]]; then
+            cp "$cl_config_dir/priv_validator_key.json" "$cl_config_dir/priv_validator_key.json.generated"
+        fi
+        cp "$validator_key_file" "$cl_config_dir/priv_validator_key.json"
+        log_info "CL validator key deployed: $cl_key_name"
+
+        if [[ -f "$node_key_file" ]]; then
+            if [[ -f "$cl_config_dir/node_key.json" ]]; then
+                cp "$cl_config_dir/node_key.json" "$cl_config_dir/node_key.json.generated"
+            fi
+            cp "$node_key_file" "$cl_config_dir/node_key.json"
+            log_info "CL P2P node key deployed: $cl_key_name"
+        fi
+    fi
+
+    local el_key_name=""
+    el_key_name="$(bb_get_identity_key_name "$installation_toml" "el_key_name" 2>/dev/null || true)"
+    if [[ -n "$el_key_name" ]]; then
+        local el_key_dir="$BERABOX_ROOT/keep/el-keys"
+        local el_key_file="$el_key_dir/${el_key_name}.nodekey"
+        local el_key_target="$el_chain_dir/discovery-secret"
+
+        if [[ ! -f "$el_key_file" ]]; then
+            log_error "EL key file not found for '$installation_name': $el_key_file"
+            return 1
+        fi
+
+        bb_validate_unique_el_key_material "$el_key_file" "$el_key_name" "$el_key_dir"
+        cp "$el_key_file" "$el_key_target"
+        log_info "EL discovery-secret deployed: $el_key_name"
+    fi
+}
+
 # Installation iteration utilities
 bb_iterate_all_installations_with_errors() {
     local command_name="$1"
@@ -673,16 +795,12 @@ bb_check_cl_initialized() {
 bb_get_validator_keys() {
     local installation="$1"
     local installation_dir=$(bb_get_installation_dir "$installation")
-    local beacond_bin="$installation_dir/src/beacon-kit/beacond-debug"
+    local beacond_bin="$installation_dir/src/beacon-kit/beacond"
     local cl_data_dir="$installation_dir/data/cl"
-    
-    # Check if beacond binary exists (try debug first, then regular)
+
     if [[ ! -f "$beacond_bin" ]]; then
-        beacond_bin="$installation_dir/src/beacon-kit/beacond"
-        if [[ ! -f "$beacond_bin" ]]; then
-            log_debug "beacond binary not found at $installation_dir/src/beacon-kit/"
-            return 1
-        fi
+        log_debug "beacond binary not found at $beacond_bin"
+        return 1
     fi
     
     # Check if CL has been initialized
@@ -741,6 +859,7 @@ export -f log_info log_result log_operation log_warn log_error log_debug log_ste
 export -f run_quiet debug_echo
 export -f bb_validate_installation bb_get_installation_toml bb_get_installation_dir bb_installation_exists
 export -f bb_parse_toml_value bb_parse_toml_array bb_iterate_all_installations_with_errors
+export -f bb_get_identity_key_name bb_validate_unique_el_key_material bb_deploy_identity_keys
 export -f bb_get_service_status bb_get_installation_status
 export -f bb_parse_boolean_arg
 export -f bb_ensure_directory bb_backup_file bb_git_checkout_safe bb_git_refresh_refs bb_ensure_repos_match_config bb_get_external_ip

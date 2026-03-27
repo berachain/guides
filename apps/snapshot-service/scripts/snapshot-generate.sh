@@ -2,10 +2,15 @@
 set -euo pipefail
 
 # snapshot-generate.sh - Generate a snapshot for a given type
-# Usage: snapshot-generate.sh <type> <output_dir> [--skip-sync-check]
-# Types: geth-pruned, reth-pruned, geth-archive, reth-archive, beacon-kit-pruned, beacon-kit-archive
+# Usage: snapshot-generate.sh <type> <output_dir> [flags...]
+# Types: reth-pruned, reth-archive, beacon-kit-pruned, beacon-kit-archive
 # Output: Writes snapshot path to stdout on success, exits non-zero on failure
-# Note: beacon-kit snapshots are typically generated immediately after reth snapshots with --skip-sync-check
+# Flags:
+#   --skip-sync-check   Skip block-lag check against public RPC
+#   --skip-stop         Skip stopping services (caller is responsible for quiescing)
+#   --skip-restart      Skip restarting services (caller is responsible for restart)
+#   --block-number N    Use N as the snapshot block/slot (required when --skip-stop is set,
+#                       since the node RPC is unavailable while stopped)
 
 # Set up DBUS environment for systemctl --user commands in cron context
 setup_dbus_env() {
@@ -34,9 +39,12 @@ PYTHON_BIN="$SNAPSHOT_PYTHON_BIN"
 BERABOX_BIN="$SNAPSHOT_BERABOX_BIN"
 COSMPRUND_BIN="$SNAPSHOT_COSMPRUND_BIN"
 SKIP_SYNC_CHECK=0
+SKIP_STOP=0
+SKIP_RESTART=0
+OVERRIDE_BLOCK_NUMBER=""
 
 usage() {
-    echo "Usage: $0 <type> <output_dir> [--skip-sync-check]" >&2
+    echo "Usage: $0 <type> <output_dir> [--skip-sync-check] [--skip-stop] [--skip-restart] [--block-number N]" >&2
     echo "Types: reth-pruned, reth-archive, beacon-kit-pruned, beacon-kit-archive" >&2
     exit 1
 }
@@ -75,25 +83,30 @@ error_with_code() {
 TYPE="$1"
 OUTPUT_DIR="$2"
 
-# Parse optional flag
-if [[ $# -ge 3 ]] && [[ "$3" == "--skip-sync-check" ]]; then
+# Parse optional flags (all positions after the first two)
+shift 2
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --skip-sync-check) SKIP_SYNC_CHECK=1 ;;
+        --skip-stop)       SKIP_STOP=1 ;;
+        --skip-restart)    SKIP_RESTART=1 ;;
+        --block-number)    [[ $# -ge 2 ]] || usage; OVERRIDE_BLOCK_NUMBER="$2"; shift ;;
+        *) echo "Unknown flag: $1" >&2; usage ;;
+    esac
+    shift
+done
+
+# --skip-stop implies the node is already down; skip the sync check too since
+# the local RPC is unavailable. --block-number must be supplied in this case.
+if [[ $SKIP_STOP -eq 1 ]]; then
     SKIP_SYNC_CHECK=1
+    [[ -n "$OVERRIDE_BLOCK_NUMBER" ]] || { echo "ERROR: --skip-stop requires --block-number" >&2; exit 1; }
 fi
 
 [[ -d "$OUTPUT_DIR" ]] || error "Output directory does not exist: $OUTPUT_DIR"
 
 # Determine installation and layer based on type
 case "$TYPE" in
-    geth-pruned)
-        INSTALLATION="geth-pruned"
-        LAYER="el"
-        SERVICE="geth-pruned-el"
-        ;;
-    geth-archive)
-        INSTALLATION="geth-archive"
-        LAYER="el"
-        SERVICE="geth-archive-el"
-        ;;
     reth-pruned)
         INSTALLATION="reth-pruned"
         LAYER="el"
@@ -105,13 +118,11 @@ case "$TYPE" in
         SERVICE="reth-archive-el"
         ;;
     beacon-kit-pruned)
-        # Use reth-pruned as source for pruned CL snapshot (geth being deprecated)
         INSTALLATION="reth-pruned"
         LAYER="cl"
         SERVICE="reth-pruned-cl"
         ;;
     beacon-kit-archive)
-        # Use reth-archive as source for archive CL snapshot (geth being deprecated)
         INSTALLATION="reth-archive"
         LAYER="cl"
         SERVICE="reth-archive-cl"
@@ -131,12 +142,7 @@ CL_VERSION=$(grep '^beacon_kit' "$TOML_FILE" | cut -d'"' -f2)
 [[ -n "$CL_VERSION" ]] || error "Could not read beacon_kit version from $TOML_FILE"
 
 if [[ "$LAYER" == "el" ]]; then
-    # Get EL version based on client type
-    if [[ "$INSTALLATION" == geth-* ]]; then
-        EL_VERSION=$(grep '^bera_geth' "$TOML_FILE" | cut -d'"' -f2)
-    else
-        EL_VERSION=$(grep '^bera_reth' "$TOML_FILE" | cut -d'"' -f2)
-    fi
+    EL_VERSION=$(grep '^bera_reth' "$TOML_FILE" | cut -d'"' -f2)
     [[ -n "$EL_VERSION" ]] || error "Could not read EL version from $TOML_FILE"
 fi
 
@@ -160,8 +166,6 @@ get_el_rpc_port() {
         return 0
     fi
     case "$INSTALLATION" in
-        geth-pruned) echo 42010 ;;
-        geth-archive) echo 42210 ;;
         reth-pruned) echo 42110 ;;
         reth-archive) echo 42310 ;;
     esac
@@ -175,8 +179,6 @@ get_cl_api_port() {
         return 0
     fi
     case "$INSTALLATION" in
-        geth-pruned) echo 42005 ;;
-        geth-archive) echo 42205 ;;
         reth-pruned) echo 42105 ;;
         reth-archive) echo 42305 ;;
     esac
@@ -192,7 +194,7 @@ query_block_number() {
 }
 
 # Get current block/slot number from the running node
-get_local_block_number() {
+get_local_block_number_once() {
     if [[ "$LAYER" == "cl" ]]; then
         local port
         port=$(get_cl_api_port)
@@ -203,6 +205,33 @@ get_local_block_number() {
         port=$(get_el_rpc_port)
         query_block_number "http://127.0.0.1:$port"
     fi
+}
+
+# CL can briefly be unavailable right after a restart, so retry slot reads.
+get_local_block_number() {
+    local block
+    block=$(get_local_block_number_once)
+    if [[ "$block" -gt 0 ]]; then
+        echo "$block"
+        return 0
+    fi
+
+    if [[ "$LAYER" == "cl" ]]; then
+        local max_attempts=12
+        local attempt=1
+        while [[ $attempt -le $max_attempts ]]; do
+            log_detail "CL API not ready yet, retrying slot query ($attempt/$max_attempts)..."
+            sleep 2
+            block=$(get_local_block_number_once)
+            if [[ "$block" -gt 0 ]]; then
+                echo "$block"
+                return 0
+            fi
+            ((attempt++))
+        done
+    fi
+
+    echo "0"
 }
 
 # Check sync status against public RPC
@@ -258,17 +287,25 @@ else
     log "Skipping sync check (--skip-sync-check flag set)"
 fi
 
-# Get block/slot number for filename
-BLOCK_NUMBER=$(get_local_block_number)
-log_detail "Block/Slot for snapshot: $BLOCK_NUMBER"
-[[ "$BLOCK_NUMBER" -gt 0 ]] || error "Could not get block number from node"
+# Capture block number. When --skip-stop is set, services are already down so
+# we rely on the caller-supplied --block-number instead of querying the RPC.
+if [[ -n "$OVERRIDE_BLOCK_NUMBER" ]]; then
+    BLOCK_NUMBER="$OVERRIDE_BLOCK_NUMBER"
+    log_detail "Block/Slot for snapshot (caller-supplied): $BLOCK_NUMBER"
+else
+    BLOCK_NUMBER=$(get_local_block_number)
+    log_detail "Block/Slot for snapshot: $BLOCK_NUMBER"
+    if [[ "$BLOCK_NUMBER" -le 0 ]]; then
+        error "Could not get block number from node while services are running"
+    fi
+fi
 
 if [[ "$LAYER" == "cl" ]]; then
     # CL snapshot: beacon-kit-{pruned|archive}-{slot}-{cl_version}.tar.lz4
     MODE="${TYPE#beacon-kit-}"
     FILENAME="beacon-kit-${MODE}-${BLOCK_NUMBER}-${CL_VERSION}.tar.lz4"
 else
-    # EL snapshot: bera-{geth|reth}-{pruned|archive}-{block}-{el_version}.tar.lz4
+    # EL snapshot: bera-reth-{pruned|archive}-{block}-{el_version}.tar.lz4
     CLIENT="${INSTALLATION%-*}"
     MODE="${INSTALLATION#*-}"
     FILENAME="bera-${CLIENT}-${MODE}-${BLOCK_NUMBER}-${EL_VERSION}.tar.lz4"
@@ -400,15 +437,17 @@ restart_services() {
 # Global variable to store output file path for successful completion
 SUCCESS_OUTPUT_FILE=""
 
-# Trap to restart services on any exit
+# Trap to restart services on any exit (skip if caller manages lifecycle)
 cleanup() {
     local exit_code=$?
-    restart_services
+    if [[ $SKIP_RESTART -eq 0 ]]; then
+        restart_services
+    fi
     # Clean up temp file on failure
     if [[ $exit_code -ne 0 ]] && [[ -f "$TEMP_FILE" ]]; then
         rm -f "$TEMP_FILE"
     fi
-    # Output success file path after restart (only to stdout, not stderr)
+    # Output success file path (only to stdout, not stderr)
     if [[ $exit_code -eq 0 ]] && [[ -n "$SUCCESS_OUTPUT_FILE" ]]; then
         echo "$SUCCESS_OUTPUT_FILE"
     fi
@@ -416,8 +455,12 @@ cleanup() {
 }
 trap cleanup EXIT
 
-# Stop services
-stop_services
+# Stop services (skip if caller is managing service lifecycle)
+if [[ $SKIP_STOP -eq 0 ]]; then
+    stop_services
+else
+    log "Skipping service stop (--skip-stop set, caller manages lifecycle)"
+fi
 
 # Prune CL state data for pruned snapshots only
 if [[ "$LAYER" == "cl" && "$TYPE" == "beacon-kit-pruned" ]]; then
@@ -432,7 +475,7 @@ if [[ "$LAYER" == "cl" && "$TYPE" == "beacon-kit-pruned" ]]; then
     # Run cosmprund with conservative settings for snapshots.
     # Berachain cosmprund main uses --keep-blocks/--keep-versions.
     # Keep 10 blocks and 5 versions (smaller than default for snapshot efficiency).
-    if "$COSMPRUND_BIN" prune "$CL_DATA_DIR" --keep-blocks 10 --keep-versions 5; then
+    if "$COSMPRUND_BIN" prune "$CL_DATA_DIR" --keep-blocks 10 --keep-versions 5 >&2; then
         SIZE_AFTER=$(du -sh "$CL_DATA_DIR" 2>/dev/null | cut -f1 || echo "unknown")
         log_detail "Size after pruning: $SIZE_AFTER"
         log_detail "Cosmprund completed successfully"
@@ -471,8 +514,7 @@ if [[ "$LAYER" == "cl" ]]; then
         | lz4 -3 > "$TEMP_FILE"
 else
     # EL: tar only the chain subdirectory (flat structure like CL)
-    # For reth: archive contains db/, static_files/, blobstore/, etc. (flat)
-    # For geth: archive contains bera-geth/, keystore/, etc. (flat)
+    # Archive contains db/, static_files/, blobstore/, etc. (flat)
     DATA_DIR="$INSTALL_DIR/data/el/chain"
     [[ -d "$DATA_DIR" ]] || error "EL chain directory not found: $DATA_DIR"
     
