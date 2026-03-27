@@ -30,31 +30,31 @@ Migrations apply automatically on daemon startup via numbered files in `sql/`. N
 
 **Required:**
 
-| Variable | Description |
-|----------|-------------|
-| `PG_DSN` | Postgres connection string, e.g. `postgres://user:pass@localhost/beralyzer_mainnet` |
-| `EL_ETHRPC_URL` | EL JSON-RPC endpoint(s), comma- or semicolon-separated for load balancing |
-| `CL_ETHRPC_URL` | CL RPC endpoint(s), comma- or semicolon-separated for load balancing |
+| Variable        | Description                                                                         |
+| --------------- | ----------------------------------------------------------------------------------- |
+| `PG_DSN`        | Postgres connection string, e.g. `postgres://user:pass@localhost/beralyzer_mainnet` |
+| `EL_ETHRPC_URL` | EL JSON-RPC endpoint(s), comma- or semicolon-separated for load balancing           |
+| `CL_ETHRPC_URL` | CL RPC endpoint(s), comma- or semicolon-separated for load balancing                |
 
 **Polling intervals:**
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `BERALYZER_POLL_MS` | 15000 | EL ingestion sleep between runs; set to `0` for continuous catch-up |
-| `BERALYZER_ERC20_POLL_MS` | 60000 | ERC20 registry loop |
-| `BERALYZER_CL_POLL_MS` | 30000 | CL ingestion loop |
-| `BERALYZER_DECODER_POLL_MS` | 60000 | Decoder loop |
-| `BERALYZER_SNAPSHOT_POLL_MS` | 300000 | Daily snapshot loop |
-| `BERALYZER_RETRY_POLL_MS` | 60000 | Failed-blocks retry loop |
-| `BERALYZER_STATS_POLL_MS` | 60000 | DB inventory stats collection (row counts, cursor heights) |
+| Variable                     | Default | Description                                                         |
+| ---------------------------- | ------- | ------------------------------------------------------------------- |
+| `BERALYZER_POLL_MS`          | 15000   | EL ingestion sleep between runs; set to `0` for continuous catch-up |
+| `BERALYZER_ERC20_POLL_MS`    | 60000   | ERC20 registry loop                                                 |
+| `BERALYZER_CL_POLL_MS`       | 30000   | CL ingestion loop                                                   |
+| `BERALYZER_DECODER_POLL_MS`  | 60000   | Decoder loop                                                        |
+| `BERALYZER_SNAPSHOT_POLL_MS` | 300000  | Daily snapshot loop                                                 |
+| `BERALYZER_RETRY_POLL_MS`    | 60000   | Failed-blocks retry loop                                            |
+| `BERALYZER_STATS_POLL_MS`    | 60000   | DB inventory stats collection (row counts, cursor heights)          |
 
 **Other:**
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `BERALYZER_LOG` | 1 | Enable minimal logs (1/0) |
-| `BERALYZER_METRICS_PORT` | 9464 | Prometheus metrics port (binds to 127.0.0.1) |
-| `ABI_DIR` | — | Path to ABIs for decoder helpers |
+| Variable                 | Default | Description                                  |
+| ------------------------ | ------- | -------------------------------------------- |
+| `BERALYZER_LOG`          | 1       | Enable minimal logs (1/0)                    |
+| `BERALYZER_METRICS_PORT` | 9464    | Prometheus metrics port (binds to 127.0.0.1) |
+| `ABI_DIR`                | —       | Path to ABIs for decoder helpers             |
 
 ## Running directly
 
@@ -103,23 +103,23 @@ See [deploy/beralyzer.rules.yml](../deploy/beralyzer.rules.yml) for the full ale
 
 ### Key metrics
 
-| Metric | What it tells you |
-|--------|------------------|
-| `beralyzer_worker_running{worker}` | 1 if the worker is running, 0 if it has exited — most reliable worker health signal |
-| `beralyzer_blocks_behind{type="el"}` | How far the EL worker is from chain head |
-| `beralyzer_blocks_behind{type="cl"}` | How far the CL worker is from chain head |
-| `beralyzer_loop_iterations_total{worker}` | Loop heartbeat — stops incrementing if worker exits or is stuck |
-| `beralyzer_rpc_errors_total` | RPC failures by endpoint and error type |
-| `beralyzer_blocks_process_duration_seconds` | Per-block processing time distribution |
-| `beralyzer_queue_depth{type="tx_queue"}` | EL pipeline backpressure indicator |
-| `beralyzer_db_rows{table="blocks"}` | Approximate indexed block count (updated every ~60s by stats worker) |
-| `beralyzer_db_rows{table="transactions"}` | Approximate indexed transaction count |
-| `beralyzer_db_rows{table="contracts"}` | Approximate indexed contract count |
-| `beralyzer_db_rows{table="erc20_tokens"}` | Approximate detected ERC-20 token count |
-| `beralyzer_db_rows{table="validators"}` | Approximate known validator count |
-| `beralyzer_db_failed_blocks_unresolved` | Unresolved failed blocks — key data integrity signal |
-| `beralyzer_db_cursor_height{module}` | Committed cursor per worker (from DB, reliable after worker exit) |
-| `beralyzer_db_daily_snapshot_days` | Number of distinct days with validator set snapshots |
+| Metric                                      | What it tells you                                                                   |
+| ------------------------------------------- | ----------------------------------------------------------------------------------- |
+| `beralyzer_worker_running{worker}`          | 1 if the worker is running, 0 if it has exited — most reliable worker health signal |
+| `beralyzer_blocks_behind{type="el"}`        | How far the EL worker is from chain head                                            |
+| `beralyzer_blocks_behind{type="cl"}`        | How far the CL worker is from chain head                                            |
+| `beralyzer_loop_iterations_total{worker}`   | Loop heartbeat — stops incrementing if worker exits or is stuck                     |
+| `beralyzer_rpc_errors_total`                | RPC failures by endpoint and error type                                             |
+| `beralyzer_blocks_process_duration_seconds` | Per-block processing time distribution                                              |
+| `beralyzer_queue_depth{type="tx_queue"}`    | EL pipeline backpressure indicator                                                  |
+| `beralyzer_db_rows{table="blocks"}`         | Approximate indexed block count (updated every ~60s by stats worker)                |
+| `beralyzer_db_rows{table="transactions"}`   | Approximate indexed transaction count                                               |
+| `beralyzer_db_rows{table="contracts"}`      | Approximate indexed contract count                                                  |
+| `beralyzer_db_rows{table="erc20_tokens"}`   | Approximate detected ERC-20 token count                                             |
+| `beralyzer_db_rows{table="validators"}`     | Approximate known validator count                                                   |
+| `beralyzer_db_failed_blocks_unresolved`     | Unresolved failed blocks — key data integrity signal                                |
+| `beralyzer_db_cursor_height{module}`        | Committed cursor per worker (from DB, reliable after worker exit)                   |
+| `beralyzer_db_daily_snapshot_days`          | Number of distinct days with validator set snapshots                                |
 
 ### DB-based health checks
 
@@ -167,12 +167,12 @@ On retry: if a block appears in `failed_blocks`, Stage 4 deletes all existing da
 
 **Concurrency tuning:**
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `BERALYZER_CONCURRENCY_EL` | 24 | Parallel header fetch threads |
-| `BERALYZER_CONCURRENCY_TRACE` | 24 | Parallel transaction fetch threads |
-| `BERALYZER_CONCURRENCY_RECEIPT` | 2× trace | Parallel receipt fetch threads |
-| `BERALYZER_BLOCK_BATCH_SIZE` | 512 | Block batch size |
+| Variable                        | Default  | Description                        |
+| ------------------------------- | -------- | ---------------------------------- |
+| `BERALYZER_CONCURRENCY_EL`      | 24       | Parallel header fetch threads      |
+| `BERALYZER_CONCURRENCY_TRACE`   | 24       | Parallel transaction fetch threads |
+| `BERALYZER_CONCURRENCY_RECEIPT` | 2× trace | Parallel receipt fetch threads     |
+| `BERALYZER_BLOCK_BATCH_SIZE`    | 512      | Block batch size                   |
 
 Connection pool is sized to `max(100, elFetch + trace + receipt + 20)` to ensure all concurrent operations have connections.
 

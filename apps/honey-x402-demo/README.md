@@ -1,6 +1,7 @@
 # Honey Token: EIP-2612, Permit2, and EIP-3009 Demo
 
 This project demonstrates the differences between three gasless transaction standards:
+
 - **EIP-2612 (Permit)**: Gasless token approvals via signed messages
 - **Permit2**: Uniswap's universal approval system for any ERC20 token
 - **EIP-3009 (Transfer With Authorization)**: Gasless token transfers via authorization signatures
@@ -9,17 +10,18 @@ This project demonstrates the differences between three gasless transaction stan
 
 ### Standards Comparison
 
-| Feature | EIP-2612 | Permit2 | EIP-3009 |
-|---------|----------|---------|----------|
-| **Purpose** | Gasless approvals | Universal approvals/transfers | Gasless transfers |
-| **Nonce Type** | Sequential | Non-monotonic | Random (32-byte) |
-| **Works With** | EIP-2612 tokens only | Any ERC20 token | EIP-3009 tokens only |
-| **Pattern** | Approve + TransferFrom | Direct transfer or allowance | Direct transfer |
-| **Parallel Txs** | No (sequential nonces) | Yes | Yes (random nonces) |
+| Feature          | EIP-2612               | Permit2                       | EIP-3009             |
+| ---------------- | ---------------------- | ----------------------------- | -------------------- |
+| **Purpose**      | Gasless approvals      | Universal approvals/transfers | Gasless transfers    |
+| **Nonce Type**   | Sequential             | Non-monotonic                 | Random (32-byte)     |
+| **Works With**   | EIP-2612 tokens only   | Any ERC20 token               | EIP-3009 tokens only |
+| **Pattern**      | Approve + TransferFrom | Direct transfer or allowance  | Direct transfer      |
+| **Parallel Txs** | No (sequential nonces) | Yes                           | Yes (random nonces)  |
 
 ### Architecture
 
 The demo uses a two-wallet pattern with private keys loaded from `.env`:
+
 - **Wallet A — Token Holder** (`PRIVATE_KEY`): Has HONEY tokens, signs messages off-chain (no gas)
 - **Wallet B — Gas Subsidizer** (`PRIVATE_KEY_GAS_SUBSIDIZER`): Has BERA for gas, executes transactions on-chain (pays gas)
 
@@ -32,13 +34,13 @@ flowchart TD
     Sig --> Exec
     Exec -->|Calls| Contract[Smart Contract]
     Contract -->|Transfers| Tokens[Honey Tokens]
-    
+
     subgraph Methods
         EIP2612[EIP-2612: permit + transferFrom]
         Permit2[Permit2: signatureTransfer or allowanceTransfer]
         EIP3009[EIP-3009: transferWithAuthorization]
     end
-    
+
     Exec --> Methods
 ```
 
@@ -52,6 +54,7 @@ foundryup
 ```
 
 Verify installation:
+
 ```bash
 forge --version
 ```
@@ -63,6 +66,7 @@ curl -fsSL https://bun.sh/install | bash
 ```
 
 Verify installation:
+
 ```bash
 bun --version
 ```
@@ -77,6 +81,7 @@ chmod +x setup.sh
 ```
 
 This will:
+
 - Check for Foundry and Bun installations
 - Install Solidity dependencies (forge-std, OpenZeppelin)
 - Build contracts
@@ -144,6 +149,7 @@ forge script script/Deploy.s.sol:DeployScript \
 The deploy script reads `DEPLOYER_PRIVATE_KEY` from the project root `.env`. If not found, it falls back to Anvil's default key.
 
 This will:
+
 - Deploy Permit2
 - Deploy the Honey ERC20 token (with EIP-2612 and EIP-3009 support)
 - Deploy the Demo contract (wired to Honey and Permit2)

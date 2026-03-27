@@ -25,7 +25,10 @@ export async function collectDbStats(pg: Pool): Promise<void> {
         dbRows.set({ table }, parseInt(result.rows[0].count, 10));
       }
     } catch (e) {
-      console.warn(`Stats: failed to read row count for ${table}:`, (e as Error).message);
+      console.warn(
+        `Stats: failed to read row count for ${table}:`,
+        (e as Error).message,
+      );
     }
   }
 
@@ -35,7 +38,10 @@ export async function collectDbStats(pg: Pool): Promise<void> {
     );
     dbFailedBlocksUnresolved.set(parseInt(failedResult.rows[0].count, 10));
   } catch (e) {
-    console.warn("Stats: failed to read failed_blocks count:", (e as Error).message);
+    console.warn(
+      "Stats: failed to read failed_blocks count:",
+      (e as Error).message,
+    );
   }
 
   try {
@@ -58,6 +64,9 @@ export async function collectDbStats(pg: Pool): Promise<void> {
     );
     dbDailySnapshotDays.set(parseInt(snapshotResult.rows[0].count, 10));
   } catch (e) {
-    console.warn("Stats: failed to read snapshot coverage:", (e as Error).message);
+    console.warn(
+      "Stats: failed to read snapshot coverage:",
+      (e as Error).message,
+    );
   }
 }
