@@ -138,6 +138,7 @@ BERA_CHEF_ABI = [
         "stateMutability": "view",
         "type": "function"
     },
+    {"inputs": [{"internalType": "bytes", "name": "valPubkey", "type": "bytes"}], "name": "activateQueuedValCommission", "outputs": [], "stateMutability": "nonpayable", "type": "function"},
     {
         "inputs": [{"internalType": "bytes", "name": "valPubkey", "type": "bytes"}],
         "name": "getQueuedRewardAllocation",
@@ -212,7 +213,7 @@ class SmartOperatorManager:
         script_dir = Path(__file__).parent
         env_path = script_dir.parent / "install-helpers" / "env.sh"
         env_vars = {}
-        
+
         if env_path.exists():
             try:
                 # Parse bash env.sh for variables
@@ -228,7 +229,7 @@ class SmartOperatorManager:
                         env_vars[key] = value.strip('"').strip("'")
             except Exception as e:
                 console.print(f"[yellow]Warning: Could not parse env.sh: {e}[/yellow]")
-        
+
         return env_vars
 
     def get_validator_pubkey(self, beacond_home: str, beacond_bin: str = "beacond") -> Optional[str]:
@@ -242,7 +243,7 @@ class SmartOperatorManager:
                 check=True
             )
             output = result.stdout
-            
+
             # Try to find the line after "Eth/Beacon Pubkey (Compressed 48-byte Hex):"
             lines = output.split('\n')
             for i, line in enumerate(lines):
@@ -251,12 +252,12 @@ class SmartOperatorManager:
                         pk = lines[i + 1].strip()
                         if pk and pk.startswith('0x'):
                             return pk.replace('0x', '')
-            
+
             # Fallback: search for hex pattern 0x[0-9a-fA-F]{96}
             match = re.search(r'0x[0-9a-fA-F]{96}', output)
             if match:
                 return match.group(0).replace('0x', '')
-            
+
             return None
         except Exception as e:
             console.print(f"[yellow]Warning: Could not get pubkey from beacond: {e}[/yellow]")
@@ -269,7 +270,7 @@ class SmartOperatorManager:
             genesis_path = Path(beacond_home) / "config" / "genesis.json"
             if not genesis_path.exists():
                 return "unknown"
-            
+
             result = subprocess.run(
                 [beacond_bin, "--home", beacond_home, "genesis", "validator-root", str(genesis_path)],
                 capture_output=True,
@@ -277,7 +278,7 @@ class SmartOperatorManager:
                 check=True
             )
             root = result.stdout.strip()
-            
+
             if root == MAINNET_VALIDATOR_ROOT:
                 return "mainnet"
             elif root == BEPOLIA_VALIDATOR_ROOT:
@@ -293,7 +294,7 @@ class SmartOperatorManager:
         """Connect to network and load configuration"""
         console.print(Panel.fit("🐻 SmartOperator Manager", style="bold magenta"))
         console.print()
-        
+
         # Load env.sh
         env_vars = self.load_env_sh()
         beacond_home = os.environ.get("BEACOND_HOME") or env_vars.get("BEACOND_HOME")
@@ -321,7 +322,7 @@ class SmartOperatorManager:
         # Check for VALIDATOR_PUBKEY and CHAIN environment variables first
         validator_pubkey = os.environ.get("VALIDATOR_PUBKEY") or env_vars.get("VALIDATOR_PUBKEY")
         chain = os.environ.get("CHAIN") or env_vars.get("CHAIN")
-        
+
         if validator_pubkey and chain:
             # Use environment variables
             self.network = chain
@@ -364,54 +365,54 @@ class SmartOperatorManager:
                 if self.pubkey.startswith("0x"):
                     self.pubkey = self.pubkey[2:]
         console.print(f"[cyan]Validator pubkey:[/cyan] 0x{self.pubkey}")
-        
+
         # Connect to RPC
         self.rpc_url = env_vars.get("RPC_URL") or (
-            "https://rpc.berachain.com/" if self.network == "mainnet" 
+            "https://rpc.berachain.com/" if self.network == "mainnet"
             else "https://bepolia.rpc.berachain.com/"
         )
         console.print(f"[cyan]RPC:[/cyan] {self.rpc_url}")
-        
+
         self.w3 = Web3(Web3.HTTPProvider(self.rpc_url))
         if not self.w3.is_connected():
             console.print("[red]Error: Could not connect to RPC[/red]")
             sys.exit(1)
-        
+
         # Get private key
         console.print()
         private_key = os.getenv("PRIVATE_KEY")
-        
+
         if private_key:
             console.print("[cyan]Using private key from PRIVATE_KEY environment variable[/cyan]")
         else:
             private_key = getpass.getpass("Enter private key (will not be displayed): ")
-        
+
         if not private_key.startswith("0x"):
             private_key = "0x" + private_key
-        
+
         try:
             self.account = Account.from_key(private_key)
             console.print(f"[cyan]Your address:[/cyan] {self.account.address}")
         except Exception as e:
             console.print(f"[red]Error: Invalid private key: {e}[/red]")
             sys.exit(1)
-        
+
         # Get SmartOperator address
         factory_address = Web3.to_checksum_address(FACTORY_ADDRESSES[self.network])
         self.factory = self.w3.eth.contract(address=factory_address, abi=FACTORY_ABI)
-        
+
         console.print(f"[cyan]Looking up contracts for pubkey:[/cyan] 0x{self.pubkey}")
-        
+
         try:
             self.pubkey_bytes = bytes.fromhex(self.pubkey)
-            
+
             try:
                 block = self.w3.eth.block_number
                 console.print(f"[green]✓[/green] Connected to RPC (block: {block})")
             except Exception as rpc_error:
                 console.print(f"[red]✗ RPC connection failed: {rpc_error}[/red]")
                 sys.exit(1)
-            
+
             try:
                 code = self.w3.eth.get_code(factory_address)
                 if code == b'' or code == b'0x':
@@ -421,19 +422,19 @@ class SmartOperatorManager:
             except Exception as code_error:
                 console.print(f"[red]✗ Could not check factory code: {code_error}[/red]")
                 sys.exit(1)
-            
+
             # Now try to get contracts (tuple order per FACTORY_ABI):
             # CoreContracts { smartOperator, stakingPool, stakingRewardsVault, incentiveCollector }
             contracts = self.factory.functions.getCoreContracts(self.pubkey_bytes).call()
             self.operator_address = contracts[0]  # smartOperator is at index 0
             self.staking_pool_address = contracts[1]
-            
+
             # Check if address is zero (not deployed)
             if self.operator_address == "0x0000000000000000000000000000000000000000":
                 console.print(f"[red]✗ No contracts deployed for this pubkey[/red]")
                 console.print(f"[yellow]Have you run activate.sh to deploy the staking pool?[/yellow]")
                 sys.exit(1)
-            
+
             console.print(f"[green]✓[/green] SmartOperator: {self.operator_address}")
         except Exception as e:
             console.print(f"[red]Error: Could not find SmartOperator for pubkey: {e}[/red]")
@@ -443,7 +444,7 @@ class SmartOperatorManager:
             console.print(f"  Factory: {factory_address}")
             console.print(f"  Pubkey: 0x{self.pubkey}")
             sys.exit(1)
-        
+
         # Load contracts (checksum all addresses)
         self.operator = self.w3.eth.contract(address=Web3.to_checksum_address(self.operator_address), abi=SMART_OPERATOR_ABI)
         self.bgt = self.w3.eth.contract(address=Web3.to_checksum_address(BGT_ADDRESS), abi=BGT_ABI)
@@ -459,12 +460,12 @@ class SmartOperatorManager:
             # Gracefully handle case where staking pool cannot be fetched (may not exist yet)
             self._staking_pool = None
             self.pool_fully_exited = None
-        
+
         # Check roles
         console.print()
         console.print("[cyan]Checking your roles...[/cyan]")
         self.check_roles()
-        
+
         if not any(self.roles.values()):
             console.print("[yellow]Warning: Your address has no roles on this SmartOperator. You can still use role tools to grant roles if you are an admin.[/yellow]")
 
@@ -553,7 +554,7 @@ class SmartOperatorManager:
         """Display operator status"""
         console.print()
         console.print(Panel.fit("📊 Status Dashboard", style="bold cyan"))
-        
+
         try:
             # Get BGT balances
             pubkey_bytes = bytes.fromhex(self.pubkey)
@@ -573,7 +574,7 @@ class SmartOperatorManager:
             except Exception:
                 # Use default if delay cannot be fetched (non-critical for display)
                 drop_delay = 0
-            
+
             # Get fee state
             current_bal, already_charged, chargeable, fee_pct = self.operator.functions.getEarnedBGTFeeState().call()
 
@@ -640,16 +641,16 @@ class SmartOperatorManager:
                         allocation_rows.append(f"{display} → {pct_num/100:.2f}%")
                 except Exception:
                     allocation_rows = []
-            
+
             # Display in table
             table = Table(box=box.ROUNDED)
             table.add_column("Metric", style="cyan")
             table.add_column("Value", style="green")
-            
+
             table.add_row("Total BGT Balance", f"{Web3.from_wei(bgt_balance, 'ether'):.4f} BGT")
             table.add_row("Unboosted BGT", f"{Web3.from_wei(unboosted, 'ether'):.4f} BGT")
             table.add_row("Boosted BGT", f"{Web3.from_wei(boosted, 'ether'):.4f} BGT")
-            
+
             if boost_queue_amount > 0:
                 available_block = int(boost_queue_block) + int(activate_delay)
                 remaining = max(0, available_block - int(current_block))
@@ -658,7 +659,7 @@ class SmartOperatorManager:
                     f"{Web3.from_wei(boost_queue_amount, 'ether'):.4f} BGT (queued at {boost_queue_block}; activate at {available_block}; ~{remaining} blocks)",
                     style="yellow",
                 )
-            
+
             if drop_queue_amount > 0:
                 available_drop_block = int(drop_queue_block) + int(drop_delay)
                 remaining_drop = max(0, available_drop_block - int(current_block))
@@ -667,7 +668,7 @@ class SmartOperatorManager:
                     f"{Web3.from_wei(drop_queue_amount, 'ether'):.4f} BGT (queued at {drop_queue_block}; drop at {available_drop_block}; ~{remaining_drop} blocks)",
                     style="yellow",
                 )
-            
+
             table.add_row("Protocol Fee", f"{fee_pct / 100:.2f}%")
             table.add_row("Chargeable BGT", f"{Web3.from_wei(chargeable, 'ether'):.4f} BGT")
 
@@ -699,7 +700,7 @@ class SmartOperatorManager:
                         table.add_row("Queued Allocation", "\n".join(q_rows))
             except Exception:
                 pass
-            
+
             # Add withdrawal availability information
             try:
                 # Get staking pool contract (stakingPool is at index 1)
@@ -709,17 +710,17 @@ class SmartOperatorManager:
                         address=staking_pool_addr,
                         abi=self.get_staking_pool_abi()
                     )
-                    
+
                     # Check withdrawal availability
                     active_threshold_reached = staking_pool.functions.activeThresholdReached().call()
                     is_active = staking_pool.functions.isActive().call()
                     is_fully_exited = staking_pool.functions.isFullyExited().call()
-                    
+
                     table.add_row("Staking Pool", staking_pool_addr)
                     table.add_row("Pool Active", "✅ Yes" if is_active else "❌ No")
                     table.add_row("Threshold Reached", "✅ Yes" if active_threshold_reached else "❌ No")
                     table.add_row("Fully Exited", "✅ Yes" if is_fully_exited else "❌ No")
-                    
+
                     # Get total supply of shares
                     try:
                         total_supply = staking_pool.functions.totalSupply().call()
@@ -727,40 +728,41 @@ class SmartOperatorManager:
                     except Exception:
                         # Total supply may not be available (optional display field)
                         pass
-                    
+
             except Exception as e:
                 table.add_row("Pool Status", f"❌ Error: {str(e)[:50]}...")
-            
+
             console.print(table)
-            
+
         except Exception as e:
             console.print(f"[red]Error fetching status: {e}[/red]")
 
-    def execute_or_show_calldata(self, func_name: str, tx_data: Dict):
+    def execute_or_show_calldata(self, func_name: str, tx_data: Dict, to_addr: Optional[str] = None):
         """Execute transaction or show calldata"""
+        target = to_addr if to_addr else self.operator_address
         if self.show_calldata:
             console.print()
             console.print(Panel.fit("📋 Transaction Calldata", style="bold yellow"))
-            console.print(f"[cyan]To:[/cyan] {self.operator_address}")
+            console.print(f"[cyan]To:[/cyan] {target}")
             console.print(f"[cyan]Data:[/cyan] {tx_data['data']}")
             console.print(f"[cyan]Value:[/cyan] {tx_data.get('value', 0)} wei")
             # Log simulated (show-only) transaction for external simulation
             try:
-                self.log_sim(func_name, self.operator_address, tx_data['data'], tx_data.get('value', 0), mode="show")
+                self.log_sim(func_name, target, tx_data['data'], tx_data.get('value', 0), mode="show")
             except Exception:
                 # Logging failures should not block transaction preview
                 pass
             return False
-        
+
         # Show transaction details (quiet)
         console.print()
         console.print(Panel.fit(f"🔄 Executing: {func_name}", style="bold yellow"))
-        
+
         # Estimate gas
         try:
             gas_estimate = self.w3.eth.estimate_gas({
                 'from': self.account.address,
-                'to': self.operator_address,
+                'to': target,
                 'data': tx_data['data']
             })
             console.print(f"[cyan]Estimated gas:[/cyan] {gas_estimate}")
@@ -770,22 +772,22 @@ class SmartOperatorManager:
 
         # Always log the intended tx for simulation before prompting
         try:
-            self.log_sim(func_name, self.operator_address, tx_data['data'], tx_data.get('value', 0), mode="tx")
+            self.log_sim(func_name, target, tx_data['data'], tx_data.get('value', 0), mode="tx")
         except Exception:
             pass
-        
+
         if not Confirm.ask("Execute this transaction?"):
             console.print("[yellow]Transaction cancelled[/yellow]")
             return False
-        
+
         # Build and send transaction
         try:
             nonce = self.w3.eth.get_transaction_count(self.account.address)
             gas_price = self.w3.eth.gas_price
-            
+
             tx = {
                 'from': self.account.address,
-                'to': self.operator_address,
+                'to': target,
                 'data': tx_data['data'],
                 'gas': gas_estimate,
                 'gasPrice': gas_price,
@@ -793,15 +795,15 @@ class SmartOperatorManager:
                 'chainId': self.w3.eth.chain_id,
             }
             # (Already logged above)
-            
+
             signed_tx = self.account.sign_transaction(tx)
             tx_hash = self.w3.eth.send_raw_transaction(signed_tx.raw_transaction)
-            
+
             console.print(f"[green]✓ Transaction sent: {tx_hash.hex()}[/green]")
             console.print("[cyan]Waiting for confirmation...[/cyan]")
-            
+
             receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash, timeout=120)
-            
+
             if receipt['status'] == 1:
                 console.print(f"[green]✓ Transaction confirmed in block {receipt['blockNumber']}[/green]")
                 return True
@@ -937,7 +939,7 @@ class SmartOperatorManager:
         if not self.w3.is_address(allocator):
             console.print("[red]Invalid address[/red]")
             return
-        
+
         tx_data = self.operator.functions.setRewardAllocator(allocator).build_transaction({'from': self.account.address})
         self.execute_or_show_calldata("setRewardAllocator", tx_data)
 
@@ -946,10 +948,10 @@ class SmartOperatorManager:
         console.print("[yellow]This will register the SmartOperator as the validator operator on BeraChef.[/yellow]")
         console.print(f"[dim]SmartOperator: {self.operator_address}[/dim]")
         console.print(f"[dim]Validator pubkey: {self.pubkey}[/dim]")
-        
+
         if not Confirm.ask("Continue?"):
             return
-        
+
         try:
             # Set the SmartOperator as its own reward allocator
             tx_data = self.operator.functions.setRewardAllocator(self.operator_address).build_transaction({'from': self.account.address})
@@ -1025,6 +1027,34 @@ class SmartOperatorManager:
         except Exception as e:
             console.print(f"[red]Error: {e}[/red]")
 
+    def activate_queued_val_commission_action(self):
+        """Activate a previously queued validator commission change"""
+        # Permission check
+        try:
+            has_role = self.operator.functions.hasRole(
+                Web3.to_bytes(hexstr=ROLES["COMMISSION_MANAGER_ROLE"]),
+                self.account.address
+            ).call()
+        except Exception:
+            has_role = False
+        if not has_role:
+            console.print("[red]You do not have COMMISSION_MANAGER_ROLE on this SmartOperator.[/red]")
+            return
+
+        console.print(f"[cyan]Activating queued validator commission for pubkey 0x{self.pubkey}...[/cyan]")
+
+        bera_chef_addr = Web3.to_checksum_address(BERA_CHEF_ADDRESS)
+        try:
+            self.berachef.functions.activateQueuedValCommission(self.pubkey_bytes).call({'from': self.account.address})
+            console.print("[green]✅ Preflight check passed[/green]")
+        except Exception as preflight:
+            reason = self.decode_revert(preflight)
+            console.print(f"[red]Preflight revert:[/red] {reason}")
+            return
+
+        tx_data = self.berachef.functions.activateQueuedValCommission(self.pubkey_bytes).build_transaction({'from': self.account.address})
+        self.execute_or_show_calldata("activateQueuedValCommission", tx_data, to_addr=bera_chef_addr)
+
     def queue_rewards_allocation_action(self):
         """Queue new rewards allocation weights"""
         console.print("[cyan]Queueing new rewards allocation...[/cyan]")
@@ -1096,20 +1126,20 @@ class SmartOperatorManager:
         console.print("[cyan]Claim Boost Rewards[/cyan]")
         console.print("This function claims HONEY rewards from BGT staking and incentive tokens from the boost program,")
         console.print("then forwards all tokens to IncentiveCollector.\n")
-        
+
         # Get merkle claims (can be empty)
         console.print("[yellow]Merkle Claims (for incentive program rewards)[/yellow]")
         console.print("Enter merkle claims in JSON format, or press Enter for empty array.")
         console.print("Format: [{\"identifier\": \"0x...\", \"account\": \"0x...\", \"amount\": \"0x...\", \"merkleProof\": [\"0x...\", ...]}, ...]")
         claims_input = Prompt.ask("Merkle claims (JSON array)", default="[]")
-        
+
         try:
             import json
             claims_data = json.loads(claims_input)
             if not isinstance(claims_data, list):
                 console.print("[red]Claims must be a JSON array[/red]")
                 return
-            
+
             # Convert claims to the proper format
             claims = []
             for claim in claims_data:
@@ -1128,13 +1158,13 @@ class SmartOperatorManager:
         except Exception as e:
             console.print(f"[red]Error parsing claims: {e}[/red]")
             return
-        
+
         # Get token addresses (can be empty, but should include common tokens)
         console.print("\n[yellow]Token Addresses[/yellow]")
         console.print("Enter token addresses to forward (comma-separated), or press Enter to forward all common tokens.")
         console.print("Common tokens: HONEY, BERA, and any incentive tokens you've received.")
         tokens_input = Prompt.ask("Token addresses (comma-separated, or Enter for auto-detect)", default="")
-        
+
         if tokens_input.strip():
             token_addresses = [self.w3.to_checksum_address(addr.strip()) for addr in tokens_input.split(",")]
         else:
@@ -1144,7 +1174,7 @@ class SmartOperatorManager:
             console.print("[yellow]No tokens specified. The function will forward tokens based on merkle claims.[/yellow]")
             console.print("If you have accumulated tokens, you may want to specify their addresses.")
             token_addresses = []
-        
+
         try:
             console.print(f"\n[cyan]Preparing transaction with {len(claims)} claim(s) and {len(token_addresses)} token(s)...[/cyan]")
             tx_data = self.operator.functions.claimBoostRewards(claims, token_addresses).build_transaction({'from': self.account.address})
@@ -1161,7 +1191,7 @@ class SmartOperatorManager:
             if fee_bps < 0 or fee_bps > 2000:
                 console.print("[red]Fee must be between 0 and 20%[/red]")
                 return
-            
+
             tx_data = self.operator.functions.setProtocolFeePercentage(fee_bps).build_transaction({'from': self.account.address})
             self.execute_or_show_calldata("setProtocolFeePercentage", tx_data)
         except Exception as e:
@@ -1197,33 +1227,33 @@ class SmartOperatorManager:
         try:
             console.print()
             console.print(Panel.fit("📊 Reward Allocation Status", style="bold cyan"))
-            
+
             # Get BeraChef contract
             bera_chef_abi = [
                 {"inputs": [{"internalType": "bytes", "name": "pubkey", "type": "bytes"}], "name": "valRewardAllocator", "outputs": [{"internalType": "address", "name": "", "type": "address"}], "stateMutability": "view", "type": "function"},
                 {"inputs": [{"internalType": "bytes", "name": "pubkey", "type": "bytes"}], "name": "getValCommissionOnIncentiveTokens", "outputs": [{"internalType": "uint96", "name": "", "type": "uint96"}], "stateMutability": "view", "type": "function"},
                 {"inputs": [{"internalType": "bytes", "name": "pubkey", "type": "bytes"}], "name": "getActiveRewardAllocation", "outputs": [{"internalType": "uint64", "name": "startBlock", "type": "uint64"}, {"components": [{"internalType": "address", "name": "receiver", "type": "address"}, {"internalType": "uint96", "name": "percentageNumerator", "type": "uint96"}], "internalType": "struct IBeraChef.Weight[]", "name": "weights", "type": "tuple[]"}], "stateMutability": "view", "type": "function"},
             ]
-            
+
             bera_chef = self.w3.eth.contract(
                 address=Web3.to_checksum_address("0xdf960E8F3F19C481dDE769edEDD439ea1a63426a"),
                 abi=bera_chef_abi
             )
-            
+
             table = Table(show_header=True, header_style="bold magenta")
             table.add_column("Property", style="cyan")
             table.add_column("Value", style="white")
-            
+
             # Convert pubkey to bytes
             pubkey_bytes = bytes.fromhex(self.pubkey)
-            
+
             # Get reward allocator
             try:
                 reward_allocator = bera_chef.functions.valRewardAllocator(pubkey_bytes).call()
                 table.add_row("Reward Allocator", reward_allocator)
             except Exception as e:
                 table.add_row("Reward Allocator", f"❌ Error: {str(e)[:50]}...")
-            
+
             # Get validator commission
             try:
                 commission = bera_chef.functions.getValCommissionOnIncentiveTokens(pubkey_bytes).call()
@@ -1231,37 +1261,37 @@ class SmartOperatorManager:
                 table.add_row("Validator Commission", f"{commission_bps:.2f}% ({commission} bps)")
             except Exception as e:
                 table.add_row("Validator Commission", f"❌ Error: {str(e)[:50]}...")
-            
+
             # Get reward allocation
             try:
                 result = bera_chef.functions.getActiveRewardAllocation(pubkey_bytes).call()
                 # The result is a struct with startBlock and weights
                 start_block = result[0]
                 weights = result[1]
-                
+
                 table.add_row("Allocation Start Block", str(start_block))
-                
+
                 if weights:
                     table.add_row("Allocation Weights", f"{len(weights)} recipients")
                     for i, weight in enumerate(weights):
                         recipient, weight_value = weight
                         weight_percent = (weight_value / 10000) * 100  # Convert from basis points
-                        
+
                         # Try to get vault name from API
                         vault_name = self.get_vault_name_from_api(recipient)
                         if vault_name:
                             display_name = f"{vault_name} ({recipient})"
                         else:
                             display_name = recipient
-                        
+
                         table.add_row(f"  Recipient {i+1}", f"{display_name} ({weight_percent:.2f}%)")
                 else:
                     table.add_row("Allocation Weights", "No allocation set")
             except Exception as e:
                 table.add_row("Reward Allocation", f"❌ Error: {str(e)[:50]}...")
-            
+
             console.print(table)
-            
+
         except Exception as e:
             console.print(f"[red]Error viewing reward allocation: {e}[/red]")
 
@@ -1270,31 +1300,31 @@ class SmartOperatorManager:
         # Known individual vault names for Bepolia
         known_vaults = {
             "0x57aBe4e0C59a650a7042e18493179dd5b91a3F61": "Bepolia Foundation Vault #1",
-            "0xae461ea8238df1bd63B3f93b0EF7da1A56De2f91": "Bepolia Foundation Vault #2", 
+            "0xae461ea8238df1bd63B3f93b0EF7da1A56De2f91": "Bepolia Foundation Vault #2",
             "0x45450D1E3bfd42E224976a7a263F7e59AB9607C8": "Bepolia Foundation Vault #3",
             "0x3bcED9bC841a862716d58560c07480c203e61912": "Bepolia Foundation Vault #4",
             "0x668b25f09D1f505b774bb5F686874c401EE22730": "Bepolia Foundation Vault #5",
             "0xBA0DDC0C0a8cBCccd9819e59368Dc133D362415C": "Bepolia Foundation Vault #6",
             "0x005f3019690310D0Afea6051a5133E0b9207D9b6": "Bepolia Foundation Vault #7"
         }
-        
+
         # Match case-insensitively
         known_lower = {addr.lower(): name for addr, name in known_vaults.items()}
         result = {}
         for addr in vault_addresses:
             result[addr] = known_lower.get(addr.lower())
-        
+
         return result
 
     def get_vault_names_from_api(self, vault_addresses):
         """Get vault names from Berachain API for multiple addresses"""
         try:
             import requests
-            
+
             # Initialize cache if it doesn't exist
             if not hasattr(self, '_vault_names_cache'):
                 self._vault_names_cache = {}
-            
+
             # Check cache; treat None values as missing so we can re-resolve
             missing_addresses = [
                 addr for addr in vault_addresses
@@ -1302,10 +1332,10 @@ class SmartOperatorManager:
             ]
             if not missing_addresses:
                 return {addr: self._vault_names_cache.get(addr) for addr in vault_addresses}
-            
+
             # Use network-specific API endpoint
             api_url = "https://bepolia-api.berachain.com" if self.network == "bepolia" else "https://api.berachain.com"
-            
+
             # GraphQL query to get all pools with their vault information
             query = """
             query GetAllPools {
@@ -1324,7 +1354,7 @@ class SmartOperatorManager:
               }
             }
             """
-            
+
             response = requests.post(
                 api_url,
                 json={
@@ -1336,7 +1366,7 @@ class SmartOperatorManager:
                 },
                 timeout=10
             )
-            
+
             # Build result map initialized as None
             result = {addr: None for addr in vault_addresses}
 
@@ -1404,7 +1434,7 @@ class SmartOperatorManager:
             # Cache and return
             self._vault_names_cache.update(result)
             return result
-            
+
         except Exception:
             # If API call fails, return empty dict (will fall back to addresses)
             return {}
@@ -1413,12 +1443,12 @@ class SmartOperatorManager:
         """Get vault name from Berachain API (single address - uses cached data)"""
         if not hasattr(self, '_vault_names_cache'):
             self._vault_names_cache = {}
-        
+
         if vault_address not in self._vault_names_cache:
             # Fetch all vault names at once
             all_names = self.get_vault_names_from_api([vault_address])
             self._vault_names_cache.update(all_names)
-        
+
         return self._vault_names_cache.get(vault_address)
 
     def view_vault_info_action(self):
@@ -1426,67 +1456,67 @@ class SmartOperatorManager:
         try:
             console.print()
             console.print(Panel.fit("🏦 Vault Information", style="bold cyan"))
-            
+
             # Get validator pubkey
             pubkey_bytes = bytes.fromhex(self.pubkey)
-            
+
             # Get core contract addresses from factory for reference
             try:
                 core_contracts = self.factory.functions.getCoreContracts(pubkey_bytes).call()
                 smart_operator, staking_pool, staking_rewards_vault, incentive_collector = core_contracts
                 withdrawal_vault = self.factory.functions.withdrawalVault().call()
-                
+
                 # Create mapping of addresses to contract types
                 contract_types = {
                     staking_pool.lower(): "Staking Pool",
-                    smart_operator.lower(): "Smart Operator", 
+                    smart_operator.lower(): "Smart Operator",
                     staking_rewards_vault.lower(): "Staking Rewards Vault",
                     incentive_collector.lower(): "Incentive Collector",
                     withdrawal_vault.lower(): "Withdrawal Vault"
                 }
-                
+
                 console.print(f"[dim]Core contracts for reference:[/dim]")
                 console.print(f"[dim]  Staking Pool: {staking_pool}[/dim]")
                 console.print(f"[dim]  Smart Operator: {smart_operator}[/dim]")
                 console.print(f"[dim]  Staking Rewards Vault: {staking_rewards_vault}[/dim]")
                 console.print(f"[dim]  Incentive Collector: {incentive_collector}[/dim]")
                 console.print(f"[dim]  Withdrawal Vault: {withdrawal_vault}[/dim]")
-                
+
                 if staking_pool == "0x0000000000000000000000000000000000000000":
                     console.print(f"[yellow]⚠️  All core contracts are 0x0000...0000 - contracts may not be deployed for this validator[/yellow]")
-                
+
                 console.print()
-                
+
             except Exception as e:
                 console.print(f"[yellow]Could not get core contracts: {e}[/yellow]")
                 contract_types = {}
-            
+
             # Get active reward allocation from BeraChef
             try:
                 res = self.berachef.functions.getActiveRewardAllocation(pubkey_bytes).call()
                 if isinstance(res, (list, tuple)) and len(res) == 2:
                     allocation_start_block = res[0]
                     weights = res[1]
-                    
+
                     if weights:
                         # Collect all vault addresses first
                         all_vault_addresses = [w[0] for w in weights]
-                        
+
                         # Fetch all vault names at once
                         vault_names = self.get_vault_names_from_api(all_vault_addresses)
-                        
-                        
+
+
                         table = Table(show_header=True, header_style="bold magenta")
                         table.add_column("Vault Address", style="cyan")
                         table.add_column("Name", style="green")
                         table.add_column("Percentage", style="yellow")
-                        
+
                         for w in weights:
                             receiver, pct_num = w[0], int(w[1])
-                            
+
                             # Try API lookup first
                             vault_name = vault_names.get(receiver)
-                            
+
                             if vault_name:
                                 display_name = f"{vault_name} ({receiver})"
                             else:
@@ -1497,17 +1527,17 @@ class SmartOperatorManager:
                                 else:
                                     display_name = f"Unknown Vault ({receiver})"
                             table.add_row(receiver, display_name, f"{pct_num/100:.2f}%")
-                        
+
                         console.print(table)
                         console.print(f"[dim]Active since block: {allocation_start_block}[/dim]")
                     else:
                         console.print("[yellow]No active reward allocation found[/yellow]")
                 else:
                     console.print("[yellow]No active reward allocation found[/yellow]")
-                    
+
             except Exception as e:
                 console.print(f"[red]Error getting reward allocation: {e}[/red]")
-            
+
             # Also show queued allocation if any
             try:
                 res = self.berachef.functions.getQueuedRewardAllocation(pubkey_bytes).call()
@@ -1517,13 +1547,13 @@ class SmartOperatorManager:
                     if queued_weights:
                         console.print()
                         console.print("[cyan]📋 Queued Reward Allocation:[/cyan]")
-                        
+
                         # Collect all queued vault addresses
                         queued_vault_addresses = [w[0] for w in queued_weights]
-                        
+
                         # Fetch all queued vault names at once
                         queued_vault_names = self.get_vault_names_from_api(queued_vault_addresses)
-                        
+
                         for w in queued_weights:
                             receiver, pct_num = w[0], int(w[1])
                             vault_name = queued_vault_names.get(receiver)
@@ -1539,7 +1569,7 @@ class SmartOperatorManager:
                         console.print(f"[dim]Will activate at block: {queued_start_block}[/dim]")
             except Exception:
                 pass  # No queued allocation
-            
+
         except Exception as e:
             console.print(f"[red]Error viewing vault info: {e}[/red]")
 
@@ -1548,21 +1578,21 @@ class SmartOperatorManager:
         try:
             console.print()
             console.print(Panel.fit("🔑 Role Management", style="bold cyan"))
-            
+
             user_address = self.account.address
             console.print(f"[cyan]Managing roles for: {user_address}[/cyan]")
             console.print()
-            
+
             # Define all available roles (excluding DEFAULT_ADMIN_ROLE)
             available_roles = [
                 "VALIDATOR_ADMIN_ROLE",
-                "BGT_MANAGER_ROLE", 
+                "BGT_MANAGER_ROLE",
                 "PROTOCOL_FEE_MANAGER_ROLE",
                 "REWARDS_ALLOCATION_MANAGER_ROLE",
                 "COMMISSION_MANAGER_ROLE",
                 "INCENTIVE_COLLECTOR_MANAGER_ROLE"
             ]
-            
+
             # Get current role status
             current_roles = {}
             for role in available_roles:
@@ -1573,16 +1603,16 @@ class SmartOperatorManager:
                 except Exception as e:
                     console.print(f"[red]❌ Error checking {role}: {e}[/red]")
                     current_roles[role] = False
-            
+
             # Show current status
             console.print("[bold]Current Role Status:[/bold]")
             for role in available_roles:
                 status = "✓" if current_roles[role] else "✗"
                 color = "green" if current_roles[role] else "red"
                 console.print(f"  [{color}]{status}[/{color}] {role}")
-            
+
             console.print()
-            
+
             # Interactive role selection
             console.print("[bold]Select roles to toggle:[/bold]")
             console.print("[dim]Press Space to select/deselect, Enter when done[/dim]")
@@ -1592,23 +1622,23 @@ class SmartOperatorManager:
                 current_status = "ON" if current_roles[role] else "OFF"
                 choice_text = f"{role} ({current_status})"
                 choices.append(choice_text)
-            
+
             selected_roles = questionary.checkbox(
                 "Choose roles to toggle:",
                 choices=choices
             ).ask()
-            
+
             if not selected_roles:
                 console.print("[yellow]No changes selected.[/yellow]")
                 return
-            
+
             # Determine what changes to make
             changes = []
             for choice in selected_roles:
                 role = choice.split(" (")[0]  # Remove the (ON/OFF) part
                 current_has_role = current_roles[role]
                 changes.append((role, not current_has_role))  # Toggle the role
-            
+
             # Show planned changes
             console.print()
             console.print("[bold]Planned Changes:[/bold]")
@@ -1616,25 +1646,25 @@ class SmartOperatorManager:
                 action = "Grant" if should_have else "Revoke"
                 color = "green" if should_have else "red"
                 console.print(f"  [{color}]{action}[/{color}] {role}")
-            
+
             console.print()
             if not questionary.confirm("Apply these changes?", default=True).ask():
                 console.print("[yellow]Changes cancelled.[/yellow]")
                 return
-            
+
             # Apply changes
             success_count = 0
             for role, should_have in changes:
                 try:
                     action = "Granting" if should_have else "Revoking"
                     console.print(f"[cyan]{action} {role}...[/cyan]")
-                    
+
                     if role not in ROLES:
                         console.print(f"[red]❌ Unknown role: {role}[/red]")
                         continue
-                    
+
                     role_hash = Web3.to_bytes(hexstr=ROLES[role])
-                    
+
                     if should_have:
                         tx_data = self.operator.functions.grantRole(
                             role_hash,
@@ -1647,19 +1677,19 @@ class SmartOperatorManager:
                             user_address
                         ).build_transaction({'from': self.account.address})
                         self.execute_or_show_calldata(f"revokeRole({role})", tx_data)
-                    
+
                     success_count += 1
-                    
+
                 except Exception as e:
                     console.print(f"[red]❌ Failed to modify {role}: {e}[/red]")
-            
+
             console.print()
             if success_count > 0:
                 console.print(f"[green]✅ Successfully applied {success_count} change(s)[/green]")
                 console.print("[yellow]Note: You may need to refresh the status to see updated roles.[/yellow]")
             else:
                 console.print("[red]❌ No changes were applied successfully.[/red]")
-                
+
         except Exception as e:
             console.print(f"[red]Error managing roles: {e}[/red]")
 
@@ -1667,34 +1697,35 @@ class SmartOperatorManager:
     def build_menu(self) -> List[Tuple[str, str, callable]]:
         """Build menu based on user's roles"""
         menu = [("status", "📊 View Status", self.display_status)]
-        
+
         # BGT Operations (anyone can queue/activate, BGT_MANAGER can drop/redeem)
         menu.append(("queue_boost", "⬆️  Queue Boost (unboosted → boosted)", self.queue_boost_action))
         menu.append(("activate_boost", "✅ Activate Boost", self.activate_boost_action))
-        
+
         if self.roles.get("BGT_MANAGER_ROLE"):
             menu.append(("queue_drop", "⬇️  Queue Drop Boost", self.queue_drop_boost_action))
             menu.append(("drop_boost", "✅ Execute Drop Boost", self.drop_boost_action))
             menu.append(("redeem_bgt", "💰 Redeem BGT for BERA", self.redeem_bgt_action))
-        
+
         # Rewards allocation
         if self.roles.get("REWARDS_ALLOCATION_MANAGER_ROLE"):
             menu.append(("queue_rewards", "📊 Queue Rewards Allocation", self.queue_rewards_allocation_action))
-        
+
         # Commission
         if self.roles.get("COMMISSION_MANAGER_ROLE"):
             menu.append(("register_operator", "🔧 Register as Validator Operator", self.register_as_operator_action))
             menu.append(("queue_commission", "💵 Queue Validator Commission", self.queue_commission_action))
-        
+            menu.append(("activate_commission", "✅ Activate Queued Validator Commission", self.activate_queued_val_commission_action))
+
         # Claims (anyone can call)
         menu.append(("claim_boost_rewards", "🎁 Claim Boost Rewards (HONEY + Incentives) [Recommended]", self.claim_boost_rewards_action))
         menu.append(("claim_honey", "🍯 Claim BGT Staker Rewards (HONEY only)", self.claim_bgt_staker_reward_action))
-        
+
         # Protocol fee management
         if self.roles.get("PROTOCOL_FEE_MANAGER_ROLE"):
             menu.append(("set_fee", "💸 Set Protocol Fee Percentage", self.set_protocol_fee_action))
             menu.append(("accrue_fees", "📈 Accrue Earned BGT Fees", self.accrue_fees_action))
-        
+
         # Role management (available to anyone; contract enforces permissions)
         menu.append(("manage_roles", "🔑 Manage Roles", self.manage_roles_action))
 
@@ -1703,22 +1734,22 @@ class SmartOperatorManager:
     def run(self):
         """Main interactive loop"""
         self.connect()
-        
+
         while True:
             console.print()
             menu_items = self.build_menu()
-            
+
             choices = [item[1] for item in menu_items] + ["🚪 Exit"]
-            
+
             choice = questionary.select(
                 "What would you like to do?",
                 choices=choices
             ).ask()
-            
+
             if choice == "🚪 Exit" or choice is None:
                 console.print("[cyan]Goodbye! 🐻[/cyan]")
                 break
-            
+
             # Find and execute the action
             for key, label, action in menu_items:
                 if label == choice:
@@ -1734,7 +1765,7 @@ def main():
     parser = argparse.ArgumentParser(description="SmartOperator Manager - Interactive validator operations tool")
     parser.add_argument("--show-calldata", action="store_true", help="Show calldata instead of executing transactions")
     args = parser.parse_args()
-    
+
     try:
         manager = SmartOperatorManager(show_calldata=args.show_calldata)
         manager.run()
