@@ -1,7 +1,6 @@
 #!/opt/homebrew/bin/node
 
 const https = require('https');
-const path = require('path');
 const fs = require('fs');
 const child_process = require('child_process');
 
@@ -10,8 +9,7 @@ function parseArgs() {
     const args = process.argv.slice(2);
     const config = {
         el_client: 'reth',
-        snapshot_chain: 'bera-snapshot',
-        geography: 'na',
+        network: 'mainnet',
         snapshot_type: 'pruned'
     };
 
@@ -26,8 +24,12 @@ function parseArgs() {
             case '--network':
             case '-n':
                 if (i + 1 < args.length) {
-                    const network = args[++i];
-                    config.snapshot_chain = network === 'testnet' ? 'bera-testnet-snapshot' : 'bera-snapshot';
+                    const val = args[++i];
+                    if (!['mainnet', 'testnet'].includes(val)) {
+                        console.error('Error: --network must be "mainnet" or "testnet"');
+                        process.exit(1);
+                    }
+                    config.network = val;
                 } else {
                     console.error('Error: --network requires a value (mainnet or testnet)');
                     process.exit(1);
@@ -35,12 +37,8 @@ function parseArgs() {
                 break;
             case '--geography':
             case '-g':
-                if (i + 1 < args.length) {
-                    config.geography = args[++i];
-                } else {
-                    console.error('Error: --geography requires a value (na, eu, or as)');
-                    process.exit(1);
-                }
+                // Deprecated flag — accepted silently for backwards compatibility
+                if (i + 1 < args.length) i++;
                 break;
             case '--type':
             case '-t':
@@ -58,11 +56,6 @@ function parseArgs() {
         }
     }
 
-    // Validate arguments
-    if (!['na', 'eu', 'as'].includes(config.geography)) {
-        console.error('Error: geography must be "na", "eu", or "as"');
-        process.exit(1);
-    }
     if (!['pruned', 'archive'].includes(config.snapshot_type)) {
         console.error('Error: type must be either "pruned" or "archive"');
         process.exit(1);
@@ -81,25 +74,26 @@ Usage: ./fetch-berachain-snapshot.js [options]
 
 Options:
   -n, --network <network>    Network: mainnet or testnet (default: mainnet)
-  -t, --type <type>         Snapshot type: pruned or archive (default: pruned)
-  -h, --help                Show this help message
+  -t, --type <type>          Snapshot type: pruned or archive (default: pruned)
+  -h, --help                 Show this help message
 
 Examples:
-  ./fetch-berachain-snapshot.js                    # Download reth pruned mainnet
+  ./fetch-berachain-snapshot.js                        # Download reth pruned mainnet
   ./fetch-berachain-snapshot.js -n testnet -t archive  # Download reth archive testnet
     `);
 }
 
 const config = parseArgs();
 
+const indexHostname = config.network === 'testnet'
+    ? 'bepolia.snapshots.berachain.com'
+    : 'snapshots.berachain.com';
+
 console.log('Bera Snapshot Downloader');
 console.log('-------------------------');
-console.log(`Network: ${config.snapshot_chain === 'bera-snapshot' ? 'mainnet' : 'testnet'}`);
+console.log(`Network: ${config.network}`);
 console.log(`Client: ${config.el_client}`);
 console.log(`Type: ${config.snapshot_type}`);
-if (config.geography !== 'na') {
-    console.log(`Note: --geography parameter is deprecated and ignored (new service uses single endpoint)`);
-}
 console.log('');
 
 function startDownload(mediaLink, fileName) {
@@ -111,14 +105,14 @@ function startDownload(mediaLink, fileName) {
 	console.log(`\n✓ ${fileName} - Complete`);
 }
 
-// Fetch snapshot index from snapshots.berachain.com
-const indexUrl = 'https://snapshots.berachain.com/index.csv';
+// Fetch snapshot index
+const indexUrl = `https://${indexHostname}/index.csv`;
 console.log('Fetching snapshot index from:');
 console.log(`  ${indexUrl}`);
 console.log('');
 
 const req = https.request({
-	hostname: 'snapshots.berachain.com',
+	hostname: indexHostname,
 	path: '/index.csv',
 	method: 'GET',
 	headers: { 'Accept': 'text/csv' }
@@ -126,13 +120,26 @@ const req = https.request({
 	let data = '';
 	res.on('data', chunk => data += chunk);
 	res.on('end', async () => {
-		// Parse CSV: type,size_bytes,block_number,version,created_at,sha256,url
+		// Parse CSV: type,size_bytes,block_number,version,created_at,sha256,url,url_s3
 		const lines = data.trim().split('\n');
 		if (lines.length < 2) {
 			console.error('Error: Invalid CSV format or no snapshots found');
 			process.exit(1);
 		}
-		
+
+		// Determine column indices from header
+		const header = lines[0].split(',');
+		const colUrl = header.indexOf('url');
+		const colUrlS3 = header.indexOf('url_s3');
+		const colType = header.indexOf('type');
+		const colSizeBytes = header.indexOf('size_bytes');
+		const colCreatedAt = header.indexOf('created_at');
+
+		if (colUrl === -1 || colType === -1) {
+			console.error('Error: Unexpected CSV format — missing required columns');
+			process.exit(1);
+		}
+
 		// Map to snapshot service type names
 		const beaconType = `beacon-kit-${config.snapshot_type}`;
 		const elType = `${config.el_client}-${config.snapshot_type}`;
@@ -147,21 +154,21 @@ const req = https.request({
 			const line = lines[i].trim();
 			if (!line) continue;
 			
-			// Simple CSV parsing (assuming no quoted commas in our data)
 			const fields = line.split(',');
-			if (fields.length < 7) continue;
-			
-			const type = fields[0];
-			const sizeBytes = parseInt(fields[1]);
-			const createdAt = fields[4];
-			const url = fields[6];
+			const type = fields[colType];
+			const sizeBytes = parseInt(fields[colSizeBytes]);
+			const createdAt = fields[colCreatedAt];
+			const url = fields[colUrl];
+			// Prefer S3 URL when available — direct object storage, no proxy
+			const urlS3 = colUrlS3 !== -1 ? fields[colUrlS3] : '';
+			const effectiveUrl = urlS3 || url;
 			
 			// Find latest snapshot for each type
 			if (type === beaconType && (!snapshots.beacon || createdAt > snapshots.beacon.createdAt)) {
-				snapshots.beacon = { url, createdAt, sizeBytes };
+				snapshots.beacon = { url: effectiveUrl, createdAt, sizeBytes };
 			}
 			if (type === elType && (!snapshots.el || createdAt > snapshots.el.createdAt)) {
-				snapshots.el = { url, createdAt, sizeBytes };
+				snapshots.el = { url: effectiveUrl, createdAt, sizeBytes };
 			}
 		}
 		
