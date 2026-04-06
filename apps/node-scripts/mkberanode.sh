@@ -13,7 +13,10 @@
 #     --mode {archive|pruned} \
 #     [--cl-version vX.Y.Z] \
 #     [--el-version vA.B.C] \
-#     [--no-snapshot]
+#     [--no-snapshot] \
+#     [--stream-snapshots] \
+#     [--snapshot-download-dir DIR] \
+#     [--keep-snapshot-downloads]
 
 set -eu
 # Enable pipefail if the shell supports it (bash, zsh). Safe no-op on dash/sh.
@@ -28,6 +31,9 @@ MODE=""               # archive|pruned (required)
 CL_VERSION=""       # e.g. v1.3.2 (empty: latest)
 EL_VERSION=""       # e.g. v1.20.0 (empty: latest)
 USE_SNAPSHOT=1      # if 1, download and install snapshots
+SNAPSHOT_STREAM=0   # if 1, pipe curl|lz4|tar; if 0 (default), download to disk then extract
+SNAPSHOT_KEEP_DOWNLOADS=0  # if 1, keep .tar.lz4 after successful extract
+SNAPSHOT_DOWNLOAD_DIR=""  # empty: default under BASE_DIR (set after BASE_DIR)
 SNAPSHOT_GEOGRAPHY="na"  # na|eu|as for snapshot region
 SNAPSHOT_GEOGRAPHY_PROVIDED=0  # track if --snapshot-geography was explicitly provided
 
@@ -39,6 +45,8 @@ EL_HOME="$BASE_DIR/var/el"
 CONFIG_DIR="$BASE_DIR/chainspec"
 RUNTIME_DIR="$BASE_DIR/runtime"
 JWT_PATH="$RUNTIME_DIR/jwt.hex"
+# Populated after BASE_DIR is defined (default snapshot cache location)
+SNAPSHOT_DOWNLOAD_DIR_DEFAULT="$BASE_DIR/var/snapshot-downloads"
 
 # Systemd
 EL_SERVICE="berachain-el.service"
@@ -72,12 +80,26 @@ need_cmd() { command -v "$1" >/dev/null 2>&1 || { err "Required command '$1' not
 print_usage() {
   cat <<EOF
 Usage:
-  sudo $0 --chain {mainnet|bepolia} --mode {archive|pruned} [--cl-version vX.Y.Z] [--el-version vA.B.C] [--no-snapshot]
+  sudo $0 --chain {mainnet|bepolia} --mode {archive|pruned}
+    [--cl-version vX.Y.Z] [--el-version vA.B.C]
+    [--no-snapshot]
+    [--stream-snapshots]
+    [--snapshot-download-dir DIR]
+    [--keep-snapshot-downloads]
+
+Snapshot transfer (default: download archives under $SNAPSHOT_DOWNLOAD_DIR_DEFAULT then extract;
+uses aria2c when installed for resumable multi-connection downloads, else curl with resume):
+
+  --stream-snapshots          Stream over the network (curl | lz4 | tar), no full archive on disk
+  --snapshot-download-dir     Override download directory (default: $SNAPSHOT_DOWNLOAD_DIR_DEFAULT)
+  --keep-snapshot-downloads   Keep .tar.lz4 files after successful extract
 
 Examples:
   sudo $0 --chain mainnet --mode archive
   sudo $0 --chain bepolia --mode pruned --cl-version v1.3.2 --el-version v1.19.5
   sudo $0 --chain mainnet --mode pruned --no-snapshot
+  sudo $0 --chain mainnet --mode archive --stream-snapshots
+  sudo $0 --chain mainnet --mode archive --snapshot-download-dir /mnt/nvme/snapshots
 
 EOF
 }
@@ -103,6 +125,9 @@ while [[ $# -gt 0 ]]; do
     --cl-version) CL_VERSION="${2:-}"; shift 2;;
     --el-version) EL_VERSION="${2:-}"; shift 2;;
     --no-snapshot) USE_SNAPSHOT=0; shift 1;;
+    --stream-snapshots) SNAPSHOT_STREAM=1; shift 1;;
+    --snapshot-download-dir) SNAPSHOT_DOWNLOAD_DIR="${2:-}"; shift 2;;
+    --keep-snapshot-downloads) SNAPSHOT_KEEP_DOWNLOADS=1; shift 1;;
     --snapshot-geography) SNAPSHOT_GEOGRAPHY="${2:-}"; SNAPSHOT_GEOGRAPHY_PROVIDED=1; shift 2;;
     -h|--help) print_usage; exit 0;;
     *) err "Unknown arg: $1"; print_usage; exit 1;;
@@ -126,6 +151,14 @@ case "${SNAPSHOT_GEOGRAPHY:-}" in
   na|eu|as) ;;
   *) err "--snapshot-geography must be na, eu, or as"; exit 1;;
 esac
+
+if [[ -z "${SNAPSHOT_DOWNLOAD_DIR}" ]]; then
+  SNAPSHOT_DOWNLOAD_DIR="$SNAPSHOT_DOWNLOAD_DIR_DEFAULT"
+fi
+if [[ "${SNAPSHOT_DOWNLOAD_DIR}" != /* ]]; then
+  err "--snapshot-download-dir must be an absolute path"
+  exit 1
+fi
 
 # ------------------------------
 # OS detection & dependency install (Debian/Ubuntu)
@@ -166,6 +199,10 @@ maybe_install_deps_debian() {
   apt_install_if_missing openssl openssl || warn "Failed to install openssl - JWT generation may fail"
   # ca-certificates ensures TLS works for curl to GitHub
   apt_install_if_missing ca-certificates update-ca-certificates || warn "Failed to update ca-certificates - TLS may fail"
+  # Resumable multi-connection snapshot downloads (optional; curl resume is fallback)
+  if [[ $USE_SNAPSHOT -eq 1 && $SNAPSHOT_STREAM -eq 0 ]]; then
+    apt_install_if_missing aria2 aria2c || info "aria2 not installed; snapshot downloads will use curl with resume"
+  fi
 }
 
 # Enforce Debian/Ubuntu systems only
@@ -298,9 +335,9 @@ parse_snapshot_urls() {
     else "" end
   ' | tr -d '\r\n' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
   
-  # Extract filename from URL
+  # Extract filename from URL (strip query string)
   if [[ -n "$beacon_url" ]]; then
-    beacon_name=$(echo "$beacon_url" | sed 's|.*/||')
+    beacon_name=$(echo "$beacon_url" | sed 's|.*/||;s/?.*//')
     echo "BEACON_URL='$beacon_url'"
     echo "BEACON_NAME='$beacon_name'"
   else
@@ -309,7 +346,7 @@ parse_snapshot_urls() {
   fi
   
   if [[ -n "$el_url" ]]; then
-    el_name=$(echo "$el_url" | sed 's|.*/||')
+    el_name=$(echo "$el_url" | sed 's|.*/||;s/?.*//')
     echo "EL_URL='$el_url'"
     echo "EL_NAME='$el_name'"
   else
@@ -318,7 +355,57 @@ parse_snapshot_urls() {
   fi
 }
 
-:
+# Stored archive basename: avoids collisions if the same download dir is reused across chains
+snapshot_stored_archive_name() {
+  local url="$1"
+  local base
+  base=$(echo "$url" | sed 's|.*/||;s/?.*//')
+  echo "${CHAIN}__${base}"
+}
+
+download_snapshot_archive() {
+  local url="$1"
+  local output_path="$2"
+  local desc="${3:-snapshot}"
+  local out_dir out_base
+  out_dir=$(dirname "$output_path")
+  out_base=$(basename "$output_path")
+  mkdir -p "$out_dir"
+  if command -v aria2c >/dev/null 2>&1; then
+    info "Downloading $desc with aria2c (resumable) → $output_path"
+    aria2c --continue=true --max-connection-per-server=16 --split=16 --min-split-size=4M \
+      --file-allocation=none --dir="$out_dir" --out="$out_base" "$url"
+  else
+    info "Downloading $desc with curl (resume if partial) → $output_path"
+    curl -fL --continue-at - --output "$output_path" "$url"
+  fi
+}
+
+extract_lz4_tar_to() {
+  local archive="$1"
+  local dest="$2"
+  mkdir -p "$dest"
+  lz4 -dc "$archive" | tar -xf - -C "$dest"
+}
+
+disk_extract_snapshot() {
+  local url="$1" dest="$2" stored_name="$3" label="$4"
+  local path="$SNAPSHOT_DOWNLOAD_DIR/$stored_name"
+  mkdir -p "$SNAPSHOT_DOWNLOAD_DIR"
+  if ! download_snapshot_archive "$url" "$path" "$label"; then
+    return 1
+  fi
+  if ! extract_lz4_tar_to "$path" "$dest"; then
+    warn "Extraction failed; leaving $path for inspection or resume"
+    return 1
+  fi
+  if [[ $SNAPSHOT_KEEP_DOWNLOADS -eq 0 ]]; then
+    rm -f "$path" "${path}.aria2" 2>/dev/null || true
+  else
+    info "Kept snapshot archive: $path"
+    chown berachain:berachain "$path" 2>/dev/null || true
+  fi
+}
 
 stream_extract() {
   local url="$1" dest="$2" description="$3"
@@ -353,9 +440,13 @@ install_snapshots() {
   BEACON_URL="" EL_URL=""
   eval "$snapshot_info"
 
-  info "Installing snapshots (streaming)..."
+  if [[ $SNAPSHOT_STREAM -eq 1 ]]; then
+    info "Installing snapshots (streaming download)..."
+  else
+    info "Installing snapshots (download to $SNAPSHOT_DOWNLOAD_DIR then extract)..."
+  fi
 
-  # Beacon snapshot (stream)
+  # Beacon snapshot
   if [[ -n "${BEACON_URL:-}" ]]; then
     # Check if we should skip due to existing data
     local should_skip=0
@@ -365,18 +456,26 @@ install_snapshots() {
     fi
     
     if [[ $should_skip -eq 0 ]]; then
-      info "Streaming beacon snapshot"
-      if stream_extract "$BEACON_URL" "$CL_HOME/data" "beacon snapshot"; then
+      local ok=0
+      if [[ $SNAPSHOT_STREAM -eq 1 ]]; then
+        info "Streaming beacon snapshot"
+        stream_extract "$BEACON_URL" "$CL_HOME/data" "beacon snapshot" && ok=1 || ok=0
+      else
+        local stored
+        stored="$(snapshot_stored_archive_name "$BEACON_URL")"
+        disk_extract_snapshot "$BEACON_URL" "$CL_HOME/data" "$stored" "beacon snapshot" && ok=1 || ok=0
+      fi
+      if [[ $ok -eq 1 ]]; then
         chown -R berachain:berachain "$CL_HOME" 2>/dev/null || warn "Failed to set ownership for CL snapshot data"
       else
-        warn "Beacon snapshot streaming failed; will sync from genesis"
+        warn "Beacon snapshot install failed; will sync from genesis"
       fi
     fi
   else
     info "No beacon snapshot URL; will sync from genesis"
   fi
 
-  # Execution snapshot (stream)
+  # Execution snapshot
   if [[ -n "${EL_URL:-}" ]]; then
     # Check if we should skip due to existing data
     local should_skip=0
@@ -387,18 +486,33 @@ install_snapshots() {
     if [[ $should_skip -eq 1 ]]; then
       info "Detected existing EL data; skipping execution snapshot"
     else
-      info "Streaming execution layer snapshot"
-      if stream_extract_el "$EL_URL" "$EL_CHOICE" "$EL_HOME" "execution layer snapshot"; then
+      local ok=0
+      if [[ $SNAPSHOT_STREAM -eq 1 ]]; then
+        info "Streaming execution layer snapshot"
+        stream_extract_el "$EL_URL" "$EL_CHOICE" "$EL_HOME" "execution layer snapshot" && ok=1 || ok=0
+      else
+        local stored
+        stored="$(snapshot_stored_archive_name "$EL_URL")"
+        disk_extract_snapshot "$EL_URL" "$EL_HOME/data" "$stored" "execution layer snapshot" && ok=1 || ok=0
+      fi
+      if [[ $ok -eq 1 ]]; then
         chown -R berachain:berachain "$EL_HOME" 2>/dev/null || warn "Failed to set ownership for EL snapshot data"
       else
-        warn "Execution snapshot streaming failed; will sync from genesis"
+        warn "Execution snapshot install failed; will sync from genesis"
       fi
     fi
   else
     info "No execution snapshot URL; will sync from genesis"
   fi
 
-  info "Snapshot installation (streaming) completed"
+  if [[ $SNAPSHOT_STREAM -eq 1 ]]; then
+    info "Snapshot installation (streaming) completed"
+  else
+    if [[ "$SNAPSHOT_DOWNLOAD_DIR" == "$BASE_DIR"/* ]]; then
+      chown -R berachain:berachain "$SNAPSHOT_DOWNLOAD_DIR" 2>/dev/null || true
+    fi
+    info "Snapshot installation (download + extract) completed"
+  fi
 }
 
 # ------------------------------
