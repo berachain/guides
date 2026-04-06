@@ -251,8 +251,12 @@ gh_asset_url_by_tag_and_match() {
 # ------------------------------
 fetch_snapshot_index() {
   local snapshot_chain="$1"
-  local index_url="https://snapshots.berachain.com/index.csv"
-  
+  local index_url
+  case "$snapshot_chain" in
+    bepolia) index_url="https://bepolia.snapshots.berachain.com/index.csv" ;;
+    mainnet|*) index_url="https://snapshots.berachain.com/index.csv" ;;
+  esac
+
   info "Fetching snapshot index from: $index_url" >&2
   curl -fsSL "$index_url"
 }
@@ -264,8 +268,8 @@ parse_snapshot_urls() {
   local beacon_type="beacon-kit-${snapshot_type}"
   local el_type="${el_client}-${snapshot_type}"
   
-  # Parse CSV to find latest snapshots (CSV is: type,size_bytes,block_number,version,created_at,sha256,url)
-  # Sort by created_at descending and take first match for each type
+  # Parse CSV to find latest snapshots (CSV: type,size_bytes,block_number,version,created_at,sha256,url,url_s3)
+  # Prefer url_s3 (object storage / CDN) when present; else HTTPS url. Sort by created_at descending.
   local beacon_url el_url beacon_name el_name
   
   beacon_url=$(echo "$csv_data" | jq -sR -r --arg type "$beacon_type" '
@@ -274,7 +278,11 @@ parse_snapshot_urls() {
     map(split(",")) |
     map(select(.[0] == $type)) |
     sort_by(.[4]) | reverse | .[0] // empty |
-    if . then .[6] // "" else "" end
+    if . then
+      ((.[7] // "") | gsub("^[\t ]+|[\t ]+$"; "")) as $s3 |
+      if ($s3 | length) > 0 then $s3
+      else ((.[6] // "") | gsub("^[\t ]+|[\t ]+$"; "")) end
+    else "" end
   ' | tr -d '\r\n' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
   
   el_url=$(echo "$csv_data" | jq -sR -r --arg type "$el_type" '
@@ -283,7 +291,11 @@ parse_snapshot_urls() {
     map(split(",")) |
     map(select(.[0] == $type)) |
     sort_by(.[4]) | reverse | .[0] // empty |
-    if . then .[6] // "" else "" end
+    if . then
+      ((.[7] // "") | gsub("^[\t ]+|[\t ]+$"; "")) as $s3 |
+      if ($s3 | length) > 0 then $s3
+      else ((.[6] // "") | gsub("^[\t ]+|[\t ]+$"; "")) end
+    else "" end
   ' | tr -d '\r\n' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
   
   # Extract filename from URL
@@ -326,7 +338,7 @@ install_snapshots() {
   fi
   
   # Resolve snapshot URLs
-  info "Resolving snapshot URLs from snapshots.berachain.com..."
+  info "Resolving snapshot URLs from chain snapshot index (${CHAIN})..."
   if [[ $SNAPSHOT_GEOGRAPHY_PROVIDED -eq 1 ]]; then
     warn "Note: --snapshot-geography parameter is deprecated and ignored (new service uses single endpoint)"
   fi
