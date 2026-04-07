@@ -1,27 +1,30 @@
 #!/usr/bin/env node
 
 /**
- * Standalone Berachain snapshot downloader. No env.sh or other repo files required.
- * Requires Node.js 18+ (global fetch + stream helpers).
+ * Berachain snapshot downloader. No env.sh required.
+ * Index: mainnet uses snapshots.berachain.com; testnet uses bepolia.snapshots.berachain.com.
+ * Large downloads use curl (-C) for resume; install curl on PATH.
  */
 
 const fs = require('fs');
 const path = require('path');
-const { pipeline } = require('stream/promises');
-const { createWriteStream } = require('fs');
-const { Readable } = require('stream');
+const child_process = require('child_process');
 
-const DEFAULT_INDEX = 'https://snapshots.berachain.com/index.csv';
 const DEFAULT_OUTPUT = 'downloads';
+
+function defaultIndexUrl(network) {
+    const host =
+        network === 'testnet' ? 'bepolia.snapshots.berachain.com' : 'snapshots.berachain.com';
+    return `https://${host}/index.csv`;
+}
 
 function parseArgs() {
     const args = process.argv.slice(2);
     const config = {
         el_client: 'reth',
-        snapshot_chain: 'bera-snapshot',
+        network: 'mainnet',
         snapshot_type: 'pruned',
         outputDir: DEFAULT_OUTPUT,
-        indexUrl: DEFAULT_INDEX,
         beaconOnly: false,
         elOnly: false
     };
@@ -41,9 +44,12 @@ function parseArgs() {
                     process.exit(1);
                 }
                 {
-                    const network = args[++i];
-                    config.snapshot_chain =
-                        network === 'testnet' ? 'bera-testnet-snapshot' : 'bera-snapshot';
+                    const val = args[++i];
+                    if (!['mainnet', 'testnet'].includes(val)) {
+                        console.error('Error: --network must be "mainnet" or "testnet"');
+                        process.exit(1);
+                    }
+                    config.network = val;
                 }
                 break;
             case '--type':
@@ -62,13 +68,6 @@ function parseArgs() {
                 }
                 config.outputDir = args[++i];
                 break;
-            case '--index-url':
-                if (i + 1 >= args.length) {
-                    console.error('Error: --index-url requires a URL');
-                    process.exit(1);
-                }
-                config.indexUrl = args[++i];
-                break;
             case '--el-client':
                 if (i + 1 >= args.length) {
                     console.error('Error: --el-client requires a value (e.g. reth)');
@@ -82,15 +81,6 @@ function parseArgs() {
             case '--execution-only':
             case '--el-only':
                 config.elOnly = true;
-                break;
-            case '--geography':
-            case '-g':
-                if (i + 1 < args.length && !args[i + 1].startsWith('-')) {
-                    i++;
-                }
-                console.error(
-                    'Warning: --geography is deprecated and ignored (single index endpoint).'
-                );
                 break;
             default:
                 console.error(`Error: Unknown option ${arg}`);
@@ -112,10 +102,13 @@ function parseArgs() {
 }
 
 function showHelp() {
+    const defMain = defaultIndexUrl('mainnet');
+    const defTest = defaultIndexUrl('testnet');
     console.log(`
 Bera Snapshot Downloader
 
-Standalone script: no env file or other repo files required (Node.js 18+).
+Downloads beacon-kit and execution snapshots from the Berachain snapshot index (CSV).
+Requires Node.js 18+ for index fetch and curl on PATH for resumable downloads.
 
 Usage: node fetch-berachain-snapshot.js [options]
 
@@ -123,21 +116,26 @@ Options:
   -n, --network <network>     mainnet or testnet (default: mainnet)
   -t, --type <type>           pruned or archive (default: pruned)
   -o, --output <dir>          download directory (default: downloads)
-      --index-url <url>       snapshot index CSV URL (default: ${DEFAULT_INDEX})
-      --el-client <name>      execution snapshot type prefix in index (default: reth)
-      --beacon-only           download only the beacon-kit snapshot
+      --el-client <name>      execution row prefix in CSV (default: reth)
+      --beacon-only           beacon-kit snapshot only
       --execution-only, --el-only
-                              download only the execution-layer snapshot
+                              execution-layer snapshot only
   -h, --help                  show this help
 
-Deprecated (ignored):
-  -g, --geography             kept for backward compatibility
+Index CSV: ${defMain} (mainnet), ${defTest} (testnet)
 
 Examples:
   node fetch-berachain-snapshot.js
   node fetch-berachain-snapshot.js -n testnet -t archive -o /var/snapshots
   node fetch-berachain-snapshot.js --execution-only -o ./downloads
 `);
+}
+
+function startDownload(mediaLink, destPath) {
+    fs.mkdirSync(path.dirname(destPath), { recursive: true });
+    console.log(`\nDownloading ${path.basename(destPath)}`);
+    child_process.execSync(`curl -L -C - -o "${destPath}" "${mediaLink}"`, { stdio: 'inherit' });
+    console.log(`\n✓ ${path.basename(destPath)} - Complete`);
 }
 
 async function fetchText(url) {
@@ -148,37 +146,24 @@ async function fetchText(url) {
     return res.text();
 }
 
-async function downloadToFile(url, destPath) {
-    await fs.promises.mkdir(path.dirname(destPath), { recursive: true });
-    const res = await fetch(url, { redirect: 'follow' });
-    if (!res.ok) {
-        throw new Error(`HTTP ${res.status} ${res.statusText}`);
-    }
-    if (!res.body) {
-        throw new Error('Empty response body');
-    }
-    const nodeStream = Readable.fromWeb(res.body);
-    await pipeline(nodeStream, createWriteStream(destPath));
-}
-
-const config = parseArgs();
-
-console.log('Bera Snapshot Downloader');
-console.log('-------------------------');
-console.log(`Network: ${config.snapshot_chain === 'bera-snapshot' ? 'mainnet' : 'testnet'}`);
-console.log(`Client: ${config.el_client}`);
-console.log(`Type: ${config.snapshot_type}`);
-console.log(`Output: ${path.resolve(config.outputDir)}`);
-console.log(`Index: ${config.indexUrl}`);
-console.log('');
-
 async function main() {
+    const config = parseArgs();
+    const indexUrl = defaultIndexUrl(config.network);
+
+    console.log('Bera Snapshot Downloader');
+    console.log('-------------------------');
+    console.log(`Network: ${config.network}`);
+    console.log(`Client: ${config.el_client}`);
+    console.log(`Type: ${config.snapshot_type}`);
+    console.log(`Output: ${path.resolve(config.outputDir)}`);
+    console.log(`Index: ${indexUrl}`);
+    console.log('');
     console.log('Fetching snapshot index...');
     console.log('');
 
     let data;
     try {
-        data = await fetchText(config.indexUrl);
+        data = await fetchText(indexUrl);
     } catch (err) {
         console.error(`Error: ${err.message}`);
         process.exit(1);
@@ -190,9 +175,20 @@ async function main() {
         process.exit(1);
     }
 
+    const header = lines[0].split(',');
+    const colUrl = header.indexOf('url');
+    const colUrlS3 = header.indexOf('url_s3');
+    const colType = header.indexOf('type');
+    const colSizeBytes = header.indexOf('size_bytes');
+    const colCreatedAt = header.indexOf('created_at');
+
+    if (colUrl === -1 || colType === -1) {
+        console.error('Error: Unexpected CSV format — missing required columns');
+        process.exit(1);
+    }
+
     const beaconType = `beacon-kit-${config.snapshot_type}`;
     const elType = `${config.el_client}-${config.snapshot_type}`;
-
     const snapshots = { beacon: null, el: null };
 
     for (let i = 1; i < lines.length; i++) {
@@ -200,20 +196,20 @@ async function main() {
         if (!line) continue;
 
         const fields = line.split(',');
-        if (fields.length < 7) continue;
-
-        const type = fields[0];
-        const createdAt = fields[4];
-        const url = fields[6];
+        const type = fields[colType];
+        const createdAt = fields[colCreatedAt];
+        const url = fields[colUrl];
+        const urlS3 = colUrlS3 !== -1 ? fields[colUrlS3] : '';
+        const effectiveUrl = urlS3 || url;
 
         if (
             type === beaconType &&
             (!snapshots.beacon || createdAt > snapshots.beacon.createdAt)
         ) {
-            snapshots.beacon = { url, createdAt };
+            snapshots.beacon = { url: effectiveUrl, createdAt };
         }
         if (type === elType && (!snapshots.el || createdAt > snapshots.el.createdAt)) {
-            snapshots.el = { url, createdAt };
+            snapshots.el = { url: effectiveUrl, createdAt };
         }
     }
 
@@ -257,12 +253,10 @@ async function main() {
     }
 
     for (const item of downloadsToQueue) {
-        const filePath = path.join(config.outputDir, item.name);
+        const destPath = path.join(config.outputDir, item.name);
         console.log(`Starting download: ${item.name}`);
         try {
-            console.log(`\nDownloading ${item.name}`);
-            await downloadToFile(item.mediaLink, filePath);
-            console.log(`\n✓ ${item.name} - Complete`);
+            startDownload(item.mediaLink, destPath);
         } catch (err) {
             console.error(`Error downloading ${item.name}: ${err.message}`);
             process.exit(1);
