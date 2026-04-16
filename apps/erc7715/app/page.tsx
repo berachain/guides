@@ -1,45 +1,52 @@
-'use client'
+"use client";
 
-import { useCallback } from 'react'
-import { RedeemSection } from '@/components/RedeemSection'
-import { RequestPermissionsSection } from '@/components/RequestPermissionsSection'
-import { SupportedPermissions } from '@/components/SupportedPermissions'
-import { UnsupportedBanner } from '@/components/UnsupportedBanner'
-import { useStoredPermission, type StoredGrant } from '@/hooks/useStoredPermission'
-import { useWalletSupport } from '@/hooks/useWalletSupport'
-import { useConnect, useConnection, useDisconnect } from 'wagmi'
+import { useCallback } from "react";
+import { RedeemSection } from "@/components/RedeemSection";
+import { RequestPermissionsSection } from "@/components/RequestPermissionsSection";
+import { SupportedPermissions } from "@/components/SupportedPermissions";
+import { UnsupportedBanner } from "@/components/UnsupportedBanner";
+import {
+  useStoredPermission,
+  type StoredGrant,
+} from "@/hooks/useStoredPermission";
+import { useWalletSupport } from "@/hooks/useWalletSupport";
+import { useConnect, useConnection, useDisconnect } from "wagmi";
 
 export default function HomePage() {
-  const { address, isConnected, status } = useConnection()
-  const { connect, connectors, isPending: isConnectPending } = useConnect()
-  const { disconnect } = useDisconnect()
-  const support = useWalletSupport()
+  const { address, isConnected, status } = useConnection();
+  const { connect, connectors, isPending: isConnectPending } = useConnect();
+  const { disconnect } = useDisconnect();
+  const support = useWalletSupport();
 
-  const { grant, setGrant, clear: clearGrant } = useStoredPermission()
+  const { grant, setGrant, clear: clearGrant } = useStoredPermission();
 
   const handleGrantChange = useCallback(
     (next: StoredGrant | null) => setGrant(next),
     [setGrant],
-  )
+  );
 
-  const metaMask = connectors.find((c) => c.type === 'metaMask')
+  const metaMask = connectors.find((c) => c.type === "metaMask");
 
   const showPhase2Request =
     isConnected &&
-    status === 'connected' &&
+    status === "connected" &&
     !support.isLoading &&
     !support.isUnsupported &&
-    support.data !== undefined
+    support.data !== undefined;
 
   return (
     <div className="flex min-h-full flex-1 flex-col bg-[#0A0A0A] text-zinc-100">
       <header className="border-b border-[#2A2A2A] bg-[#0A0A0A]/90 backdrop-blur">
         <div className="mx-auto flex max-w-5xl flex-col gap-4 px-4 py-10 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight text-white sm:text-3xl">ERC-7715 execution permissions</h1>
+            <h1 className="text-2xl font-bold tracking-tight text-white sm:text-3xl">
+              ERC-7715 execution permissions
+            </h1>
             <p className="mt-2 max-w-xl text-sm text-zinc-400">
-              Probe the connected wallet for{' '}
-              <span className="font-mono text-xs text-zinc-300">wallet_getSupportedExecutionPermissions</span>
+              Probe the connected wallet for{" "}
+              <span className="font-mono text-xs text-zinc-300">
+                wallet_getSupportedExecutionPermissions
+              </span>
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -50,11 +57,14 @@ export default function HomePage() {
                 disabled={!metaMask || isConnectPending}
                 onClick={() => metaMask && connect({ connector: metaMask })}
               >
-                {isConnectPending ? 'Connecting…' : 'Connect Wallet'}
+                {isConnectPending ? "Connecting…" : "Connect Wallet"}
               </button>
             ) : (
               <>
-                <span className="truncate font-mono text-xs text-zinc-400 sm:max-w-48" title={address}>
+                <span
+                  className="truncate font-mono text-xs text-zinc-400 sm:max-w-48"
+                  title={address}
+                >
                   {address}
                 </span>
                 <button
@@ -71,9 +81,10 @@ export default function HomePage() {
       </header>
 
       <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col space-y-10 px-4 py-10 pb-40">
-        {!isConnected || status !== 'connected' ? (
+        {!isConnected || status !== "connected" ? (
           <p className="rounded-xl border border-dashed border-[#2A2A2A] bg-[#1A1A1A]/50 px-4 py-8 text-center text-sm text-zinc-500">
-            Connect MetaMask to automatically check execution permission support on Berachain networks.
+            Connect MetaMask to automatically check execution permission support
+            on Berachain networks.
           </p>
         ) : (
           <>
@@ -90,16 +101,27 @@ export default function HomePage() {
                 className="rounded-xl border border-red-500/40 bg-red-500/15 px-4 py-4 text-sm text-red-400"
                 role="alert"
               >
-                <p className="font-medium text-red-300">Could not read supported permissions</p>
-                {support.errorMessage && <p className="mt-2 font-mono text-xs">{support.errorMessage}</p>}
+                <p className="font-medium text-red-300">
+                  Could not read supported permissions
+                </p>
+                {support.errorMessage && (
+                  <p className="mt-2 font-mono text-xs">
+                    {support.errorMessage}
+                  </p>
+                )}
                 {support.errorCode !== undefined && (
-                  <p className="mt-1 font-mono text-xs text-red-300/90">RPC code: {support.errorCode}</p>
+                  <p className="mt-1 font-mono text-xs text-red-300/90">
+                    RPC code: {support.errorCode}
+                  </p>
                 )}
               </div>
             )}
 
             {support.data && support.rawResponse !== undefined && (
-              <SupportedPermissions data={support.data} rawResponse={support.rawResponse} />
+              <SupportedPermissions
+                data={support.data}
+                rawResponse={support.rawResponse}
+              />
             )}
 
             {showPhase2Request && support.data ? (
@@ -110,10 +132,13 @@ export default function HomePage() {
               />
             ) : null}
 
-            <RedeemSection initialResponse={grant?.response ?? null} onClear={clearGrant} />
+            <RedeemSection
+              initialResponse={grant?.response ?? null}
+              onClear={clearGrant}
+            />
           </>
         )}
       </main>
     </div>
-  )
+  );
 }

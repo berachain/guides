@@ -1,20 +1,25 @@
-import type { GetSupportedExecutionPermissionsResult } from '@/types/erc7715'
-import { hexChainIdToNumericString } from '@/lib/executionPermissionsDisplay'
+import type { GetSupportedExecutionPermissionsResult } from "@/types/erc7715";
+import { hexChainIdToNumericString } from "@/lib/executionPermissionsDisplay";
 
 export type SupportedPermissionsProps = {
-  data: GetSupportedExecutionPermissionsResult
-  rawResponse: unknown
-}
+  data: GetSupportedExecutionPermissionsResult;
+  rawResponse: unknown;
+};
 
-export function SupportedPermissions({ data, rawResponse }: SupportedPermissionsProps) {
+export function SupportedPermissions({
+  data,
+  rawResponse,
+}: SupportedPermissionsProps) {
   const rows = Object.entries(data).map(([permissionType, value]) => ({
     permissionType,
     chainIds: value.chainIds,
     ruleTypes: value.ruleTypes,
-  }))
+  }));
 
   const rawJson =
-    typeof rawResponse === 'string' ? rawResponse : JSON.stringify(rawResponse, null, 2)
+    typeof rawResponse === "string"
+      ? rawResponse
+      : JSON.stringify(rawResponse, null, 2);
 
   return (
     <details className="group overflow-hidden rounded-xl border border-[#2A2A2A] bg-[#1A1A1A]">
@@ -30,9 +35,13 @@ export function SupportedPermissions({ data, rawResponse }: SupportedPermissions
                 <span className="hidden group-open:inline">Hide</span>
               </span>
             </div>
-            <p className="mt-1 text-xs text-zinc-500">Parsed from the wallet response</p>
+            <p className="mt-1 text-xs text-zinc-500">
+              Parsed from the wallet response
+            </p>
             {rows.length === 0 ? (
-              <p className="mt-3 text-xs text-zinc-500">No supported permission types</p>
+              <p className="mt-3 text-xs text-zinc-500">
+                No supported permission types
+              </p>
             ) : (
               <div className="mt-3 flex flex-wrap gap-2">
                 {rows.map((row) => (
@@ -55,8 +64,18 @@ export function SupportedPermissions({ data, rawResponse }: SupportedPermissions
             aria-hidden
             className="mt-1 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-[#2A2A2A] bg-[#141414] text-zinc-400 transition-transform group-open:rotate-180"
           >
-            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            <svg
+              className="h-4 w-4"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M19 9l-7 7-7-7"
+              />
             </svg>
           </span>
         </div>
@@ -77,7 +96,8 @@ export function SupportedPermissions({ data, rawResponse }: SupportedPermissions
               {rows.length === 0 ? (
                 <tr>
                   <td className="px-4 py-6 text-sm text-zinc-500" colSpan={4}>
-                    The wallet reported no supported execution permission types (empty object).
+                    The wallet reported no supported execution permission types
+                    (empty object).
                   </td>
                 </tr>
               ) : (
@@ -96,7 +116,9 @@ export function SupportedPermissions({ data, rawResponse }: SupportedPermissions
                     <td className="px-4 py-3 font-mono text-xs text-zinc-400">
                       <ul className="flex flex-col gap-1">
                         {row.chainIds.map((id) => (
-                          <li key={`${row.permissionType}-${id}-num`}>{hexChainIdToNumericString(id)}</li>
+                          <li key={`${row.permissionType}-${id}-num`}>
+                            {hexChainIdToNumericString(id)}
+                          </li>
                         ))}
                       </ul>
                     </td>
@@ -118,7 +140,9 @@ export function SupportedPermissions({ data, rawResponse }: SupportedPermissions
 
         <section className="mx-4 overflow-hidden rounded-xl border border-[#2A2A2A] bg-[#0A0A0A]">
           <div className="border-b border-[#2A2A2A] px-4 py-3">
-            <h3 className="text-sm font-semibold text-zinc-100">Raw wallet response</h3>
+            <h3 className="text-sm font-semibold text-zinc-100">
+              Raw wallet response
+            </h3>
           </div>
           <pre className="max-h-112 overflow-auto p-4 font-mono text-xs leading-relaxed text-zinc-300">
             {rawJson}
@@ -126,5 +150,5 @@ export function SupportedPermissions({ data, rawResponse }: SupportedPermissions
         </section>
       </div>
     </details>
-  )
+  );
 }

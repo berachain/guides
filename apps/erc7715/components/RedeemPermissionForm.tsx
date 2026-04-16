@@ -1,149 +1,165 @@
-'use client'
+"use client";
 
-import { type FormEvent, useEffect, useMemo, useState } from 'react'
-import { getAddress, isAddress, parseEther, parseUnits } from 'viem'
-import { berachain, berachainTestnetbArtio } from 'viem/chains'
-import { useRedeemPermission } from '@/hooks/useRedeemPermission'
-import type { PermissionResponse } from '@/types/erc7715'
+import { type FormEvent, useEffect, useMemo, useState } from "react";
+import { getAddress, isAddress, parseEther, parseUnits } from "viem";
+import { berachain, berachainTestnetbArtio } from "viem/chains";
+import { useRedeemPermission } from "@/hooks/useRedeemPermission";
+import type { PermissionResponse } from "@/types/erc7715";
 
-const ERC20_DECIMALS = 18
+const ERC20_DECIMALS = 18;
 
-const SUPPORTED_CHAINS = [berachain, berachainTestnetbArtio]
+const SUPPORTED_CHAINS = [berachain, berachainTestnetbArtio];
 
 function getExplorerTxUrl(chainIdHex: string, txHash: string): string | null {
-  const chainId = Number(chainIdHex)
-  const chain = SUPPORTED_CHAINS.find((c) => c.id === chainId)
-  const baseUrl = chain?.blockExplorers?.default?.url
-  if (!baseUrl) return null
-  return `${baseUrl}/tx/${txHash}`
+  const chainId = Number(chainIdHex);
+  const chain = SUPPORTED_CHAINS.find((c) => c.id === chainId);
+  const baseUrl = chain?.blockExplorers?.default?.url;
+  if (!baseUrl) return null;
+  return `${baseUrl}/tx/${txHash}`;
 }
 
 function formatTimestamp(ts: number): string {
   return new Intl.DateTimeFormat(undefined, {
-    dateStyle: 'medium',
-    timeStyle: 'medium',
-  }).format(new Date(ts * 1000))
+    dateStyle: "medium",
+    timeStyle: "medium",
+  }).format(new Date(ts * 1000));
 }
 
 function truncateHex(hex: string, leading = 6, trailing = 4): string {
-  if (!hex.startsWith('0x') || hex.length <= leading + trailing + 2) return hex
-  return `${hex.slice(0, leading + 2)}…${hex.slice(-trailing)}`
+  if (!hex.startsWith("0x") || hex.length <= leading + trailing + 2) return hex;
+  return `${hex.slice(0, leading + 2)}…${hex.slice(-trailing)}`;
 }
 
 function isPermissionResponse(value: unknown): value is PermissionResponse {
-  if (typeof value !== 'object' || value === null) return false
-  const v = value as Record<string, unknown>
+  if (typeof value !== "object" || value === null) return false;
+  const v = value as Record<string, unknown>;
   return (
-    typeof v.context === 'string' &&
-    typeof v.delegationManager === 'string' &&
+    typeof v.context === "string" &&
+    typeof v.delegationManager === "string" &&
     Array.isArray(v.dependencies) &&
-    typeof v.chainId === 'string' &&
-    typeof v.to === 'string' &&
-    typeof v.permission === 'object' &&
+    typeof v.chainId === "string" &&
+    typeof v.to === "string" &&
+    typeof v.permission === "object" &&
     v.permission !== null
-  )
+  );
 }
 
 export type RedeemPermissionFormProps = {
-  initialResponse?: PermissionResponse | null
-  onClear?: () => void
-}
+  initialResponse?: PermissionResponse | null;
+  onClear?: () => void;
+};
 
-export function RedeemPermissionForm({ initialResponse, onClear }: RedeemPermissionFormProps) {
-  const redeem = useRedeemPermission()
+export function RedeemPermissionForm({
+  initialResponse,
+  onClear,
+}: RedeemPermissionFormProps) {
+  const redeem = useRedeemPermission();
 
-  const [responseJson, setResponseJson] = useState('')
-  const [targetAddress, setTargetAddress] = useState('')
-  const [amountInput, setAmountInput] = useState('0.001')
+  const [responseJson, setResponseJson] = useState("");
+  const [targetAddress, setTargetAddress] = useState("");
+  const [amountInput, setAmountInput] = useState("0.001");
 
   useEffect(() => {
     if (initialResponse) {
-      setResponseJson(JSON.stringify(initialResponse, null, 2))
+      setResponseJson(JSON.stringify(initialResponse, null, 2));
     }
-  }, [initialResponse])
+  }, [initialResponse]);
 
   const { parsed, parseError } = useMemo<{
-    parsed: PermissionResponse | null
-    parseError: string | null
+    parsed: PermissionResponse | null;
+    parseError: string | null;
   }>(() => {
-    const trimmed = responseJson.trim()
-    if (!trimmed) return { parsed: null, parseError: null }
+    const trimmed = responseJson.trim();
+    if (!trimmed) return { parsed: null, parseError: null };
     try {
-      const obj = JSON.parse(trimmed)
+      const obj = JSON.parse(trimmed);
       if (!isPermissionResponse(obj)) {
         return {
           parsed: null,
           parseError:
-            'Missing required fields: context, delegationManager, dependencies, chainId, to, permission.',
-        }
+            "Missing required fields: context, delegationManager, dependencies, chainId, to, permission.",
+        };
       }
-      return { parsed: obj, parseError: null }
+      return { parsed: obj, parseError: null };
     } catch {
-      return { parsed: null, parseError: 'Invalid JSON — paste a PermissionResponse object.' }
+      return {
+        parsed: null,
+        parseError: "Invalid JSON — paste a PermissionResponse object.",
+      };
     }
-  }, [responseJson])
+  }, [responseJson]);
 
-  const isErc20Type = parsed?.permission.type.startsWith('erc20-token-') ?? false
+  const isErc20Type =
+    parsed?.permission.type.startsWith("erc20-token-") ?? false;
 
   const amountValid = useMemo(() => {
     try {
       if (isErc20Type) {
-        parseUnits(amountInput.trim() || '0', ERC20_DECIMALS)
+        parseUnits(amountInput.trim() || "0", ERC20_DECIMALS);
       } else {
-        parseEther(amountInput.trim() || '0')
+        parseEther(amountInput.trim() || "0");
       }
-      return true
+      return true;
     } catch {
-      return false
+      return false;
     }
-  }, [amountInput, isErc20Type])
+  }, [amountInput, isErc20Type]);
 
-  const data = (parsed?.permission.data ?? {}) as Record<string, unknown>
-  const tokenAddress = typeof data.tokenAddress === 'string' ? data.tokenAddress : null
-  const periodAmount = typeof data.periodAmount === 'string' ? data.periodAmount : null
-  const allowance = typeof data.allowance === 'string' ? data.allowance : null
-  const isNativeType = parsed?.permission.type.startsWith('native-token-') ?? false
+  const data = (parsed?.permission.data ?? {}) as Record<string, unknown>;
+  const tokenAddress =
+    typeof data.tokenAddress === "string" ? data.tokenAddress : null;
+  const periodAmount =
+    typeof data.periodAmount === "string" ? data.periodAmount : null;
+  const allowance = typeof data.allowance === "string" ? data.allowance : null;
+  const isNativeType =
+    parsed?.permission.type.startsWith("native-token-") ?? false;
 
-  const expiryRule = parsed?.rules?.find((r) => r.type === 'expiry')
-  const expiryTs = (expiryRule?.data as { timestamp?: number } | undefined)?.timestamp
+  const expiryRule = parsed?.rules?.find((r) => r.type === "expiry");
+  const expiryTs = (expiryRule?.data as { timestamp?: number } | undefined)
+    ?.timestamp;
 
   const handleSubmit = (e: FormEvent) => {
-    e.preventDefault()
-    if (!parsed) return
-    if (!isAddress(targetAddress)) return
-    if (!amountValid) return
+    e.preventDefault();
+    if (!parsed) return;
+    if (!isAddress(targetAddress)) return;
+    if (!amountValid) return;
 
-    const recipient = getAddress(targetAddress) as `0x${string}`
+    const recipient = getAddress(targetAddress) as `0x${string}`;
 
     if (isErc20Type && tokenAddress && isAddress(tokenAddress)) {
       redeem.mutate({
-        kind: 'erc20',
+        kind: "erc20",
         response: parsed,
         tokenAddress: getAddress(tokenAddress) as `0x${string}`,
         recipient,
         amount: parseUnits(amountInput.trim(), ERC20_DECIMALS),
-      })
+      });
     } else {
       redeem.mutate({
-        kind: 'native',
+        kind: "native",
         response: parsed,
         recipient,
         value: parseEther(amountInput.trim()),
-      })
+      });
     }
-  }
+  };
 
   const explorerUrl =
-    redeem.hash && parsed ? getExplorerTxUrl(parsed.chainId, redeem.hash) : null
+    redeem.hash && parsed
+      ? getExplorerTxUrl(parsed.chainId, redeem.hash)
+      : null;
 
   return (
     <div className="space-y-6">
-      <label className="flex flex-col gap-1 text-xs text-zinc-400" htmlFor="redeem-response-json">
+      <label
+        className="flex flex-col gap-1 text-xs text-zinc-400"
+        htmlFor="redeem-response-json"
+      >
         Permission response (JSON)
         <textarea
           id="redeem-response-json"
           rows={8}
-          placeholder='Paste a PermissionResponse JSON object, or complete Phase 2 above to auto-fill…'
+          placeholder="Paste a PermissionResponse JSON object, or complete Phase 2 above to auto-fill…"
           className="rounded-lg border border-[#2A2A2A] bg-[#0A0A0A] px-3 py-2 font-mono text-xs leading-relaxed text-white placeholder:text-zinc-500 focus:border-[#F5A623] focus:outline-none"
           value={responseJson}
           onChange={(e) => setResponseJson(e.target.value)}
@@ -155,7 +171,10 @@ export function RedeemPermissionForm({ initialResponse, onClear }: RedeemPermiss
         <div className="flex items-center gap-3">
           {initialResponse ? (
             <span className="inline-flex items-center gap-1.5 rounded-md bg-emerald-500/15 px-2 py-1 text-xs text-emerald-300">
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" aria-hidden />
+              <span
+                className="h-1.5 w-1.5 rounded-full bg-emerald-400"
+                aria-hidden
+              />
               Loaded from storage
             </span>
           ) : null}
@@ -163,9 +182,9 @@ export function RedeemPermissionForm({ initialResponse, onClear }: RedeemPermiss
             type="button"
             className="text-xs font-medium text-red-400 underline-offset-2 hover:text-red-300 hover:underline"
             onClick={() => {
-              setResponseJson('')
-              redeem.reset()
-              onClear?.()
+              setResponseJson("");
+              redeem.reset();
+              onClear?.();
             }}
           >
             Clear context
@@ -173,9 +192,7 @@ export function RedeemPermissionForm({ initialResponse, onClear }: RedeemPermiss
         </div>
       ) : null}
 
-      {parseError ? (
-        <p className="text-xs text-red-400">{parseError}</p>
-      ) : null}
+      {parseError ? <p className="text-xs text-red-400">{parseError}</p> : null}
 
       {parsed ? (
         <>
@@ -194,10 +211,10 @@ export function RedeemPermissionForm({ initialResponse, onClear }: RedeemPermiss
               <dt className="text-zinc-500">Token</dt>
               <dd className="font-mono text-zinc-100">
                 {isNativeType
-                  ? 'Native (BERA)'
+                  ? "Native (BERA)"
                   : tokenAddress
                     ? truncateHex(tokenAddress)
-                    : '—'}
+                    : "—"}
               </dd>
 
               {allowance ? (
@@ -264,12 +281,12 @@ export function RedeemPermissionForm({ initialResponse, onClear }: RedeemPermiss
             >
               {isErc20Type
                 ? `Token amount (${ERC20_DECIMALS} decimals)`
-                : 'Value (ETH / native token)'}
+                : "Value (ETH / native token)"}
               <input
                 id="redeem-value"
                 type="text"
                 inputMode="decimal"
-                placeholder={isErc20Type ? '1.0' : '0.001'}
+                placeholder={isErc20Type ? "1.0" : "0.001"}
                 className="rounded-lg border border-[#2A2A2A] bg-[#0A0A0A] px-3 py-2 text-sm text-white placeholder:text-zinc-500 focus:border-[#F5A623] focus:outline-none"
                 value={amountInput}
                 onChange={(e) => setAmountInput(e.target.value)}
@@ -277,13 +294,20 @@ export function RedeemPermissionForm({ initialResponse, onClear }: RedeemPermiss
             </label>
             {isErc20Type && tokenAddress ? (
               <p className="text-xs text-zinc-500">
-                Transfers to{' '}
-                <code className="font-mono text-[11px] text-zinc-300">{truncateHex(tokenAddress)}</code>
-                {' '}via <code className="font-mono text-[11px]">transfer(address,uint256)</code>
+                Transfers to{" "}
+                <code className="font-mono text-[11px] text-zinc-300">
+                  {truncateHex(tokenAddress)}
+                </code>{" "}
+                via{" "}
+                <code className="font-mono text-[11px]">
+                  transfer(address,uint256)
+                </code>
               </p>
             ) : null}
             {!amountValid && amountInput.trim().length > 0 ? (
-              <p className="text-xs text-red-400">Enter a valid decimal amount.</p>
+              <p className="text-xs text-red-400">
+                Enter a valid decimal amount.
+              </p>
             ) : null}
 
             <div className="flex flex-wrap items-center gap-3 pt-1">
@@ -303,7 +327,7 @@ export function RedeemPermissionForm({ initialResponse, onClear }: RedeemPermiss
                     Redeeming…
                   </>
                 ) : (
-                  'Redeem'
+                  "Redeem"
                 )}
               </button>
               {redeem.hash || redeem.error ? (
@@ -320,7 +344,9 @@ export function RedeemPermissionForm({ initialResponse, onClear }: RedeemPermiss
 
           {redeem.hash ? (
             <div className="rounded-lg border border-[#22C55E]/40 bg-emerald-500/15 px-4 py-3">
-              <p className="text-sm font-medium text-[#22C55E]">Transaction submitted</p>
+              <p className="text-sm font-medium text-[#22C55E]">
+                Transaction submitted
+              </p>
               <p className="mt-1 break-all font-mono text-xs text-zinc-300">
                 {redeem.hash}
               </p>
@@ -348,12 +374,12 @@ export function RedeemPermissionForm({ initialResponse, onClear }: RedeemPermiss
         </>
       ) : !parseError && !responseJson.trim() ? (
         <p className="rounded-lg border border-dashed border-[#2A2A2A] bg-[#1A1A1A]/50 px-4 py-6 text-center text-sm text-zinc-500">
-          Paste a <code className="font-mono text-xs">PermissionResponse</code> JSON above, or
-          complete Phase 2 to auto-fill.
+          Paste a <code className="font-mono text-xs">PermissionResponse</code>{" "}
+          JSON above, or complete Phase 2 to auto-fill.
         </p>
       ) : null}
 
       {/* TODO: Phase 4 — Revoke permission (call revokePermission on delegationManager with the context). */}
     </div>
-  )
+  );
 }
