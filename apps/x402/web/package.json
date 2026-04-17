@@ -1,0 +1,30 @@
+{
+  "name": "weather-x402-web",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc -b --noEmit"
+  },
+  "dependencies": {
+    "@tanstack/react-query": "^5.99.0",
+    "react": "^19.2.5",
+    "react-dom": "^19.2.5",
+    "thirdweb": "^5.119.4",
+    "viem": "^2.48.1",
+    "wagmi": "^3.6.2"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.1",
+    "typescript": "^5.9.3",
+    "vite": "^8.0.8"
+  },
+  "overrides": {
+    "viem": "^2.48.1"
+  }
+}
