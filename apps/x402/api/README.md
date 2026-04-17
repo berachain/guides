@@ -103,7 +103,7 @@ Everything a client needs to pay is in `accepts[0]`:
 
 | Field               | Example value                                | What it is                                                                            |
 | ------------------- | -------------------------------------------- | ------------------------------------------------------------------------------------- |
-| `scheme`            | `exact`                                      | Use EIP-3009 `transferWithAuthorization` (or ERC-2612 `permit`) for the exact amount. |
+| `scheme`            | `exact`                                      | Use erc-3009 `transferWithAuthorization` (or ERC-2612 `permit`) for the exact amount. |
 | `network`           | `eip155:80094`                               | CAIP-2 chain id. `80094` = Berachain mainnet, `80069` = Bepolia testnet.              |
 | `amount`            | `100000000000000000`                         | Atomic units. For `0.1 HONEY` at 18 decimals → `parseUnits("0.1", 18)`.               |
 | `asset`             | `0xFCBD14DC51f0A4d49d5E53C2E0950e0bC26d0Dce` | HONEY ERC-20 contract on Berachain.                                                   |
@@ -253,13 +253,13 @@ This service conforms to the [x402 v2 protocol specification](https://github.com
 - Responds with HTTP `402 Payment Required` when `X-PAYMENT` is missing or invalid.
 - Emits the canonical v2 envelope: `{ x402Version: 2, error, resource, accepts, extensions }`.
 - Uses CAIP-2 network identifiers (`eip155:<chainId>`).
-- Advertises `scheme: "exact"` backed by EIP-3009 `TransferWithAuthorization` (HONEY also supports ERC-2612 `permit`, which the Thirdweb facilitator accepts as an alternative).
+- Advertises `scheme: "exact"` backed by erc-3009 `TransferWithAuthorization` (HONEY also supports ERC-2612 `permit`, which the Thirdweb facilitator accepts as an alternative).
 - Returns the settlement receipt as a base64-encoded `SettlementResponse` in the `X-PAYMENT-RESPONSE` header on successful paid requests.
 - Verification + settlement are delegated to the [Thirdweb facilitator](https://portal.thirdweb.com/x402/facilitator), which implements the v2 `/verify`, `/settle`, and `/supported` endpoints.
 
 ## Notes
 
-- HONEY must support **EIP-3009** or **ERC-2612 permit** for the Thirdweb facilitator to settle payments. If a non-permit token is required, swap `HONEY_CONTRACT_ADDRESS` in `.env` — no code changes needed.
+- HONEY must support **erc-3009** or **ERC-2612 permit** for the Thirdweb facilitator to settle payments. If a non-permit token is required, swap `HONEY_CONTRACT_ADDRESS` in `.env` — no code changes needed.
 - The Thirdweb facilitator uses your server wallet via EIP-7702 so the payer does not need native BERA for gas.
 - No private keys live in this service; all signing is brokered by Thirdweb via `THIRDWEB_SECRET_KEY` + `THIRDWEB_SERVER_WALLET_ADDRESS`.
 

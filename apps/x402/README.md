@@ -11,7 +11,7 @@ This repo has two pieces:
 | [`api/`](./api) | [Hono](https://hono.dev/) service exposing `/geocode` (free) and `/weather` (paid, 0.1 HONEY). Emits x402 v2 `402 Payment Required` responses.   |
 | [`web/`](./web) | Vite + React + wagmi + viem frontend that connects MetaMask, signs the x402 authorization, and renders the forecast plus the settlement receipt. |
 
-The payer signs an EIP-3009 `TransferWithAuthorization` (or ERC-2612 `permit`) over HONEY. The Thirdweb facilitator verifies the signature and submits the transfer on Berachain gaslessly via EIP-7702 using your server wallet, so the payer does not need native BERA for gas.
+The payer signs an erc-3009 `TransferWithAuthorization` (or ERC-2612 `permit`) over HONEY. The Thirdweb facilitator verifies the signature and submits the transfer on Berachain gaslessly via EIP-7702 using your server wallet, so the payer does not need native BERA for gas.
 
 ## Quickstart
 
@@ -99,7 +99,7 @@ That's the full x402 handshake: `402 → sign → retry with X-PAYMENT → 200 +
 
 1. Client calls `GET /weather?lat=…&lon=…` without a payment header.
 2. Server responds `402 Payment Required` with the x402 v2 envelope, advertising HONEY on Berachain via `accepts[0]`.
-3. Client signs an EIP-3009 `TransferWithAuthorization` over the HONEY amount and retries with the base64-encoded payload in the `X-PAYMENT` header.
+3. Client signs an erc-3009 `TransferWithAuthorization` over the HONEY amount and retries with the base64-encoded payload in the `X-PAYMENT` header.
 4. Thirdweb facilitator verifies the signature and submits the HONEY transfer on Berachain gaslessly via EIP-7702 using your server wallet.
 5. Server returns the weather JSON plus an `X-PAYMENT-RESPONSE` settlement receipt header.
 

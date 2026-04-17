@@ -34,6 +34,6 @@ bun run dev            # http://localhost:5173
 3. User enters a city → frontend calls `GET /geocode?city=...` (free) on the backend.
 4. Frontend calls `GET /weather?lat=...&lon=...` through a paid-fetch wrapper:
    - First response is `402` with x402 v2 payment requirements (HONEY amount, chain, payTo).
-   - `thirdweb/x402` builds a payment header using the wagmi/viem wallet client (adapted via `viemAdapter.wallet.fromViem`), prompting MetaMask to sign an ERC-2612 permit / EIP-3009 authorization.
+   - `thirdweb/x402` builds a payment header using the wagmi/viem wallet client (adapted via `viemAdapter.wallet.fromViem`), prompting MetaMask to sign an ERC-2612 permit / erc-3009 authorization.
    - Request is retried with `X-PAYMENT`. Thirdweb's facilitator settles the HONEY transfer on-chain.
 5. UI shows the forecast plus the settlement receipt decoded from the `X-PAYMENT-RESPONSE` header.
