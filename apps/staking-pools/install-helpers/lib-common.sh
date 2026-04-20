@@ -10,29 +10,22 @@ log_warn() { echo "[warn] $*"; }
 
 # === CAST OUTPUT HANDLING ===
 strip_scientific_notation() {
-  # Handles both cast format "240000000000000000000000 [2.4e23]" and pure scientific notation "2.4e23"
-  # Returns the full decimal number as a string
+  # Normalizes numeric output from `cast call`. Handles both the bracketed
+  # format `240000000000000000000000 [2.4e23]` (take the first field) and bare
+  # scientific notation `2.4e23` (expand to full decimal).
+  #
+  # Non-numeric tokens (e.g. "true", "false", checksummed addresses) MUST pass
+  # through unchanged so boolean / address getters aren't corrupted by awk's
+  # implicit string-to-number coercion. The previous implementation relied on
+  # an awk syntax error (the reserved word `exp`) to accidentally preserve
+  # "false" via the `|| echo "$input"` fallback; do not reintroduce that.
   local input="${1:-}"
-  
-  # If it contains scientific notation in brackets or as a separate field, extract the first field
+
   input=$(echo "$input" | awk '{print $1}')
-  
-  # If it's pure scientific notation (contains 'e' or 'E'), convert it
-  if [[ "$input" =~ [eE] ]]; then
-    # Use awk to convert scientific notation - more reliable than bc for this
-    # awk can handle both e and E notation
-    echo "$input" | awk '{
-      if ($1 ~ /[eE]/) {
-        # Parse scientific notation: split on e/E
-        split(toupper($1), parts, "E")
-        base = parts[1]
-        exp = parts[2]
-        # Calculate: base * 10^exp using awk
-        printf "%.0f", $1
-      } else {
-        print $1
-      }
-    }' 2>/dev/null || echo "$input"
+
+  if [[ "$input" =~ ^-?[0-9]+(\.[0-9]+)?[eE][+-]?[0-9]+$ ]]; then
+    # Real scientific notation. awk natively coerces this to a number.
+    echo "$input" | awk '{ printf "%.0f", $1 }'
   else
     echo "$input"
   fi

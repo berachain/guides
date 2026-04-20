@@ -88,29 +88,33 @@ main() {
   predicted_staking_pool=$(echo "$predicted_staking_pool" | tr -d '[:space:]')
   echo ""
 
-  # Check if staking pool contract already exists
+  # Check if staking pool contract already exists, and whether it is already
+  # activated. Use isActive() — not paused() — because paused() can be true
+  # independent of activation (owner pause, or post-exit auto-pause).
   local pool_exists="false"
-  local pool_is_paused=""
+  local pool_needs_activation="false"
   if [[ -n "$predicted_staking_pool" && "$predicted_staking_pool" != "0x0000000000000000000000000000000000000000" ]]; then
     local pool_code
     pool_code=$(cast code "$predicted_staking_pool" -r "$rpc_url" 2>/dev/null || echo "0x")
     if [[ -n "$pool_code" && "$pool_code" != "0x" ]]; then
       pool_exists="true"
 
-      local paused_result
-      paused_result=$(cast_call_clean "$predicted_staking_pool" "paused()(bool)" -r "$rpc_url" 2>/dev/null)
-      if [[ $? -eq 0 && -n "$paused_result" ]]; then
-        pool_is_paused="$paused_result"
-        if [[ "$pool_is_paused" == "true" ]]; then
-          log_info "Pool is paused and needs activation"
-        else
+      local is_active
+      is_active=$(cast call "$predicted_staking_pool" "isActive()(bool)" -r "$rpc_url" 2>/dev/null | tr -d '[:space:]' || echo "")
+      case "$is_active" in
+        true)
           log_success "Pool is already deployed and activated - no action needed"
           exit 0
-        fi
-      else
-        log_warn "Could not determine pool pause status, assuming paused"
-        pool_is_paused="true"
-      fi
+          ;;
+        false)
+          pool_needs_activation="true"
+          log_info "Pool is deployed but not yet activated"
+          ;;
+        *)
+          log_warn "Could not determine pool activation status (isActive returned: '$is_active'); assuming activation is still needed"
+          pool_needs_activation="true"
+          ;;
+      esac
     fi
   fi
 
@@ -127,14 +131,11 @@ main() {
   fi
   echo ""
 
-  # If pool already exists and is not paused, nothing to do
-  if [[ "$pool_exists" == "true" && "$pool_is_paused" != "true" ]]; then
-    log_success "Pool already exists and is activated - no action needed"
-    exit 0
-  fi
-
-  # If pool exists but is paused, validator must be registered to activate
-  if [[ "$pool_exists" == "true" && "$pool_is_paused" == "true" && "$validator_exists" != "true" ]]; then
+  # If pool already exists and is activated, we short-circuited above. The only
+  # way to reach here with pool_exists=true is pool_needs_activation=true, in
+  # which case the validator must already be registered before activate.sh can
+  # succeed.
+  if [[ "$pool_exists" == "true" && "$pool_needs_activation" == "true" && "$validator_exists" != "true" ]]; then
     log_error "Pool exists but validator is not yet registered on beacon chain"
     log_error "Wait for validator registration, then use activate.sh to activate the pool"
     exit 1
