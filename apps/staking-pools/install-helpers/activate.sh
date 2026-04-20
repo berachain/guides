@@ -10,8 +10,6 @@ source "$SCRIPT_DIR/lib-common.sh"
 
 load_env "$SCRIPT_DIR"
 
-SEND_MODE=0
-
 print_usage() {
   cat <<'USAGE'
 activate.sh
@@ -19,11 +17,9 @@ activate.sh
 Activates a deployed staking pool for your validator.
 
 Usage:
-  activate.sh [--send]
+  activate.sh
 
 Options:
-  --send                    Broadcast the activation transaction immediately
-                            (default: write command to generated/activation-command.sh)
   -h, --help                Show this help
 
 The script uses the validator pubkey and withdrawal vault configured for this
@@ -31,7 +27,7 @@ install (via setup_staking_pool_env) and deterministically predicts the pool
 address from the factory. The pool must already be deployed (use register.sh
 first).
 
-Output (default mode):
+Output:
   generated/activation-command.sh
 
 Note: Proofs are valid for exactly 10 minutes after generation (contract-
@@ -43,7 +39,6 @@ USAGE
 parse_args() {
   while [[ $# -gt 0 ]]; do
     case $1 in
-      --send) SEND_MODE=1; shift ;;
       -h|--help) print_usage; exit 0 ;;
       *) log_error "Unknown arg: $1"; print_usage; exit 1 ;;
     esac
@@ -409,13 +404,7 @@ EOF
 
   log_success "Activation command written to: $cmd_file"
   log_warn "Hard expiry: $expiry_iso (contract enforces MAX_TIMESTAMP_AGE = 10 min)"
-
-  if (( SEND_MODE == 1 )); then
-    log_info "Broadcasting now (--send)..."
-    exec "$cmd_file"
-  else
-    log_info "Next step: ./$cmd_file (or re-run with --send to broadcast immediately)"
-  fi
+  log_info "Next step: ./$cmd_file"
 }
 
 main "$@"
