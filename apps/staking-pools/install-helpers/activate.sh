@@ -233,17 +233,31 @@ main() {
     "validator_balance proof") || exit 1
 
   # Defensive: each proof response includes its own beacon_block_header.slot;
-  # confirm they all equal the pinned slot. If this ever disagrees, the bkit
-  # endpoint is interpreting the slot id differently than expected.
-  local j_var got_slot
+  # confirm they all equal the pinned slot. Compare numerically — the standard
+  # beacon headers endpoint returns slot as a decimal string, but the bkit
+  # proof endpoints return it hex-encoded ("0x120ba31").
+  local j_var got_slot got_slot_dec
+  local slot_dec=$((10#$slot))
   for j_var in pubkey_proof_json credentials_proof_json balance_proof_json; do
     got_slot=$(eval "echo \"\$$j_var\"" | jq -r '.beacon_block_header.slot // empty')
-    if [[ "$got_slot" != "$slot" ]]; then
-      log_error "Proof $j_var reports slot '$got_slot' but we pinned slot '$slot'"
+    if [[ -z "$got_slot" ]]; then
+      log_error "Proof $j_var missing beacon_block_header.slot"
+      exit 1
+    fi
+    if [[ "$got_slot" == 0x* ]]; then
+      got_slot_dec=$((got_slot))
+    elif [[ "$got_slot" =~ ^[0-9]+$ ]]; then
+      got_slot_dec=$((10#$got_slot))
+    else
+      log_error "Proof $j_var returned non-numeric slot: '$got_slot'"
+      exit 1
+    fi
+    if (( got_slot_dec != slot_dec )); then
+      log_error "Proof $j_var reports slot $got_slot_dec ('$got_slot') but we pinned slot $slot_dec"
       exit 1
     fi
   done
-  log_success "All proofs pinned to slot $slot"
+  log_success "All proofs pinned to slot $slot_dec"
 
   # --- Derive EIP-4788 timestamp. On Berachain beacon-kit, CL slot == EL block
   # number; EIP-4788 stores the parent beacon root at each EL block's timestamp,
