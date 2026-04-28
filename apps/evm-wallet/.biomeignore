@@ -1,0 +1,8 @@
+node_modules
+ios
+android
+.expo
+dist
+assets
+bun.lockb
+global.css
