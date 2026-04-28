@@ -1,0 +1,8 @@
+{
+  "name": "wallet-crypto",
+  "version": "1.0.0",
+  "description": "Local Swift Expo module: BIP39 + Keychain for the wallet app",
+  "main": "index.ts",
+  "types": "index.ts",
+  "private": true
+}
