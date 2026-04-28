@@ -28,6 +28,20 @@ Create or refresh the iOS native project when native config changes:
 bunx expo prebuild --platform ios
 ```
 
+If you use EAS Build, link this checkout to your own Expo project before the
+first EAS build:
+
+```bash
+bunx eas login
+bunx eas init
+```
+
+`eas init` can create a new Expo project or link to an existing one. If you
+already have a project ID, run `bunx eas init --id <project-id>` instead.
+The generated `extra.eas.projectId` is intentionally not committed here; if
+EAS writes it to `app.json`, treat that as local machine/account state unless
+the team explicitly wants to share one Expo project.
+
 Build a simulator development client:
 
 ```bash
