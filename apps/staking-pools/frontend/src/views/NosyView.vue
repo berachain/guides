@@ -254,6 +254,56 @@
         <button
           type="button"
           class="accordion-trigger"
+          :aria-expanded="isAccordionOpen('wbera')"
+          aria-controls="accordion-wbera"
+          id="accordion-wbera-trigger"
+          @click="toggleAccordion('wbera')"
+        >
+          WBERA &amp; Rewards (PoL vNext)
+        </button>
+        <div id="accordion-wbera" class="accordion-panel" role="region" aria-labelledby="accordion-wbera-trigger" :hidden="!isAccordionOpen('wbera')">
+          <div v-if="nosy" class="bgt-layout">
+            <div class="bgt-left">
+              <div class="bgt-hero-metric">
+                <span class="bgt-hero-value">{{ formatWei(nosy.availableWBERABalance) }}</span>
+                <span class="bgt-hero-label has-info">
+                  Available WBERA (operator-side liquidity)
+                  <button type="button" class="info-btn" @click="showAvailableWberaInfo = !showAvailableWberaInfo" aria-label="What is Available WBERA?">?</button>
+                </span>
+              </div>
+              <p v-if="showAvailableWberaInfo" class="info-popup">
+                WBERA currently held by the SmartOperator. After PoL vNext, validator emissions accrue here as $WBERA. This balance can also be pulled by the WithdrawalVault at request time to cover staker withdrawals (full, partial, or none, depending on liquidity); the cooldown still applies before finalization.
+              </p>
+            </div>
+            <div class="bgt-right">
+              <table class="rebase-calc">
+                <tbody>
+                  <tr>
+                    <td class="calc-label">WBERA held</td>
+                    <td class="calc-value">{{ formatWei(nosy.wberaFeeState?.currentBalance) }}</td>
+                  </tr>
+                  <tr>
+                    <td class="calc-label">Less: protocol fee ({{ nosy.protocolFeePercentage != null ? Number(nosy.protocolFeePercentage) / 100 + '%' : '—' }})</td>
+                    <td class="calc-value calc-negative">{{ formatWberaProtocolFee(nosy) }}</td>
+                  </tr>
+                  <tr class="calc-total">
+                    <td class="calc-label has-info">Equals: Rebaseable WBERA <button type="button" class="info-btn" @click="showRebaseableWberaInfo = !showRebaseableWberaInfo" aria-label="What is Rebaseable WBERA?">?</button></td>
+                    <td class="calc-value">{{ formatWei(nosy.rebaseableWberaAmount) }}</td>
+                  </tr>
+                </tbody>
+              </table>
+              <p v-if="showRebaseableWberaInfo" class="info-popup">
+                WBERA held by the SmartOperator minus the protocol fee. This amount is included in the pool's total assets calculation alongside rebaseable BGT, so it "rebases" into the value of stBERA shares.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="accordion">
+        <button
+          type="button"
+          class="accordion-trigger"
           :aria-expanded="isAccordionOpen('incentive')"
           aria-controls="accordion-incentive"
           id="accordion-incentive-trigger"
@@ -540,6 +590,8 @@ const isResetting = ref(false)
 const resetStatus = ref(null)
 const showRebaseableInfo = ref(false)
 const showStakingVaultInfo = ref(false)
+const showRebaseableWberaInfo = ref(false)
+const showAvailableWberaInfo = ref(false)
 async function handleReset() {
   if (!props.resetNosyBrowserState) return
   const ok = typeof window !== 'undefined'
@@ -645,6 +697,9 @@ const nosy = computed(() => {
     unboostedBalance: d.unboostedBalance?.value ?? 0n,
     bgtFeeState: d.bgtFeeState?.value ?? null,
     bgtBalanceOfSmartOperator: d.bgtBalanceOfSmartOperator?.value ?? null,
+    rebaseableWberaAmount: d.rebaseableWberaAmount?.value ?? 0n,
+    availableWBERABalance: d.availableWBERABalance?.value ?? 0n,
+    wberaFeeState: d.wberaFeeState?.value ?? null,
     payoutAmount: d.payoutAmount?.value ?? 0n,
     queuedPayoutAmount: d.queuedPayoutAmount?.value ?? 0n,
     feePercentage: d.feePercentage?.value ?? 0n,
@@ -866,6 +921,16 @@ function formatProtocolFee(nosy) {
   const rebaseable = nosy.rebaseableBgtAmount
   if (bgtHeld == null || rebaseable == null) return '—'
   const fee = bgtHeld - rebaseable
+  if (fee <= 0n) return '—'
+  return '(' + formatWei(fee) + ')'
+}
+
+function formatWberaProtocolFee(nosy) {
+  if (!nosy) return '—'
+  const wberaHeld = nosy.wberaFeeState?.currentBalance
+  const rebaseable = nosy.rebaseableWberaAmount
+  if (wberaHeld == null || rebaseable == null) return '—'
+  const fee = wberaHeld - rebaseable
   if (fee <= 0n) return '—'
   return '(' + formatWei(fee) + ')'
 }

@@ -298,67 +298,128 @@ main() {
     log_warn "Could not get min effective balance: $min_effective_balance"
   fi
   
-  # Check BGT disposition from StakingPool via SmartOperator
-  log_info "=== BGT Disposition ==="
-  
-  # Get BGT information from the smart operator (which the staking pool uses)
+  # === WBERA Disposition (primary track after PoL vNext) ===
+  log_info "=== WBERA Disposition ==="
+
+  local available_wbera rebaseable_wbera wbera_fee_state
+  local rc_avail_wbera=0 rc_rebaseable_wbera=0 rc_wbera_fee_state=0
+  available_wbera=$(cast call "$smart_operator" "availableWBERABalance()(uint256)" -r "$RPC_URL" 2>&1) || rc_avail_wbera=$?
+  rebaseable_wbera=$(cast call "$smart_operator" "rebaseableWberaAmount()(uint256)" -r "$RPC_URL" 2>&1) || rc_rebaseable_wbera=$?
+  wbera_fee_state=$(cast call "$smart_operator" "getEarnedWBERAFeeState()(uint256,uint256,uint256,uint96)" -r "$RPC_URL" 2>&1) || rc_wbera_fee_state=$?
+
+  if [[ $rc_avail_wbera -eq 0 && -n "$available_wbera" && ! "$available_wbera" =~ (error|revert|panic|Error) ]]; then
+    available_wbera=$(echo "$available_wbera" | awk '{print $1}')
+    local available_wbera_eth
+    available_wbera_eth=$(cast_from_wei_safe "$available_wbera")
+    log_info "Available WBERA (operator-side liquidity): $available_wbera_eth WBERA"
+  else
+    log_warn "Could not get available WBERA (the SmartOperator may pre-date PoL vNext): $available_wbera"
+  fi
+
+  if [[ $rc_rebaseable_wbera -eq 0 && -n "$rebaseable_wbera" && ! "$rebaseable_wbera" =~ (error|revert|panic|Error) ]]; then
+    rebaseable_wbera=$(echo "$rebaseable_wbera" | awk '{print $1}')
+    local rebaseable_wbera_eth
+    rebaseable_wbera_eth=$(cast_from_wei_safe "$rebaseable_wbera")
+    log_info "Rebaseable WBERA (in pool assets): $rebaseable_wbera_eth WBERA"
+  else
+    if [[ "$rebaseable_wbera" =~ (arithmetic|underflow|overflow|panic) ]]; then
+      log_info "Rebaseable WBERA (in pool assets): 0.000000000000000000 WBERA (calculation underflow - likely no rebaseable WBERA)"
+    else
+      log_warn "Could not get rebaseable WBERA (this may be normal if there's no rebaseable WBERA)"
+    fi
+  fi
+
+  if [[ $rc_wbera_fee_state -eq 0 && -n "$wbera_fee_state" && ! "$wbera_fee_state" =~ (error|revert|panic|Error) ]]; then
+    # Parse the tuple: (currentBalance, wberaBalanceAlreadyCharged, chargeableBalance, protocolFeePercentage)
+    local wbera_current wbera_charged wbera_chargeable wbera_fee_bps
+    local wbera_tuple_clean
+    wbera_tuple_clean=$(echo "$wbera_fee_state" | tr -d '()' | tr ',\n\r\t' ' ' | tr -s ' ')
+    read -r wbera_current wbera_charged wbera_chargeable wbera_fee_bps <<< "$wbera_tuple_clean"
+
+    local wbera_current_eth wbera_charged_eth wbera_chargeable_eth
+    wbera_current_eth=$(cast_from_wei_safe "$wbera_current")
+    wbera_charged_eth=$(cast_from_wei_safe "$wbera_charged")
+    wbera_chargeable_eth=$(cast_from_wei_safe "$wbera_chargeable")
+
+    log_info "Total WBERA Balance: $wbera_current_eth WBERA"
+    log_info "WBERA Already Charged Fees: $wbera_charged_eth WBERA"
+    log_info "WBERA Chargeable (new earnings): $wbera_chargeable_eth WBERA"
+    local wbera_fee_pct_display
+    wbera_fee_pct_display=$(awk -v bps="$wbera_fee_bps" 'BEGIN{ if (bps ~ /^[0-9]+$/) printf "%.2f", bps/100; else printf "0.00" }')
+    log_info "Protocol Fee: $wbera_fee_pct_display%"
+  else
+    log_warn "Could not get WBERA fee state (the SmartOperator may pre-date PoL vNext): $wbera_fee_state"
+  fi
+
+  # === Legacy BGT Disposition ===
+  # Read state up front so we can decide whether to render the legacy section at all.
   local rebaseable_bgt unboosted_bgt bgt_fee_state
   local rc_rebaseable=0 rc_unboosted=0 rc_fee_state=0
   rebaseable_bgt=$(cast call "$smart_operator" "rebaseableBgtAmount()(uint256)" -r "$RPC_URL" 2>&1) || rc_rebaseable=$?
   unboosted_bgt=$(cast call "$smart_operator" "unboostedBalance()(uint256)" -r "$RPC_URL" 2>&1) || rc_unboosted=$?
   bgt_fee_state=$(cast call "$smart_operator" "getEarnedBGTFeeState()(uint256,uint256,uint256,uint96)" -r "$RPC_URL" 2>&1) || rc_fee_state=$?
-  
-  if [[ $rc_rebaseable -eq 0 && -n "$rebaseable_bgt" && ! "$rebaseable_bgt" =~ (error|revert|panic|Error) ]]; then
-    rebaseable_bgt=$(echo "$rebaseable_bgt" | awk '{print $1}')
-    local rebaseable_bgt_eth
-    rebaseable_bgt_eth=$(cast_from_wei_safe "$rebaseable_bgt")
-    log_info "Rebaseable BGT (in pool assets): $rebaseable_bgt_eth BGT"
-  else
-    # Check if it's an arithmetic underflow/overflow (common when BGT balance is zero or very small)
-    if [[ "$rebaseable_bgt" =~ (arithmetic|underflow|overflow|panic) ]]; then
-      log_info "Rebaseable BGT (in pool assets): 0.000000000000000000 BGT (calculation underflow - likely no rebaseable BGT)"
-    else
-      log_warn "Could not get rebaseable BGT (this may be normal if there's no rebaseable BGT)"
-    fi
+
+  # Pre-extract numeric fields for activity check.
+  local unboosted_bgt_num=0 bgt_current_num=0 bgt_chargeable_num=0
+  if [[ $rc_unboosted -eq 0 && -n "$unboosted_bgt" && ! "$unboosted_bgt" =~ (error|revert|panic|Error) ]]; then
+    unboosted_bgt_num=$(echo "$unboosted_bgt" | awk '{print $1}')
+    [[ "$unboosted_bgt_num" =~ ^[0-9]+$ ]] || unboosted_bgt_num=0
   fi
-  
-  if [[ $rc_unboosted -eq 0 && -n "$unboosted_bgt" ]]; then
-    unboosted_bgt=$(echo "$unboosted_bgt" | awk '{print $1}')
-    local unboosted_bgt_eth
-    unboosted_bgt_eth=$(cast_from_wei_safe "$unboosted_bgt")
-    log_info "Unboosted BGT: $unboosted_bgt_eth BGT"
-  else
-    log_warn "Could not get unboosted BGT: $unboosted_bgt"
-  fi
-  
-  if [[ $rc_fee_state -eq 0 && -n "$bgt_fee_state" ]]; then
-    # Parse the tuple: (currentBalance, bgtBalanceAlreadyCharged, chargeableBalance, protocolFeePercentage)
-    # The output format is: (value1, value2, value3, value4)
-    local current_balance charged_balance chargeable_balance fee_percentage
-    
-    # Normalize tuple to single line, whitespace-separated tokens
+  local current_balance="" charged_balance="" chargeable_balance="" fee_bps=""
+  if [[ $rc_fee_state -eq 0 && -n "$bgt_fee_state" && ! "$bgt_fee_state" =~ (error|revert|panic|Error) ]]; then
     local tuple_clean
     tuple_clean=$(echo "$bgt_fee_state" | tr -d '()' | tr ',\n\r\t' ' ' | tr -s ' ')
     read -r current_balance charged_balance chargeable_balance fee_bps <<< "$tuple_clean"
-    
-    # Convert to ether for display
-    local current_balance_eth charged_balance_eth chargeable_balance_eth
-    current_balance_eth=$(cast_from_wei_safe "$current_balance")
-    charged_balance_eth=$(cast_from_wei_safe "$charged_balance")
-    chargeable_balance_eth=$(cast_from_wei_safe "$chargeable_balance")
-    
-    log_info "Total BGT Balance: $current_balance_eth BGT"
-    log_info "BGT Already Charged Fees: $charged_balance_eth BGT"
-    log_info "BGT Chargeable (new earnings): $chargeable_balance_eth BGT"
-    # fee_bps is basis points (e.g., 1569 -> 15.69%)
-    local fee_pct_display
-    fee_pct_display=$(awk -v bps="$fee_bps" 'BEGIN{ if (bps ~ /^[0-9]+$/) printf "%.2f", bps/100; else printf "0.00" }')
-    log_info "Protocol Fee: $fee_pct_display%"
-  else
-    log_warn "Could not get BGT fee state: $bgt_fee_state"
+    [[ "$current_balance" =~ ^[0-9]+$ ]] && bgt_current_num="$current_balance"
+    [[ "$chargeable_balance" =~ ^[0-9]+$ ]] && bgt_chargeable_num="$chargeable_balance"
   fi
-  
-  # (reduced) omit direct BGT and boosted balance duplicates for concise output
+
+  # Suppress entire legacy block when nothing relevant is happening (post wind-down).
+  local legacy_bgt_active=0
+  if [[ "$unboosted_bgt_num" != "0" || "$bgt_current_num" != "0" || "$bgt_chargeable_num" != "0" ]]; then
+    legacy_bgt_active=1
+  fi
+
+  if [[ $legacy_bgt_active -eq 1 ]]; then
+    log_info "=== Legacy BGT Disposition ==="
+
+    if [[ $rc_rebaseable -eq 0 && -n "$rebaseable_bgt" && ! "$rebaseable_bgt" =~ (error|revert|panic|Error) ]]; then
+      rebaseable_bgt=$(echo "$rebaseable_bgt" | awk '{print $1}')
+      local rebaseable_bgt_eth
+      rebaseable_bgt_eth=$(cast_from_wei_safe "$rebaseable_bgt")
+      log_info "Rebaseable BGT (in pool assets): $rebaseable_bgt_eth BGT"
+    else
+      if [[ "$rebaseable_bgt" =~ (arithmetic|underflow|overflow|panic) ]]; then
+        log_info "Rebaseable BGT (in pool assets): 0.000000000000000000 BGT (calculation underflow - likely no rebaseable BGT)"
+      else
+        log_warn "Could not get rebaseable BGT (this may be normal if there's no rebaseable BGT)"
+      fi
+    fi
+
+    if [[ $rc_unboosted -eq 0 && -n "$unboosted_bgt" ]]; then
+      local unboosted_bgt_eth
+      unboosted_bgt_eth=$(cast_from_wei_safe "$unboosted_bgt_num")
+      log_info "Unboosted BGT: $unboosted_bgt_eth BGT"
+    else
+      log_warn "Could not get unboosted BGT: $unboosted_bgt"
+    fi
+
+    if [[ -n "$current_balance" ]]; then
+      local current_balance_eth charged_balance_eth chargeable_balance_eth
+      current_balance_eth=$(cast_from_wei_safe "$current_balance")
+      charged_balance_eth=$(cast_from_wei_safe "$charged_balance")
+      chargeable_balance_eth=$(cast_from_wei_safe "$chargeable_balance")
+
+      log_info "Total BGT Balance: $current_balance_eth BGT"
+      log_info "BGT Already Charged Fees: $charged_balance_eth BGT"
+      log_info "BGT Chargeable (new earnings): $chargeable_balance_eth BGT"
+      local fee_pct_display
+      fee_pct_display=$(awk -v bps="$fee_bps" 'BEGIN{ if (bps ~ /^[0-9]+$/) printf "%.2f", bps/100; else printf "0.00" }')
+      log_info "Protocol Fee: $fee_pct_display%"
+    else
+      log_warn "Could not get BGT fee state: $bgt_fee_state"
+    fi
+  fi
 
   # Step 5: If PRIVATE_KEY is set, reveal wallet holdings
   if [[ -n "${PRIVATE_KEY:-}" ]]; then

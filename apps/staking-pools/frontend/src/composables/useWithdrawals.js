@@ -211,8 +211,10 @@ export function useWithdrawals(publicClient, walletClient, withdrawalVaultAddres
     error.value = null
     
     try {
-      // No approve needed: WithdrawalVault calls StakingPool.notifyWithdrawalRequest(user, amountInWei),
+      // No approve needed: WithdrawalVault calls StakingPool.notifyWithdrawalRequest(user, amountInWei, coveredByOperator),
       // and the pool burns the user's shares directly (only callable by the vault). StBERA allowances are unused.
+      // After PoL vNext the vault may also pull operator-side WBERA at request time to cover part or all of the
+      // withdrawal; the staker-facing call signature does not change, and the cooldown still gates finalization.
       const hash = await walletClient.value.writeContract({
         address: withdrawalVaultAddress.value,
         abi: WITHDRAWAL_VAULT_ABI,

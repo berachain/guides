@@ -57,7 +57,7 @@ Three ways to supply a private key, in order of preference:
 | `activate.sh`                 | Activate a deployed pool using a beacon state proof       | (auto-detected from `BEACOND_HOME`)                 |
 | `stake.sh`                    | Stake BERA into a pool, receive stBERA                    | `--amount`, `--receiver`, optional `--staking-pool` |
 | `unstake.sh`                  | Request withdrawal from a pool                            | `--amount` or `--shares`, `--receiver`              |
-| `status.sh`                   | Check deployment, activation, and delegation state        | (auto-detected)                                     |
+| `status.sh`                   | Check deployment, activation, delegation, and WBERA/BGT disposition (post-vNext primary track is WBERA; legacy BGT block auto-suppresses on a wound-down pool) | (auto-detected)                                     |
 | `generate-frontend-config.sh` | Write a `config.draft.json` for the staking-pool frontend | optional `--out` path                               |
 
 ### Delegator Scripts (Foundation / capital provider)
