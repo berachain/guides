@@ -84,7 +84,7 @@ SMART_OPERATOR_ABI = [
     {"inputs": [{"internalType": "uint256", "name": "minEffectiveBalance", "type": "uint256"}], "name": "setMinEffectiveBalance", "outputs": [], "stateMutability": "nonpayable", "type": "function"},
     {"inputs": [{"internalType": "uint256", "name": "newPayoutAmount", "type": "uint256"}], "name": "queueIncentiveCollectorPayoutAmountChange", "outputs": [], "stateMutability": "nonpayable", "type": "function"},
     {"inputs": [], "name": "accrueEarnedBGTFees", "outputs": [], "stateMutability": "nonpayable", "type": "function"},
-    # PoL vNext (WBERA track). withdrawRewards / pullBeraToWithdrawalVault are sender-restricted
+    # WBERA track. withdrawRewards / pullBeraToWithdrawalVault are sender-restricted
     # to the StakingPool / WithdrawalVault respectively; they are present here for log decoding
     # completeness and must not be exposed as menu entries.
     {"inputs": [], "name": "accrueEarnedWBERAFees", "outputs": [], "stateMutability": "nonpayable", "type": "function"},
@@ -683,8 +683,8 @@ class SmartOperatorManager:
             table.add_row("Protocol Fee", f"{fee_pct / 100:.2f}%")
             table.add_row("Chargeable BGT", f"{Web3.from_wei(chargeable, 'ether'):.4f} BGT")
 
-            # WBERA disposition (PoL vNext primary track). Skipped silently on a SmartOperator
-            # implementation that pre-dates vNext; those calls revert.
+            # WBERA disposition. Skipped silently on older SmartOperator
+            # implementations that lack WBERA support; those calls revert.
             try:
                 avail_wbera = self.operator.functions.availableWBERABalance().call()
                 rebaseable_wbera = self.operator.functions.rebaseableWberaAmount().call()
@@ -1024,7 +1024,7 @@ class SmartOperatorManager:
             console.print("[red]Pool is fully exited; BGT wind-down is not applicable.[/red]")
             return
         console.print(Panel.fit(
-            "BGT wind-down (PoL vNext transition)\n"
+            "BGT wind-down\n"
             "Steps: drop boosted BGT -> wait for cooldown -> execute drop -> redeem BGT for BERA.\n"
             "See https://docs.berachain.com/nodes/staking-pools/operators#deprecated-bgt-entry-points",
             style="bold cyan"
@@ -1422,7 +1422,7 @@ class SmartOperatorManager:
         self.execute_or_show_calldata("accrueEarnedBGTFees", tx_data)
 
     def accrue_wbera_fees_action(self):
-        """Manually accrue earned WBERA fees (PoL vNext primary track)"""
+        """Manually accrue earned WBERA fees"""
         if self.pool_fully_exited is True:
             console.print("[red]Pool is fully exited; accruing earned WBERA fees is disabled.[/red]")
             return

@@ -67,7 +67,7 @@ export function useNosyData(
   const unboostedBalance = ref(0n)
   const bgtFeeState = ref(null) // { currentBalance, bgtBalanceAlreadyCharged, chargeableBalance, protocolFeePercentage }
   const bgtBalanceOfSmartOperator = ref(null) // from BGT.balanceOf(smartOperator), if BGT address known
-  // PoL vNext (WBERA track). null when the SmartOperator implementation pre-dates vNext.
+  // WBERA track. null when the SmartOperator implementation lacks WBERA support.
   const rebaseableWberaAmount = ref(0n)
   const availableWBERABalance = ref(0n)
   const wberaFeeState = ref(null) // { currentBalance, wberaBalanceAlreadyCharged, chargeableBalance, protocolFeePercentage }
@@ -134,7 +134,7 @@ export function useNosyData(
         contracts.push({ address: smartOp, abi: SMART_OPERATOR_ABI, functionName: 'rebaseableBgtAmount' })
         contracts.push({ address: smartOp, abi: SMART_OPERATOR_ABI, functionName: 'unboostedBalance' })
         contracts.push({ address: smartOp, abi: SMART_OPERATOR_ABI, functionName: 'getEarnedBGTFeeState' })
-        // PoL vNext WBERA-track views; will report failure on pre-vNext implementations.
+        // WBERA-track views; will report failure on older implementations.
         contracts.push({ address: smartOp, abi: SMART_OPERATOR_ABI, functionName: 'rebaseableWberaAmount' })
         contracts.push({ address: smartOp, abi: SMART_OPERATOR_ABI, functionName: 'availableWBERABalance' })
         contracts.push({ address: smartOp, abi: SMART_OPERATOR_ABI, functionName: 'getEarnedWBERAFeeState' })
@@ -205,7 +205,7 @@ export function useNosyData(
         const feeState = res[idx]?.result
         idx++
         bgtFeeState.value = feeState && Array.isArray(feeState) ? { currentBalance: feeState[0], bgtBalanceAlreadyCharged: feeState[1], chargeableBalance: feeState[2], protocolFeePercentage: feeState[3] } : null
-        // WBERA track. Pre-vNext implementations revert; allowFailure leaves status: 'failure'.
+        // WBERA track. Older implementations revert; allowFailure leaves status: 'failure'.
         rebaseableWberaAmount.value = res[idx]?.result ?? 0n
         idx++
         availableWBERABalance.value = res[idx]?.result ?? 0n

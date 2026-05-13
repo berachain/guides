@@ -298,7 +298,7 @@ main() {
     log_warn "Could not get min effective balance: $min_effective_balance"
   fi
   
-  # === WBERA Disposition (primary track after PoL vNext) ===
+  # === WBERA Disposition ===
   log_info "=== WBERA Disposition ==="
 
   local available_wbera rebaseable_wbera wbera_fee_state
@@ -313,7 +313,7 @@ main() {
     available_wbera_eth=$(cast_from_wei_safe "$available_wbera")
     log_info "Available WBERA (operator-side liquidity): $available_wbera_eth WBERA"
   else
-    log_warn "Could not get available WBERA (the SmartOperator may pre-date PoL vNext): $available_wbera"
+    log_warn "Could not get available WBERA (older SmartOperator without WBERA support): $available_wbera"
   fi
 
   if [[ $rc_rebaseable_wbera -eq 0 && -n "$rebaseable_wbera" && ! "$rebaseable_wbera" =~ (error|revert|panic|Error) ]]; then
@@ -348,7 +348,7 @@ main() {
     wbera_fee_pct_display=$(awk -v bps="$wbera_fee_bps" 'BEGIN{ if (bps ~ /^[0-9]+$/) printf "%.2f", bps/100; else printf "0.00" }')
     log_info "Protocol Fee: $wbera_fee_pct_display%"
   else
-    log_warn "Could not get WBERA fee state (the SmartOperator may pre-date PoL vNext): $wbera_fee_state"
+    log_warn "Could not get WBERA fee state (older SmartOperator without WBERA support): $wbera_fee_state"
   fi
 
   # === Legacy BGT Disposition ===

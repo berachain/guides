@@ -259,7 +259,7 @@
           id="accordion-wbera-trigger"
           @click="toggleAccordion('wbera')"
         >
-          WBERA &amp; Rewards (PoL vNext)
+          WBERA &amp; Rewards
         </button>
         <div id="accordion-wbera" class="accordion-panel" role="region" aria-labelledby="accordion-wbera-trigger" :hidden="!isAccordionOpen('wbera')">
           <div v-if="nosy" class="bgt-layout">
@@ -272,7 +272,7 @@
                 </span>
               </div>
               <p v-if="showAvailableWberaInfo" class="info-popup">
-                WBERA currently held by the SmartOperator. After PoL vNext, validator emissions accrue here as $WBERA. This balance can also be pulled by the WithdrawalVault at request time to cover staker withdrawals (full, partial, or none, depending on liquidity); the cooldown still applies before finalization.
+                WBERA currently held by the SmartOperator. Validator emissions accrue here as $WBERA. This balance can also be pulled by the WithdrawalVault at request time to cover staker withdrawals (full, partial, or none, depending on liquidity); the cooldown still applies before finalization.
               </p>
             </div>
             <div class="bgt-right">

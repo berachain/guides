@@ -1,6 +1,6 @@
 # Smart Operator Manager
 
-The `smart-operator-manager.py` script provides an interactive command-line interface for managing your SmartOperator contract. It simplifies common validator operations like reward allocation, commission management, fee claims on the WBERA-track (PoL vNext primary), and the BGT wind-down during the May 2026 transition.
+The `smart-operator-manager.py` script provides an interactive command-line interface for managing your SmartOperator contract. It simplifies common validator operations like reward allocation, commission management, WBERA fee claims, and BGT wind-down.
 
 ## Installation
 
@@ -47,13 +47,13 @@ The script provides a menu-driven interface with operations organized by categor
 
 ### Status and Monitoring
 
-**View Status** displays pool status including contract addresses (SmartOperator, StakingPool, StakingRewardsVault, IncentiveCollector), pool state (active, exited, threshold reached), BGT balances (boosted, unboosted, rebaseable), WBERA disposition on the operator (`availableWBERABalance`, `rebaseableWberaAmount`, `getEarnedWBERAFeeState`), protocol fee settings, current roles and permissions, reward allocation information, and vault information with names. The WBERA rows are skipped silently on a SmartOperator implementation that pre-dates PoL vNext.
+**View Status** displays pool status including contract addresses (SmartOperator, StakingPool, StakingRewardsVault, IncentiveCollector), pool state (active, exited, threshold reached), BGT balances (boosted, unboosted, rebaseable), WBERA disposition on the operator (`availableWBERABalance`, `rebaseableWberaAmount`, `getEarnedWBERAFeeState`), protocol fee settings, current roles and permissions, reward allocation information, and vault information with names. The WBERA rows are skipped silently on older SmartOperator implementations that lack WBERA support.
 
 ### BGT Operations
 
 **Queue Boost** queues unboosted BGT for boosting to your validator. Anyone can call this. **Activate Boost** activates a queued boost and is also callable by anyone. **Queue Drop Boost** queues a request to unboost BGT and requires `BGT_MANAGER_ROLE`. **Execute Drop Boost** executes a queued drop boost and anyone can call it. **Redeem BGT for BERA** converts BGT to BERA and sends it to the staking rewards vault, requiring `BGT_MANAGER_ROLE`.
 
-**Wind Down BGT** is a guided macro that walks the operator through the three-step BGT wind-down: queue a drop boost for any boosted balance, execute the drop after the cooldown delay, then redeem the resulting unboosted BGT for BERA. Each step prints state before prompting and respects `--show-calldata`. Requires `BGT_MANAGER_ROLE`. Recommended during the May 2026 PoL vNext transition since the BGT-era surface becomes inert once chargeable BGT is exhausted; see [Operator Guide → Deprecated BGT entry points](https://docs.berachain.com/nodes/staking-pools/operators#deprecated-bgt-entry-points).
+**Wind Down BGT** is a guided macro that walks the operator through the three-step BGT wind-down: queue a drop boost for any boosted balance, execute the drop after the cooldown delay, then redeem the resulting unboosted BGT for BERA. Each step prints state before prompting and respects `--show-calldata`. Requires `BGT_MANAGER_ROLE`. Recommended since the BGT-era surface becomes inert once chargeable BGT is exhausted; see [Operator Guide → Deprecated BGT entry points](https://docs.berachain.com/nodes/staking-pools/operators#deprecated-bgt-entry-points).
 
 ### Reward Management
 
@@ -75,7 +75,7 @@ The script provides a menu-driven interface with operations organized by categor
 
 **Set Protocol Fee Percentage** sets the protocol fee percentage (0-20%) charged on operator balance growth and requires `PROTOCOL_FEE_MANAGER_ROLE`. The setter charges both tracks (BGT and WBERA) before applying the new rate.
 
-**Accrue Earned WBERA Fees** is the primary fee-accrual entry point after PoL vNext. The same `_updateEarnedWBERAFees` runs automatically inside `withdrawRewards`, `pullBeraToWithdrawalVault`, and `setProtocolFeePercentage`, so this menu entry is a forced-settlement / monitoring tool. Requires `PROTOCOL_FEE_MANAGER_ROLE`.
+**Accrue Earned WBERA Fees** is the primary fee-accrual entry point. The same `_updateEarnedWBERAFees` runs automatically inside `withdrawRewards`, `pullBeraToWithdrawalVault`, and `setProtocolFeePercentage`, so this menu entry is a forced-settlement / monitoring tool. Requires `PROTOCOL_FEE_MANAGER_ROLE`.
 
 **Accrue Earned BGT Fees (legacy)** manually triggers BGT-track fee calculation. Becomes a no-op once chargeable BGT on the operator is exhausted. Requires `PROTOCOL_FEE_MANAGER_ROLE`.
 
