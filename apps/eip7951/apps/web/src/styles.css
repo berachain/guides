@@ -1,0 +1,282 @@
+:root {
+  color: #172033;
+  background: #f5f7fb;
+  font-family:
+    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+main {
+  width: min(1120px, calc(100% - 32px));
+  margin: 0 auto;
+  padding: 32px 0 56px;
+}
+
+.app-header,
+.card,
+.warning {
+  border: 1px solid #dde3ef;
+  border-radius: 20px;
+  background: #ffffff;
+  box-shadow: 0 18px 45px rgb(31 45 71 / 8%);
+}
+
+.app-header {
+  display: grid;
+  position: sticky;
+  z-index: 20;
+  top: 16px;
+  gap: 18px;
+  padding: 22px;
+  margin-bottom: 20px;
+  backdrop-filter: blur(12px);
+}
+
+.header-top,
+.header-actions {
+  display: grid;
+  gap: 16px;
+}
+
+.header-top {
+  grid-template-columns: 1fr minmax(260px, 360px);
+  align-items: end;
+}
+
+.header-actions {
+  grid-template-columns: repeat(2, minmax(220px, max-content));
+  align-items: center;
+}
+
+.network-select {
+  align-self: end;
+}
+
+.card,
+.warning {
+  padding: 24px;
+  margin-top: 20px;
+}
+
+.warning {
+  border-color: #ffd27d;
+  background: #fff7e6;
+}
+
+.warning-note {
+  border-left: 4px solid #d98f00;
+  border-radius: 10px;
+  background: #fff7e6;
+  color: #5f4200;
+  margin-bottom: 0;
+  padding: 12px;
+}
+
+.section-heading {
+  margin-bottom: 18px;
+}
+
+.eyebrow {
+  margin: 0 0 4px;
+  color: #65728a;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+h1,
+h2,
+h3,
+p {
+  margin-top: 0;
+}
+
+h1 {
+  margin-bottom: 0;
+  font-size: clamp(2rem, 4vw, 3.25rem);
+  line-height: 1;
+}
+
+h2 {
+  margin-bottom: 0;
+  font-size: 1.6rem;
+}
+
+h3 {
+  margin-bottom: 10px;
+}
+
+a {
+  color: #2559d6;
+}
+
+button,
+input,
+select {
+  border-radius: 12px;
+  font: inherit;
+}
+
+button {
+  width: fit-content;
+  border: 0;
+  background: #172033;
+  color: #ffffff;
+  cursor: pointer;
+  font-weight: 700;
+  padding: 12px 16px;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+button.secondary {
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #172033;
+}
+
+label {
+  display: grid;
+  gap: 8px;
+  color: #33405a;
+  font-weight: 700;
+}
+
+input,
+select {
+  width: 100%;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #172033;
+  padding: 12px 14px;
+}
+
+code {
+  border-radius: 6px;
+  background: #edf2fb;
+  padding: 2px 5px;
+}
+
+.stack {
+  display: grid;
+  gap: 14px;
+}
+
+.button-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: center;
+  margin-top: 8px;
+}
+
+.action-result {
+  margin-top: 18px;
+}
+
+.signature-output {
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid #e4e9f3;
+}
+
+.action-result p {
+  margin-bottom: 0;
+}
+
+.note {
+  color: #526078;
+  line-height: 1.6;
+}
+
+.status {
+  border-left: 4px solid #2559d6;
+  border-radius: 10px;
+  background: #edf4ff;
+  color: #223756;
+  margin-bottom: 0;
+  padding: 12px;
+}
+
+.callout {
+  display: grid;
+  gap: 12px;
+  border: 1px solid #d8e2f4;
+  border-radius: 16px;
+  background: #f8fbff;
+  padding: 16px;
+}
+
+.callout h3,
+.callout p {
+  margin-bottom: 0;
+}
+
+.error {
+  border-left: 4px solid #c62828;
+  border-radius: 10px;
+  background: #ffebee;
+  color: #8a1f1f;
+  margin-bottom: 0;
+  padding: 12px;
+}
+
+.value-grid {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+}
+
+.value-grid div {
+  display: grid;
+  grid-template-columns: 180px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+  border: 1px solid #e4e9f3;
+  border-radius: 12px;
+  padding: 12px;
+}
+
+.value-grid dt {
+  color: #526078;
+  font-weight: 800;
+}
+
+.value-grid dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+}
+
+@media (max-width: 860px) {
+  .header-top,
+  .header-actions {
+    grid-template-columns: 1fr;
+  }
+
+  button {
+    width: 100%;
+  }
+
+  .button-row {
+    gap: 12px;
+  }
+
+  .value-grid div {
+    grid-template-columns: 1fr;
+  }
+}
