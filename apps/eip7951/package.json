@@ -1,0 +1,17 @@
+{
+  "name": "two-factor-account-monorepo",
+  "private": true,
+  "type": "module",
+  "packageManager": "bun@1.2.0",
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "bun run web:dev",
+    "build": "bun run contracts:build && bun run web:build",
+    "contracts:build": "bun run --cwd apps/contracts build",
+    "web:dev": "bun run --cwd apps/web dev",
+    "web:build": "bun run --cwd apps/web build",
+    "typecheck": "bun run --cwd apps/web typecheck"
+  }
+}
