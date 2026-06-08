@@ -25,7 +25,7 @@
     "prettier": "^3.0.0",
     "tsup": "^8.0.0",
     "@nomicfoundation/hardhat-toolbox": "^4.0.0",
-    "@nomicfoundation/hardhat-verify": "^2.0.4",
+    "@nomicfoundation/hardhat-verify": "^3.0.0",
     "hardhat": "^2.19.5"
   },
   "dependencies": {

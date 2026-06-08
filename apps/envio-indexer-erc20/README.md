@@ -1,6 +1,6 @@
 # Index ERC-20 Contract Using Envio
 
-> See the full [GitHub Project Code Repository](https://github.com/berachain/guides/tree/main/apps/envio-indexing-erc20)
+> See the full [GitHub Project Code Repository](https://github.com/berachain/guides/tree/main/apps/envio-indexer-erc20)
 
 This developer guide will walk you through setting up an indexer, to query any ERC20 contract on the Berachain network using a GraphQL API, all with **[Envio](https://envio.dev)**.
 
@@ -11,12 +11,13 @@ This guide analyzes all WETH token "approval" and "transfer" event logs emitted 
 Before beginning, make sure you have the following installed or set up on your computer beforehand.
 
 - **[Envio](https://docs.envio.dev/docs/getting-started)**
+- **HyperSync API token** — create a free token at [envio.dev/app/api-tokens](https://envio.dev/app/api-tokens) and set `ENVIO_API_TOKEN` in `.env` (see `.env.example`)
 
 # ERC20 Indexer Project Code Setup
 
 Let's start by initializing the indexer and generating a boilerplate to index all events emitted by the WETH ERC20 token contract on Berachain.
 
-This is the WETH contract address: [0x8239FBb3e3D0C2cDFd7888D8aF7701240Ac4DcA4](https://artio.beratrail.io/token/0x8239FBb3e3D0C2cDFd7888D8aF7701240Ac4DcA4).
+This is the WETH contract address: [0x2f6f07cdcf3588944bf4c42ac74ff24bf56e7590](https://berascan.com/token/0x2f6f07cdcf3588944bf4c42ac74ff24bf56e7590).
 
 1. Open your terminal in a preferred directory and run the command `envio init`.
 
@@ -40,17 +41,17 @@ This file defines the network, start block, contract address, and events we want
 
 Replace the placeholder values for network, start block and contract address with the correct values, i.e.
 
-- Network Id = 80085
+- Network Id = 80094
 - Start Block = 0
-- Contract Address = 0x8239FBb3e3D0C2cDFd7888D8aF7701240Ac4DcA4
+- Contract Address = 0x2f6f07cdcf3588944bf4c42ac74ff24bf56e7590
 
 2. **Schema.graphql**
 
 This file saves and defines the data structures for selected events, such as the `Approval` event.
 
-3. **event-handler**
+3. **src/handlers/**
 
-This file defines what happens when an event is emitted and saves what code is going to run, allowing customization in data handling.
+Handler files define what happens when an event is emitted. Envio auto-registers handlers from this directory.
 
 # Starting the Indexer & Exploring Indexed Data
 
