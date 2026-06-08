@@ -51,14 +51,14 @@ Three ways to supply a private key, in order of preference:
 
 ### Operator Scripts (self-funded validators)
 
-| Script                        | Purpose                                                   | Key Inputs                                          |
-| ----------------------------- | --------------------------------------------------------- | --------------------------------------------------- |
-| `register.sh`                 | Deploy a new staking pool + initial 10 000 BERA deposit   | `--sr` (shares recipient), `--op` (operator)        |
-| `activate.sh`                 | Activate a deployed pool using a beacon state proof       | (auto-detected from `BEACOND_HOME`)                 |
-| `stake.sh`                    | Stake BERA into a pool, receive stBERA                    | `--amount`, `--receiver`, optional `--staking-pool` |
-| `unstake.sh`                  | Request withdrawal from a pool                            | `--amount` or `--shares`, `--receiver`              |
+| Script                        | Purpose                                                                                                                                             | Key Inputs                                          |
+| ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
+| `register.sh`                 | Deploy a new staking pool + initial 10 000 BERA deposit                                                                                             | `--sr` (shares recipient), `--op` (operator)        |
+| `activate.sh`                 | Activate a deployed pool using a beacon state proof                                                                                                 | (auto-detected from `BEACOND_HOME`)                 |
+| `stake.sh`                    | Stake BERA into a pool, receive stBERA                                                                                                              | `--amount`, `--receiver`, optional `--staking-pool` |
+| `unstake.sh`                  | Request withdrawal from a pool                                                                                                                      | `--amount` or `--shares`, `--receiver`              |
 | `status.sh`                   | Check deployment, activation, delegation, and WBERA/BGT disposition (primary track is WBERA; legacy BGT block auto-suppresses on a wound-down pool) | (auto-detected)                                     |
-| `generate-frontend-config.sh` | Write a `config.draft.json` for the staking-pool frontend | optional `--out` path                               |
+| `generate-frontend-config.sh` | Write a `config.draft.json` for the staking-pool frontend                                                                                           | optional `--out` path                               |
 
 ### Delegator Scripts (Foundation / capital provider)
 
