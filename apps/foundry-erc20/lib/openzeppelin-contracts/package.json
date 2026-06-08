@@ -66,7 +66,7 @@
     "@openzeppelin/upgrade-safe-transpiler": "^0.4.0",
     "@openzeppelin/upgrades-core": "^1.20.6",
     "array.prototype.at": "^1.1.1",
-    "chai": "^4.2.0",
+    "chai": "^6.0.0",
     "eslint": "^8.30.0",
     "eslint-config-prettier": "^9.0.0",
     "eth-sig-util": "^3.0.0",
