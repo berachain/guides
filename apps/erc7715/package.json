@@ -16,7 +16,7 @@
     "@safe-global/safe-apps-sdk": "^9.1.0",
     "@tanstack/react-query": "^5.99.0",
     "@walletconnect/ethereum-provider": "^2.21.1",
-    "next": "15",
+    "next": "16",
     "porto": "~0.2.35",
     "react": "19",
     "react-dom": "19",
@@ -30,7 +30,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
-    "eslint-config-next": "15",
+    "eslint-config-next": "16",
     "tailwindcss": "^4",
     "typescript": "^6.0.0"
   },
