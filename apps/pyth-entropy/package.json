@@ -21,11 +21,11 @@
   "dependencies": {
     "@openzeppelin/contracts": "^5.0.2",
     "@pythnetwork/entropy-sdk-solidity": "^2.0.0",
-    "dotenv": "^16.4.5",
+    "dotenv": "^17.0.0",
     "web3": "^4.8.0"
   },
   "devDependencies": {
-    "eslint": "^8.56.0",
+    "eslint": "^10.0.0",
     "typescript": "^5.0.0",
     "@types/jest": "^30.0.0",
     "@types/node": "^20.0.0",
