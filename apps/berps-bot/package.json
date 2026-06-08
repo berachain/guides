@@ -16,7 +16,7 @@
   "license": "ISC",
   "dependencies": {
     "@pythnetwork/pyth-evm-js": "^2.0.0",
-    "dotenv": "^16.4.5",
+    "dotenv": "^17.0.0",
     "ethers": "^6.13.0",
     "lodash": "^4.17.21"
   },
@@ -28,8 +28,8 @@
     "tsup": "^8.0.0",
     "typescript": "^6.0.0",
     "@types/lodash": "^4.17.0",
-    "eslint": "^8.0.1",
-    "eslint-config-prettier": "^10.0.0",
+    "eslint": "^10.0.0",
+    "eslint-config-prettier": "^8.3.0",
     "eslint-plugin-prettier": "^5.0.0",
     "tslib": "^2.3.1"
   }
