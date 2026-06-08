@@ -404,6 +404,9 @@ readonly BEACON_DEPOSIT_CONTRACT="0x4242424242424242424242424242424242424242"
 # BGT (Berachain Governance Token) addresses (same on both chains)
 readonly BGT_ADDRESS="0x656b95E550C07a9ffe548bd4085c72418Ceb1dba"
 
+# WBERA (Wrapped BERA) singleton (same on both chains)
+readonly WBERA_ADDRESS="0x6969696969696969696969696969696969696969"
+
 # === CHAIN DETECTION & DEFAULTS ===
 get_rpc_url_for_network() {
   local network="$1"
