@@ -3,7 +3,7 @@ module cometbft-decoder
 go 1.21
 
 require (
-	github.com/mattn/go-sqlite3 v1.14.17
+	github.com/mattn/go-sqlite3 v1.14.45
 	github.com/supranational/blst v0.3.16
 	github.com/tyler-smith/go-bip39 v1.1.0
 )

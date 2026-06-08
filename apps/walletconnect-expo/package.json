@@ -30,9 +30,9 @@
     "expo-linking": "^6.2.2",
     "nativewind": "^4.0.36",
     "postcss": "^8.4.35",
-    "react": "18.2.0",
+    "react": "18.3.1",
     "react-native": "0.73.4",
-    "react-native-css-interop": "^0.0.34",
+    "react-native-css-interop": "^0.2.0",
     "react-native-get-random-values": "^1.10.0",
     "react-native-modal": "^13.0.1",
     "react-native-reanimated": "^3.7.1",
@@ -51,7 +51,7 @@
     "tsup": "^8.0.0",
     "@babel/core": "^7.20.0",
     "@babel/runtime": "^7.26.10",
-    "@types/react": "~18.2.45"
+    "@types/react": "~18.3.0"
   },
   "private": true
 }
