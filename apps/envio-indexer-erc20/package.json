@@ -29,7 +29,7 @@
   },
   "dependencies": {
     "chai": "4.3.10",
-    "envio": "0.0.31",
+    "envio": "0.0.41",
     "ethers": "6.8.0"
   }
 }
