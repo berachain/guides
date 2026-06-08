@@ -28,7 +28,7 @@
     "tsup": "^8.0.0",
     "typescript": "^5.4.5",
     "@types/lodash": "^4.17.0",
-    "eslint": "^8.0.1",
+    "eslint": "^10.0.0",
     "eslint-config-prettier": "^8.3.0",
     "eslint-plugin-prettier": "^5.0.0",
     "tslib": "^2.3.1"
