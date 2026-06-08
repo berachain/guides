@@ -35,6 +35,6 @@
   },
   "dependencies": {
     "ethers": "^6.9.1",
-    "solc": "0.8.23-fixed"
+    "solc": "0.8.35"
   }
 }

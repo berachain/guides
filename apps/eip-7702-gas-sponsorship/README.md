@@ -81,32 +81,28 @@ CONTRACT_ADDRESS=$(grep -Eo '0x[a-fA-F0-9]{40}' deployment.log | tail -n1) && \
 sed -i '' "/^CONTRACT_ADDRESS=/d" .env && echo "CONTRACT_ADDRESS=$CONTRACT_ADDRESS" >> .env
 ```
 
-#### Step 4 - Fetch Nonce and Compute NONCE_TO_USE
+#### Step 4 - Sign EOA TX and Broadcast with Sponsor (Gas Paid by Sponsor)
+
+EIP-7702 authorization still requires the EOA's current account nonce for `cast wallet sign-auth`. Application-level nonce replay protection is covered in Part B.
 
 ```bash
 source .env && \
-EOA_NONCE=$(cast nonce $EOA_ADDRESS --rpc-url $TEST_RPC_URL) && \
-NONCE_TO_USE=$(cast call $CONTRACT_ADDRESS "getNonceToUse(uint256)(uint256)" $EOA_NONCE --rpc-url $TEST_RPC_URL) && \
-sed -i '' "/^NONCE_TO_USE=/d" .env && echo "NONCE_TO_USE=$NONCE_TO_USE" >> .env
-```
-
-#### Step 5 - Sign EOA TX and Broadcast with Sponsor (Gas Paid by Sponsor)
-
-```bash
 EOA_BAL_BEFORE=$(cast balance $EOA_ADDRESS --rpc-url $TEST_RPC_URL) && \
 SPONSOR_BAL_BEFORE=$(cast balance $SPONSOR_ADDRESS --rpc-url $TEST_RPC_URL) && \
 echo "💰 EOA Balance Before:     $EOA_BAL_BEFORE wei" && \
 echo "💸 Sponsor Balance Before: $SPONSOR_BAL_BEFORE wei" && \
 
-# ✍️ Sign EOA authorization
+EOA_NONCE=$(cast nonce $EOA_ADDRESS --rpc-url $TEST_RPC_URL) && \
+
+# ✍️ Sign EOA authorization (EIP-7702 auth nonce)
 AUTH_SIG=$(cast wallet sign-auth $CONTRACT_ADDRESS \
   --private-key $EOA_PRIVATE_KEY \
-  --nonce $NONCE_TO_USE \
+  --nonce $EOA_NONCE \
   --rpc-url $TEST_RPC_URL) && \
 
-# 📦 Prepare calldata for `execute(...)`
-CALLDATA=$(cast calldata "execute((bytes,address,uint256),address,uint256)" \
-  "(0x,$CONTRACT_ADDRESS,0)" $SPONSOR_ADDRESS $NONCE_TO_USE) && \
+# 📦 Prepare calldata for `execute(...)` (empty call to sponsor EOA; impl has no fallback)
+CALLDATA=$(cast calldata "execute((bytes,address,uint256),address)" \
+  "(0x,$SPONSOR_ADDRESS,0)" $SPONSOR_ADDRESS) && \
 
 # 🚀 Send the sponsored transaction
 TX_HASH=$(cast send $EOA_ADDRESS "$CALLDATA" \
@@ -147,7 +143,7 @@ cast receipt $TX_HASH --rpc-url $TEST_RPC_URL | grep -E 'gasUsed|effectiveGasPri
 echo "✅ If sponsor delta roughly equals gasUsed * effectiveGasPrice → gas was paid by SPONSOR."
 ```
 
-## Step 5 - Assessing the Results
+## Assessing the Results
 
 The output from running the last command will provide two `cast` commands to assess the results. If you prefer, just run the following commands though and copy and paste the transaction hash in accordingly.
 

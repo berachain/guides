@@ -1,13 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.29;
 
-import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
-import {MessageHashUtils} from "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
-
 /// @title SimpleDelegate Educational Contract - Part A
 /// @notice An example implementation contract showcasing transactions with gas sponsorship leveraging EIP-7702
 /// @dev Since the EOA prepares their own transactions (via a UI, their own code, etc.), they will have full reign on what is in their transaction. Thus having generic implementation contract code that an EOA points to for carrying out low level calls is acceptable.
-/// @dev This contract, as is, showcases gas sponsorship. Later parts of the EIP-7702 gas sponsorship guides will show: 1.) Initializing a contract, that will become a specific contract to an EOA basically, 2.) Having a check to ensure that the signer is the EOA for a sponsored call using solidity scripts and foundry to construct the signed transaction. Code commented out pertains to these later parts.
+/// @dev This contract, as is, showcases gas sponsorship. Part B of the EIP-7702 gas sponsorship guide adds signer validation, application-level nonce replay protection, and chain ID checks.
 contract SimpleDelegate {
     /// State Vars
     struct Call {
@@ -24,7 +21,7 @@ contract SimpleDelegate {
     event HenloSaid(address indexed sender, address indexed eoa, string message);
     event Reimbursed(address indexed sponsor, uint256 refund);
 
-    function execute(Call memory userCall, address sponsor, uint256 nonce) external payable {
+    function execute(Call memory userCall, address sponsor) external payable {
         // Begin gas tracking
         uint256 startGas = gasleft();
 
@@ -44,10 +41,5 @@ contract SimpleDelegate {
         }
 
         emit HenloSaid(msg.sender, address(this), "Henlo triggered!");
-    }
-
-    function getNonceToUse(uint256 currentEOANonce) external pure returns (uint256) {
-        uint256 nonceToUse = currentEOANonce + 10;
-        return nonceToUse;
     }
 }
