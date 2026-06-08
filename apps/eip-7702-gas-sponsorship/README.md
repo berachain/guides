@@ -100,9 +100,9 @@ AUTH_SIG=$(cast wallet sign-auth $CONTRACT_ADDRESS \
   --nonce $EOA_NONCE \
   --rpc-url $TEST_RPC_URL) && \
 
-# 📦 Prepare calldata for `execute(...)`
+# 📦 Prepare calldata for `execute(...)` (empty call to sponsor EOA; impl has no fallback)
 CALLDATA=$(cast calldata "execute((bytes,address,uint256),address)" \
-  "(0x,$CONTRACT_ADDRESS,0)" $SPONSOR_ADDRESS) && \
+  "(0x,$SPONSOR_ADDRESS,0)" $SPONSOR_ADDRESS) && \
 
 # 🚀 Send the sponsored transaction
 TX_HASH=$(cast send $EOA_ADDRESS "$CALLDATA" \
