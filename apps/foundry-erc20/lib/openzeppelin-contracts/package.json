@@ -54,7 +54,7 @@
     "@changesets/pre": "^2.0.0",
     "@changesets/read": "^0.5.9",
     "@nomicfoundation/hardhat-chai-matchers": "^2.0.2",
-    "@nomicfoundation/hardhat-ethers": "^3.0.4",
+    "@nomicfoundation/hardhat-ethers": "^4.0.0",
     "@nomicfoundation/hardhat-foundry": "^1.1.1",
     "@nomicfoundation/hardhat-network-helpers": "^3.0.0",
     "@nomicfoundation/hardhat-toolbox": "^3.0.0",
