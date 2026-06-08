@@ -1,35 +1,25 @@
 {
   "name": "envio-indexer-erc20-app",
   "version": "0.1.0",
+  "type": "module",
   "scripts": {
     "build": "echo 'Build skipped for this package'",
+    "codegen": "envio codegen",
     "dev": "envio dev",
     "lint": "echo 'No lint script defined for this guide'",
-    "lint:fix": "eslint src/ --fix",
     "format": "echo 'No format script defined for this guide'",
-    "test": "mocha",
-    "clean": "tsc --clean",
-    "watch": "tsc --watch",
-    "mocha": "ts-mocha test/**/*.ts",
-    "codegen": "envio codegen",
-    "start": "ts-node generated/src/Index.bs.js"
+    "start": "envio start",
+    "test": "vitest run --test-timeout=10000"
   },
   "devDependencies": {
-    "@types/jest": "^29.5.0",
-    "@types/node": "20.8.8",
-    "jest": "^29.5.0",
-    "prettier": "^3.0.0",
-    "tsup": "^8.0.0",
-    "typescript": "5.2.2",
-    "@types/chai": "^4.3.11",
-    "@types/mocha": "10.0.6",
-    "ts-mocha": "^10.0.0",
-    "ts-node": "10.9.1",
-    "mocha": "10.2.0"
+    "@types/node": "24.12.2",
+    "typescript": "6.0.3",
+    "vitest": "4.1.0"
   },
   "dependencies": {
-    "chai": "4.3.10",
-    "envio": "0.0.31",
-    "ethers": "6.8.0"
+    "envio": "3.1.1"
+  },
+  "engines": {
+    "node": ">=22.0.0"
   }
 }
