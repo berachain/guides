@@ -28,7 +28,7 @@
     "mocha": "10.2.0"
   },
   "dependencies": {
-    "chai": "4.3.10",
+    "chai": "4.5.0",
     "envio": "0.0.31",
     "ethers": "6.8.0"
   }
