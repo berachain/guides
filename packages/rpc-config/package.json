@@ -17,8 +17,8 @@
     "clean": "rm -rf .turbo && rm -rf node_modules && rm -rf dist"
   },
   "devDependencies": {
-    "eslint": "^10.0.0",
-    "typescript": "^5.3.3",
+    "eslint": "^8.56.0",
+    "typescript": "^6.0.0",
     "tsup": "^8.0.1"
   },
   "dependencies": {
