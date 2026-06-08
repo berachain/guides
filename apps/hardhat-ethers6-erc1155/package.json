@@ -25,7 +25,7 @@
     "prettier": "^3.0.0",
     "tsup": "^8.0.0",
     "@nomicfoundation/hardhat-toolbox": "^7.0.0",
-    "dotenv-cli": "^7.3.0",
+    "dotenv-cli": "^11.0.0",
     "hardhat": "^3.0.0"
   },
   "dependencies": {
