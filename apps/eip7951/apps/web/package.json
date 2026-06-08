@@ -10,7 +10,7 @@
     "typecheck": "tsc -b"
   },
   "dependencies": {
-    "@noble/hashes": "1",
+    "@noble/hashes": "2",
     "@tfa/contracts": "workspace:*",
     "@vitejs/plugin-react": "latest",
     "react": "latest",
