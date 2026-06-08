@@ -1,89 +1,81 @@
 logLevel: warn
 
-database:
-  evmJsonRpcCache:
-    driver: memory
-    maxItems: 10000
-    # driver: postgresql
-    # postgresql:
-    #   connectionUri: >-
-    #     postgres://YOUR_USERNAME_HERE:YOUR_PASSWORD_HERE@your.postgres.hostname.here.com:5432/your_database_name
-    #   table: rpc_cache
-
 server:
-  httpHost: 0.0.0.0
-  httpPort: 4000
+  httpHostV4: "0.0.0.0"
+  httpPortV4: 4000
 
 metrics:
   enabled: true
-  host: 0.0.0.0
+  hostV4: "0.0.0.0"
   port: 4001
+
+database:
+  evmJsonRpcCache:
+    connectors:
+      - id: memory-cache
+        driver: memory
+        memory:
+          maxItems: 10000
+      # - id: postgres-cache
+      #   driver: postgresql
+      #   postgresql:
+      #     connectionUri: >-
+      #       postgres://YOUR_USERNAME_HERE:YOUR_PASSWORD_HERE@your.postgres.hostname.here.com:5432/your_database_name
+      #     table: rpc_cache
+    policies:
+      - network: "*"
+        method: "*"
+        finality: finalized
+        connector: memory-cache
+        ttl: 0
+      - network: "*"
+        method: "*"
+        finality: unfinalized
+        connector: memory-cache
+        ttl: 5s
 
 projects:
   - id: main
+    rateLimitBudget: global
     networks:
       - architecture: evm
         evm:
-          chainId: 80084
+          chainId: 80069
         failsafe:
-          timeout:
-            duration: 8s
-          retry:
-            maxCount: 5
-            delay: 500ms
-            backoffMaxDelay: 10s
-            backoffFactor: 0.3
-            jitter: 200ms
-          hedge:
-            delay: 3000ms
-            maxCount: 2
+          - matchMethod: "*"
+            timeout:
+              duration: 8s
+            retry:
+              maxAttempts: 5
+              delay: 500ms
+              backoffMaxDelay: 10s
+              backoffFactor: 0.3
+              jitter: 200ms
+            hedge:
+              delay: 3000ms
+              maxCount: 2
     upstreams:
-      - id: chain-80084-https://bartio.rpc.berachain.com
+      - id: bepolia-official
         type: evm
-        endpoint: https://bartio.rpc.berachain.com
-        rateLimitBucket: global
-        healthCheckGroup: aggressive
+        endpoint: https://bepolia.rpc.berachain.com
+        rateLimitBudget: global
         evm:
-          chainId: 80084
+          chainId: 80069
         failsafe:
-          timeout:
-            duration: 5s
-          retry:
-            maxCount: 2
-            delay: 500ms
-            backoffMaxDelay: 10s
-            backoffFactor: 0.3
-            jitter: 100ms
-      - id: chain-80084-https://bartio.drpc.org
-        type: evm
-        endpoint: https://bartio.drpc.org
-        rateLimitBucket: global
-        healthCheckGroup: aggressive
-        evm:
-          chainId: 80084
-        failsafe:
-          timeout:
-            duration: 5s
-          retry:
-            maxCount: 2
-            delay: 500ms
-            backoffMaxDelay: 10s
-            backoffFactor: 0.3
-            jitter: 100ms
+          - matchMethod: "*"
+            timeout:
+              duration: 5s
+            retry:
+              maxAttempts: 2
+              delay: 500ms
+              backoffMaxDelay: 10s
+              backoffFactor: 0.3
+              jitter: 100ms
 
 rateLimiters:
-  buckets:
+  budgets:
     - id: global
       rules:
         - method: "*"
           maxCount: 1000
           period: 1s
-          scope: instance
-
-healthChecks:
-  groups:
-    - id: aggressive
-      checkInterval: 30s
-      maxErrorRatePercent: 10
-      maxP90LatencyMs: 5s
-      maxBlocksBehind: 5

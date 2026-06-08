@@ -19,10 +19,9 @@ logLevel: debug
 projects:
   - id: main
     upstreams:
-      # You don't need to define architecture (e.g. evm) or chain id (e.g. 80084)
+      # You don't need to define architecture (e.g. evm) or chain id (e.g. 80069)
       # as they will be detected automatically by eRPC.
-      - endpoint: https://berachain-bartio.blastapi.io/xxxx
-      - endpoint: evm+alchemy://xxxx-my-alchemy-api-key-xxxx
+      - endpoint: https://bepolia.rpc.berachain.com
 ```
 
 See [a complete config example](https://docs.erpc.cloud/config/example) for inspiration.
@@ -36,12 +35,12 @@ docker run -v $(pwd)/erpc.yaml:/root/erpc.yaml -p 4000:4000 -p 4001:4001 ghcr.io
 3. Send your first request:
 
 ```bash
-curl --location 'http://localhost:4000/main/evm/80084' \
+curl --location 'http://localhost:4000/main/evm/80069' \
 --header 'Content-Type: application/json' \
 --data '{
     "method": "eth_getBlockByNumber",
     "params": [
-        "0x226c32",
+        "latest",
         false
     ],
     "id": 9199,
@@ -56,7 +55,7 @@ curl --location 'http://localhost:4000/main/evm/80084' \
 git clone https://github.com/erpc/erpc.git
 cd erpc
 
-# bring up the monitoring stack
+# bring up monitoring stack
 docker-compose up -d
 ```
 
