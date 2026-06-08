@@ -1,7 +1,7 @@
 {
   "name": "hardhat-project",
   "devDependencies": {
-    "eslint": "^8.56.0",
+    "eslint": "^10.0.0",
     "typescript": "^5.0.0",
     "@types/jest": "^29.5.0",
     "@types/node": "^24.0.0",
