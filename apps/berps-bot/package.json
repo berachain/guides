@@ -15,21 +15,21 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@pythnetwork/pyth-evm-js": "^2.0.0",
-    "dotenv": "^17.0.0",
+    "@pythnetwork/pyth-evm-js": "^1.41.0",
+    "dotenv": "^16.4.5",
     "ethers": "^6.13.0",
     "lodash": "^4.17.21"
   },
   "devDependencies": {
-    "@types/jest": "^30.0.0",
-    "@types/node": "^20.0.0",
-    "jest": "^30.0.0",
+    "@types/jest": "^29.5.0",
+    "@types/node": "^24.0.0",
+    "jest": "^29.5.0",
     "prettier": "^3.0.0",
     "tsup": "^8.0.0",
     "typescript": "^5.4.5",
     "@types/lodash": "^4.17.0",
-    "eslint": "^10.0.0",
-    "eslint-config-prettier": "^8.3.0",
+    "eslint": "^8.0.1",
+    "eslint-config-prettier": "^10.0.0",
     "eslint-plugin-prettier": "^5.0.0",
     "tslib": "^2.3.1"
   }
