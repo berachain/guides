@@ -10,7 +10,7 @@
     "tsup": "^8.0.0",
     "@nomicfoundation/hardhat-toolbox": "^4.0.0",
     "hardhat": "^2.20.1",
-    "hardhat-deploy": "^0.11.45"
+    "hardhat-deploy": "^0.14.0"
   },
   "dependencies": {
     "ethers": "^6.6.4",
