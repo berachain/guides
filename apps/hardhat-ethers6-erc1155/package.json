@@ -26,7 +26,7 @@
     "tsup": "^8.0.0",
     "@nomicfoundation/hardhat-toolbox": "^4.0.0",
     "dotenv-cli": "^7.3.0",
-    "hardhat": "^2.19.4"
+    "hardhat": "^3.0.0"
   },
   "dependencies": {
     "@openzeppelin/contracts": "^5.0.1",
