@@ -9,7 +9,7 @@
     "prettier": "^3.0.0",
     "tsup": "^8.0.0",
     "@nomicfoundation/hardhat-toolbox": "^4.0.0",
-    "hardhat": "^2.20.1",
+    "hardhat": "^3.0.0",
     "hardhat-deploy": "^2.0.0"
   },
   "dependencies": {
