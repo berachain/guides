@@ -78,7 +78,7 @@
     "hardhat": "^3.0.0",
     "hardhat-exposed": "^0.3.13",
     "hardhat-gas-reporter": "^1.0.9",
-    "hardhat-ignore-warnings": "^0.2.0",
+    "hardhat-ignore-warnings": "^0.3.0",
     "lodash.startcase": "^4.4.0",
     "lodash.zip": "^4.2.0",
     "micromatch": "^4.0.2",
