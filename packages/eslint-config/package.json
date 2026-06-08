@@ -15,6 +15,6 @@
     "eslint-config-prettier": "^9.0.0",
     "eslint-plugin-only-warn": "^1.1.0",
     "eslint-plugin-simple-import-sort": "^13.0.0",
-    "typescript": "^5.2.2"
+    "typescript": "^6.0.0"
   }
 }
