@@ -17,7 +17,7 @@
   "devDependencies": {
     "eslint": "^8.56.0",
     "typescript": "^5.0.0",
-    "@nomicfoundation/hardhat-toolbox": "^4.0.0",
+    "@nomicfoundation/hardhat-toolbox": "^7.0.0",
     "@nomicfoundation/hardhat-toolbox-viem": "^5.0.0",
     "@types/node": "^20.0.0",
     "hardhat": "^2.19.4",
