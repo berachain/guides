@@ -2013,8 +2013,7 @@ prelude-ls@^1.2.1:
   version "1.2.1"
 
 prettier@^3.0.0:
-  version "3.6.2"
-  resolved "file:../../node_modules/.pnpm/prettier@3.6.2/node_modules/prettier"
+  version "3.8.3"
 
 proxy-addr@~2.0.7:
   version "2.0.7"

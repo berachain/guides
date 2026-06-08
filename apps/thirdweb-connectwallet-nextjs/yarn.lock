@@ -204,8 +204,7 @@ next@^14:
     "@next/swc-win32-x64-msvc" "14.2.26"
 
 prettier@^3.0.0:
-  version "3.6.2"
-  resolved "file:../../node_modules/.pnpm/prettier@3.6.2/node_modules/prettier"
+  version "3.8.3"
 
 react-dom@^18.2:
   version "18.3.1"
