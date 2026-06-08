@@ -41,6 +41,6 @@
   "dependencies": {
     "@irys/upload": "^0.0.15",
     "@irys/upload-ethereum": "^0.0.16",
-    "dotenv": "^16.4.7"
+    "dotenv": "^17.0.0"
   }
 }
