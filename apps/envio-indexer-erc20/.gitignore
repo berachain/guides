@@ -29,5 +29,7 @@ build/
 benchmarks/
 artifacts
 cache
-*.bs.js
-generated
+*.res.js
+*.res.mjs
+.env
+.pnpm-store
