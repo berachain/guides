@@ -2,7 +2,7 @@ module enode-tester
 
 go 1.23.0
 
-toolchain go1.23.12
+toolchain go1.26.4
 
 require (
 	github.com/ethereum/go-ethereum v1.16.3
