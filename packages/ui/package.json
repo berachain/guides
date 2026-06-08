@@ -12,8 +12,8 @@
     "generate:component": "turbo gen react-component"
   },
   "devDependencies": {
-    "@turbo/gen": "^2.0.0",
-    "@types/node": "^20.5.2",
+    "@turbo/gen": "^1.10.12",
+    "@types/node": "^24.0.0",
     "@types/eslint": "^9.0.0",
     "@types/react": "^18.2.0",
     "@types/react-dom": "^18.2.0",
