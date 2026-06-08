@@ -45,7 +45,9 @@ export const WITHDRAWAL_VAULT_ABI = [
   { name: 'requestRedeem', type: 'function', stateMutability: 'payable', inputs: [{ name: 'pubkey', type: 'bytes' }, { name: 'shares', type: 'uint256' }, { name: 'maxFeeToPay', type: 'uint256' }], outputs: [{ name: 'requestId', type: 'uint256' }] },
   { name: 'finalizeWithdrawalRequest', type: 'function', stateMutability: 'nonpayable', inputs: [{ name: 'requestId', type: 'uint256' }], outputs: [] },
   { name: 'finalizeWithdrawalRequests', type: 'function', stateMutability: 'nonpayable', inputs: [{ name: 'requestIds', type: 'uint256[]' }], outputs: [] },
-  { name: 'getWithdrawalRequest', type: 'function', stateMutability: 'view', inputs: [{ name: 'requestId', type: 'uint256' }], outputs: [{ name: '', type: 'tuple', components: [{ name: 'pubkey', type: 'bytes' }, { name: 'assetsRequested', type: 'uint256' }, { name: 'sharesBurnt', type: 'uint256' }, { name: 'user', type: 'address' }, { name: 'requestBlock', type: 'uint256' }] }] }
+  { name: 'getWithdrawalRequest', type: 'function', stateMutability: 'view', inputs: [{ name: 'requestId', type: 'uint256' }], outputs: [{ name: '', type: 'tuple', components: [{ name: 'pubkey', type: 'bytes' }, { name: 'assetsRequested', type: 'uint256' }, { name: 'sharesBurnt', type: 'uint256' }, { name: 'user', type: 'address' }, { name: 'requestBlock', type: 'uint256' }] }] },
+  { name: 'retryFullExit', type: 'function', stateMutability: 'payable', inputs: [{ name: 'pubkey', type: 'bytes' }, { name: 'maxFeeToPay', type: 'uint256' }], outputs: [] },
+  { type: 'event', name: 'FullExitRequestRetried', inputs: [{ name: 'pubkey', type: 'bytes', indexed: false }] }
 ]
 
 export const DELEGATION_HANDLER_ABI = [
@@ -77,7 +79,10 @@ export const SMART_OPERATOR_ABI = [
   { name: 'protocolFeePercentage', type: 'function', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint96' }] },
   { name: 'rebaseableBgtAmount', type: 'function', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256' }] },
   { name: 'unboostedBalance', type: 'function', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256' }] },
-  { name: 'getEarnedBGTFeeState', type: 'function', stateMutability: 'view', inputs: [], outputs: [{ name: 'currentBalance', type: 'uint256' }, { name: 'bgtBalanceAlreadyCharged', type: 'uint256' }, { name: 'chargeableBalance', type: 'uint256' }, { name: 'protocolFeePercentage', type: 'uint96' }] }
+  { name: 'getEarnedBGTFeeState', type: 'function', stateMutability: 'view', inputs: [], outputs: [{ name: 'currentBalance', type: 'uint256' }, { name: 'bgtBalanceAlreadyCharged', type: 'uint256' }, { name: 'chargeableBalance', type: 'uint256' }, { name: 'protocolFeePercentage', type: 'uint96' }] },
+  { name: 'rebaseableWberaAmount', type: 'function', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256' }] },
+  { name: 'availableWBERABalance', type: 'function', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256' }] },
+  { name: 'getEarnedWBERAFeeState', type: 'function', stateMutability: 'view', inputs: [], outputs: [{ name: 'currentBalance', type: 'uint256' }, { name: 'wberaBalanceAlreadyCharged', type: 'uint256' }, { name: 'chargeableBalance', type: 'uint256' }, { name: 'protocolFeePercentage', type: 'uint96' }] }
 ]
 
 export const STAKING_POOL_FACTORY_ABI = [
