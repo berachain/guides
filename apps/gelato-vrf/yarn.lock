@@ -1331,8 +1331,7 @@ ethers@^5.5.2:
     "@ethersproject/wordlists" "5.7.0"
 
 ethers@^6.6.4:
-  version "6.15.0"
-  resolved "file:../../node_modules/.pnpm/ethers@6.15.0_bufferutil@4.0.9_utf-8-validate@5.0.10/node_modules/ethers"
+  version "6.16.0"
   dependencies:
     "@adraffy/ens-normalize" "1.10.1"
     "@noble/curves" "1.2.0"
