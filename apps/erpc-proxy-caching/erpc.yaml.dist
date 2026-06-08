@@ -24,7 +24,7 @@ projects:
     networks:
       - architecture: evm
         evm:
-          chainId: 80084
+          chainId: 80069
         failsafe:
           timeout:
             duration: 8s
@@ -38,29 +38,13 @@ projects:
             delay: 3000ms
             maxCount: 2
     upstreams:
-      - id: chain-80084-https://bartio.rpc.berachain.com
+      - id: chain-80069-https://bepolia.rpc.berachain.com
         type: evm
-        endpoint: https://bartio.rpc.berachain.com
+        endpoint: https://bepolia.rpc.berachain.com
         rateLimitBucket: global
         healthCheckGroup: aggressive
         evm:
-          chainId: 80084
-        failsafe:
-          timeout:
-            duration: 5s
-          retry:
-            maxCount: 2
-            delay: 500ms
-            backoffMaxDelay: 10s
-            backoffFactor: 0.3
-            jitter: 100ms
-      - id: chain-80084-https://bartio.drpc.org
-        type: evm
-        endpoint: https://bartio.drpc.org
-        rateLimitBucket: global
-        healthCheckGroup: aggressive
-        evm:
-          chainId: 80084
+          chainId: 80069
         failsafe:
           timeout:
             duration: 5s
