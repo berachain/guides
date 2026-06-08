@@ -84,6 +84,17 @@ SMART_OPERATOR_ABI = [
     {"inputs": [{"internalType": "uint256", "name": "minEffectiveBalance", "type": "uint256"}], "name": "setMinEffectiveBalance", "outputs": [], "stateMutability": "nonpayable", "type": "function"},
     {"inputs": [{"internalType": "uint256", "name": "newPayoutAmount", "type": "uint256"}], "name": "queueIncentiveCollectorPayoutAmountChange", "outputs": [], "stateMutability": "nonpayable", "type": "function"},
     {"inputs": [], "name": "accrueEarnedBGTFees", "outputs": [], "stateMutability": "nonpayable", "type": "function"},
+    # WBERA track. withdrawRewards / pullBeraToWithdrawalVault are sender-restricted
+    # to the StakingPool / WithdrawalVault respectively; they are present here for log decoding
+    # completeness and must not be exposed as menu entries.
+    {"inputs": [], "name": "accrueEarnedWBERAFees", "outputs": [], "stateMutability": "nonpayable", "type": "function"},
+    {"inputs": [], "name": "availableWBERABalance", "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}], "stateMutability": "view", "type": "function"},
+    {"inputs": [], "name": "rebaseableWberaAmount", "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}], "stateMutability": "view", "type": "function"},
+    {"inputs": [], "name": "getEarnedWBERAFeeState", "outputs": [{"internalType": "uint256", "name": "currentBalance", "type": "uint256"}, {"internalType": "uint256", "name": "wberaBalanceAlreadyCharged", "type": "uint256"}, {"internalType": "uint256", "name": "chargeableBalance", "type": "uint256"}, {"internalType": "uint96", "name": "", "type": "uint96"}], "stateMutability": "view", "type": "function"},
+    {"inputs": [{"internalType": "uint256", "name": "amount", "type": "uint256"}], "name": "withdrawRewards", "outputs": [], "stateMutability": "nonpayable", "type": "function"},
+    {"inputs": [{"internalType": "uint256", "name": "amount", "type": "uint256"}], "name": "pullBeraToWithdrawalVault", "outputs": [], "stateMutability": "nonpayable", "type": "function"},
+    {"anonymous": False, "inputs": [{"indexed": False, "internalType": "uint256", "name": "amount", "type": "uint256"}], "name": "WBERADepositedToPool", "type": "event"},
+    {"anonymous": False, "inputs": [{"indexed": False, "internalType": "uint256", "name": "amount", "type": "uint256"}], "name": "WBERASentToWithdrawalVault", "type": "event"},
 ]
 
 STAKING_POOL_ABI = [
@@ -672,6 +683,19 @@ class SmartOperatorManager:
             table.add_row("Protocol Fee", f"{fee_pct / 100:.2f}%")
             table.add_row("Chargeable BGT", f"{Web3.from_wei(chargeable, 'ether'):.4f} BGT")
 
+            # WBERA disposition. Skipped silently on older SmartOperator
+            # implementations that lack WBERA support; those calls revert.
+            try:
+                avail_wbera = self.operator.functions.availableWBERABalance().call()
+                rebaseable_wbera = self.operator.functions.rebaseableWberaAmount().call()
+                wbera_current, wbera_charged, wbera_chargeable, _wbera_fee = self.operator.functions.getEarnedWBERAFeeState().call()
+                table.add_row("Available WBERA", f"{Web3.from_wei(avail_wbera, 'ether'):.4f} WBERA")
+                table.add_row("Rebaseable WBERA", f"{Web3.from_wei(rebaseable_wbera, 'ether'):.4f} WBERA")
+                table.add_row("WBERA Charged Fees", f"{Web3.from_wei(wbera_charged, 'ether'):.4f} WBERA")
+                table.add_row("Chargeable WBERA", f"{Web3.from_wei(wbera_chargeable, 'ether'):.4f} WBERA")
+            except Exception:
+                pass
+
             # Commission
             table.add_row("Validator Commission", commission_pct_display if commission_pct_display else "unknown")
             # Reward allocator
@@ -932,6 +956,181 @@ class SmartOperatorManager:
             self.execute_or_show_calldata("redeemBGT", tx_data)
         except Exception as e:
             console.print(f"[red]Error: {e}[/red]")
+
+    def _read_bgt_wind_down_state(self):
+        """Read the current BGT wind-down state on the operator. Returns a dict with raw wei values."""
+        pubkey_bytes = bytes.fromhex(self.pubkey)
+        state = {
+            'unboosted': 0,
+            'boosted': 0,
+            'queued_boost': 0,
+            'queued_boost_block': 0,
+            'queued_drop': 0,
+            'queued_drop_block': 0,
+            'drop_delay': 0,
+            'bgt_balance': 0,
+        }
+        try:
+            state['unboosted'] = self.bgt.functions.unboostedBalanceOf(self.operator_address).call()
+        except Exception:
+            pass
+        try:
+            state['boosted'] = self.bgt.functions.boosted(self.operator_address, pubkey_bytes).call()
+        except Exception:
+            pass
+        try:
+            qb_block, qb_amt = self.bgt.functions.boostedQueue(self.operator_address, pubkey_bytes).call()
+            state['queued_boost'] = qb_amt
+            state['queued_boost_block'] = qb_block
+        except Exception:
+            pass
+        try:
+            qd_block, qd_amt = self.bgt.functions.dropBoostQueue(self.operator_address, pubkey_bytes).call()
+            state['queued_drop'] = qd_amt
+            state['queued_drop_block'] = qd_block
+        except Exception:
+            pass
+        try:
+            state['drop_delay'] = int(self.bgt.functions.dropBoostDelay().call())
+        except Exception:
+            pass
+        try:
+            state['bgt_balance'] = self.bgt.functions.balanceOf(self.operator_address).call()
+        except Exception:
+            pass
+        return state
+
+    def _print_bgt_wind_down_state(self, label: str, s: Dict):
+        """Render a wind-down state snapshot."""
+        from rich.table import Table as RichTable
+        t = RichTable(title=label, show_header=True, header_style="bold cyan")
+        t.add_column("Field")
+        t.add_column("Value", justify="right")
+        t.add_row("Unboosted BGT", f"{Web3.from_wei(s['unboosted'], 'ether'):.6f}")
+        t.add_row("Boosted BGT", f"{Web3.from_wei(s['boosted'], 'ether'):.6f}")
+        t.add_row("Queued Boost", f"{Web3.from_wei(s['queued_boost'], 'ether'):.6f}")
+        t.add_row("Queued Drop Boost", f"{Web3.from_wei(s['queued_drop'], 'ether'):.6f}")
+        t.add_row("BGT Balance (operator)", f"{Web3.from_wei(s['bgt_balance'], 'ether'):.6f}")
+        console.print(t)
+
+    def wind_down_bgt_action(self):
+        """Guided BGT wind-down: queueDropBoost -> dropBoost -> redeemBGT.
+
+        Each step is independently confirmable, prints state before prompting, and respects
+        --show-calldata mode via execute_or_show_calldata. See:
+        https://docs.berachain.com/nodes/staking-pools/operators#deprecated-bgt-entry-points
+        """
+        if self.pool_fully_exited:
+            console.print("[red]Pool is fully exited; BGT wind-down is not applicable.[/red]")
+            return
+        console.print(Panel.fit(
+            "BGT wind-down\n"
+            "Steps: drop boosted BGT -> wait for cooldown -> execute drop -> redeem BGT for BERA.\n"
+            "See https://docs.berachain.com/nodes/staking-pools/operators#deprecated-bgt-entry-points",
+            style="bold cyan"
+        ))
+
+        before = self._read_bgt_wind_down_state()
+        self._print_bgt_wind_down_state("Before", before)
+
+        if before['boosted'] == 0 and before['queued_drop'] == 0 and before['unboosted'] == 0 and before['bgt_balance'] == 0:
+            console.print("[green]Nothing to wind down: operator has no BGT exposure.[/green]")
+            return
+
+        # Step 1: queueDropBoost for any currently-boosted amount with no drop already queued.
+        if before['boosted'] > 0 and before['queued_drop'] == 0:
+            console.print(
+                f"[cyan]Step 1:[/cyan] queue drop boost for "
+                f"{Web3.from_wei(before['boosted'], 'ether'):.6f} boosted BGT."
+            )
+            default_amount = str(Web3.from_wei(before['boosted'], 'ether'))
+            amount_str = Prompt.ask("Amount of BGT to drop (default = full boosted)", default=default_amount)
+            try:
+                amount_wei = self.w3.to_wei(amount_str, 'ether')
+            except Exception as e:
+                console.print(f"[red]Error parsing amount: {e}[/red]")
+                return
+            if amount_wei <= 0 or amount_wei > before['boosted']:
+                console.print("[red]Amount must be > 0 and <= currently boosted balance.[/red]")
+                return
+            try:
+                self.operator.functions.queueDropBoost(amount_wei).call({'from': self.account.address})
+            except Exception as e:
+                console.print(f"[red]Preflight revert:[/red] {self.decode_revert(e)}")
+                return
+            tx_data = self.operator.functions.queueDropBoost(amount_wei).build_transaction({'from': self.account.address})
+            self.execute_or_show_calldata("queueDropBoost", tx_data)
+            console.print(
+                "[yellow]Drop boost queued. Wait for the cooldown delay, then re-run this macro to execute the drop.[/yellow]"
+            )
+            return
+        elif before['boosted'] > 0 and before['queued_drop'] > 0:
+            console.print(
+                "[yellow]Step 1 skipped:[/yellow] a drop is already queued; cannot queue another until it executes."
+            )
+
+        # Step 2: dropBoost when the queued drop is past its delay.
+        if before['queued_drop'] > 0:
+            current_block = self.w3.eth.block_number
+            ready_at = before['queued_drop_block'] + before['drop_delay']
+            if current_block < ready_at:
+                console.print(
+                    f"[yellow]Step 2 not ready:[/yellow] queued drop unlocks at block {ready_at} "
+                    f"(current {current_block}, {ready_at - current_block} blocks remaining)."
+                )
+                return
+            console.print(
+                f"[cyan]Step 2:[/cyan] execute the queued drop boost "
+                f"({Web3.from_wei(before['queued_drop'], 'ether'):.6f} BGT)."
+            )
+            if not Confirm.ask("Execute drop boost now?", default=True):
+                return
+            try:
+                self.operator.functions.dropBoost().call({'from': self.account.address})
+            except Exception as e:
+                console.print(f"[red]Preflight revert:[/red] {self.decode_revert(e)}")
+                return
+            tx_data = self.operator.functions.dropBoost().build_transaction({'from': self.account.address})
+            self.execute_or_show_calldata("dropBoost", tx_data)
+            # Refresh state so the redeem step sees the unboosted BGT.
+            before = self._read_bgt_wind_down_state()
+
+        # Step 3: redeem any unboosted (or otherwise redeemable) BGT for BERA.
+        if before['bgt_balance'] > 0 and before['unboosted'] > 0:
+            console.print(
+                f"[cyan]Step 3:[/cyan] redeem unboosted BGT for BERA "
+                f"({Web3.from_wei(before['unboosted'], 'ether'):.6f} BGT available)."
+            )
+            default_amount = str(Web3.from_wei(before['unboosted'], 'ether'))
+            amount_str = Prompt.ask("Amount of BGT to redeem (default = full unboosted)", default=default_amount)
+            try:
+                if amount_str.strip().lower() in ("all", "max"):
+                    amount_wei = before['unboosted']
+                else:
+                    amount_wei = self.w3.to_wei(amount_str, 'ether')
+            except Exception as e:
+                console.print(f"[red]Error parsing amount: {e}[/red]")
+                return
+            if amount_wei <= 0 or amount_wei > before['unboosted']:
+                console.print("[red]Amount must be > 0 and <= unboosted BGT.[/red]")
+                return
+            try:
+                self.operator.functions.redeemBGT(amount_wei).call({'from': self.account.address})
+            except Exception as e:
+                console.print(f"[red]Preflight revert:[/red] {self.decode_revert(e)}")
+                return
+            tx_data = self.operator.functions.redeemBGT(amount_wei).build_transaction({'from': self.account.address})
+            self.execute_or_show_calldata("redeemBGT", tx_data)
+        elif before['bgt_balance'] > 0:
+            console.print(
+                "[yellow]Step 3 skipped:[/yellow] BGT held by the operator is still boosted; "
+                "queue a drop boost first."
+            )
+        else:
+            console.print("[green]Nothing left to redeem; BGT balance on the operator is zero.[/green]")
+
+        after = self._read_bgt_wind_down_state()
+        self._print_bgt_wind_down_state("After (post-action)", after)
 
     def set_reward_allocator_action(self):
         """Set reward allocator address"""
@@ -1208,7 +1407,7 @@ class SmartOperatorManager:
             console.print(f"[red]Error: {e}[/red]")
 
     def accrue_fees_action(self):
-        """Manually accrue earned BGT fees"""
+        """Manually accrue earned BGT fees (legacy track)"""
         if self.pool_fully_exited is True:
             console.print("[red]Pool is fully exited; accruing earned BGT fees is disabled.[/red]")
             return
@@ -1221,6 +1420,20 @@ class SmartOperatorManager:
             return
         tx_data = self.operator.functions.accrueEarnedBGTFees().build_transaction({'from': self.account.address})
         self.execute_or_show_calldata("accrueEarnedBGTFees", tx_data)
+
+    def accrue_wbera_fees_action(self):
+        """Manually accrue earned WBERA fees"""
+        if self.pool_fully_exited is True:
+            console.print("[red]Pool is fully exited; accruing earned WBERA fees is disabled.[/red]")
+            return
+        console.print("[cyan]Accruing earned WBERA fees...[/cyan]")
+        try:
+            self.operator.functions.accrueEarnedWBERAFees().call({'from': self.account.address})
+        except Exception as e:
+            console.print(f"[red]Preflight revert:[/red] {self.decode_revert(e)}")
+            return
+        tx_data = self.operator.functions.accrueEarnedWBERAFees().build_transaction({'from': self.account.address})
+        self.execute_or_show_calldata("accrueEarnedWBERAFees", tx_data)
 
     def view_reward_allocation_action(self):
         """View current reward allocation from BeraChef"""
@@ -1706,6 +1919,7 @@ class SmartOperatorManager:
             menu.append(("queue_drop", "⬇️  Queue Drop Boost", self.queue_drop_boost_action))
             menu.append(("drop_boost", "✅ Execute Drop Boost", self.drop_boost_action))
             menu.append(("redeem_bgt", "💰 Redeem BGT for BERA", self.redeem_bgt_action))
+            menu.append(("wind_down_bgt", "🧹 Wind Down BGT (drop → execute → redeem)", self.wind_down_bgt_action))
 
         # Rewards allocation
         if self.roles.get("REWARDS_ALLOCATION_MANAGER_ROLE"):
@@ -1724,7 +1938,8 @@ class SmartOperatorManager:
         # Protocol fee management
         if self.roles.get("PROTOCOL_FEE_MANAGER_ROLE"):
             menu.append(("set_fee", "💸 Set Protocol Fee Percentage", self.set_protocol_fee_action))
-            menu.append(("accrue_fees", "📈 Accrue Earned BGT Fees", self.accrue_fees_action))
+            menu.append(("accrue_wbera_fees", "📈 Accrue Earned WBERA Fees", self.accrue_wbera_fees_action))
+            menu.append(("accrue_fees", "📈 Accrue Earned BGT Fees (legacy)", self.accrue_fees_action))
 
         # Role management (available to anyone; contract enforces permissions)
         menu.append(("manage_roles", "🔑 Manage Roles", self.manage_roles_action))
