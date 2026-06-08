@@ -11,7 +11,7 @@
   "dependencies": {
     "@base-org/account": "^2.5.1",
     "@coinbase/wallet-sdk": "^4.3.6",
-    "@metamask/connect-evm": "^0.9.1",
+    "@metamask/connect-evm": "^0.11.0",
     "@safe-global/safe-apps-provider": "~0.18.6",
     "@safe-global/safe-apps-sdk": "^9.1.0",
     "@tanstack/react-query": "^5.99.0",
