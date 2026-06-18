@@ -33,7 +33,7 @@
     "react-native-mmkv": "^4.3.1",
     "react-native-nitro-modules": "^0.35.4",
     "react-native-reanimated": "~4.4.0",
-    "react-native-safe-area-context": "~5.6.0",
+    "react-native-safe-area-context": "~5.8.0",
     "react-native-screens": "~4.25.0",
     "viem": "^2.48.4",
     "wallet-crypto": "file:./modules/wallet-crypto",
