@@ -49,7 +49,7 @@ npm run compile; # npx hardhat compile;
 # [Expected Output]:
 # Compiled 1 Solidity file successfully (evm target: paris).
 
-npm run deploy:berachain; # npx hardhat run scripts/deploy.ts --network berachainTestnet;
+npm run deploy:berachain; # npx hardhat run scripts/deploy.ts --network berachainBepolia;
 
 # [Expected Equivalent Output]:
 # {
@@ -65,7 +65,7 @@ In order to verify your contract, take note of the deployed contract `address` a
 ```bash
 # FROM ./create-erc1155-contract-using-hardhat-ethers6
 
-# npx hardhat verify --network berachainTestnet 0xe9470c884603c239502c4d92d108a5b3f14074b4 "https://example.com" "0x012456..";
+# npx hardhat verify --network berachainBepolia 0xe9470c884603c239502c4d92d108a5b3f14074b4 "https://example.com" "0x012456..";
 npm run verify 0xe9470c884603c239502c4d92d108a5b3f14074b4 "YOUR-UNIQUE-BASE-URL-FOR-HOLDING-JSON-FILES-WITH-SLASH-AT-THE-END" "0xYOUR_WALLET_ADDRESS";
 
 # [Expected Output]:

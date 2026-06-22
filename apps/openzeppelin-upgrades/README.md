@@ -11,7 +11,7 @@ This repository contains an example of how to deploy and interact with upgradeab
 
 - Node `v20.11.0` or greater
 - npm
-- Wallet with Berachain Testnet $BERA tokens - See the [Berachain bArtio Faucet](https://bartio.faucet.berachain.com)
+- Wallet with Berachain Testnet $BERA tokens - See the [Berachain Bepolia Faucet](https://bepolia.faucet.berachain.com)
 - [Foundry](https://book.getfoundry.sh/getting-started/installation) - ensure `foundryup` is run to install binaries
 
 ## Step 1 - Set Up Environment Variables
@@ -55,7 +55,7 @@ Next, run the deployment script `script/DeployProxy.s.sol` (we pin the Solidity 
 ```base
 # FROM: ./openzeppelin-upgrades
 
-forge script script/DeployProxy.s.sol --broadcast --rpc-url https://bartio.rpc.berachain.com/ --private-key $PK --use 0.8.25;
+forge script script/DeployProxy.s.sol --broadcast --rpc-url https://bepolia.rpc.berachain.com/ --private-key $PK --use 0.8.25;
 ```
 
 Take note of your `Proxy` contract address.
@@ -66,7 +66,7 @@ Take note of your `Proxy` contract address.
 ```
 # FROM: ./openzeppelin-upgrades
 
-forge verify-contract <IMPLEMENTATION_ADDRESS> ./src/DeFiTokenV1.sol:DeFiToken --verifier-url 'https://api.routescan.io/v2/network/testnet/evm/80084/etherscan' --etherscan-api-key "verifyContract" --num-of-optimizations 200 --compiler-version 0.8.25;
+forge verify-contract <IMPLEMENTATION_ADDRESS> ./src/DeFiTokenV1.sol:DeFiToken --verifier-url 'https://api.routescan.io/v2/network/testnet/evm/80069/etherscan' --etherscan-api-key "verifyContract" --num-of-optimizations 200 --compiler-version 0.8.25;
 ```
 
 Now, when you navigate to your proxy contract on Beratrail, you will see the ERC20 token attributes hooked up to the proxy contract.
@@ -81,7 +81,7 @@ Clean the build artifacts and then run the upgrade script:
 # FROM: ./openzeppelin-upgrades
 
 forge clean;
-forge script script/DeployUpgrade.s.sol --broadcast --rpc-url https://bartio.rpc.berachain.com/ --private-key $PK --use 0.8.25;
+forge script script/DeployUpgrade.s.sol --broadcast --rpc-url https://bepolia.rpc.berachain.com/ --private-key $PK --use 0.8.25;
 ```
 
 Now, when checking your proxy contract on Beratrail explorer, you will notice the token name has been updated.

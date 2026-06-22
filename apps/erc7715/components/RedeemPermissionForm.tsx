@@ -2,13 +2,13 @@
 
 import { type FormEvent, useEffect, useMemo, useState } from "react";
 import { getAddress, isAddress, parseEther, parseUnits } from "viem";
-import { berachain, berachainTestnetbArtio } from "viem/chains";
+import { berachain, berachainBepolia } from "viem/chains";
 import { useRedeemPermission } from "@/hooks/useRedeemPermission";
 import type { PermissionResponse } from "@/types/erc7715";
 
 const ERC20_DECIMALS = 18;
 
-const SUPPORTED_CHAINS = [berachain, berachainTestnetbArtio];
+const SUPPORTED_CHAINS = [berachain, berachainBepolia];
 
 function getExplorerTxUrl(chainIdHex: string, txHash: string): string | null {
   const chainId = Number(chainIdHex);

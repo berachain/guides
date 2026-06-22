@@ -15,33 +15,61 @@ The configuration file is shared from the parent repository's `exp/config.js`. I
 - Copy `../exp/config.js` to `apps/config.js`, or
 - Symlink it: `ln -s ../exp/config.js config.js`
 
-## Directories
+## Tools And Operations
 
 ### beralyzer/
 
-Database-backed blockchain indexing and analysis tool tracking validator activity, block proposals, and chain metrics. See [beralyzer/README.md](beralyzer/README.md) for details.
+Database-backed blockchain indexing and analysis tool tracking validator activity, block proposals, and chain metrics.
 
 ### block-scanners/
 
-Suite of blockchain analysis utilities examining blocks, validators, voting patterns, and network performance. See [block-scanners/README.md](block-scanners/README.md) for details.
+Suite of blockchain analysis utilities examining blocks, validators, voting patterns, and network performance.
 
 ### cometbft-decoder/
 
 Go utility for decoding CometBFT validator addresses and correlating them with on-chain data.
 
-### gas-burner/
+### erpc-proxy-caching/
 
-Solidity contract and scripts for controlled gas consumption testing and network stress testing. See [gas-burner/README.md](gas-burner/README.md) for details.
+eRPC proxy configuration for caching and optimizing RPC requests.
+
+### grafana/
+
+Grafana dashboards and Prometheus configuration for monitoring Berachain nodes.
+
+### local-docker-devnet/
+
+Docker-based local Berachain devnet for testing and development.
+
+### node-scripts/
+
+Shell utilities for operating Berachain nodes.
 
 ### peer-filter/
 
-Go-based P2P network peer filtering and management tool. See [peer-filter/README.md](peer-filter/README.md) for details.
+Go-based P2P network peer filtering and management tool.
 
 ### pol-performance-study/
 
-Analysis tools for studying Proof-of-Liquidity validator performance and reward distribution patterns. See [pol-performance-study/README.md](pol-performance-study/README.md) for details.
+Analysis tools for studying Proof-of-Liquidity validator performance and reward distribution patterns.
 
-## Smart Contract & DApp Examples
+### snapshot-service/
+
+Snapshot generation, publishing, and pruning pipeline for Berachain node snapshots.
+
+### staking-pools/
+
+Staking pool frontend and install-helper scripts.
+
+### validators/
+
+Validator rewards, deposits, allocations, and pubkey utility scripts.
+
+## Smart Contract And DApp Examples
+
+### batch-multiswap/
+
+Vite + wagmi batch multiswap example.
 
 ### batch-transactions/
 
@@ -59,17 +87,25 @@ Trading bot implementation for Berps (Berachain Perpetuals).
 
 EIP-7702 gas sponsorship implementation with Foundry examples.
 
+### eip7951/
+
+Bun workspace demo for EIP-7951-style two-factor accounts.
+
 ### envio-indexer-erc20/
 
 Envio-based indexer for tracking ERC20 token events and transfers.
 
-### erpc-proxy-caching/
+### erc7715/
 
-eRPC proxy configuration for caching and optimizing RPC requests.
+Next.js + wagmi permissions demo.
 
 ### ethers6-solc-helloworld/
 
 Basic smart contract deployment using ethers.js v6 and solc compiler.
+
+### evm-wallet/
+
+Expo wallet app demonstrating local key management and EVM interactions.
 
 ### foundry-erc20/
 
@@ -77,19 +113,11 @@ ERC20 token implementation and deployment guide using Foundry.
 
 ### gas-burner/
 
-Controlled gas consumption testing utilities.
+Solidity contract and scripts for controlled gas consumption testing and network stress testing.
 
 ### gelato-vrf/
 
-Gelato VRF (Verifiable Random Function) integration example.
-
-### goldsky-subgraph/
-
-Goldsky-powered subgraph for indexing Berachain data.
-
-### grafana/
-
-Grafana dashboards and Prometheus configuration for monitoring Berachain nodes.
+Gelato VRF integration example. This app needs a Hardhat/tooling rebuild before it should be treated as current.
 
 ### hardhat-contract-verification/
 
@@ -103,21 +131,17 @@ ERC1155 NFT contract implementation with Hardhat and ethers.js v6.
 
 Basic smart contract deployment using Hardhat and viem.
 
+### honey-x402-demo/
+
+HONEY x402 demo with contracts and frontend examples.
+
 ### irys-bera-nodejs/
 
-Irys (Arweave) integration for permanent data storage on Berachain.
+Irys integration for permanent data storage on Berachain.
 
 ### layerzero-oft/
 
-LayerZero OFT (Omnichain Fungible Token) implementation for cross-chain tokens.
-
-### local-docker-devnet/
-
-Docker-based local Berachain devnet for testing and development.
-
-### node-scripts/
-
-Various Node.js utilities for interacting with Berachain.
+LayerZero OFT implementation for cross-chain tokens.
 
 ### openzeppelin-upgrades/
 
@@ -125,7 +149,7 @@ OpenZeppelin upgradeable contract patterns and deployment scripts.
 
 ### particle-auth-core-vite/
 
-Particle Network authentication integration with Vite.
+Particle Network authentication integration with Vite. This app needs a frontend/tooling rebuild before it should be treated as current.
 
 ### privy-nextjs/
 
@@ -145,7 +169,7 @@ RainbowKit wallet connection with Vite.
 
 ### thirdweb-connectwallet-nextjs/
 
-Thirdweb wallet connection with Next.js.
+Deprecated Thirdweb wallet connection example. Prefer rebuilding or removing rather than patching in place.
 
 ### viem-solc-helloworld/
 
@@ -153,8 +177,12 @@ Smart contract compilation and deployment using viem and solc.
 
 ### walletconnect-expo/
 
-WalletConnect integration for React Native Expo apps.
+WalletConnect integration for React Native Expo apps. This app needs a modern WalletConnect/Reown rebuild.
 
 ### walletconnect-nextjs/
 
-WalletConnect integration for Next.js applications.
+WalletConnect integration for Next.js applications. This app needs a modern WalletConnect/Reown rebuild.
+
+### x402/
+
+Bun Hono API and Vite web app demonstrating x402 payments.

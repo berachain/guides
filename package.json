@@ -1,6 +1,13 @@
 {
   "name": "guides",
   "private": true,
+  "packageManager": "bun@1.3.12",
+  "workspaces": [
+    "apps/*",
+    "apps/*/*",
+    "apps/eip7951/apps/*",
+    "packages/*"
+  ],
   "contributors": [
     {
       "name": "De",

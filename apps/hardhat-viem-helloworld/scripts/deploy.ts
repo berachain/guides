@@ -36,7 +36,7 @@ const chainConfiguration = defineChain({
 // ========================================================
 async function main() {
   // NOTE: hardhat with viem currently doesn't support custom chains so there needs to be some custom functionality ↴
-  if (hre.network.name === "berachainTestnet") {
+  if (hre.network.name === "berachainBepolia") {
     // Retrieve contract artifact ABI & Bytecode
     const contractName = "HelloWorld";
     const artifactFile = fs.readFileSync(

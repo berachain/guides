@@ -59,7 +59,7 @@ PRIVATE_KEY=your_private_key_here
 RPC_URL=https://bepolia.rpc.berachain.com
 
 # Chain configuration
-CHAIN_ID=80085
+CHAIN_ID=80069
 CHAIN_NAME=Berachain Bepolia
 CHAIN_NATIVE_CURRENCY_NAME=BERA
 CHAIN_NATIVE_CURRENCY_SYMBOL=BERA

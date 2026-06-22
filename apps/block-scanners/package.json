@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "main": "find_day_boundaries.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo 'No test script defined for this guide'"
   },
   "keywords": [],
   "author": "",

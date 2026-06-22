@@ -1,28 +1,26 @@
 {
   "name": "hardhat-project",
+  "type": "module",
   "devDependencies": {
-    "eslint": "^10.0.0",
+    "eslint": "^9.0.0",
     "typescript": "^6.0.0",
-    "@types/jest": "^30.0.0",
     "@types/node": "^24.0.0",
-    "jest": "^30.0.0",
     "prettier": "^3.0.0",
-    "tsup": "^8.0.0",
-    "@nomicfoundation/hardhat-toolbox": "^7.0.0",
+    "@nomicfoundation/hardhat-toolbox-mocha-ethers": "^3.0.7",
+    "@types/chai": "^5.2.3",
+    "@types/mocha": "^10.0.10",
+    "chai": "^6.2.2",
+    "ethers": "^6.14.0",
     "hardhat": "^3.0.0",
     "hardhat-deploy": "^2.0.0"
   },
-  "dependencies": {
-    "ethers": "^6.6.4",
-    "gelato-web3-functions-hardhat-template": "gelatodigital/vrf-contracts"
-  },
   "scripts": {
-    "build": "tsup",
-    "dev": "tsup --watch",
+    "build": "hardhat compile",
+    "dev": "echo 'No dev script defined for this Hardhat guide'",
     "lint": "echo 'No lint script defined for this package'",
     "lint:fix": "eslint scripts/ contracts/ --fix --no-ignore",
     "format": "prettier --write \"scripts/**/*.{ts,tsx} contracts/**/*.{ts,tsx}\"",
-    "test": "jest",
+    "test": "hardhat test",
     "clean": "rm -rf .turbo && rm -rf node_modules && rm -rf dist"
   }
 }

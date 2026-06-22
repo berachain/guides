@@ -1,8 +1,25 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
-import { BerachainArtio } from "@particle-network/chains";
+import type { ChainInfo } from "@particle-network/chains";
 import { AuthCoreContextProvider } from "@particle-network/auth-core-modal";
 import App from "./App";
+
+const berachainBepolia: ChainInfo = {
+  id: 80069,
+  name: "Berachain Bepolia",
+  chainType: "evm",
+  icon: "",
+  fullname: "Berachain Bepolia",
+  network: "Berachain",
+  website: "https://berachain.com",
+  nativeCurrency: {
+    name: "BERA Token",
+    symbol: "BERA",
+    decimals: 18,
+  },
+  rpcUrl: "https://bepolia.rpc.berachain.com",
+  blockExplorerUrl: "https://bepolia.beratrail.io",
+};
 
 import("buffer").then(({ Buffer }) => {
   window.Buffer = Buffer;
@@ -22,7 +39,7 @@ ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
         wallet: {
           visible: true,
           customStyle: {
-            supportChains: [BerachainArtio],
+            supportChains: [berachainBepolia],
           },
         },
       }}

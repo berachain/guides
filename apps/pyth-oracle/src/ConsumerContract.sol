@@ -8,7 +8,7 @@ contract ConsumerContract {
     IPyth pyth;
 
     /**
-     * Network: Berachain Artio (testnet)
+     * Network: Berachain Bepolia (testnet)
      * Address: 0x8D254a21b3C86D32F7179855531CE99164721933
      */
     constructor() {

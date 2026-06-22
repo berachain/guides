@@ -14,7 +14,7 @@ import ERC20ABI from "./abi/ERC20.json";
 config();
 
 const provider = new ethers.JsonRpcProvider(`${process.env.RPC}`, {
-  chainId: 80084, // Chain ID for Berachain
+  chainId: 80069, // Chain ID for Berachain
   name: "Berachain",
   ensAddress: null,
 });
@@ -181,7 +181,7 @@ async function getOrCreateVault() {
 
       // Provide instructions to view vault details
       console.log("\nTo view details about the existing vault:");
-      console.log("1. Go to https://bartio.beratrail.io");
+      console.log("1. Go to https://bepolia.beratrail.io");
       console.log(
         `2. Search for the rewards vault address: ${existingVaultAddress}`
       );
@@ -223,7 +223,7 @@ async function getOrCreateVault() {
 
     // Provide instructions to view new vault details
     console.log("\nTo view details about the new vault:");
-    console.log("1. Go to https://bartio.beratrail.io");
+    console.log("1. Go to https://bepolia.beratrail.io");
     console.log(`2. Search for the rewards vault address: ${newVaultAddress}`);
     console.log(
       '3. Look for the "Create Rewards Vault" method in the transaction history'

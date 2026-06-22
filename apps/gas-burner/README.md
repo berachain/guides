@@ -82,8 +82,8 @@ export PRIVATE_KEY=your_private_key_here
 anvil
 forge script script/Deploy.s.sol --rpc-url http://localhost:8545 --broadcast
 
-# Deploy to Berachain Artio testnet
-forge script script/Deploy.s.sol --rpc-url https://artio.rpc.berachain.com --broadcast --verify
+# Deploy to Berachain Bepolia testnet
+forge script script/Deploy.s.sol --rpc-url https://bepolia.rpc.berachain.com --broadcast --verify
 ```
 
 ## Environment Variables

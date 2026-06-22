@@ -1,8 +1,8 @@
 # Bera-HardhatExample
 
-This repo should serve as an example of the config and manual gas-override required for hardhat-based contract deployments on Berachain Artio. The repo also should help you verify contracts via hardhat (Routescan api and configs have been provided in the repo).
+This repo should serve as an example of the config and manual gas-override required for hardhat-based contract deployments on Berachain Bepolia. The repo also should help you verify contracts via hardhat (Routescan api and configs have been provided in the repo).
 
-## Sum-up on the changes made/required for contract deployments on Artio.
+## Sum-up on the changes made/required for contract deployments on Bepolia.
 
 1. The default Hardhat `deployContract` is having issue. But crafting the deploy transaction manually with `gasLimit` and `gasPrice` specified works.
 2. Removing the gas: “auto” setting in hardhat config file.
@@ -14,12 +14,12 @@ This repo should serve as an example of the config and manual gas-override requi
 2. npm install --save-dev hardhat
 3. npm install --save-dev dotenv
 4. create .env - and add WALLET_KEY=0x
-5. npx hardhat run scripts/deploy.ts --network berachain-artio
+5. npx hardhat run scripts/deploy.ts --network berachain-bepolia
 
 ## To deploy on the live testnet
 
 ```shell
-npx hardhat run scripts/deploy.ts --network berachain-artio
+npx hardhat run scripts/deploy.ts --network berachain-bepolia
 ```
 
 ---
@@ -35,14 +35,14 @@ npm install --save-dev @nomicfoundation/hardhat-verify
 ### Verify
 
 ```shell
-npx hardhat verify --network berachain-artio <0x...>
+npx hardhat verify --network berachain-bepolia <0x...>
 ```
 
 Make sure to replace the whole " <0xaddress> ". A correct example would be:-
 
-✅ npx hardhat verify --network berachain-artio 0x3229075dd6F75bD879F7af07d384A0856c30a806
+✅ npx hardhat verify --network berachain-bepolia 0x3229075dd6F75bD879F7af07d384A0856c30a806
 <br>
-❌ npx hardhat verify --network berachain-artio <0x3229075dd6F75bD879F7af07d384A0856c30a806> (This is incorrect)
+❌ npx hardhat verify --network berachain-bepolia <0x3229075dd6F75bD879F7af07d384A0856c30a806> (This is incorrect)
 
 ---
 
@@ -51,7 +51,7 @@ Make sure to replace the whole " <0xaddress> ". A correct example would be:-
 Spin up a local fork:
 
 ```shell
-npx hardhat node --fork https://artio.rpc.berachain.com/
+npx hardhat node --fork https://bepolia.rpc.berachain.com/
 ```
 
 Run the deploy script in a new terminal:

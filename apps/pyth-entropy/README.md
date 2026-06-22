@@ -8,7 +8,7 @@ This repository demonstrates how to leverage Pyth's Entropy service to enable pr
 
 - Node `v20.11.0` or greater
 - npm
-- Wallet with Berachain Testnet $BERA tokens - See the [Berachain Artio Faucet](https://artio.faucet.berachain.com)
+- Wallet with Berachain Testnet $BERA tokens - See the [Berachain Bepolia Faucet](https://bepolia.faucet.berachain.com)
 - [Foundry](https://book.getfoundry.sh/getting-started/installation) - ensure `foundryup` is run to install binaries
 
 ### Overview of Randomized Minting Process
@@ -38,7 +38,7 @@ echo "remappings = ['@pythnetwork/entropy-sdk-solidity/=node_modules/@pythnetwor
 Create a `.env` file at the project root and populate it with the following:
 
 ```toml
-RPC_URL=https://artio.rpc.berachain.com/
+RPC_URL=https://bepolia.rpc.berachain.com/
 ENTROPY_NFT_ADDRESS=YOUR_ENTROPY_NFT_ADDRESS
 PRIVATE_KEY=YOUR_PRIVATE_KEY
 ENTROPY_ADDRESS=0x26DD80569a8B23768A1d80869Ed7339e07595E85

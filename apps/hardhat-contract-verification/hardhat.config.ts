@@ -1,24 +1,36 @@
-import { HardhatUserConfig } from "hardhat/config";
-import "@nomicfoundation/hardhat-toolbox";
-import "@nomicfoundation/hardhat-verify";
+import hardhatToolboxMochaEthersPlugin from "@nomicfoundation/hardhat-toolbox-mocha-ethers";
+import { defineConfig } from "hardhat/config";
+import dotenv from "dotenv";
 
-require("dotenv").config();
+dotenv.config();
 
-const config: HardhatUserConfig = {
+const chainId = 80069;
+const rpcUrl = process.env.RPC_URL ?? "https://bepolia.rpc.berachain.com";
+
+const config = defineConfig({
+  plugins: [hardhatToolboxMochaEthersPlugin],
   solidity: {
-    version: "0.8.23",
+    version: "0.8.30",
   },
   networks: {
+    hardhat: {
+      type: "edr-simulated",
+      chainType: "l1",
+    },
     // for testnet
-    "berachain-artio": {
-      url: "https://rpc.ankr.com/berachain_testnet",
+    "berachain-bepolia": {
+      type: "http",
+      chainType: "l1",
+      url: rpcUrl,
       accounts: process.env.WALLET_KEY ? [process.env.WALLET_KEY] : [],
-      chainId: 80085,
+      chainId,
       // gas: "auto",
       gasPrice: 10000000000,
     },
     // for local dev environment
     "berachain-local": {
+      type: "http",
+      chainType: "l1",
       url: "http://localhost:8545",
       gasPrice: 1000000000,
     },
@@ -26,20 +38,20 @@ const config: HardhatUserConfig = {
   defaultNetwork: "hardhat",
   etherscan: {
     apiKey: {
-      berachainArtio: "berachainArtio", // apiKey is not required, just set a placeholder
+      "berachain-bepolia": "verifyContract", // apiKey is not required, just set a placeholder
     },
     customChains: [
       {
-        network: "berachainArtio",
-        chainId: 80085,
+        network: "berachain-bepolia",
+        chainId,
         urls: {
           apiURL:
-            "https://api.routescan.io/v2/network/testnet/evm/80085/etherscan",
-          browserURL: "https://artio.beratrail.io",
+            "https://api.routescan.io/v2/network/testnet/evm/80069/etherscan",
+          browserURL: "https://bepolia.beratrail.io",
         },
       },
     ],
   },
-};
+});
 
 export default config;

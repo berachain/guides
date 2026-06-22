@@ -10,7 +10,7 @@
     "lint": "eslint src/ --ext .ts,.tsx --no-ignore",
     "lint:fix": "eslint src/ --ext .ts,.tsx --fix --no-ignore",
     "format": "prettier --write \"src/**/*.{ts,tsx}\"",
-    "test": "jest",
+    "test": "echo 'No test script defined for this guide'",
     "clean": "rm -rf .turbo && rm -rf node_modules && rm -rf dist",
     "start": "ts-node src/index.ts"
   },
@@ -29,7 +29,7 @@
     "node": ">=20.0.0"
   },
   "devDependencies": {
-    "eslint": "^10.0.0",
+    "eslint": "^9.0.0",
     "typescript": "^6.0.0",
     "@types/jest": "^30.0.0",
     "@types/node": "^24.0.0",

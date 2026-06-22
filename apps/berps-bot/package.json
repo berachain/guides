@@ -8,7 +8,7 @@
     "lint": "echo 'No lint script defined for this package'",
     "lint:fix": "eslint src/ --fix --no-ignore",
     "format": "prettier --write \"src/**/*.{ts,tsx}\"",
-    "test": "jest",
+    "test": "echo 'No test script defined for this guide'",
     "clean": "rm -rf .turbo && rm -rf node_modules && rm -rf dist"
   },
   "keywords": [],
@@ -28,7 +28,7 @@
     "tsup": "^8.0.0",
     "typescript": "^6.0.0",
     "@types/lodash": "^4.17.0",
-    "eslint": "^10.0.0",
+    "eslint": "^9.0.0",
     "eslint-config-prettier": "^10.0.0",
     "eslint-plugin-prettier": "^5.0.0",
     "tslib": "^2.3.1"
