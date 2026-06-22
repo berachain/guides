@@ -39,7 +39,7 @@
     "react-native-svg": "^15.0.0",
     "tailwindcss": "^4.0.0",
     "viem": "2.52.2",
-    "wagmi": "3.6.17"
+    "wagmi": "3.6.18"
   },
   "devDependencies": {
     "eslint": "^9.0.0",
