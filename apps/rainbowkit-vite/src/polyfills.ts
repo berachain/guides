@@ -1,11 +1,14 @@
-// Polyfills for browser environment
-window.global = window.global ?? window;
-window.Buffer =
-  window.Buffer ??
-  (() => {
-    const buffer = require("buffer");
-    return buffer.Buffer;
-  })();
-window.process = window.process ?? { env: {} }; // Minimal process polyfill
+import { Buffer } from "buffer";
+
+const globalWindow = window as Window &
+  typeof globalThis & {
+    Buffer?: typeof Buffer;
+    global?: typeof globalThis;
+    process?: { env: Record<string, string> };
+  };
+
+globalWindow.global = globalWindow.global ?? globalThis;
+globalWindow.Buffer = globalWindow.Buffer ?? Buffer;
+globalWindow.process = globalWindow.process ?? { env: {} };
 
 export {};

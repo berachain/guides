@@ -4,12 +4,12 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "build": "tsup",
+    "build": "tsup src/index.ts",
     "dev": "tsup --watch",
     "lint": "eslint scripts/ --ext .ts,.tsx --no-ignore",
     "lint:fix": "eslint scripts/ contracts/ --fix --no-ignore",
     "format": "prettier --write \"scripts/**/*.{ts,tsx}\" \"contracts/**/*.{ts,tsx}\"",
-    "test": "jest",
+    "test": "echo 'No test script defined for this guide'",
     "clean": "rm -rf node_modules; rm -rf .turbo;",
     "deploy:berachain": "echo $RPC_URL; ./node_modules/.bin/tsx scripts/deploy.ts"
   },

@@ -47,7 +47,7 @@ npm run compile; # npx hardhat compile;
 # [Expected Output]:
 # Compiled 1 Solidity file successfully (evm target: paris).
 
-npm run deploy:berachain; # npx hardhat run scripts/deploy.ts --network berachainTestnet;
+npm run deploy:berachain; # npx hardhat run scripts/deploy.ts --network berachainBepolia;
 
 # [Expected Equivalent Output]:
 # {
@@ -63,7 +63,7 @@ In order to verify your contract, take note of the deployed contract `address` a
 ```bash
 # FROM ./create-helloworld-contract-using-hardhat
 
-# npx hardhat verify --network berachainTestnet 0x38f8423cc4390938c01616d7a9f761972e7f116a "Hello From Deployed Contract";
+# npx hardhat verify --network berachainBepolia 0x38f8423cc4390938c01616d7a9f761972e7f116a "Hello From Deployed Contract";
 npm run verify 0x38f8423cc4390938c01616d7a9f761972e7f116a "Hello From Deployed Contract";
 
 # [Expected Output]:
@@ -72,7 +72,7 @@ npm run verify 0x38f8423cc4390938c01616d7a9f761972e7f116a "Hello From Deployed C
 # for verification on the block explorer. Waiting for verification result...
 
 # Successfully verified contract HelloWorld on the block explorer.
-# https://bartio.beratrail.io/address/0x38f8423cc4390938c01616d7a9f761972e7f116a#code
+# https://bepolia.beratrail.io/address/0x38f8423cc4390938c01616d7a9f761972e7f116a#code
 ```
 
 ## Run Local Node

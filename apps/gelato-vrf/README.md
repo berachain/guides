@@ -16,7 +16,7 @@ Before beginning, make sure you have the following installed or set up on your c
 
 - nvm or Node `v20.0.0` or greater
 - npm or yarn
-- Wallet that contains BERA token (for deployment - see the [faucet](https://bartio.faucet.berachain.com/))
+- Wallet that contains BERA token (for deployment, use the Bepolia faucet from BeraHub)
 - hardhat
 
 ## Gelato VRF: `SimpleVRFContract`
@@ -42,14 +42,14 @@ npm install
 Then run the following hardhat command:
 
 ```bash
-npx hardhat deploy --network berachain
+npx hardhat deploy --network berachainBepolia
 ```
 
 > [!NOTE]  
 > Check the deployed addresses for each network in the `deployments/` folder, which is automatically created at the root of the `gelato-vrf/` directory following a deployment.
 
 - **Description**: Contract for using Gelato VRF directly.
-- **Contract Address on Berachain**: [0x3E183d1C8fcfdb080e3107f400786f6FA6f30810](https://bartio.beratrail.io/address/0x3E183d1C8fcfdb080e3107f400786f6FA6f30810)
+- **Contract Address on Berachain**: use the address from your own deployment.
 - **Features**:
   - Requests randomness from Gelato VRF.
   - Handles the fulfillment of randomness.
@@ -68,11 +68,11 @@ Navigate to the Gelato [app](https://app.gelato.network/vrf).
 
 ### Step 3. Select Deployment Network
 
-Ensure you choose the `Berachain bArtio` network where your VRF requester and receiver contracts are deployed.
+Ensure you choose the Berachain Bepolia network where your VRF requester and receiver contracts are deployed.
 
 ### Step 4. Specify the Request Contract
 
-You'll be asked to provide the address of the Request Contract to which the Gelato nodes should respond. Enter the address you gathered in step 1 (in our example: **0x3E183d1C8fcfdb080e3107f400786f6FA6f30810**).
+You'll be asked to provide the address of the Request Contract to which the Gelato nodes should respond. Enter the address you gathered in step 1.
 
 ### Step 5. Launch your VRF Instance
 
@@ -82,16 +82,16 @@ Once all details are correctly entered, go ahead and launch your Gelato VRF inst
 
 ## Request Randomness
 
-After deploying your contract, proceed to the `.env` file and replace the existing smart contract address with the one specific to your deployment. Regarding our example, you would set it as follows:
+After deploying your contract, proceed to the `.env` file and replace the existing smart contract address with the one specific to your deployment.
 
 ```bash
-SC_ADDRESS=0x3E183d1C8fcfdb080e3107f400786f6FA6f30810
+SC_ADDRESS=<your deployed contract address>
 ```
 
 To invoke the randomness request, you can run the `requestRandomness.ts` script:
 
 ```bash
-npx hardhat run ./scripts/requestRandomness.ts --network berachain
+npx hardhat run ./scripts/requestRandomness.ts --network berachainBepolia
 ```
 
 This will produce a similar response:
@@ -103,8 +103,6 @@ Transaction hash: 0x1a33e33970c0c4e89589e863b8833d7da5138a4f13b7cc02da9b2d978639
 
 ## Monitor Execution
 
-After your randomness request has been made, you can monitor and analyze it here:
-
-[Here](https://app.gelato.network/functions/task/0x904a1cdf1d09ec7f237a887bd6924d9116351a329c5f52a64d62bdcb9b9b5568:80084?origin=vrf) is an example task from the app that shows the fulfilled randomness
+After your randomness request has been made, monitor it from your Gelato VRF task page.
 
 ![Monitoring](./assets/monitoring.png)

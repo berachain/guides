@@ -5,7 +5,7 @@
 import { useAccount, useWaitForTransactionReceipt } from "wagmi";
 import { useState } from "react";
 import { encodeAbiParameters } from "viem";
-import { berachainTestnet } from "wagmi/chains";
+import { berachainBepolia } from "viem/chains";
 
 // Constants
 // ========================================================
@@ -80,7 +80,7 @@ const CONTRACT_BYTECODE =
 /**
  * @dev Berachain testnet block explorer
  */
-const BLOCK_EXPLORER = "https://artio.beratrail.io/";
+const BLOCK_EXPLORER = "https://bepolia.beratrail.io/";
 
 // Main Page
 // ========================================================
@@ -93,7 +93,7 @@ export default function Deploy() {
   const [error, setError] = useState("");
 
   const receipt = useWaitForTransactionReceipt({
-    chainId: berachainTestnet.id,
+    chainId: berachainBepolia.id,
     hash: transactionHash ? (`${transactionHash}` as `0x${string}`) : undefined,
   });
 

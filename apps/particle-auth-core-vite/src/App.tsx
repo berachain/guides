@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { BerachainArtio } from "@particle-network/chains";
+import type { ChainInfo } from "@particle-network/chains";
 import {
   AAWrapProvider,
   SendTransactionMode,
@@ -15,6 +15,23 @@ import { notification } from "antd";
 
 import "./App.css";
 
+const berachainBepolia: ChainInfo = {
+  id: 80069,
+  name: "Berachain Bepolia",
+  chainType: "evm",
+  icon: "",
+  fullname: "Berachain Bepolia",
+  network: "Berachain",
+  website: "https://berachain.com",
+  nativeCurrency: {
+    name: "BERA Token",
+    symbol: "BERA",
+    decimals: 18,
+  },
+  rpcUrl: "https://bepolia.rpc.berachain.com",
+  blockExplorerUrl: "https://bepolia.beratrail.io",
+};
+
 const App = () => {
   const { provider } = useEthereum();
   const { connect, disconnect } = useConnect();
@@ -27,7 +44,7 @@ const App = () => {
     clientKey: "YOUR_CLIENT_KEY_HERE", // Replace YOUR_CLIENT_KEY_HERE with the actual client key
     appId: "YOUR_APP_ID_HERE", // Replace YOUR_APP_ID_HERE with the actual app ID
     aaOptions: {
-      simple: [{ chainId: BerachainArtio.id, version: "1.0.0" }],
+      simple: [{ chainId: berachainBepolia.id, version: "1.0.0" }],
     },
   });
 
@@ -52,7 +69,7 @@ const App = () => {
     if (!userInfo) {
       await connect({
         socialType: authType,
-        chain: BerachainArtio,
+        chain: berachainBepolia,
       });
     }
   };
@@ -74,7 +91,7 @@ const App = () => {
         <div>
           Transaction Hash:{" "}
           <a
-            href={`https://artio.beratrail.io/tx/${txReceipt.transactionHash}`}
+            href={`https://bepolia.beratrail.io/tx/${txReceipt.transactionHash}`}
             target="_blank"
             rel="noopener noreferrer"
           >
@@ -106,7 +123,7 @@ const App = () => {
         <div>
           Transaction Hash:{" "}
           <a
-            href={`https://artio.beratrail.io/tx/${txReceipt.transactionHash}`}
+            href={`https://bepolia.beratrail.io/tx/${txReceipt.transactionHash}`}
             target="_blank"
             rel="noopener noreferrer"
           >

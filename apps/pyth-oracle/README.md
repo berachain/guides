@@ -1,6 +1,6 @@
 # Query Berachain Data with Pyth Oracles
 
-[Pyth Network](https://pyth.network/) is a decentralized oracle network that provides high-quality, real-time data for Berachain. This repo provides an example of how to query Pyth Network data on Berachain's Artio Testnet.
+[Pyth Network](https://pyth.network/) is a decentralized oracle network that provides high-quality, real-time data for Berachain. This repo provides an example of how to query Pyth Network data on Berachain's Bepolia Testnet.
 
 Pyth differs from the existing oracle paradigm by using on-demand price updates, where users pull on-chain prices only when needed - learn more [here](https://pyth.network/blog/pyth-a-new-model-to-the-price-oracle).
 
@@ -9,7 +9,7 @@ Pyth differs from the existing oracle paradigm by using on-demand price updates,
 - Nodejs `v20.11.0` or greater
 - npm
 - [jq ](https://jqlang.github.io/jq/download/)
-- Wallet with testnet $BERA tokens - See the [Berachain Artio Faucet](https://artio.faucet.berachain.com)
+- Wallet with testnet $BERA tokens - See the [Berachain Bepolia Faucet](https://bepolia.faucet.berachain.com)
 - [Foundry](https://book.getfoundry.sh/getting-started/installation) - ensure `foundryup` is run to install binaries
 
 ## Quick Setup
@@ -42,7 +42,7 @@ cast wallet list;
 Load the Berachain RPC into your terminal session:
 
 ```bash
-export BERACHAIN_ARTIO_RPC="https://rpc.ankr.com/berachain_testnet"
+export BERACHAIN_BEPOLIA_RPC="https://bepolia.rpc.berachain.com"
 ```
 
 ### Step 3 - Deploying to Berachain
@@ -60,7 +60,7 @@ Deploy the smart contract (you will be prompted for the keystore password you se
 ```bash
 # FROM: ./pyth-oracle
 
-forge create ./src/ConsumerContract.sol:ConsumerContract --rpc-url $BERACHAIN_ARTIO_RPC --account deployer
+forge create ./src/ConsumerContract.sol:ConsumerContract --rpc-url $BERACHAIN_BEPOLIA_RPC --account deployer
 
 # [Expected Similar Output]:
 # Enter keystore password:
@@ -84,7 +84,7 @@ Call `updatePrice` with the payload:
 ```bash
 # FROM: ./pyth-oracle
 
-cast send <YOUR_DEPLOYED_CONTRACT> --rpc-url $BERACHAIN_ARTIO_RPC "updatePrice(bytes[])"  "[0x`cat price_update.txt`]" --account deployer --value 0.0001ether
+cast send <YOUR_DEPLOYED_CONTRACT> --rpc-url $BERACHAIN_BEPOLIA_RPC "updatePrice(bytes[])"  "[0x`cat price_update.txt`]" --account deployer --value 0.0001ether
 
 # [Expected Similar Output]:
 # blockHash               0xf00e38ea8197d088973dc51502b9fb62d089ac31b6fe01002e83a969e9c05f93
@@ -99,7 +99,7 @@ cast send <YOUR_DEPLOYED_CONTRACT> --rpc-url $BERACHAIN_ARTIO_RPC "updatePrice(b
 Next, query the price with `getPrice()`:
 
 ```bash
-cast call <YOUR_DEPLOYED_CONTRACT> --rpc-url $BERACHAIN_ARTIO_RPC "getPrice()"
+cast call <YOUR_DEPLOYED_CONTRACT> --rpc-url $BERACHAIN_BEPOLIA_RPC "getPrice()"
 
 # [Expected Similar Output]:
 # 0x0000000000000000000000000000000000000000000000000000005c7eedf820000000000000000000000000000000000000000000000000000000000eb29f7bfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff80000000000000000000000000000000000000000000000000000000065f256b1

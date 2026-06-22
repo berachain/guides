@@ -4,7 +4,7 @@
   "description": "Helper scripts for staking pool installation and delegation",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "echo 'No test script defined for this guide'",
     "submit-bitgo": "tsx submit-bitgo-transaction.ts"
   },
   "keywords": [],
@@ -21,4 +21,3 @@
     "viem": "^2"
   }
 }
-

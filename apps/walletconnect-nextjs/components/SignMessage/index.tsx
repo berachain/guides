@@ -4,7 +4,7 @@
 // ========================================================
 import { useAccount, useSignMessage, useVerifyMessage } from "wagmi";
 import { useState } from "react";
-import { berachainTestnet } from "wagmi/chains";
+import { berachainBepolia } from "viem/chains";
 
 // Main Page
 // ========================================================
@@ -16,7 +16,7 @@ export default function SignMessage() {
   const [result, setResult] = useState("");
   const { signMessageAsync } = useSignMessage();
   const verification = useVerifyMessage({
-    chainId: berachainTestnet.id,
+    chainId: berachainBepolia.id,
     address,
     message,
     signature,

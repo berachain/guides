@@ -13,17 +13,17 @@ This project is a script to create, manage, and execute governance proposals for
 2. Create a `.env` file in the project root with the following content:
 
    ```
-   RPC=https://bartio.rpc.berachain.com/
+   RPC=https://bepolia.rpc.berachain.com/
    PRIVATE_KEY=your_private_key_here
    FACTORY_ADDRESS=0x2B6e40f65D82A0cB98795bC7587a71bfa49fBB2B
-   LP_TOKEN_ADDRESS=your_lp_token_address_from_bartio
+   LP_TOKEN_ADDRESS=your_lp_token_address_from_bepolia
    GOVERNANCE_ADDRESS=0xE3EDa03401Cf32010a9A9967DaBAEe47ed0E1a0b
    BERACHEF_ADDRESS=0xfb81E39E3970076ab2693fA5C45A07Cc724C93c2
    BGT_ADDRESS=0xbDa130737BDd9618301681329bF2e46A016ff9Ad
    ```
 
 3. Replace `your_private_key_here` with your actual private key.
-4. Replace `your_lp_token_address_from_bartio` with your LP token address from Bartio.
+4. Replace `your_lp_token_address_from_bepolia` with your LP token address from Bepolia.
 
 ## Step-by-Step Guide
 

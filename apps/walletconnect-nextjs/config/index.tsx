@@ -2,7 +2,7 @@
 // ========================================================
 import { defaultWagmiConfig } from "@web3modal/wagmi/react/config";
 import { cookieStorage, createStorage } from "wagmi";
-import { berachainTestnet } from "wagmi/chains";
+import { berachainBepolia } from "viem/chains";
 
 // Constants
 // ========================================================
@@ -21,7 +21,7 @@ if (!projectId) throw new Error("Project ID is not defined");
 // Config
 // ========================================================
 export const config = defaultWagmiConfig({
-  chains: [berachainTestnet], // required
+  chains: [berachainBepolia], // required
   projectId, // required
   metadata, // required
   ssr: true,

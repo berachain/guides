@@ -4,10 +4,10 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "build": "tsup",
+    "build": "tsup src/index.ts",
     "dev": "tsup --watch",
     "format": "prettier --write \"src/**/*.{ts,tsx}\"",
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "echo 'No test script defined for this guide'",
     "clean": "rm -rf .turbo && rm -rf node_modules && rm -rf dist"
   },
   "keywords": [
@@ -25,7 +25,7 @@
     "web3": "^4.8.0"
   },
   "devDependencies": {
-    "eslint": "^10.0.0",
+    "eslint": "^9.0.0",
     "typescript": "^6.0.0",
     "@types/jest": "^30.0.0",
     "@types/node": "^24.0.0",

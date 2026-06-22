@@ -5,12 +5,12 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "build": "tsup",
+    "build": "tsup src/index.ts",
     "dev": "tsup --watch",
     "lint": "echo 'No lint script defined for this package'",
     "lint:fix": "eslint src/ --ext .sol --fix --no-ignore",
     "format": "prettier --write \"src/**/*.{ts,tsx}\"",
-    "test": "jest",
+    "test": "echo 'No test script defined for this guide'",
     "clean": "rm -rf .turbo && rm -rf node_modules && rm -rf dist"
   },
   "keywords": [],

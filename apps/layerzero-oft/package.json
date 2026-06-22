@@ -5,10 +5,10 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "build": "tsup",
-    "dev": "tsup --watch",
+    "build": "forge build",
+    "dev": "echo 'No dev script defined for this Foundry guide'",
     "format": "prettier --write \"src/**/*.{ts,tsx}\" \"script/**/*.{ts,tsx}\"",
-    "test": "jest",
+    "test": "forge test",
     "clean": "rm -rf .turbo && rm -rf node_modules && rm -rf dist"
   },
   "keywords": [
@@ -23,7 +23,7 @@
   "author": "@larrythecucumber321",
   "license": "ISC",
   "devDependencies": {
-    "eslint": "^10.0.0",
+    "eslint": "^9.0.0",
     "typescript": "^6.0.0",
     "@types/jest": "^30.0.0",
     "@types/node": "^24.0.0",

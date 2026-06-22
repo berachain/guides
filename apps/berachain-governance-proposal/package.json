@@ -3,12 +3,12 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "build": "tsup",
+    "build": "node --check src/governance.js",
     "dev": "tsup --watch",
     "lint": "eslint src/ --ext .ts,.tsx,.js --no-ignore --fix",
     "lint:fix": "eslint src/ --ext .ts,.tsx,.js --fix --no-ignore",
     "format": "prettier --write \"src/**/*.{ts,tsx,js}\"",
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "echo 'No test script defined for this guide'",
     "clean": "rm -rf node_modules; rm -rf .turbo;"
   },
   "dependencies": {

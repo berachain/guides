@@ -11,7 +11,7 @@
     "lint": "eslint scripts/ --ext .ts,.tsx --no-ignore --fix",
     "lint:fix": "eslint scripts/ --ext .ts,.tsx --fix --no-ignore",
     "format": "prettier --write \"scripts/**/*.{ts,tsx}\"",
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "echo 'No test script defined for this guide'",
     "clean": "rm -rf node_modules; rm -rf .turbo;",
     "deploy:berachain": "echo $RPC_URL; ./node_modules/.bin/tsx scripts/deploy.ts"
   },

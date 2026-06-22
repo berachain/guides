@@ -1,6 +1,7 @@
-import { ethers } from "hardhat";
+import { network } from "hardhat";
 
 async function main() {
+  const { ethers } = await network.create();
   const nft = await ethers.deployContract("NFT");
 
   await nft.waitForDeployment();

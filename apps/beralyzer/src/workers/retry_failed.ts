@@ -1,4 +1,4 @@
-import { Pool, Client } from "pg";
+import { Pool, Client, type PoolClient } from "pg";
 import { RoundRobinProvider } from "../rpc-balancer.js";
 import { classifyClient, decodeExtraDataAscii } from "../decoders.js";
 import {
@@ -44,8 +44,8 @@ export async function retryFailedBlocks(
   // Process each failed block directly
   for (const bn of failedHeights) {
     if (cfg.shouldShutdown && cfg.shouldShutdown()) break;
-    const isPool = "query" in pg;
-    let transactionClient: Pool | Client | null = null;
+    const isPool = pg instanceof Pool;
+    let transactionClient: PoolClient | Client | null = null;
     try {
       // Delete existing data for this block first
       await pg.query(`DELETE FROM blocks WHERE height = $1`, [bn]);
@@ -294,7 +294,7 @@ export async function retryFailedBlocks(
           // Ignore rollback errors
         }
         if ("release" in transactionClient) {
-          (transactionClient as any).release();
+          transactionClient.release();
         }
       }
       const err = e as Error;
@@ -302,7 +302,7 @@ export async function retryFailedBlocks(
       // Failed block entry will remain for next retry attempt
     } finally {
       if (transactionClient && "release" in transactionClient) {
-        (transactionClient as any).release();
+        transactionClient.release();
       }
     }
   }

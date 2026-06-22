@@ -4,7 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "build": "tsup",
+    "build": "forge build",
     "dev": "tsup --watch",
     "lint": "echo 'No lint script defined for this package'",
     "lint:fix": "eslint src/ --fix",
@@ -17,7 +17,7 @@
   "author": "@codingwithmanny",
   "license": "ISC",
   "devDependencies": {
-    "eslint": "^10.0.0",
+    "eslint": "^9.0.0",
     "typescript": "^6.0.0",
     "@types/jest": "^30.0.0",
     "@types/node": "^24.0.0",

@@ -1,25 +1,33 @@
 // Imports
 // ========================================================
-import { HardhatUserConfig } from "hardhat/config";
-import "@nomicfoundation/hardhat-toolbox-viem";
+import hardhatToolboxViemPlugin from "@nomicfoundation/hardhat-toolbox-viem";
+import { defineConfig } from "hardhat/config";
 import dotenv from "dotenv";
 
 // Load Environment Variables
 // ========================================================
 dotenv.config();
 
+const chainId = Number(process.env.CHAIN_ID ?? 80069);
+const rpcUrl = process.env.RPC_URL ?? "https://bepolia.rpc.berachain.com/";
+
 // Main Hardhat Config
 // ========================================================
-const config: HardhatUserConfig = {
+const config = defineConfig({
+  plugins: [hardhatToolboxViemPlugin],
   solidity: "0.8.19",
   networks: {
     hardhat: {
+      type: "edr-simulated",
+      chainType: "l1",
       chainId: 1337,
     },
     // NOTE: hardhat viem currently doesn't yet support this method for custom chains through Hardhat config ↴
-    berachainTestnet: {
-      chainId: parseInt(`${process.env.CHAIN_ID}`),
-      url: `${process.env.RPC_URL || ""}`,
+    berachainBepolia: {
+      type: "http",
+      chainType: "l1",
+      chainId,
+      url: rpcUrl,
       accounts: process.env.WALLET_PRIVATE_KEY
         ? [`${process.env.WALLET_PRIVATE_KEY}`]
         : [],
@@ -31,7 +39,7 @@ const config: HardhatUserConfig = {
     customChains: [
       {
         network: "Berachain Testnet",
-        chainId: parseInt(`${process.env.CHAIN_ID}`),
+        chainId,
         urls: {
           apiURL: `${process.env.BLOCK_EXPLORER_API_URL}`,
           browserURL: `${process.env.BLOCK_EXPLORER_URL}`,
@@ -39,7 +47,7 @@ const config: HardhatUserConfig = {
       },
     ],
   },
-};
+});
 
 // Exports
 // ========================================================

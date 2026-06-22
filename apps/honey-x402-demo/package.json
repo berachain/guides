@@ -3,6 +3,10 @@
   "module": "index.ts",
   "type": "module",
   "scripts": {
+    "setup": "bash setup.sh",
+    "dev:frontend": "bun run --cwd frontend dev",
+    "build:frontend": "bun run --cwd frontend build",
+    "build:contracts": "forge build --root contracts",
     "clean": "rm -rf node_modules; rm -rf out; rm -rf cache; rm -rf .turbo; rm bun.lockb; rm -rf frontend/node_modules; rm -rf contracts/cache; rm -rf contracts/out; rm -rf contracts/lib; rm -rf contracts/deployments.json"
   },
   "devDependencies": {

@@ -1,7 +1,7 @@
 // Imports
 // ========================================================
 import dotenv from "dotenv";
-import { ethers } from "hardhat";
+import { network } from "hardhat";
 
 // Config
 // ========================================================
@@ -10,6 +10,7 @@ dotenv.config();
 // Imports
 // ========================================================
 async function main() {
+  const { ethers } = await network.create();
   const walletAddress = new ethers.Wallet(`${process.env.WALLET_PRIVATE_KEY}`);
   const Contract = await ethers.getContractFactory(
     `${process.env.CONTRACT_NAME}`,
