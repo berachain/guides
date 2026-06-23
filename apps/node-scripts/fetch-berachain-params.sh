@@ -5,7 +5,7 @@ set -e
 
 mkdir -p "$SEED_DATA_DIR"
 
-export SEED_DATA_URL=https://raw.githubusercontent.com/berachain/beacon-kit/v1.4.1/testing/networks/$CHAIN_ID
+export SEED_DATA_URL=https://raw.githubusercontent.com/berachain/beacon-kit/refs/heads/main/testing/networks/$CHAIN_ID
 curl -s -o "$SEED_DATA_DIR/kzg-trusted-setup.json" $SEED_DATA_URL/kzg-trusted-setup.json
 curl -s -o "$SEED_DATA_DIR/genesis.json" $SEED_DATA_URL/genesis.json
 curl -s -o "$SEED_DATA_DIR/el-peers.txt" $SEED_DATA_URL/el-peers.txt
