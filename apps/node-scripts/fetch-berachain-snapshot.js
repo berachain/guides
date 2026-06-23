@@ -2,7 +2,7 @@
 
 /**
  * Berachain snapshot downloader. No env.sh required.
- * Index: mainnet uses snapshots.berachain.com; testnet uses bepolia.snapshots.berachain.com.
+ * Index: mainnet uses snapshots.berachain.com; bepolia uses bepolia.snapshots.berachain.com.
  * Large downloads use curl (-C) for resume; install curl on PATH.
  */
 
@@ -14,7 +14,7 @@ const DEFAULT_OUTPUT = 'downloads';
 
 function defaultIndexUrl(network) {
     const host =
-        network === 'testnet' ? 'bepolia.snapshots.berachain.com' : 'snapshots.berachain.com';
+        network === 'bepolia' ? 'bepolia.snapshots.berachain.com' : 'snapshots.berachain.com';
     return `https://${host}/index.csv`;
 }
 
@@ -40,13 +40,13 @@ function parseArgs() {
             case '--network':
             case '-n':
                 if (i + 1 >= args.length) {
-                    console.error('Error: --network requires a value (mainnet or testnet)');
+                    console.error('Error: --network requires a value (mainnet or bepolia)');
                     process.exit(1);
                 }
                 {
                     const val = args[++i];
-                    if (!['mainnet', 'testnet'].includes(val)) {
-                        console.error('Error: --network must be "mainnet" or "testnet"');
+                    if (!['mainnet', 'bepolia'].includes(val)) {
+                        console.error('Error: --network must be "mainnet" or "bepolia"');
                         process.exit(1);
                     }
                     config.network = val;
@@ -103,7 +103,7 @@ function parseArgs() {
 
 function showHelp() {
     const defMain = defaultIndexUrl('mainnet');
-    const defTest = defaultIndexUrl('testnet');
+    const defBepolia = defaultIndexUrl('bepolia');
     console.log(`
 Bera Snapshot Downloader
 
@@ -113,7 +113,7 @@ Requires Node.js 18+ for index fetch and curl on PATH for resumable downloads.
 Usage: node fetch-berachain-snapshot.js [options]
 
 Options:
-  -n, --network <network>     mainnet or testnet (default: mainnet)
+  -n, --network <network>     mainnet or bepolia (default: mainnet)
   -t, --type <type>           pruned or archive (default: pruned)
   -o, --output <dir>          download directory (default: downloads)
       --el-client <name>      execution row prefix in CSV (default: reth)
@@ -122,11 +122,11 @@ Options:
                               execution-layer snapshot only
   -h, --help                  show this help
 
-Index CSV: ${defMain} (mainnet), ${defTest} (testnet)
+Index CSV: ${defMain} (mainnet), ${defBepolia} (bepolia)
 
 Examples:
   node fetch-berachain-snapshot.js
-  node fetch-berachain-snapshot.js -n testnet -t archive -o /var/snapshots
+  node fetch-berachain-snapshot.js -n bepolia -t archive -o /var/snapshots
   node fetch-berachain-snapshot.js --execution-only -o ./downloads
 `);
 }

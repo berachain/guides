@@ -12,10 +12,10 @@ fi
 
 echo "RETH_DATA: $RETH_DATA"
 echo "RETH_BIN: $RETH_BIN"
+echo "  Chain: $CHAIN"
 echo "  Version: $($RETH_BIN --version | grep Version)"
 
-cp "$SEED_DATA_DIR/eth-genesis.json" "$RETH_GENESIS_PATH"
-$RETH_BIN init --datadir "$RETH_DATA" --chain "$RETH_GENESIS_PATH" 
+$RETH_BIN init --datadir "$RETH_DATA" --chain "$CHAIN"
 
 echo
 echo "✓ Reth set up."

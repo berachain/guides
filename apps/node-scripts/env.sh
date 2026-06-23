@@ -2,7 +2,7 @@
 
 ########
 # CHANGE THESE VALUES
-export CHAIN_SPEC=mainnet   # "mainnet" or "testnet"
+export CHAIN=mainnet   # mainnet or bepolia
 export MONIKER_NAME=camembera
 export WALLET_ADDRESS_FEE_RECIPIENT=0x9BcaA41DC32627776b1A4D714Eef627E640b3EF5
 export EL_ARCHIVE_NODE=false # set to true if you want to run an archive node on CL and EL
@@ -45,18 +45,21 @@ fi
 ######
 # LEAVE BELOW ALONE. CAN CHANGE (most) DATA DIRECTORIES
 
-if [[ "$CHAIN_SPEC" == "testnet" ]]; then
-    export CHAIN=testnet-beacon-80069
-    export CHAIN_ID=80069
-else
-    export CHAIN=mainnet-beacon-80094
-    export CHAIN_ID=80094
-fi
+case "$CHAIN" in
+    mainnet)
+        export CHAIN_ID=80094
+        export BEACON_CHAIN_SPEC=mainnet
+        ;;
+    bepolia)
+        export CHAIN_ID=80069
+        export BEACON_CHAIN_SPEC=testnet
+        ;;
+    *)
+        echo "Error: CHAIN must be mainnet or bepolia (got: $CHAIN)"
+        exit 1
+        ;;
+esac
 export SEED_DATA_DIR=$(pwd)/seed-data-$CHAIN_ID
-
-if [ -f "$SEED_DATA_DIR/el-bootnodes.txt" ]; then
-    EL_BOOTNODES=$(grep '^enode://' "$SEED_DATA_DIR/el-bootnodes.txt"| tr '\n' ',' | sed 's/,$//')
-fi
 
 if [ -f "$SEED_DATA_DIR/el-peers.txt" ]; then
     EL_PEERS=$(grep '^enode://' "$SEED_DATA_DIR/el-peers.txt"| tr '\n' ',' | sed 's/,$//')
@@ -71,7 +74,6 @@ fi
 
 if command >/dev/null -v $RETH_BIN; then
     export RETH_DATA=$(pwd)/var/reth/data
-    export RETH_GENESIS_PATH=$(pwd)/var/reth/genesis.json
 fi  
 
 if ! command >/dev/null -v $RETH_BIN; then
