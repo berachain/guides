@@ -79,7 +79,7 @@ Block utilization analyzer examining transaction counts, gas usage, and block fi
 - Detailed block filling statistics
 - Sortable results by various metrics
 
-**Usage:** `node analyze-block-filling.js [-b N] [-n NAME] [-s COLUMN] [-h]`
+**Usage:** `node analyze-block-filling.js [--blocks N] [--start N --end N] [-c CHAIN] [-s COLUMN] [-h]`
 
 ### `analyze-missing-validators.js`
 
@@ -195,7 +195,8 @@ node scan-proposer-activity.js -p 0xYOUR_VALIDATOR_ADDRESS -c mainnet
 Analyze block filling patterns by a specific proposer:
 
 ```bash
-node analyze-block-filling.js -b 2000 -n "Validator Name"
+node analyze-block-filling.js --blocks=2000 --sort=gas
+node analyze-block-filling.js --start=10100000 --end=10101000
 ```
 
 ## Getting Help

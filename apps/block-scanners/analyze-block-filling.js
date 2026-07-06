@@ -447,161 +447,178 @@ async function analyzeBlockProposers(provider, startBlock, endBlock, clRpcBaseUr
     }
 }
 
-// Example usage
-async function main() {
-    const BLOCKS_TO_SCAN_PRIOR = 43200;
-    const DEFAULT_SORT_BY = COL_GAS_PERCENT_LIMIT;
-    const FIXED_SORT_ORDER = 'desc';
-    const DEFAULT_CONCURRENCY = 16;
-    const DEFAULT_BATCH_SIZE = 500;
+const SORT_COLUMNS = {
+    gas: COL_GAS_PERCENT_LIMIT,
+    txs: COL_AVG_TXS_PER_BLOCK,
+    blocks: COL_PROPOSED_BLOCKS,
+    empty: COL_EMPTY_BLOCKS,
+    proposer: COL_PROPOSER,
+};
 
-    const elRpcUrlEnv = process.env.EL_ETHRPC_URL;
-    const clRpcUrlEnv = process.env.CL_ETHRPC_URL;
-    
-    let rpcUrl; // For EL
-    let clRpcBaseUrl; // For CL
+async function resolveBlockRange(provider, { blocks, start, end }) {
+    const latest = await provider.getBlockNumber();
+    const defaultCount = ConfigHelper.getDefaultBlockCount();
 
-    if (!elRpcUrlEnv || !elRpcUrlEnv.startsWith('http')) {
-        console.error('Error: Missing Execution Layer RPC configuration. Please set EL_ETHRPC_URL environment variable.');
-        process.exit(1);
+    if (start !== undefined && end !== undefined) {
+        if (start < 1) {
+            throw new Error('--start must be >= 1');
+        }
+        if (end < start) {
+            throw new Error('--end must be >= --start');
+        }
+        return {
+            startBlock: start,
+            endBlock: end,
+            blockCount: end - start + 1,
+        };
     }
-    rpcUrl = elRpcUrlEnv;
 
-    if (!clRpcUrlEnv || !clRpcUrlEnv.startsWith('http')) {
-        console.error('Error: Missing Consensus Layer RPC configuration. Please set CL_ETHRPC_URL environment variable.');
-        process.exit(1);
+    const count = blocks ?? defaultCount;
+    const endBlock = latest;
+    const startBlock = Math.max(1, endBlock - count + 1);
+    return {
+        startBlock,
+        endBlock,
+        blockCount: endBlock - startBlock + 1,
+    };
+}
+
+function showHelp() {
+    const defaultBlocks = ConfigHelper.getDefaultBlockCount();
+    console.log(`
+Block Filling Analyzer - proposer utilization statistics
+
+Usage: node analyze-block-filling.js [options]
+
+Range (choose one):
+  --blocks=N             Analyze last N blocks from head (default: ${defaultBlocks})
+  --start=N              Start block (inclusive). Requires --end
+  --end=N                End block (inclusive). Requires --start
+
+Other:
+  -c, --chain=NAME       Network: mainnet|bepolia (default: mainnet)
+  -s, --sort=COLUMN      Sort results: gas|txs|blocks|empty|proposer (default: gas)
+  --concurrency=N        Parallel requests (default: 16)
+  --batch-size=N         Blocks per batch (default: 500)
+  -h, --help             Show help
+
+Environment (via ../config.js):
+  MAINNET_EL_URL / MAINNET_CL_URL     Mainnet RPC endpoints
+  BEPOLIA_EL_URL / BEPOLIA_CL_URL     Bepolia RPC endpoints
+
+Examples:
+  node analyze-block-filling.js
+  node analyze-block-filling.js --blocks=2000
+  node analyze-block-filling.js --start=10100000 --end=10101000
+  node analyze-block-filling.js --chain=bepolia --sort=txs
+`);
+}
+
+async function analyzeBlockFilling(chainName = 'mainnet', options = {}) {
+    const {
+        blocks,
+        start,
+        end,
+        sort = 'gas',
+        concurrency = 16,
+        batchSize = 500,
+    } = options;
+
+    const sortBy = SORT_COLUMNS[sort];
+    if (!sortBy) {
+        throw new Error(`Invalid sort column: ${sort}`);
     }
-    clRpcBaseUrl = clRpcUrlEnv;
-    
-    let startBlock, endBlock;
-    let useDefaultBlockRange = true;
-    let sortBy = DEFAULT_SORT_BY;
-    let sortOrder = FIXED_SORT_ORDER;
-    let concurrency = DEFAULT_CONCURRENCY;
-    let batchSize = DEFAULT_BATCH_SIZE;
+    const sortOrder = 'desc';
 
+    const rpcUrl = ConfigHelper.getRpcUrl('el', chainName);
+    const clRpcBaseUrl = ConfigHelper.getBlockScannerUrl(chainName);
+    const provider = new ethers.JsonRpcProvider(rpcUrl);
+
+    const { startBlock, endBlock, blockCount } = await resolveBlockRange(provider, { blocks, start, end });
+    console.log(`Analyzing ${blockCount.toLocaleString()} blocks (${startBlock.toLocaleString()} to ${endBlock.toLocaleString()})`);
+    console.log(`Sort: ${sortBy} (${sortOrder}). EL RPC: ${rpcUrl}, CL RPC: ${clRpcBaseUrl}`);
+    console.log(`Performance settings: concurrency=${concurrency}, batch-size=${batchSize}`);
+
+    await analyzeBlockProposers(provider, startBlock, endBlock, clRpcBaseUrl, sortBy, sortOrder, concurrency, batchSize);
+}
+
+// CLI handling
+if (require.main === module) {
     const argv = yargs(hideBin(process.argv))
-        .command('$0 [startBlock] [endBlock]', 'Scan blocks for proposer statistics. If startBlock and endBlock are omitted, scans the prior 43,200 blocks.', (yargs) => {
-            yargs
-                .positional('startBlock', {
-                    describe: 'The first block in the range to scan',
-                    type: 'number'
-                })
-                .positional('endBlock', {
-                    describe: 'The last block in the range to scan',
-                    type: 'number'
-                });
+        .option('blocks', {
+            alias: 'b',
+            type: 'number',
+            description: `Number of blocks to analyze from head (default: ${ConfigHelper.getDefaultBlockCount()})`,
+        })
+        .option('start', {
+            type: 'number',
+            description: 'Start block (inclusive). Requires --end',
+        })
+        .option('end', {
+            type: 'number',
+            description: 'End block (inclusive). Requires --start',
+        })
+        .option('chain', {
+            alias: 'c',
+            type: 'string',
+            default: 'mainnet',
+            choices: ['mainnet', 'bepolia'],
+            description: 'Network: mainnet|bepolia',
+        })
+        .option('sort', {
+            alias: 's',
+            type: 'string',
+            default: 'gas',
+            choices: Object.keys(SORT_COLUMNS),
+            description: 'Sort results by column',
         })
         .option('concurrency', {
-            describe: 'Number of concurrent requests (default: 10)',
             type: 'number',
-            default: DEFAULT_CONCURRENCY
+            default: 16,
+            description: 'Number of concurrent requests',
         })
         .option('batch-size', {
-            describe: 'Number of blocks to process in each batch (default: 100)',
             type: 'number',
-            default: DEFAULT_BATCH_SIZE
+            default: 500,
+            description: 'Number of blocks to process in each batch',
         })
-        .option('t', {
-            describe: `Sort by ${COL_AVG_TXS_PER_BLOCK} (ascending)`,
+        .option('help', {
+            alias: 'h',
             type: 'boolean',
-            group: 'Sorting Options:',
-            conflicts: ['g', 'b', 'e']
-        })
-        .option('g', {
-            describe: `Sort by ${COL_GAS_PERCENT_LIMIT} (ascending)`,
-            type: 'boolean',
-            group: 'Sorting Options:',
-            conflicts: ['t', 'b', 'e']
-        })
-        .option('b', {
-            describe: `Sort by Number of Proposed Blocks (ascending)`,
-            type: 'boolean',
-            group: 'Sorting Options:',
-            conflicts: ['t', 'g', 'e']
-        })
-        .option('e', {
-            describe: `Sort by Empty Blocks (ascending)`,
-            type: 'boolean',
-            group: 'Sorting Options:',
-            conflicts: ['t', 'g', 'b']
+            description: 'Show help',
         })
         .check((argv) => {
-            const { startBlock: sb, endBlock: eb } = argv;
-            if (sb !== undefined && eb === undefined) {
-                throw new Error('If startBlock is provided, endBlock must also be provided.');
+            if (argv.start !== undefined && argv.end === undefined) {
+                throw new Error('--end is required when --start is provided');
             }
-            if (sb === undefined && eb !== undefined) {
-                throw new Error('If endBlock is provided, startBlock must also be provided.');
-            }
-            if (sb !== undefined && eb !== undefined) {
-                if (sb < 0) {
-                    throw new Error('startBlock cannot be negative.');
-                }
-                if (eb < sb) {
-                    throw new Error('endBlock must be greater than or equal to startBlock.');
-                }
+            if (argv.end !== undefined && argv.start === undefined) {
+                throw new Error('--start is required when --end is provided');
             }
             return true;
         })
-        .alias('h', 'help')
-        .usage('Usage: node scan-block-filling.js [startBlock endBlock] [--concurrency N] [--batch-size N] [-t | -g | -b | -e]')
-        .epilogue(`Description:\n  Scans a range of blocks from an Ethereum-compatible blockchain to gather proposer statistics.\n  Relies on EL_ETHRPC_URL and CL_ETHRPC_URL environment variables for RPC endpoints.\n  If startBlock and endBlock are omitted, scans the prior ${BLOCKS_TO_SCAN_PRIOR} blocks from the current block.\n  Default sort: ${DEFAULT_SORT_BY} (ascending)\n\nRequired Environment Variables:\n  EL_ETHRPC_URL           EL RPC endpoint\n  CL_ETHRPC_URL           CL RPC endpoint\n`)
-        .fail((msg, err, yargs) => {
-            if (err) throw err; // Preserve stack
-            console.error('Error:', msg);
-            console.error("Run with --help for usage details.");
-            process.exit(1);
-        })
         .strict()
+        .help(false)
         .argv;
 
-    if (argv.t) {
-        sortBy = COL_AVG_TXS_PER_BLOCK;
-    } else if (argv.g) {
-        sortBy = COL_GAS_PERCENT_LIMIT;
-    } else if (argv.b) {
-        sortBy = COL_PROPOSED_BLOCKS;
-    } else if (argv.e) {
-        sortBy = COL_EMPTY_BLOCKS;
+    if (argv.help) {
+        showHelp();
+        process.exit(0);
     }
 
-    concurrency = argv.concurrency;
-    batchSize = argv['batch-size'];
-
-    if (argv.startBlock !== undefined && argv.endBlock !== undefined) {
-        startBlock = argv.startBlock;
-        endBlock = argv.endBlock;
-        useDefaultBlockRange = false;
-    } else {
-        useDefaultBlockRange = true;
-    }
-
-    const provider = new ethers.JsonRpcProvider(rpcUrl);
-
-    if (useDefaultBlockRange) {
-        console.log(`No specific block range provided. Fetching current block and scanning prior ${BLOCKS_TO_SCAN_PRIOR} blocks.`);
-        try {
-            const currentBlockNumber = await provider.getBlockNumber();
-            endBlock = currentBlockNumber;
-            startBlock = currentBlockNumber - BLOCKS_TO_SCAN_PRIOR;
-            console.log(`Will scan from block ${startBlock} to ${endBlock} (current).`);
-        } catch (error) {
-            console.error('Error fetching current block number:', error.message);
+    analyzeBlockFilling(argv.chain, {
+        blocks: argv.blocks,
+        start: argv.start,
+        end: argv.end,
+        sort: argv.sort,
+        concurrency: argv.concurrency,
+        batchSize: argv['batch-size'],
+    })
+        .then(() => process.exit(0))
+        .catch((error) => {
+            console.error('Error:', error.message);
             process.exit(1);
-        }
-    } else {
-        console.log(`Using provided start block: ${startBlock}, end block: ${endBlock}.`);
-    }
-    
-    try {
-        console.log(`Analyzing proposers. Sort: ${sortBy} (${sortOrder}). EL RPC: ${rpcUrl}, CL RPC: ${clRpcBaseUrl}`);
-        console.log(`Performance settings: concurrency=${concurrency}, batch-size=${batchSize}`);
-        await analyzeBlockProposers(provider, startBlock, endBlock, clRpcBaseUrl, sortBy, sortOrder, concurrency, batchSize);
-    } catch (error) {
-        console.error('Error during analysis execution:', error.message);
-    }
+        });
 }
 
-main();
+module.exports = { analyzeBlockFilling, analyzeBlockProposers };
 

@@ -10,7 +10,7 @@
  * - Counts state changes per transaction
  * - Provides histogram analysis of state change patterns
  * - Supports custom block ranges and batch processing
- * - Requires EL_ETHRPC_URL environment variable
+ * - Uses RPC endpoints from ../config.js (MAINNET_EL_URL, etc.)
  * - Useful for understanding transaction complexity and impact
  */
 
@@ -18,20 +18,11 @@ const { ethers } = require('ethers');
 const axios = require('axios');
 const yargs = require('yargs/yargs');
 const { hideBin } = require('yargs/helpers');
+const { ConfigHelper } = require('./lib/shared-utils');
 
 // Configuration
 const BATCH_SIZE = 100; // Number of blocks to process in parallel
 const BLOCKS_TO_SCAN_PRIOR = 43200; // Default number of blocks to scan if no range provided
-
-// Verify required environment variables
-const requiredEnvVars = ['EL_ETHRPC_URL'];
-const missingEnvVars = requiredEnvVars.filter(envVar => !process.env[envVar]);
-
-if (missingEnvVars.length > 0) {
-    console.error('Error: Missing required environment variables:');
-    missingEnvVars.forEach(envVar => console.error(`- ${envVar}`));
-    process.exit(1);
-}
 
 /**
  * Trace a transaction using the execution layer RPC
@@ -248,8 +239,6 @@ async function scanStateChanges(provider, elRpcUrl, selector, startBlock, endBlo
 
 // Main execution function
 async function main() {
-    const RPC_URL = process.env.EL_ETHRPC_URL;
-    
     let startBlock, endBlock;
     let useDefaultBlockRange = true;
     let selector;
@@ -271,6 +260,13 @@ async function main() {
                     type: 'number'
                 });
         })
+        .option('chain', {
+            alias: 'c',
+            describe: 'Chain to use: mainnet|bepolia',
+            type: 'string',
+            default: 'mainnet',
+            choices: ['mainnet', 'bepolia']
+        })
         .check((argv) => {
             const { startBlock: sb, endBlock: eb } = argv;
             if (sb !== undefined && eb === undefined) {
@@ -291,7 +287,7 @@ async function main() {
         })
         .alias('h', 'help')
         .usage('Usage: node scan-state-changes.js <selector> [startBlock endBlock]')
-        .epilogue(`Description:\n  Scans a range of blocks for transactions matching a specific function selector.\n  Uses EL_ETHRPC_URL environment variable for RPC endpoint.\n  If startBlock and endBlock are omitted, scans the prior ${BLOCKS_TO_SCAN_PRIOR} blocks from the current block.\n  Batch size is fixed at ${BATCH_SIZE} blocks.\n\nRequired Environment Variables:\n  EL_ETHRPC_URL           EL RPC endpoint\n`)
+        .epilogue(`Description:\n  Scans a range of blocks for transactions matching a specific function selector.\n  RPC endpoint comes from ../config.js (override with MAINNET_EL_URL, BEPOLIA_EL_URL, etc.).\n  If startBlock and endBlock are omitted, scans the prior ${BLOCKS_TO_SCAN_PRIOR} blocks from the current block.\n  Batch size is fixed at ${BATCH_SIZE} blocks.\n\nEnvironment Variables (via ../config.js):\n  MAINNET_EL_URL / BEPOLIA_EL_URL     EL RPC endpoint\n`)
         .fail((msg, err, yargs) => {
             if (err) throw err; // Preserve stack
             console.error('Error:', msg);
@@ -302,6 +298,9 @@ async function main() {
         .argv;
 
     selector = argv.selector;
+
+    const chainName = argv.chain;
+    const RPC_URL = ConfigHelper.getRpcUrl('el', chainName);
 
     if (argv.startBlock !== undefined && argv.endBlock !== undefined) {
         startBlock = argv.startBlock;
