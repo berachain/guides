@@ -36,6 +36,8 @@ You can override default settings by setting environment variables:
 - `BEPOLIA_EL_URL` - Bepolia execution layer RPC endpoint
 - `BEPOLIA_CL_URL` - Bepolia consensus layer RPC endpoint
 - `VALIDATOR_DB_PATH` - Path to validator database for name lookups (see `cometbft-decoder`)
+- `METADATA_REPO_PATH` - Local clone of [berachain/metadata](https://github.com/berachain/metadata); uses `src/validators/mainnet.json` or `bepolia.json`
+- `METADATA_MAINNET_VALIDATORS_PATH` / `METADATA_BEPOLIA_VALIDATORS_PATH` - Override validator list file path or URL
 
 ## Available Scripts
 
@@ -94,6 +96,60 @@ Analyzes missing validators (block_id_flag = 1) per proposer with detailed histo
 - Validator name lookup via database
 
 **Usage:** `node analyze-missing-validators.js [--blocks N] [--chain NAME] [-a] [-p PROPOSER] [-h]`
+
+### `validator-vote-sparklines.js`
+
+ASCII sparklines for validator vote participation. Sorts by miss count so chronically failing validators stand out.
+
+**Features:**
+
+- One character per block: `·` voted, `x` missed (old → new, left → right)
+- Shows miss count, rate, longest streak, and current trailing miss streak (`NOW`, bolded when active)
+- Category flags instead of a numeric miss threshold: default shows **missed** (any miss); `--dead` or `--all`
+- `--filter-file PATH`: watch a fixed roster. Shows every watched validator's current status (full roster unless category flags are set) and prints a one-line summary (how many are mid-miss-streak right now)
+- `--alert-on-streak N`: exit 1 if any watched validator's live streak (`NOW`) is ≥ N — for cron/alerting
+- Dead validators (100% miss in window) marked with `†`
+- Exited validators (`voting_power=0`) with `--all-validators`, labeled `(out)`
+- `--consensus`: also print the network-wide absent-voting-power/BFT-threshold strip (off by default — it's a network-health signal, separate from per-validator tracking)
+- Runtime self-check (`verifyFlagQuorumInvariant`): warns loudly if the voted-flag voting power ever fails BFT quorum on a round-0 (no-retry) block, which would mean the flag semantics below are wrong
+- Colored terminal output for easy visual scanning
+
+**Usage:** `node validator-vote-sparklines.js [-b N] [-c CHAIN] [--dead] [--all] [--top N] [--filter-file PATH] [--alert-on-streak N] [--consensus] [--json]`
+
+**Examples:**
+
+```bash
+node validator-vote-sparklines.js
+node validator-vote-sparklines.js --dead
+node validator-vote-sparklines.js --all -b 200
+MAINNET_CL_URL=http://127.0.0.1:30000 node validator-vote-sparklines.js -b 100
+
+# Valrel: full status of the delegated-validator roster, sorted by live miss streak
+node validator-vote-sparklines.js --filter-file /path/to/delegated_validators.csv
+
+# Cron/alerting: exit 1 if any watched validator has missed the last 3+ blocks
+node validator-vote-sparklines.js --filter-file delegated_validators.csv --alert-on-streak 3 --json
+```
+
+### `check-validator-voting.js`
+
+Count how many times a validator missed a vote over recent blocks.
+
+**Features:**
+
+- Simple miss count over a configurable window (default: last 100 blocks)
+- Uses `last_commit` signatures; absent = `block_id_flag` 1, voted = 4/5/6
+- JSON output mode for scripts and alerts
+- Optional `--fail-over N` exit code for monitoring
+
+**Usage:** `node check-validator-voting.js -p VALIDATOR_ADDRESS [-b N] [-c CHAIN] [--json]`
+
+**Examples:**
+
+```bash
+node check-validator-voting.js -p 0xYOUR_VALIDATOR_ADDRESS
+node check-validator-voting.js -p 0xYOUR_VALIDATOR_ADDRESS -b 500 --json
+```
 
 ### `scan-proposer-activity.js`
 
