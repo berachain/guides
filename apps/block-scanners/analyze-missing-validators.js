@@ -161,7 +161,7 @@ async function fetchBlocksParallel(blockFetcher, startBlock, blockCount, concurr
                 height: blockHeight,
                 proposer: proposer || 'unknown',
                 timestamp: timestamp,
-                signatureCount: signatures.filter(sig => sig && sig.block_id_flag !== 5).length,
+                signatureCount: signatures.filter(sig => sig && sig.block_id_flag !== 1).length,
                 totalValidators: signatures.length,
                 timestampMs: timestamp ? new Date(timestamp).getTime() : null,
                 raw: block

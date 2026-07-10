@@ -3,7 +3,7 @@ const path = require('path');
 
 // Load .env file if it exists
 try {
-  require('dotenv').config({ path: path.join(__dirname, '.env') });
+  require('dotenv').config({ path: path.join(__dirname, '.env'), quiet: true });
 } catch (e) {
   // dotenv not installed or .env not found, continue with process.env
 }
@@ -52,6 +52,7 @@ const config = {
     return path.join(__dirname, 'doc-abis');
   })(),
   VALIDATOR_DB_PATH: process.env.VALIDATOR_DB_PATH || path.join(__dirname, 'var', 'db', 'validator.sqlite'),
+  METADATA_REPO_PATH: process.env.METADATA_REPO_PATH || null,
 
   // 3) Other settings
   DEFAULT_BLOCK_COUNT: parseInt(process.env.DEFAULT_BLOCK_COUNT) || 1000,
@@ -78,6 +79,14 @@ config.ConfigHelper = {
   },
   getDefaultLogChunkSize() {
     return 2000; // Default chunk size for log scanning
+  },
+  getMetadataValidatorsPath(chainName = 'mainnet') {
+    const file = chainName === 'bepolia' ? 'bepolia.json' : 'mainnet.json';
+    if (process.env.METADATA_REPO_PATH || config.METADATA_REPO_PATH) {
+      const root = process.env.METADATA_REPO_PATH || config.METADATA_REPO_PATH;
+      return path.join(root, 'src', 'validators', file);
+    }
+    return `https://raw.githubusercontent.com/berachain/metadata/main/src/validators/${file}`;
   }
 };
 

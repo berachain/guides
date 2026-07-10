@@ -377,9 +377,10 @@ class BlockFetcher {
       const timestamp = block.header?.time;
       
       // Count signatures with valid block_id_flag (actual participation)
-      // Based on Berachain's CometBFT implementation:
-      // Flag 1: Valid vote, Flag 4: Valid vote, Flag 5: Absent/no vote, Flag 6: Valid vote
-      const actualSignatureCount = signatures.filter(sig => sig && sig.block_id_flag !== 5).length;
+      // Based on Berachain's CometBFT implementation (verified 2026-07-09 via
+      // round-0 BFT-quorum voting-power check, see validator-vote-sparklines.js):
+      // Flag 1: Absent/no vote, Flag 4/5/6: Valid vote
+      const actualSignatureCount = signatures.filter(sig => sig && sig.block_id_flag !== 1).length;
       
       blocks.push({
         height: blockHeight,
