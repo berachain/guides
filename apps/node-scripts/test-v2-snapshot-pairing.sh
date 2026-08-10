@@ -32,6 +32,6 @@ full_cl="$(printf '%s\n' "$full_out" | sed -n 's/^CL_URL=//p')"
 [[ "$archive_cl" != "$full_cl" ]]
 
 echo "$pruned_out" | grep -q 'DOWNLOAD_CMD=bera-reth download'
-echo "$archive_out" | grep -q '--manifest-url'
+echo "$archive_out" | grep -Fq -- '--manifest-url'
 
 echo "test-v2-snapshot-pairing: PASS"
