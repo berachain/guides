@@ -10,7 +10,8 @@
 # Usage:
 #   sudo ./mkberanode.sh \
 #     --chain {mainnet|bepolia} \
-#     --mode {archive|pruned} \
+#     --mode {archive|pruned|full_archive} \
+#     [--reth-storage-v2] \
 #     [--cl-version vX.Y.Z] \
 #     [--el-version vA.B.C] \
 #     [--no-snapshot] \
@@ -27,7 +28,8 @@ if (set -o pipefail) 2>/dev/null; then :; fi
 # ------------------------------
 CHAIN=""            # mainnet|bepolia
 EL_CHOICE="reth"    # reth only
-MODE=""               # archive|pruned (required)
+MODE=""               # archive|pruned|full_archive (required; full_archive needs --reth-storage-v2)
+RETH_STORAGE_V2="${RETH_STORAGE_V2:-0}"  # experimental storage-v2 catalog path (bepolia)
 CL_VERSION=""       # e.g. v1.3.2 (empty: latest)
 EL_VERSION=""       # e.g. v1.20.0 (empty: latest)
 USE_SNAPSHOT=1      # if 1, download and install snapshots
@@ -80,7 +82,8 @@ need_cmd() { command -v "$1" >/dev/null 2>&1 || { err "Required command '$1' not
 print_usage() {
   cat <<EOF
 Usage:
-  sudo $0 --chain {mainnet|bepolia} --mode {archive|pruned}
+  sudo $0 --chain {mainnet|bepolia} --mode {archive|pruned|full_archive}
+    [--reth-storage-v2]
     [--cl-version vX.Y.Z] [--el-version vA.B.C]
     [--no-snapshot]
     [--stream-snapshots]
@@ -93,6 +96,11 @@ uses aria2c when installed for resumable multi-connection downloads, else curl w
   --stream-snapshots          Stream over the network (curl | lz4 | tar), no full archive on disk
   --snapshot-download-dir     Override download directory (default: $SNAPSHOT_DOWNLOAD_DIR_DEFAULT)
   --keep-snapshot-downloads   Keep .tar.lz4 files after successful extract
+  --reth-storage-v2           Experimental bepolia storage-v2 restore (catalog + bera-reth download).
+                              Also accepted via env RETH_STORAGE_V2=1. Default remains v1 index.csv.
+                              Modes: pruned/minimal → --minimal + cl-pruned;
+                              archive → --archive + cl-pruned;
+                              full_archive → --archive + cl-archive (explicit CL archive opt-in).
 
 Examples:
   sudo $0 --chain mainnet --mode archive
@@ -100,6 +108,8 @@ Examples:
   sudo $0 --chain mainnet --mode pruned --no-snapshot
   sudo $0 --chain mainnet --mode archive --stream-snapshots
   sudo $0 --chain mainnet --mode archive --snapshot-download-dir /mnt/nvme/snapshots
+  sudo $0 --chain bepolia --mode archive --reth-storage-v2
+  sudo $0 --chain bepolia --mode full_archive --reth-storage-v2
 
 EOF
 }
@@ -129,6 +139,7 @@ while [[ $# -gt 0 ]]; do
     --snapshot-download-dir) SNAPSHOT_DOWNLOAD_DIR="${2:-}"; shift 2;;
     --keep-snapshot-downloads) SNAPSHOT_KEEP_DOWNLOADS=1; shift 1;;
     --snapshot-geography) SNAPSHOT_GEOGRAPHY="${2:-}"; SNAPSHOT_GEOGRAPHY_PROVIDED=1; shift 2;;
+    --reth-storage-v2) RETH_STORAGE_V2=1; shift 1;;
     -h|--help) print_usage; exit 0;;
     *) err "Unknown arg: $1"; print_usage; exit 1;;
   esac
@@ -144,9 +155,17 @@ case "${CHAIN:-}" in
   *) err "--chain must be mainnet or bepolia"; exit 1;;
 esac
 case "${MODE:-}" in
-  archive|pruned) ;;
-  *) err "--mode must be archive or pruned"; exit 1;;
+  archive|pruned|minimal|full_archive) ;;
+  *) err "--mode must be archive, pruned, minimal, or full_archive"; exit 1;;
 esac
+if [[ "$MODE" == "full_archive" && "$RETH_STORAGE_V2" != "1" && "$RETH_STORAGE_V2" != "true" ]]; then
+  err "full_archive requires --reth-storage-v2 (experimental storage-v2 path)"
+  exit 1
+fi
+if [[ ("$RETH_STORAGE_V2" == "1" || "$RETH_STORAGE_V2" == "true") && "$CHAIN" != "bepolia" ]]; then
+  err "--reth-storage-v2 is bepolia-only in this experiment"
+  exit 1
+fi
 case "${SNAPSHOT_GEOGRAPHY:-}" in
   na|eu|as) ;;
   *) err "--snapshot-geography must be na, eu, or as"; exit 1;;
@@ -419,8 +438,75 @@ stream_extract_el() {
   curl -Lf "$url" | lz4 -d | tar -xf - -C "$el_home/data"
 }
 
+install_snapshots_v2() {
+  local script_dir catalog_url catalog_file pairing_helper
+  script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  pairing_helper="$script_dir/v2-snapshot-pairing.sh"
+  catalog_url="${SNAPSHOT_V2_CATALOG_URL:-https://bera-snapshots.fsn1.your-objectstorage.com/v2/bepolia/catalog.csv}"
+
+  [[ -f "$pairing_helper" ]] || { err "missing $pairing_helper"; exit 1; }
+  # shellcheck source=v2-snapshot-pairing.sh
+  source "$pairing_helper"
+
+  info "Experimental storage-v2 restore (catalog=$catalog_url mode=$MODE)"
+  catalog_file="$(mktemp)"
+  # shellcheck disable=SC2329
+  cleanup_v2_catalog() { rm -f "$catalog_file"; }
+  trap cleanup_v2_catalog RETURN
+
+  if ! curl -sfL "$catalog_url" -o "$catalog_file"; then
+    err "Failed to fetch v2 catalog from $catalog_url (no v1 fallback for --reth-storage-v2)"
+    exit 1
+  fi
+  if ! v2_select_from_catalog "$catalog_file" "$MODE"; then
+    err "v2 catalog selection failed for mode=$MODE"
+    exit 1
+  fi
+  v2_print_resolution "$MODE" | while IFS= read -r line; do info "$line"; done
+
+  # CL product
+  local should_skip=0
+  if [[ -d "$CL_HOME/data/blockstore.db" && -n "$(ls -A "$CL_HOME/data/blockstore.db" 2>/dev/null)" ]]; then
+    info "Detected existing CL data; skipping CL snapshot"
+    should_skip=1
+  fi
+  if [[ $should_skip -eq 0 ]]; then
+    info "Streaming CL ($V2_CL_ROLE) from $V2_CL_URL"
+    if ! stream_extract "$V2_CL_URL" "$CL_HOME/data" "CL $V2_CL_ROLE"; then
+      err "CL snapshot install failed"
+      exit 1
+    fi
+    chown -R berachain:berachain "$CL_HOME" 2>/dev/null || warn "Failed to set ownership for CL snapshot data"
+  fi
+
+  # EL via bera-reth download
+  should_skip=0
+  if [[ -d "$EL_HOME/data/" && -n "$(ls -A "$EL_HOME/data/db" 2>/dev/null)" ]]; then
+    info "Detected existing EL data; skipping bera-reth download"
+    should_skip=1
+  fi
+  if [[ $should_skip -eq 0 ]]; then
+    info "Restoring EL via bera-reth download $V2_EL_PRESET"
+    if ! sudo -u berachain "$BIN_DIR/bera-reth" download \
+      --chain bepolia \
+      --datadir "$EL_HOME/data" \
+      --manifest-url "$V2_EL_MANIFEST_URL" \
+      "$V2_EL_PRESET"; then
+      err "bera-reth download failed"
+      exit 1
+    fi
+    chown -R berachain:berachain "$EL_HOME" 2>/dev/null || warn "Failed to set ownership for EL snapshot data"
+  fi
+  info "Storage-v2 snapshot installation completed"
+}
+
 install_snapshots() {
   if [[ $USE_SNAPSHOT -eq 0 ]]; then
+    return 0
+  fi
+
+  if [[ "$RETH_STORAGE_V2" == "1" || "$RETH_STORAGE_V2" == "true" ]]; then
+    install_snapshots_v2
     return 0
   fi
   
@@ -435,7 +521,11 @@ install_snapshots() {
     warn "Failed to fetch snapshot index, will proceed with normal initialization"
     return 0
   fi
-  snapshot_info=$(parse_snapshot_urls "$csv_data" "$EL_CHOICE" "$MODE")
+  local v1_mode="$MODE"
+  if [[ "$v1_mode" == "minimal" ]]; then
+    v1_mode="pruned"
+  fi
+  snapshot_info=$(parse_snapshot_urls "$csv_data" "$EL_CHOICE" "$v1_mode")
   # Initialize and eval results
   BEACON_URL="" EL_URL=""
   eval "$snapshot_info"
@@ -775,19 +865,17 @@ init_cl() {
       sed -i "s|^rpc-dial-url = \".*\"|rpc-dial-url = \"http://localhost:$EL_AUTHRPC_PORT\"|" "$CL_HOME/config/app.toml" || true
       sed -i "s|^jwt-secret-path = \".*\"|jwt-secret-path = \"$JWT_PATH\"|" "$CL_HOME/config/app.toml" || true
       sed -i "s|^trusted-setup-path = \".*\"|trusted-setup-path = \"$CL_HOME/config/kzg-trusted-setup.json\"|" "$CL_HOME/config/app.toml" || true
-      # Pruning depends on mode: archive => nothing, pruned => default
-      if [[ "$MODE" == "archive" ]]; then
-        if grep -q '^pruning\s*=\s*"' "$CL_HOME/config/app.toml"; then
-          sed -i "s|^pruning\s*=\s*\".*\"|pruning = \"nothing\"|" "$CL_HOME/config/app.toml" || true
-        else
-          echo "pruning = \"nothing\"" >> "$CL_HOME/config/app.toml"
-        fi
+      # Pruning: full_archive (and v1 archive) keep full CL; archive with storage-v2 uses pruned CL tip.
+      local cl_pruning="default"
+      if [[ "$MODE" == "full_archive" ]]; then
+        cl_pruning="nothing"
+      elif [[ "$MODE" == "archive" && "$RETH_STORAGE_V2" != "1" && "$RETH_STORAGE_V2" != "true" ]]; then
+        cl_pruning="nothing"
+      fi
+      if grep -q '^pruning\s*=\s*"' "$CL_HOME/config/app.toml"; then
+        sed -i "s|^pruning\s*=\s*\".*\"|pruning = \"$cl_pruning\"|" "$CL_HOME/config/app.toml" || true
       else
-        if grep -q '^pruning\s*=\s*"' "$CL_HOME/config/app.toml"; then
-          sed -i "s|^pruning\s*=\s*\".*\"|pruning = \"default\"|" "$CL_HOME/config/app.toml" || true
-        else
-          echo "pruning = \"default\"" >> "$CL_HOME/config/app.toml"
-        fi
+        echo "pruning = \"$cl_pruning\"" >> "$CL_HOME/config/app.toml"
       fi
     fi
     # Write external_address using detected IP and existing P2P port (fallback 26656)
@@ -834,14 +922,21 @@ install_systemd_units() {
       bootnodes_arg="--bootnodes $BOOTNODES"
     fi
   fi
-  local reth_mode_flag=""
-  if [[ "$MODE" != "archive" ]]; then reth_mode_flag="--full"; fi
+  local reth_mode_flag="" storage_v2_flag=""
+  case "$MODE" in
+    archive|full_archive) reth_mode_flag="" ;;
+    minimal) reth_mode_flag="--minimal" ;;
+    *) reth_mode_flag="--full" ;;
+  esac
+  if [[ "$RETH_STORAGE_V2" == "1" || "$RETH_STORAGE_V2" == "true" ]]; then
+    storage_v2_flag="--storage.v2"
+  fi
   el_exec="$BIN_DIR/bera-reth"
   el_args="node --datadir $EL_HOME/data \
     --http --http.addr 0.0.0.0 --http.port $EL_HTTP_PORT \
     --ws --ws.addr 0.0.0.0 --ws.port $EL_WS_PORT \
     --authrpc.addr 127.0.0.1 --authrpc.port $EL_AUTHRPC_PORT --authrpc.jwtsecret $JWT_PATH \
-    --port $EL_P2P_PORT --chain $CONFIG_DIR/el/genesis.json $bootnodes_arg $reth_mode_flag"
+    --port $EL_P2P_PORT --chain $CONFIG_DIR/el/genesis.json $bootnodes_arg $reth_mode_flag $storage_v2_flag"
 
   # Append NAT external IP if available (advertise correct external address)
   NAT_IP=$(detect_external_ip)
