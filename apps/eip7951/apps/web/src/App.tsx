@@ -165,13 +165,13 @@ function isCompleteSignatureDraft(
 ): draft is PendingSignature {
   return Boolean(
     draft.v !== undefined &&
-    draft.r &&
-    draft.s &&
-    draft.authenticatorData &&
-    draft.clientDataJSON &&
-    draft.webAuthnHash &&
-    draft.p256R &&
-    draft.p256S,
+      draft.r &&
+      draft.s &&
+      draft.authenticatorData &&
+      draft.clientDataJSON &&
+      draft.webAuthnHash &&
+      draft.p256R &&
+      draft.p256S,
   );
 }
 
@@ -627,10 +627,10 @@ export function App() {
   function isSameIntent(left: SignatureDraft | null, right: SignatureDraft) {
     return Boolean(
       left &&
-      left.intentHash === right.intentHash &&
-      left.contractAddress === right.contractAddress &&
-      left.chainId === right.chainId &&
-      left.nonce === right.nonce,
+        left.intentHash === right.intentHash &&
+        left.contractAddress === right.contractAddress &&
+        left.chainId === right.chainId &&
+        left.nonce === right.nonce,
     );
   }
 
