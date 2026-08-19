@@ -2736,9 +2736,7 @@
     eslint-visitor-keys "^5.0.0"
 
 "@vitejs/plugin-react@^6.0.0":
-  version "6.0.2"
-  resolved "https://registry.yarnpkg.com/@vitejs/plugin-react/-/plugin-react-6.0.2.tgz#f70cb8ed0ce225dbc3055d78070f820d8aa35eda"
-  integrity sha512-DlSMqo4WhThw4vB8Mpn0Woe9J+Jfq1geJ61AKW0QEgLzGMNwtIMdxbDUzLxcun8W7NbJO0e2Jg/Nxm3cCSVzzg==
+  version "6.0.5"
   dependencies:
     "@rolldown/pluginutils" "^1.0.0"
 
