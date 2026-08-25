@@ -1,0 +1,4 @@
+type,layer,profile,block_number,size_bytes,created_at,object_key,download_url,role
+reth,el,,22980000,1234,2026-08-25T06:00:00Z,v2/bepolia/reth/manifest.json,https://example.test/v2/bepolia/reth/manifest.json,el-manifest
+beacon-kit,cl,pruned,22980000,5678,2026-08-25T06:00:00Z,v2/bepolia/beacon-kit/pruned/beacon-kit-pruned-22980000.tar.lz4,https://example.test/v2/bepolia/beacon-kit/pruned/beacon-kit-pruned-22980000.tar.lz4,cl-pruned
+beacon-kit,cl,archive,22980000,999999,2026-08-25T06:00:00Z,v2/bepolia/beacon-kit/archive/beacon-kit-archive-22980000.tar.lz4,https://example.test/v2/bepolia/beacon-kit/archive/beacon-kit-archive-22980000.tar.lz4,cl-archive
