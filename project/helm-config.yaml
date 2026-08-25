@@ -1,0 +1,15 @@
+# Mechanical workspace contract for berachain/guides Helm tasks.
+tracker:
+  team: BERA
+  project: guides
+
+paths:
+  artifact_dir: project/
+
+instrument:
+  test_command: node apps/node-scripts/test-fetch-berachain-snapshot-v2.js
+  language: javascript
+  production_roots:
+    - apps/node-scripts/
+  test_roots:
+    - apps/node-scripts/
