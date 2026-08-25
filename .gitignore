@@ -54,3 +54,7 @@ pnpm-lock.yaml
 
 # Temporary var directory
 var/
+
+# Internal Helm workspace artifacts (Lead ruling BERA-912/GB-3): never track in this public repo.
+project/
+.helm-local
