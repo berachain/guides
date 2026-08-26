@@ -388,6 +388,31 @@ exit 0
         assert.ok(fs.readdirSync(clDir).length > 0);
         assert.ok(!fs.existsSync(elDir) || fs.readdirSync(elDir).length === 0);
     });
+
+    test('TP-12: EL manifest URL is constructed directly, not read from the catalog', () => {
+        const badCatalog = makeTempDir('snapv2-wrongmanifest-');
+        const badPath = path.join(badCatalog, 'catalog.csv');
+        fs.writeFileSync(
+            badPath,
+            `type,layer,profile,block_number,size_bytes,created_at,object_key,download_url,role
+reth,el,,1,1,2026-01-01T00:00:00Z,v2/bepolia/reth/manifest.json,https://example.test/wrong-manifest.json,el-manifest
+beacon-kit,cl,pruned,1,1,2026-01-01T00:00:00Z,v2/bepolia/beacon-kit/pruned/x.tar.lz4,https://example.test/x.tar.lz4,cl-pruned
+`,
+        );
+        const result = runScript([
+            '--network',
+            'bepolia',
+            '--catalog-url',
+            `file://${badPath}`,
+            '--no-download',
+        ]);
+        assert.strictEqual(result.status, 0, result.stderr);
+        assert.match(
+            result.stdout,
+            /bera-snapshots\.fsn1\.your-objectstorage\.com\/v2\/bepolia\/reth\/manifest\.json/,
+        );
+        assert.doesNotMatch(result.stdout, /example\.test\/wrong-manifest\.json/);
+    });
 }
 
 main();

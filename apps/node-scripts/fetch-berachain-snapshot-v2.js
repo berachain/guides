@@ -29,8 +29,21 @@ const RESTORE_PAIRING = {
     archive: { elPreset: '--archive', clRole: 'cl-pruned' },
 };
 
+const PUBLIC_BASE = 'https://bera-snapshots.fsn1.your-objectstorage.com';
+
 function defaultCatalogUrl(network) {
-    return `https://bera-snapshots.fsn1.your-objectstorage.com/v2/${network}/catalog.csv`;
+    return `${PUBLIC_BASE}/v2/${network}/catalog.csv`;
+}
+
+// The EL manifest object key is fixed per chain and overwritten in place on
+// every publish (never versioned by block or date) -- confirmed against
+// three live catalog fetches with the block advancing but the key staying
+// v2/<network>/reth/manifest.json each time. Constructing it directly avoids
+// depending on the catalog fetch succeeding just to restore EL, and matches
+// the same fix applied to bera-reth's own `download` command (see
+// berachain/bera-reth PR #281).
+function defaultManifestUrl(network) {
+    return `${PUBLIC_BASE}/v2/${network}/reth/manifest.json`;
 }
 
 function rethChainName(network) {
@@ -313,6 +326,7 @@ async function main() {
     const config = parseArgs();
     const { elPreset, clRole } = resolvePairing(config);
     const dirs = namedDirs(config);
+    const elManifestUrl = defaultManifestUrl(config.network);
 
     let catalogText;
     try {
@@ -336,10 +350,8 @@ async function main() {
         process.exit(1);
     }
 
-    let elManifest;
     let clRow;
     try {
-        elManifest = selectByRole(rows, 'el-manifest');
         clRow = selectByRole(rows, clRole);
     } catch (err) {
         console.error(`Error: ${err.message}`);
@@ -351,7 +363,7 @@ async function main() {
 
     if (config.noDownload) {
         if (restoreEl) {
-            console.log(buildElCommand(config, elManifest.downloadUrl, dirs.elDir, elPreset));
+            console.log(buildElCommand(config, elManifestUrl, dirs.elDir, elPreset));
         }
         if (restoreCl) {
             console.log(buildClCommand(clRow.downloadUrl, dirs.clDir, false));
@@ -379,10 +391,10 @@ async function main() {
         const rethBin = findRethBin(config);
         if (!rethBin) {
             console.error('Warning: bera-reth not found on PATH; EL restore was skipped');
-            console.log(buildElCommand(config, elManifest.downloadUrl, dirs.elDir, elPreset));
+            console.log(buildElCommand(config, elManifestUrl, dirs.elDir, elPreset));
         } else {
             try {
-                runElDownload(rethBin, config, elManifest.downloadUrl, dirs.elDir, elPreset);
+                runElDownload(rethBin, config, elManifestUrl, dirs.elDir, elPreset);
             } catch (err) {
                 console.error(`Error: bera-reth download failed: ${err.message}`);
                 process.exit(1);
