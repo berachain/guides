@@ -37,10 +37,20 @@ function rethChainName(network) {
     return network === 'bepolia' ? 'bepolia' : network;
 }
 
+// Matches env.sh / setup-reth.sh / run-reth.sh: CHAIN is the Quickstart's
+// established way to pick a network. --network/-n still overrides it below.
+function defaultNetwork() {
+    const envChain = process.env.CHAIN;
+    if (envChain === 'mainnet' || envChain === 'bepolia') {
+        return envChain;
+    }
+    return 'mainnet';
+}
+
 function parseArgs() {
     const args = process.argv.slice(2);
     const config = {
-        network: 'mainnet',
+        network: defaultNetwork(),
         snapshotType: 'pruned',
         outputDir: DEFAULT_OUTPUT,
         catalogUrl: null,
@@ -152,7 +162,7 @@ Requires Node.js 18+, curl on PATH, lz4 and tar for CL extract, and optionally b
 Usage: node fetch-berachain-snapshot-v2.js [options]
 
 Options:
-  -n, --network <network>     mainnet or bepolia (default: mainnet)
+  -n, --network <network>     mainnet or bepolia (default: $CHAIN env var, or mainnet)
   -t, --type <type>           pruned or archive — EL preset only (default: pruned)
   -o, --output <dir>          parent directory for named datadirs (default: downloads)
       --catalog-url <url>     override catalog.csv URL

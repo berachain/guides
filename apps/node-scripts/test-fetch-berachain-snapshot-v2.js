@@ -388,6 +388,32 @@ exit 0
         assert.ok(fs.readdirSync(clDir).length > 0);
         assert.ok(!fs.existsSync(elDir) || fs.readdirSync(elDir).length === 0);
     });
+
+    test('TP-12: CHAIN env var sets the default network, matching env.sh/setup-reth.sh', () => {
+        const result = runScript(
+            ['--catalog-url', FIXTURE_CATALOG_URL, '--no-download'],
+            { CHAIN: 'bepolia' },
+        );
+        assert.strictEqual(result.status, 0, result.stderr);
+        assert.match(result.stdout, /--chain bepolia/);
+    });
+
+    test('TP-12: --network still overrides CHAIN when both are set', () => {
+        const result = runScript(
+            ['--network', 'bepolia', '--catalog-url', FIXTURE_CATALOG_URL, '--no-download'],
+            { CHAIN: 'mainnet' },
+        );
+        assert.strictEqual(result.status, 0, result.stderr);
+        assert.match(result.stdout, /--chain bepolia/);
+    });
+
+    test('TP-12: an invalid CHAIN value is ignored, falling back to mainnet', () => {
+        const result = runScript(['--no-download'], { CHAIN: 'sepolia' });
+        // mainnet has no live v2 catalog yet; this proves the default resolved to
+        // mainnet (fails closed) rather than crashing on the bad env value.
+        assert.notStrictEqual(result.status, 0);
+        assert.match(result.stderr, /mainnet/i);
+    });
 }
 
 main();
