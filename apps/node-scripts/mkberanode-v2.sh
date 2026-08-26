@@ -309,20 +309,33 @@ fetch_v2_catalog() {
   curl -fsSL "$catalog_url"
 }
 
+V2_CATALOG_HEADER="type,layer,profile,block_number,size_bytes,created_at,object_key,download_url,role"
+
 # Selects the download_url (column 8) for the single row matching role
-# (column 9) from v2 catalog.csv text. Header: type,layer,profile,
-# block_number,size_bytes,created_at,object_key,download_url,role.
-# Object keys and URLs use '/' rather than ',', so a plain field split is
-# safe. Reads the URL from the catalog, does not construct it -- the object
-# key layout is an implementation detail of the publish pipeline, not a
-# contract this script should assume.
+# (column 9) from v2 catalog.csv text. Object keys and URLs use '/' rather
+# than ',', so a plain field split is safe. Reads the URL from the catalog,
+# does not construct it -- the object key layout is an implementation
+# detail of the publish pipeline, not a contract this script should assume.
 select_v2_role() {
   local csv_data="$1" role="$2"
+  local header
+  header="$(printf '%s\n' "$csv_data" | head -n1 | tr -d '\r')"
+  if [[ "$header" != "$V2_CATALOG_HEADER" ]]; then
+    err "storage v2 catalog header mismatch (expected: $V2_CATALOG_HEADER)"
+    return 1
+  fi
   local url
   url=$(echo "$csv_data" | awk -F',' -v role="$role" 'NR>1 && $9==role { print $8; found=1 } END { exit !found }')
   [[ -n "$url" ]] || return 1
   echo "$url"
 }
+
+# Set when EL restore actually completed via bera-reth download, so init_el
+# knows to skip `bera-reth init` -- the download already initialized and
+# configured the EL datadir; running init again on top of it is redundant
+# at best and, given every other restore command in this campaign refuses
+# a non-empty --datadir, plausibly fatal at worst.
+EL_SNAPSHOT_INSTALLED=0
 
 install_snapshots_v2() {
   if [[ $USE_SNAPSHOT -eq 0 ]]; then
@@ -356,7 +369,10 @@ install_snapshots_v2() {
 
   # Execution snapshot: bera-reth's own download command handles fetch,
   # extraction, per-file checksum verification, and resumable retry -- no
-  # separate curl|tar step, unlike v1 or the CL leg below.
+  # separate curl|tar step, unlike v1 or the CL leg below. Preset must match
+  # the EL systemd unit's own runtime flag (install_systemd_units): --mode
+  # pruned runs the node with --full, not --minimal, so restoring --minimal
+  # here would under-provision it relative to its own pruning policy.
   if [[ -n "$el_manifest_url" ]]; then
     local should_skip=0
     if [[ -d "$EL_HOME/data/db" && -n "$(ls -A "$EL_HOME/data/db" 2>/dev/null)" ]]; then
@@ -365,12 +381,15 @@ install_snapshots_v2() {
     if [[ $should_skip -eq 1 ]]; then
       info "Detected existing EL data; skipping execution snapshot"
     else
-      local el_preset="--minimal"
+      local el_preset="--full"
       [[ "$MODE" == "archive" ]] && el_preset="--archive"
       info "Restoring execution layer via bera-reth download ($el_preset)"
+      mkdir -p "$EL_HOME/data"
+      chown -R berachain:berachain "$EL_HOME"
       if sudo -u berachain "$BIN_DIR/bera-reth" download \
           --chain "$CHAIN" --datadir "$EL_HOME/data" \
           --manifest-url "$el_manifest_url" "$el_preset"; then
+        EL_SNAPSHOT_INSTALLED=1
         chown -R berachain:berachain "$EL_HOME" 2>/dev/null || warn "Failed to set ownership for EL snapshot data"
       else
         warn "Execution snapshot install failed; will sync from genesis"
@@ -679,7 +698,12 @@ provision_instance_storage() {
 # Initialization (EL and CL)
 # ------------------------------
 init_el() {
-  info "Initializing EL database..."
+  if [[ $EL_SNAPSHOT_INSTALLED -eq 1 ]]; then
+    info "EL datadir already initialized by bera-reth download; skipping bera-reth init"
+    return 0
+  fi
+
+  info "Initializing EL database from genesis..."
   # Display EL genesis md5 for verification
   if [[ -f "$CONFIG_DIR/el/genesis.json" ]]; then
     local _gen_md5
