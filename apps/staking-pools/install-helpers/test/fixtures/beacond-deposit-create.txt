@@ -1,0 +1,4 @@
+pubkey: 0xabc
+credentials: 0xdef
+signature: 0xsig
+amount: 10000000000000

@@ -1,0 +1,10 @@
+{
+  "beacon_block_header": {
+    "slot": "0x120ba31"
+  },
+  "validator_balance": "10000000000000",
+  "balance_proof": [
+    "0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+  ],
+  "balance_leaf": "0xdddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+}
