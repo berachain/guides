@@ -7,6 +7,8 @@ import { runDeploy } from './lib/commands/deploy.mjs';
 import { runActivate } from './lib/commands/activate.mjs';
 import { runStatus } from './lib/commands/status.mjs';
 import { runSetMinBalance } from './lib/commands/set-min-balance.mjs';
+import { runStake } from './lib/commands/stake.mjs';
+import { runUnstake } from './lib/commands/unstake.mjs';
 
 function printRootHelp() {
   console.log(`pool-cli — staking pool operator helper (Node stdlib + cast + beacond)
@@ -20,12 +22,22 @@ Usage:
 Commands:
   deploy          Deploy staking pool contracts (dry-run + emit default)
   activate        Activate a deployed pool with CL proofs (dry-run + emit default)
-  status          Read-only pool telemetry
+  status          EL operator, beacon inclusion, and pool isActive
   set-min-balance Optional min effective balance update (dry-run + emit default)
+  stake           Deposit BERA, mint stBERA to --receiver (dry-run + emit default)
+  unstake         Request or finalize withdrawal (dry-run + emit default)
 
 Global options:
   --execute       Broadcast on validator (requires PRIVATE_KEY; hot key only)
   --help          Show command help
+
+Stake:
+  --amount BERA --receiver 0x... [--from 0x...] [--staking-pool 0x...]
+
+Unstake:
+  --amount BERA | --shares stBERA | --finalize REQUEST_ID
+  --from 0x...   stBERA holder (or --receiver as alias; or PRIVATE_KEY)
+  [--staking-pool 0x...] [--max-fee BERA]
 
 Environment:
   BEACOND_HOME (required), BEACOND_BIN, CLI_CHAIN, RPC_URL, EL_RPC_URL
@@ -67,6 +79,27 @@ function parseSetMinBalanceArgs(args) {
   };
 }
 
+function parseStakeArgs(args) {
+  return {
+    amount: parseFlagValue(args, '--amount'),
+    receiver: parseFlagValue(args, '--receiver'),
+    from: parseFlagValue(args, '--from'),
+    stakingPool: parseFlagValue(args, '--staking-pool'),
+  };
+}
+
+function parseUnstakeArgs(args) {
+  return {
+    amount: parseFlagValue(args, '--amount'),
+    shares: parseFlagValue(args, '--shares'),
+    finalize: parseFlagValue(args, '--finalize'),
+    from: parseFlagValue(args, '--from'),
+    receiver: parseFlagValue(args, '--receiver'),
+    stakingPool: parseFlagValue(args, '--staking-pool'),
+    maxFee: parseFlagValue(args, '--max-fee'),
+  };
+}
+
 export async function main(argv = process.argv.slice(2)) {
   if (argv.length === 0 || argv[0] === '--help' || argv[0] === '-h') {
     printRootHelp();
@@ -101,6 +134,12 @@ export async function main(argv = process.argv.slice(2)) {
         return 0;
       case 'set-min-balance':
         await runSetMinBalance({ ...parseSetMinBalanceArgs(args), execute });
+        return 0;
+      case 'stake':
+        await runStake({ ...parseStakeArgs(args), execute });
+        return 0;
+      case 'unstake':
+        await runUnstake({ ...parseUnstakeArgs(args), execute });
         return 0;
       default:
         logError(`Unknown command: ${command}`);

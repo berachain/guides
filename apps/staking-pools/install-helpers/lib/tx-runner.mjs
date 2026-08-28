@@ -43,6 +43,9 @@ export async function runTransaction(ctx, descriptor) {
     '-r',
     ctx.rpcUrl,
   ];
+  if (ctx.from) {
+    dryRunArgv.push('--from', ctx.from);
+  }
   if (value) {
     dryRunArgv.push('--value', value);
   }
@@ -141,12 +144,15 @@ export async function runTransaction(ctx, descriptor) {
 }
 
 function extractTxHash(output) {
-  const match = String(output).match(/0x[0-9a-fA-F]{64}/);
-  return match ? match[0] : '';
+  const labeled = String(output).match(/transactionHash\s*[:=]?\s*(0x[0-9a-fA-F]{64})/i);
+  if (labeled) return labeled[1];
+  const hashes = String(output).match(/0x[0-9a-fA-F]{64}/g) || [];
+  return hashes.at(-1) || '';
 }
 
-export function buildCallOnlyArgv(target, signature, calldataArgs, rpcUrl, value) {
+export function buildCallOnlyArgv(target, signature, calldataArgs, rpcUrl, value, from) {
   const argv = ['call', target, signature, ...calldataArgs, '-r', rpcUrl];
+  if (from) argv.push('--from', from);
   if (value) argv.push('--value', value);
   return argv;
 }

@@ -2,16 +2,19 @@ import { BEACON_DEPOSIT_CONTRACT } from '../constants.mjs';
 import {
   getDelegationHandlerFactory,
   getFactoryAddress,
+  resolveClApiUrl,
   resolveRpcUrl,
 } from '../config.mjs';
 import {
   detectNetwork,
+  getBeaconValidator,
+  getCoreContracts,
   getValidatorPubkey,
   getWithdrawalVault,
-  predictPoolAddresses,
 } from '../beacond.mjs';
 import { runCast, parseCastTuple, castFromWei, stripScientificNotation } from '../cast.mjs';
 import { logInfo, logSuccess, logWarn, logError } from '../log.mjs';
+import { classifyPoolPhase } from '../pool-phase.mjs';
 
 export async function runStatus(options = {}) {
   const env = options.env ?? process.env;
@@ -49,23 +52,18 @@ export async function runStatus(options = {}) {
   }
   console.log('');
 
-  const core = runCast([
-    'call',
-    factory,
-    'getCoreContracts(bytes)(address,address,address,address)',
-    pubkey,
-    '-r',
-    rpcUrl,
-  ]);
-  if (core.status !== 0) {
-    throw new Error('Failed to get core contracts — pool may not be deployed yet');
+  let core;
+  try {
+    core = getCoreContracts(factory, rpcUrl, pubkey);
+  } catch (error) {
+    if (/not been deployed/i.test(error.message)) {
+      throw new Error(
+        'Pool contracts are not deployed for this pubkey. Run deploy first. isActive is not available yet.',
+      );
+    }
+    throw error;
   }
-
-  const [smartOperator, stakingPool, stakingRewardsVault, incentiveCollector] =
-    parseCastTuple(core.stdout.trim());
-  if (smartOperator === '0x0000000000000000000000000000000000000000') {
-    throw new Error('Staking pool has not been deployed yet');
-  }
+  const { smartOperator, stakingPool, stakingRewardsVault, incentiveCollector } = core;
 
   logInfo('✓ Contract addresses and verification:');
   for (const [name, addr] of [
@@ -95,14 +93,11 @@ export async function runStatus(options = {}) {
     throw new Error('Failed to get operator from beacon deposit contract');
   }
   const registeredOp = registered.stdout.trim().toLowerCase();
-  if (registeredOp === smartOperator.toLowerCase()) {
-    logInfo(`✓ Validator operator correctly registered: ${registeredOp}`);
-  } else {
+  if (registeredOp !== smartOperator.toLowerCase()) {
     throw new Error(
       `Operator mismatch. Expected ${smartOperator}, registered ${registeredOp}`,
     );
   }
-  console.log('');
 
   const isActive = runCast(['call', stakingPool, 'isActive()(bool)', '-r', rpcUrl]);
   const threshold = runCast([
@@ -120,14 +115,46 @@ export async function runStatus(options = {}) {
     rpcUrl,
   ]);
 
-  if (fullyExited.status === 0 && fullyExited.stdout.trim() === 'true') {
-    logInfo('✓ Staking pool is FULLY EXITED');
-  } else if (isActive.status === 0 && isActive.stdout.trim() === 'true') {
-    logInfo('✓ Staking pool is ACTIVE');
+  const poolActive = isActive.status === 0 && isActive.stdout.trim() === 'true';
+  const poolExited = fullyExited.status === 0 && fullyExited.stdout.trim() === 'true';
+
+  const clBase = resolveClApiUrl(env);
+  let beacon = { found: false, index: '', status: '', error: '' };
+  try {
+    beacon = await getBeaconValidator(clBase, pubkey, options.fetchImpl);
+  } catch (error) {
+    beacon = { found: false, index: '', status: '', error: error.message };
+  }
+
+  const phase = classifyPoolPhase({
+    fullyExited: poolExited,
+    poolActive,
+    beacon,
+  });
+
+  console.log('');
+  logInfo('=== Activation gate ===');
+  logInfo(`EL operator:     registered (${registeredOp})`);
+  if (beacon.found) {
+    logInfo(`Beacon:          index ${beacon.index}, status ${beacon.status}`);
+  } else if (beacon.error) {
+    logWarn(`Beacon:          lookup failed at ${clBase}`);
+    logWarn(`                 ${beacon.error}`);
   } else {
-    logInfo('⚠ Staking pool is NOT ACTIVE yet');
-    logInfo('  Run activate to activate the pool with validator proofs');
-    return { active: false };
+    logInfo(`Beacon:          not in head state (queried ${clBase})`);
+  }
+  logInfo(`Pool isActive:   ${poolActive}  (factory activateStakingPool has ${poolActive ? 'been' : 'not been'} called)`);
+  if (phase.phase === 'ready_to_activate' || phase.phase === 'pool_active') {
+    logSuccess(phase.headline);
+  } else {
+    logInfo(phase.headline);
+  }
+  if (phase.next) {
+    logInfo(`Next:            ${phase.next}`);
+  }
+
+  if (phase.phase !== 'pool_active' && phase.phase !== 'fully_exited') {
+    return { active: false, phase: phase.phase, beacon };
   }
 
   const totalAssets = runCast(['call', stakingPool, 'totalAssets()(uint256)', '-r', rpcUrl]);
@@ -183,7 +210,7 @@ export async function runStatus(options = {}) {
     await printWalletHoldings(env, stakingPool, network, rpcUrl);
   }
 
-  return { active: true, stakingPool, smartOperator };
+  return { active: true, phase: phase.phase, stakingPool, smartOperator, beacon };
 }
 
 async function printWeiField(label, target, signature, rpcUrl, unit) {

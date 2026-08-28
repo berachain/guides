@@ -1,12 +1,10 @@
 # Staking Pool Operator CLI
 
-Node standard-library CLI for validator operators **on the validator host** (next to `beacond` and `BEACOND_HOME`). Deploy a staking pool, activate your validator, and check status — with every state-changing command dry-running first (`cast call` preflight + decoded authorization summary), then **printing a copy-paste `cast send`** for signing on another machine (ledger on a laptop). Optional `--execute` broadcasts on the validator only when `PRIVATE_KEY` is set (hot key).
-
-Retail **stake** and **unstake** are not in this toolkit. Use the sample frontend at `../frontend/`.
+Node standard-library CLI for validator operators **on the validator host** (next to `beacond` and `BEACOND_HOME`). Deploy a staking pool, activate your validator, stake, unstake, and check status — with every state-changing command dry-running first (`cast call` preflight), then **printing a copy-paste `cast send`** for signing on another machine (ledger on a laptop). Optional `--execute` broadcasts on the validator only when `PRIVATE_KEY` is set (hot key).
 
 ## Run on the validator
 
-Install Node.js 22+, Foundry `cast`, and `beacond` on the **validator host**. Set `BEACOND_HOME` to your beacond data directory. The CLI refuses to run deploy/activate/set-min-balance if `BEACOND_HOME` is missing or `beacond` cannot read validator keys.
+Install Node.js 22+, Foundry `cast`, and `beacond` on the **validator host**. Set `BEACOND_HOME` to your beacond data directory. The CLI refuses to run deploy/activate/set-min-balance/stake/unstake if `BEACOND_HOME` is missing or `beacond` cannot read validator keys.
 
 Copy `env.sh.template` to `env.sh` for optional env vars and for the retained delegation scripts:
 
@@ -51,7 +49,8 @@ Entrypoint: `node pool-cli.mjs <command> [options]`
 2. Wait for beacon-chain validator registration
 3. **Activate** with CL proofs (dry-run, then copy-paste `cast send`; 10-minute proof window)
 4. **Status** telemetry
-5. Optional **set-min-balance** (default 250,000 BERA; dry-run, then copy-paste `cast send`)
+5. **Stake** extra BERA (`submit`), **unstake** (`requestWithdrawal` / `requestRedeem`, then `--finalize`)
+6. Optional **set-min-balance** (default 250,000 BERA; dry-run, then copy-paste `cast send`)
 
 ### Copy-paste ledger signing
 
@@ -86,7 +85,15 @@ Fetches three CL proofs via Node `fetch` from the local CL API (default `http://
 node pool-cli.mjs status
 ```
 
-Read-only via `cast`: contract addresses (with code checks), beacon operator match, active / not-active / fully-exited, assets/supply, threshold, buffered assets, min effective balance, WBERA disposition, legacy BGT when present. With `PRIVATE_KEY`, also wallet stBERA and withdrawal NFTs.
+Read-only via `cast` plus one Beacon API lookup (`GET /eth/v1/beacon/states/head/validators/<pubkey>`). Reports three separate facts:
+
+1. EL operator match on the beacon deposit contract
+2. Beacon inclusion (`not in head state` vs `index` + CL `status`)
+3. Pool contract `isActive`
+
+`isActive=false` is normal after deploy. It does not mean "run activate now." After deploy, wait until status says the beacon has the validator. Then run `activate`. The CLI also prints that next action.
+
+When the pool is active: contract addresses (with code checks), assets/supply, threshold, buffered assets, min effective balance, WBERA disposition, legacy BGT when present. With `PRIVATE_KEY`, also wallet stBERA and withdrawal NFTs.
 
 ### `set-min-balance` (optional)
 
@@ -96,6 +103,33 @@ node pool-cli.mjs set-min-balance --amount 300000 --execute
 ```
 
 Omission of this command is not an error. Default amount when `--amount` is omitted: **250,000 BERA**.
+
+### `stake`
+
+```bash
+node pool-cli.mjs stake --amount 100 --receiver 0xRECEIVER
+node pool-cli.mjs stake --amount 100 --receiver 0xRECEIVER --execute   # requires PRIVATE_KEY
+```
+
+Calls `StakingPool.submit(address)` with `--value <amount>ether`. `--receiver` gets the stBERA. Dry-run simulates `--from` the receiver unless you pass `--from`. Optional `--staking-pool` skips `getCoreContracts` lookup. The sample frontend at `../frontend/` remains available.
+
+### `unstake`
+
+Withdrawal is two transactions. Request creates an NFT; after the on-chain delay, finalize it.
+
+```bash
+node pool-cli.mjs unstake --amount 100 --from 0xHOLDER
+node pool-cli.mjs unstake --shares 50 --from 0xHOLDER
+node pool-cli.mjs unstake --finalize 42 --from 0xHOLDER
+```
+
+`--amount` calls `WithdrawalVault.requestWithdrawal(pubkey, assetsInGWei, maxFeeToPay)` (amount must be a multiple of 1 gwei). `--shares` calls `requestRedeem`. `--finalize` calls `finalizeWithdrawalRequest`. Pass exactly one of those three.
+
+`--from` is the stBERA holder (required for preflight). `--receiver` is accepted as an alias. If both are omitted, the CLI derives the address from `PRIVATE_KEY`.
+
+EIP-7002 fee: omit `--max-fee` to probe candidates up to 0.01 BERA, or pass `--max-fee` in BERA. The fee is both `maxFeeToPay` and `--value`.
+
+The pool must already be active. `status` lists withdrawal NFTs when `PRIVATE_KEY` is set.
 
 ## Tests
 

@@ -38,6 +38,20 @@ export function decodeActivationRevert(message) {
   return decodeRevertMap(message, ACTIVATION_REVERTS);
 }
 
+const WITHDRAWAL_REVERTS = new Map([
+  ['0x2c5211c6', 'InvalidAmount() — amount or shares is 0 or not gwei-aligned'],
+  ['0x025dbdd4', 'InsufficientFee() — EIP-7002 withdrawal fee too low; raise --max-fee'],
+  ['0x520849df', 'OverpaidFee() — payable value exceeds the current EIP-7002 fee'],
+  ['0xecc7a37c', 'RequestNotReady() — withdrawal delay has not elapsed'],
+  ['0x81b5ad68', 'NotEnoughFunds() — withdrawal vault does not have enough BERA yet'],
+  ['0x4134ed3a', 'WithdrawalNotAllowed() — pool withdrawal cooldown has not elapsed'],
+  ['0xddb5de5e', 'InvalidSender() — caller is not allowed for this vault call'],
+]);
+
+export function decodeWithdrawalRevert(message) {
+  return decodeRevertMap(message, WITHDRAWAL_REVERTS);
+}
+
 export function extractRevertSelector(message) {
   const match = String(message ?? '').match(/0x[0-9a-fA-F]{8}/);
   return match ? match[0].toLowerCase() : '';

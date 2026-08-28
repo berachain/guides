@@ -11,6 +11,7 @@ import {
 } from '../beacond.mjs';
 import { logInfo, logSuccess } from '../log.mjs';
 import { runTransaction } from '../tx-runner.mjs';
+import { beraToWei } from '../units.mjs';
 
 export function resolveMinBalanceAmount(options) {
   if (options.amount === undefined || options.amount === null || options.amount === '') {
@@ -19,13 +20,8 @@ export function resolveMinBalanceAmount(options) {
       wei: DEFAULT_MIN_EFFECTIVE_BALANCE_WEI,
     };
   }
-  const numeric = String(options.amount).trim();
-  if (!/^[0-9]+(\.[0-9]+)?$/.test(numeric)) {
-    throw new Error('--amount must be a positive number');
-  }
-  const [whole, fraction = ''] = numeric.split('.');
-  const padded = `${whole}${fraction.padEnd(18, '0').slice(0, 18)}`;
-  return { bera: numeric, wei: padded.replace(/^0+/, '') || '0' };
+  const parsed = beraToWei(options.amount, '--amount');
+  return { bera: parsed.decimal, wei: parsed.wei };
 }
 
 export async function runSetMinBalance(options) {

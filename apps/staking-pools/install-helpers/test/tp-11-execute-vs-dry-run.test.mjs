@@ -111,6 +111,43 @@ describe('TP-11 emit vs dry-run vs execute', () => {
       assert.equal(result.mode, 'execute');
       assert.deepEqual(calls, ['call', 'send']);
       assert.ok(result.executeArgv.includes('--private-key'));
+      assert.equal(
+        result.txHash,
+        '0x' + 'ab'.repeat(32),
+      );
+    } finally {
+      setCastRunner(null);
+    }
+  });
+
+  it('prints transactionHash not the preceding blockHash', async () => {
+    setCastRunner((argv) => {
+      if (argv[0] === 'send') {
+        return {
+          status: 0,
+          stdout: [
+            'blockHash            0x99b803f6e2f4f0f1f610c823fc6877d0cf39ba0bfbca33913ae584da242eeaf8',
+            'transactionHash      0x5c3e773c0a1b5a1b8a237004e4ad432f2bf020ff4bff6ddc3173be06d9a81768',
+          ].join('\n'),
+          stderr: '',
+        };
+      }
+      return { status: 0, stdout: '0x', stderr: '' };
+    });
+    try {
+      const result = await runTransaction(
+        { execute: true, rpcUrl: rpc, env: { PRIVATE_KEY: '0x' + 'cc'.repeat(32) } },
+        {
+          label: 'deployStakingPoolContracts',
+          target,
+          signature,
+          buildCalldataArgs: () => args,
+        },
+      );
+      assert.equal(
+        result.txHash,
+        '0x5c3e773c0a1b5a1b8a237004e4ad432f2bf020ff4bff6ddc3173be06d9a81768',
+      );
     } finally {
       setCastRunner(null);
     }

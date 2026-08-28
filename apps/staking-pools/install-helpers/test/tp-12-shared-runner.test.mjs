@@ -6,6 +6,8 @@ import { fileURLToPath } from 'node:url';
 import { getSharedTxRunnerId, runTransaction, SHARED_TX_RUNNER } from '../lib/tx-runner.mjs';
 import { runDeploy } from '../lib/commands/deploy.mjs';
 import { runSetMinBalance } from '../lib/commands/set-min-balance.mjs';
+import { runStake } from '../lib/commands/stake.mjs';
+import { runUnstake } from '../lib/commands/unstake.mjs';
 import { setCastRunner } from '../lib/cast.mjs';
 import { setBeacondRunner } from '../lib/beacond.mjs';
 
@@ -19,12 +21,14 @@ function installMocks() {
     if (argv[2]?.includes('withdrawalVault')) {
       return { status: 0, stdout: '0x4242424242424242424242424242424242424242', stderr: '' };
     }
-    if (argv[2]?.includes('predictStakingPoolContractsAddresses')) {
-      return {
-        status: 0,
-        stdout: liveFourAddresses,
-        stderr: '',
-      };
+    if (
+      argv[2]?.includes('getCoreContracts') ||
+      argv[2]?.includes('predictStakingPoolContractsAddresses')
+    ) {
+      return { status: 0, stdout: liveFourAddresses, stderr: '' };
+    }
+    if (argv[2]?.includes('isActive')) {
+      return { status: 0, stdout: 'true', stderr: '' };
     }
     return { status: 0, stdout: '0x', stderr: '' };
   });
@@ -59,25 +63,42 @@ function installMocks() {
 }
 
 describe('TP-12 shared transaction runner', () => {
-  it('routes deploy, activate, and set-min-balance through one runner', async () => {
+  it('routes deploy, set-min-balance, stake, and unstake through one runner', async () => {
     installMocks();
+    const env = { BEACOND_HOME: '/tmp', CLI_CHAIN: 'bepolia', BEACOND_BIN: 'beacond' };
 
     try {
       const deployResult = await runDeploy({
         operator: '0x' + '11'.repeat(20),
         sharesRecipient: '0x' + '22'.repeat(20),
         execute: false,
-        env: { BEACOND_HOME: '/tmp', CLI_CHAIN: 'bepolia', BEACOND_BIN: 'beacond' },
+        env,
       });
       assert.equal(getSharedTxRunnerId(), SHARED_TX_RUNNER);
       assert.equal(deployResult.mode, 'emit');
 
-      const setMinResult = await runSetMinBalance({
-        execute: false,
-        env: { BEACOND_HOME: '/tmp', CLI_CHAIN: 'bepolia', BEACOND_BIN: 'beacond' },
-      });
+      const setMinResult = await runSetMinBalance({ execute: false, env });
       assert.equal(getSharedTxRunnerId(), SHARED_TX_RUNNER);
       assert.equal(setMinResult.mode, 'emit');
+
+      const stakeResult = await runStake({
+        amount: '1',
+        receiver: '0x' + '33'.repeat(20),
+        execute: false,
+        env,
+      });
+      assert.equal(getSharedTxRunnerId(), SHARED_TX_RUNNER);
+      assert.equal(stakeResult.mode, 'emit');
+
+      const unstakeResult = await runUnstake({
+        amount: '1',
+        from: '0x' + '44'.repeat(20),
+        maxFee: '0.01',
+        execute: false,
+        env,
+      });
+      assert.equal(getSharedTxRunnerId(), SHARED_TX_RUNNER);
+      assert.equal(unstakeResult.mode, 'emit');
 
       const activateResult = await runTransaction(
         { execute: false, rpcUrl: 'http://rpc', env: {} },

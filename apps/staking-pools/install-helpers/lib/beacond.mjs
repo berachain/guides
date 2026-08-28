@@ -174,16 +174,40 @@ export function getWithdrawalVault(network, env = process.env) {
 }
 
 export function predictPoolAddresses(factory, rpc, pubkey) {
-  const result = runCast([
-    'call',
-    factory,
-    'predictStakingPoolContractsAddresses(bytes)(address,address,address,address)',
-    pubkey,
-    '-r',
-    rpc,
-  ]);
+  return parseFourAddresses(
+    runCast([
+      'call',
+      factory,
+      'predictStakingPoolContractsAddresses(bytes)(address,address,address,address)',
+      pubkey,
+      '-r',
+      rpc,
+    ]),
+    'predictStakingPoolContractsAddresses',
+  );
+}
+
+export function getCoreContracts(factory, rpc, pubkey) {
+  const addresses = parseFourAddresses(
+    runCast([
+      'call',
+      factory,
+      'getCoreContracts(bytes)(address,address,address,address)',
+      pubkey,
+      '-r',
+      rpc,
+    ]),
+    'getCoreContracts',
+  );
+  if (addresses.smartOperator === '0x0000000000000000000000000000000000000000') {
+    throw new Error('Staking pool has not been deployed yet');
+  }
+  return addresses;
+}
+
+function parseFourAddresses(result, label) {
   if (result.status !== 0) {
-    throw new Error(result.stderr || result.stdout || 'prediction call failed');
+    throw new Error(result.stderr || result.stdout || `${label} call failed`);
   }
   const parsed = parseCastTuple(result.stdout.trim());
   const [smartOperator, stakingPool, stakingRewardsVault, incentiveCollector] =
@@ -194,9 +218,7 @@ export function predictPoolAddresses(factory, rpc, pubkey) {
     !isEvmAddress(stakingRewardsVault) ||
     !isEvmAddress(incentiveCollector)
   ) {
-    throw new Error(
-      `predictStakingPoolContractsAddresses: expected 4 addresses, got ${JSON.stringify(parsed)}`,
-    );
+    throw new Error(`${label}: expected 4 addresses, got ${JSON.stringify(parsed)}`);
   }
   return { smartOperator, stakingPool, stakingRewardsVault, incentiveCollector };
 }
@@ -205,14 +227,39 @@ function isEvmAddress(value) {
   return /^0x[0-9a-fA-F]{40}$/.test(String(value ?? '').trim());
 }
 
-export async function getValidatorIndex(clBase, pubkey, fetchImpl = globalThis.fetch) {
-  const url = `${clBase}/eth/v1/beacon/states/head/validators`;
-  const response = await fetchImpl(url);
+export async function getBeaconValidator(clBase, pubkey, fetchImpl = globalThis.fetch) {
+  const base = String(clBase ?? '').replace(/\/+$/, '');
+  const url = `${base}/eth/v1/beacon/states/head/validators/${pubkey}`;
+  let response;
+  try {
+    response = await fetchImpl(url);
+  } catch (error) {
+    throw new Error(`Beacon validator lookup unreachable: ${error.message}`);
+  }
+  if (response.status === 404) {
+    return { found: false, index: '', status: '', balance: '' };
+  }
   const body = await response.text();
   if (!response.ok) {
-    throw new Error(`validators API returned HTTP ${response.status}`);
+    throw new Error(
+      `Beacon validator lookup returned HTTP ${response.status}: ${body.slice(0, 200)}`,
+    );
   }
-  const json = JSON.parse(body);
-  const match = json.data?.find((entry) => entry.validator?.pubkey === pubkey);
-  return match?.index ?? '';
+  let json;
+  try {
+    json = JSON.parse(body);
+  } catch {
+    throw new Error(`Beacon validator lookup returned non-JSON: ${body.slice(0, 200)}`);
+  }
+  return {
+    found: true,
+    index: String(json.data?.index ?? ''),
+    status: String(json.data?.status ?? ''),
+    balance: String(json.data?.balance ?? ''),
+  };
+}
+
+export async function getValidatorIndex(clBase, pubkey, fetchImpl = globalThis.fetch) {
+  const record = await getBeaconValidator(clBase, pubkey, fetchImpl);
+  return record.found ? record.index : '';
 }

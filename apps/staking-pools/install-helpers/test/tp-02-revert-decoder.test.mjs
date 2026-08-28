@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
   decodeActivationRevert,
+  decodeWithdrawalRevert,
   extractRevertSelector,
 } from '../lib/revert-decoder.mjs';
 
@@ -24,6 +25,17 @@ describe('TP-2 activation revert decoder', () => {
       assert.match(decoded, new RegExp(label));
     });
   }
+
+  it('maps withdrawal vault selectors', () => {
+    assert.match(
+      decodeWithdrawalRevert('execution reverted: custom error 0x025dbdd4'),
+      /InsufficientFee/,
+    );
+    assert.match(
+      decodeWithdrawalRevert('execution reverted: custom error 0xecc7a37c'),
+      /RequestNotReady/,
+    );
+  });
 
   it('passes unknown selectors through unchanged', () => {
     const raw = 'execution reverted: 0xdeadbeef';
