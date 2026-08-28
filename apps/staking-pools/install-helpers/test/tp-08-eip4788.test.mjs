@@ -32,11 +32,11 @@ describe('TP-8 EIP-4788 timestamp', () => {
     assert.equal(timestamp, Number.parseInt('669f1234', 16));
   });
 
-  it('pins min(CL head, EL latest - 1) minus 3 so slot+1 is already on EL', () => {
-    assert.equal(pinActivationSlot(24527778, 24527778), 24527774n);
-    assert.equal(eip4788ElBlockNumber(24527774n), 24527775n);
-    assert.equal(pinActivationSlot(24527778, 24527780), 24527775n);
-    assert.equal(pinActivationSlot(100, 200), 97n);
+  it('pins min(CL head, EL latest - 1) minus 5 so slot+1 is already on EL', () => {
+    assert.equal(pinActivationSlot(24527778, 24527778), 24527772n);
+    assert.equal(eip4788ElBlockNumber(24527772n), 24527773n);
+    assert.equal(pinActivationSlot(24527778, 24527780), 24527773n);
+    assert.equal(pinActivationSlot(100, 200), 95n);
   });
 
   it('parses plain and Foundry-envelope block-number output', () => {

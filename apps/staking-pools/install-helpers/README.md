@@ -77,7 +77,7 @@ node pool-cli.mjs activate
 node pool-cli.mjs activate --execute   # requires PRIVATE_KEY on validator
 ```
 
-Fetches three CL proofs via Node `fetch` from the local CL API (default `http://127.0.0.1:3500`). Pins `min(CL head, EL latest - 1) - 3` so the EIP-4788 EL block (`slot+1`) already exists. Preflights `activateStakingPool` and enforces 10-minute expiry before emit. Test hook: `--now <unix>` injects clock for expiry checks.
+Fetches three CL proofs via Node `fetch` from the local CL API (default `http://127.0.0.1:3500`). Pins `min(CL head, EL latest - 1) - 5` so the EIP-4788 EL block (`slot+1`) already exists. The CL and EL stay in lockstep on Berachain, so a 5-slot cushion should never be exhausted in practice. Preflights `activateStakingPool` and enforces 10-minute expiry before emit. Test hook: `--now <unix>` injects clock for expiry checks.
 
 ### `status`
 

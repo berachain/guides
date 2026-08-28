@@ -15,7 +15,7 @@ const SMART_OPERATOR = `0x${'22'.repeat(20)}`;
 const STAKING_POOL = `0x${'33'.repeat(20)}`;
 const REWARDS_VAULT = `0x${'44'.repeat(20)}`;
 const INCENTIVE_COLLECTOR = `0x${'55'.repeat(20)}`;
-const PINNED_SLOT = '97';
+const PINNED_SLOT = '95';
 const EL_BLOCK_TIMESTAMP_HEX = '0x669f1234';
 const PROOF_TIMESTAMP = Number.parseInt('669f1234', 16);
 
