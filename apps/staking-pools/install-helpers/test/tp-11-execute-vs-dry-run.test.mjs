@@ -24,6 +24,14 @@ describe('TP-11 emit vs dry-run vs execute', () => {
     assert.ok(emit.includes('--ledger'));
   });
 
+  it('emit and execute argv send --legacy so eth_feeHistory nulls do not break broadcast', () => {
+    const emit = buildEmitSendArgv(target, signature, args, rpc, {}, '10000ether');
+    assert.ok(
+      emit.includes('--legacy'),
+      'beacon-kit EL can return a null eth_feeHistory response; --legacy skips EIP-1559 fee estimation',
+    );
+  });
+
   it('dry-run, emit, and execute argv differ appropriately', () => {
     const dryRun = buildCallOnlyArgv(target, signature, args, rpc);
     const emit = buildEmitSendArgv(target, signature, args, rpc, {});
@@ -111,6 +119,7 @@ describe('TP-11 emit vs dry-run vs execute', () => {
       assert.equal(result.mode, 'execute');
       assert.deepEqual(calls, ['call', 'send']);
       assert.ok(result.executeArgv.includes('--private-key'));
+      assert.ok(result.executeArgv.includes('--legacy'));
       assert.equal(
         result.txHash,
         '0x' + 'ab'.repeat(32),
