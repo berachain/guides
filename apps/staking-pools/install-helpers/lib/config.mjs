@@ -37,6 +37,15 @@ export function normalizeApiBase(raw) {
   return `http://${addr}`;
 }
 
+export function isLoopbackHttp(url) {
+  try {
+    const parsed = new URL(url);
+    return parsed.hostname === '127.0.0.1' || parsed.hostname === 'localhost';
+  } catch {
+    return false;
+  }
+}
+
 export function getFactoryAddress(network) {
   if (network === 'mainnet') return STAKING_POOL_FACTORY_MAINNET;
   if (network === 'bepolia') return STAKING_POOL_FACTORY_BEPOLIA;

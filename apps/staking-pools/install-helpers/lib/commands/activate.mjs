@@ -1,5 +1,5 @@
 import { MIN_ACTIVATION_BALANCE_GWEI, PROOF_MAX_AGE_SECONDS } from '../constants.mjs';
-import { resolveRpcUrl, resolveClApiUrl, getFactoryAddress } from '../config.mjs';
+import { resolveRpcUrl, resolveClApiUrl, getFactoryAddress, isLoopbackHttp } from '../config.mjs';
 import { BEACON_DEPOSIT_CONTRACT } from '../constants.mjs';
 import {
   assertValidatorPreflight,
@@ -9,7 +9,7 @@ import {
   predictPoolAddresses,
   getWithdrawalVault,
 } from '../beacond.mjs';
-import { runCast, parseCastTuple } from '../cast.mjs';
+import { runCast, parseCastTuple, unwrapCastJson } from '../cast.mjs';
 import { decodeActivationRevert } from '../revert-decoder.mjs';
 import {
   assertProofSlotMatchesPinned,
@@ -37,6 +37,12 @@ export async function runActivate(options) {
   logInfo(`Network: ${network}`);
   logInfo(`Validator pubkey: ${pubkey}`);
   logInfo(`CL node API: ${clBase}`);
+  logInfo(`EL RPC: ${rpcUrl}`);
+  if (isLoopbackHttp(clBase) && !isLoopbackHttp(rpcUrl)) {
+    logWarn(
+      `CL is local but EL RPC is ${rpcUrl}. EIP-4788 reads the EL. Set EL_RPC_URL to this host's execution RPC.`,
+    );
+  }
   console.log('');
 
   const predicted = predictPoolAddresses(factory, rpcUrl, pubkey);
@@ -99,12 +105,24 @@ export async function runActivate(options) {
   logSuccess(`All proofs pinned to slot ${pinnedSlot}`);
 
   const elBlockNumber = BigInt(pinnedSlot) + 1n;
-  logInfo(`Reading EIP-4788 timestamp from EL block ${elBlockNumber.toString()}...`);
-  const blockResult = runCast(['block', elBlockNumber.toString(), '--json', '-r', rpcUrl]);
+  logInfo(`Reading EIP-4788 timestamp from EL block ${elBlockNumber.toString()} via ${rpcUrl}...`);
+  const blockResult = runCast(['block', elBlockNumber.toString(), '--json', '-r', rpcUrl], {
+    env,
+  });
   if (blockResult.status !== 0) {
-    throw new Error(`Failed to read EL block ${elBlockNumber.toString()}`);
+    const detail = (blockResult.stderr || blockResult.stdout).trim();
+    throw new Error(
+      `Failed to read EL block ${elBlockNumber.toString()} from ${rpcUrl}${detail ? `: ${detail}` : ''}`,
+    );
   }
-  const blockJson = JSON.parse(blockResult.stdout);
+  let blockJson;
+  try {
+    blockJson = unwrapCastJson(blockResult.stdout);
+  } catch (error) {
+    throw new Error(
+      `Failed to parse EL block ${elBlockNumber.toString()} from ${rpcUrl}: ${error.message}`,
+    );
+  }
   const proofTimestamp = deriveEip4788Timestamp(pinnedSlot, blockJson);
   logSuccess(`EIP-4788 timestamp: ${proofTimestamp}`);
 

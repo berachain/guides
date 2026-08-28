@@ -33,7 +33,7 @@ Forbidden in CLI code paths: `jq`, `bc`, `python3`, `curl`, ethers, web3.
 | `BEACOND_HOME` | beacond data directory (**required** on validator host) |
 | `BEACOND_BIN` | Override beacond binary (default: `beacond` in `$PATH`) |
 | `CLI_CHAIN` | `mainnet` or `bepolia` (auto-detected from genesis when omitted) |
-| `RPC_URL` / `EL_RPC_URL` | Override EL RPC (defaults: public Berachain endpoints) |
+| `RPC_URL` / `EL_RPC_URL` | Override EL RPC (defaults: public Berachain endpoints). When CL is `127.0.0.1`, set this to the local execution RPC or EIP-4788 reads a different node. |
 | `CL_NODE_API_URL` / `NODE_API_ADDRESS` | CL REST API for activation proofs (default: `http://127.0.0.1:3500`) |
 | `PRIVATE_KEY` | Optional hot key on validator; required for `--execute` |
 

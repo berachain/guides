@@ -71,3 +71,15 @@ export async function castFromWei(wei, unit = 'ether') {
 export function formatCastCommand(argv) {
   return ['cast', ...argv].join(' ');
 }
+
+export function unwrapCastJson(raw) {
+  const parsed = JSON.parse(String(raw ?? '').trim() || 'null');
+  if (parsed && typeof parsed === 'object' && 'schema_version' in parsed) {
+    if (parsed.success === false) {
+      const errors = Array.isArray(parsed.errors) ? parsed.errors.filter(Boolean).join('; ') : '';
+      throw new Error(errors || 'cast --json returned success=false');
+    }
+    return parsed.data;
+  }
+  return parsed;
+}
