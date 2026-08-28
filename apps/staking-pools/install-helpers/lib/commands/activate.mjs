@@ -21,6 +21,7 @@ import {
   eip4788ElBlockNumber,
   pinActivationSlot,
   proofExpiryTimestamp,
+  isProofExpired,
 } from '../proofs.mjs';
 import { logInfo, logSuccess, logWarn, logError } from '../log.mjs';
 import { runTransaction } from '../tx-runner.mjs';
