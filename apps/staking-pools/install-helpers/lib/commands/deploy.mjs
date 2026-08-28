@@ -1,6 +1,7 @@
 import { DEPLOY_VALUE } from '../constants.mjs';
 import { resolveRpcUrl, getFactoryAddress } from '../config.mjs';
 import {
+  assertValidatorPreflight,
   createValidatorDeposit,
   detectNetwork,
   getWithdrawalVault,
@@ -22,6 +23,7 @@ export async function runDeploy(options) {
   if (!sharesRecipient) throw new Error('--sr must be a valid EVM address');
 
   const env = options.env ?? process.env;
+  assertValidatorPreflight(env);
   const network = detectNetwork(env);
   const rpcUrl = resolveRpcUrl(network, env);
   const factory = getFactoryAddress(network);

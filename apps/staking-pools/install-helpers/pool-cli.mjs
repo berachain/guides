@@ -11,22 +11,26 @@ import { runSetMinBalance } from './lib/commands/set-min-balance.mjs';
 function printRootHelp() {
   console.log(`pool-cli — staking pool operator helper (Node stdlib + cast + beacond)
 
+Run on the validator host with BEACOND_HOME set. Dry-run by default; prints copy-paste
+cast send for ledger signing on another machine. Optional --execute requires PRIVATE_KEY.
+
 Usage:
   node pool-cli.mjs <command> [options]
 
 Commands:
-  deploy          Deploy staking pool contracts (dry-run default)
-  activate        Activate a deployed pool with CL proofs (dry-run default)
+  deploy          Deploy staking pool contracts (dry-run + emit default)
+  activate        Activate a deployed pool with CL proofs (dry-run + emit default)
   status          Read-only pool telemetry
-  set-min-balance Optional min effective balance update (dry-run default)
+  set-min-balance Optional min effective balance update (dry-run + emit default)
 
 Global options:
+  --execute       Broadcast on validator (requires PRIVATE_KEY; hot key only)
   --help          Show command help
 
 Environment:
-  BEACOND_HOME, BEACOND_BIN, CHAIN, RPC_URL, EL_RPC_URL
-  CL_NODE_API_URL or NODE_API_ADDRESS (required for activate)
-  PRIVATE_KEY (optional; defaults to --ledger for execute)
+  BEACOND_HOME (required), BEACOND_BIN, CLI_CHAIN, RPC_URL, EL_RPC_URL
+  CL_NODE_API_URL or NODE_API_ADDRESS (default http://127.0.0.1:3500)
+  PRIVATE_KEY (required for --execute on validator)
 `);
 }
 

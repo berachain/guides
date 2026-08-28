@@ -17,6 +17,13 @@ describe('TP-7 deploy deposit validation', () => {
     });
 
     setBeacondRunner((args) => {
+      if (args.includes('validator-keys')) {
+        return {
+          status: 0,
+          stdout: 'Eth/Beacon Pubkey (Compressed 48-byte Hex):\n0x' + 'aa'.repeat(48),
+          stderr: '',
+        };
+      }
       if (args.includes('create-validator')) {
         return {
           status: 0,
@@ -46,7 +53,7 @@ describe('TP-7 deploy deposit validation', () => {
             execute: false,
             env: {
               BEACOND_HOME: '/tmp/beacond',
-              CHAIN: 'bepolia',
+              CLI_CHAIN: 'bepolia',
               BEACOND_BIN: 'beacond',
             },
           }),

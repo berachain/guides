@@ -1,8 +1,20 @@
 # Staking Pool Operator CLI
 
-Node standard-library CLI for validator operators deploying and activating a staking pool on Berachain. Every state-changing command dry-runs first (`cast call` preflight + decoded authorization summary), then broadcasts with `--execute` (`cast send`, `--ledger` by default).
+Node standard-library CLI for validator operators **on the validator host** (next to `beacond` and `BEACOND_HOME`). Deploy a staking pool, activate your validator, and check status — with every state-changing command dry-running first (`cast call` preflight + decoded authorization summary), then **printing a copy-paste `cast send`** for signing on another machine (ledger on a laptop). Optional `--execute` broadcasts on the validator only when `PRIVATE_KEY` is set (hot key).
 
 Retail **stake** and **unstake** are not in this toolkit. Use the sample frontend at `../frontend/`.
+
+## Run on the validator
+
+Install Node.js 22+, Foundry `cast`, and `beacond` on the **validator host**. Set `BEACOND_HOME` to your beacond data directory. The CLI refuses to run deploy/activate/set-min-balance if `BEACOND_HOME` is missing or `beacond` cannot read validator keys.
+
+Copy `env.sh.template` to `env.sh` for delegation scripts (BERA-944) and optional env vars:
+
+```bash
+cp env.sh.template env.sh
+# edit BEACOND_HOME, optional PRIVATE_KEY for hot-key --execute
+source env.sh
+```
 
 ## Dependencies
 
@@ -18,22 +30,16 @@ Forbidden in CLI code paths: `jq`, `bc`, `python3`, `curl`, ethers, web3.
 
 ## Configuration
 
-Copy the template for delegation scripts and optional env vars:
-
-```bash
-cp env.sh.template env.sh
-# edit BEACOND_HOME, NODE_API_ADDRESS / CL_NODE_API_URL, PRIVATE_KEY
-source env.sh
-```
-
 | Variable | Purpose |
 | --- | --- |
-| `BEACOND_HOME` | beacond data directory (required for deploy/activate/status) |
+| `BEACOND_HOME` | beacond data directory (**required** on validator host) |
 | `BEACOND_BIN` | Override beacond binary (default: `beacond` in `$PATH`) |
-| `CHAIN` / `CLI_CHAIN` | `mainnet` or `bepolia` (auto-detected from genesis when omitted) |
+| `CLI_CHAIN` | `mainnet` or `bepolia` (auto-detected from genesis when omitted) |
 | `RPC_URL` / `EL_RPC_URL` | Override EL RPC (defaults: public Berachain endpoints) |
-| `CL_NODE_API_URL` / `NODE_API_ADDRESS` | CL REST API for activation proofs (**required for activate**; no baked host) |
-| `PRIVATE_KEY` | Optional; defaults to `--ledger` for `--execute` |
+| `CL_NODE_API_URL` / `NODE_API_ADDRESS` | CL REST API for activation proofs (default: `http://127.0.0.1:3500`) |
+| `PRIVATE_KEY` | Optional hot key on validator; required for `--execute` |
+
+Do **not** set `CHAIN=` in the environment when running this CLI — Foundry `cast` treats `CHAIN` as its own flag and rejects values like `bepolia`. Use `CLI_CHAIN` instead.
 
 ## Commands
 
@@ -41,30 +47,38 @@ Entrypoint: `node pool-cli.mjs <command> [options]`
 
 ### Operator flow
 
-1. **Deploy** pool contracts + 10,000 BERA initial deposit  
-2. Wait for beacon-chain validator registration  
-3. **Activate** with CL proofs (10-minute proof window)  
-4. **Status** telemetry  
-5. Optional **set-min-balance** (default 250,000 BERA)
+1. **Deploy** pool contracts + 10,000 BERA initial deposit (dry-run, then copy-paste `cast send`)
+2. Wait for beacon-chain validator registration
+3. **Activate** with CL proofs (dry-run, then copy-paste `cast send`; 10-minute proof window)
+4. **Status** telemetry
+5. Optional **set-min-balance** (default 250,000 BERA; dry-run, then copy-paste `cast send`)
+
+### Copy-paste ledger signing
+
+After dry-run, the CLI prints a complete `cast send … --ledger` command. Run that on your **laptop** (or any machine with your ledger). The validator host does not need a ledger attached.
+
+### Optional hot-key `--execute`
+
+To broadcast directly from the validator (no second machine), set `PRIVATE_KEY` and pass `--execute`. Without `PRIVATE_KEY`, `--execute` is refused and the emitted command is still printed.
 
 ### `deploy`
 
 ```bash
 node pool-cli.mjs deploy --op 0xOperator --sr 0xSharesRecipient
-node pool-cli.mjs deploy --op 0x... --sr 0x... --execute
+# copy-paste the printed cast send on your signing machine
+node pool-cli.mjs deploy --op 0x... --sr 0x... --execute   # requires PRIVATE_KEY
 ```
 
-Dry-run: `beacond deposit validate`, predicted addresses, `cast call` preflight, decoded `StakingPoolContractsDeployed` summary, 10,000 BERA value shown before signing.
+Dry-run: `beacond deposit validate`, predicted addresses, `cast call` preflight, decoded `StakingPoolContractsDeployed` summary, 10,000 BERA value shown before emit.
 
 ### `activate`
 
 ```bash
-export CL_NODE_API_URL=http://127.0.0.1:3500   # or NODE_API_ADDRESS
 node pool-cli.mjs activate
-node pool-cli.mjs activate --execute
+node pool-cli.mjs activate --execute   # requires PRIVATE_KEY on validator
 ```
 
-Fetches three CL proofs via Node `fetch`, pins head slot, derives EIP-4788 timestamp from EL block `slot+1`, preflights `activateStakingPool`, enforces 10-minute expiry on execute. Test hook: `--now <unix>` injects clock for expiry checks.
+Fetches three CL proofs via Node `fetch` from the local CL API (default `http://127.0.0.1:3500`), pins head slot, derives EIP-4788 timestamp from EL block `slot+1`, preflights `activateStakingPool`, enforces 10-minute expiry before emit. Test hook: `--now <unix>` injects clock for expiry checks.
 
 ### `status`
 
@@ -77,7 +91,7 @@ Read-only via `cast`: contract addresses (with code checks), beacon operator mat
 ### `set-min-balance` (optional)
 
 ```bash
-node pool-cli.mjs set-min-balance              # dry-run, default 250,000 BERA
+node pool-cli.mjs set-min-balance              # dry-run + emit, default 250,000 BERA
 node pool-cli.mjs set-min-balance --amount 300000 --execute
 ```
 

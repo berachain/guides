@@ -3,7 +3,12 @@ import {
   DEFAULT_MIN_EFFECTIVE_BALANCE_WEI,
 } from '../constants.mjs';
 import { resolveRpcUrl, getFactoryAddress } from '../config.mjs';
-import { detectNetwork, getValidatorPubkey, predictPoolAddresses } from '../beacond.mjs';
+import {
+  assertValidatorPreflight,
+  detectNetwork,
+  getValidatorPubkey,
+  predictPoolAddresses,
+} from '../beacond.mjs';
 import { logInfo, logSuccess } from '../log.mjs';
 import { runTransaction } from '../tx-runner.mjs';
 
@@ -25,6 +30,7 @@ export function resolveMinBalanceAmount(options) {
 
 export async function runSetMinBalance(options) {
   const env = options.env ?? process.env;
+  assertValidatorPreflight(env);
   const network = detectNetwork(env);
   const rpcUrl = resolveRpcUrl(network, env);
   const factory = getFactoryAddress(network);

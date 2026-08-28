@@ -8,6 +8,8 @@ import {
   DELEGATION_HANDLER_FACTORY_MAINNET,
 } from './constants.mjs';
 
+export const DEFAULT_CL_API_URL = 'http://127.0.0.1:3500';
+
 export function resolveRpcUrl(network, env = process.env) {
   const override = env.EL_RPC_URL || env.RPC_URL;
   if (override && override.trim()) {
@@ -20,9 +22,7 @@ export function resolveClApiUrl(env = process.env) {
   const raw = env.CL_NODE_API_URL || env.NODE_API_ADDRESS || '';
   const trimmed = raw.trim();
   if (!trimmed) {
-    throw new Error(
-      'CL node API URL is required. Set CL_NODE_API_URL or NODE_API_ADDRESS.',
-    );
+    return DEFAULT_CL_API_URL;
   }
   return normalizeApiBase(trimmed);
 }

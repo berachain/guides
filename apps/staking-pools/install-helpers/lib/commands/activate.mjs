@@ -2,6 +2,7 @@ import { MIN_ACTIVATION_BALANCE_GWEI, PROOF_MAX_AGE_SECONDS } from '../constants
 import { resolveRpcUrl, resolveClApiUrl, getFactoryAddress } from '../config.mjs';
 import { BEACON_DEPOSIT_CONTRACT } from '../constants.mjs';
 import {
+  assertValidatorPreflight,
   detectNetwork,
   getValidatorPubkey,
   getValidatorIndex,
@@ -25,6 +26,7 @@ import { runTransaction } from '../tx-runner.mjs';
 
 export async function runActivate(options) {
   const env = options.env ?? process.env;
+  assertValidatorPreflight(env);
   const network = detectNetwork(env);
   const rpcUrl = resolveRpcUrl(network, env);
   const clBase = resolveClApiUrl(env);
@@ -150,7 +152,7 @@ export async function runActivate(options) {
     decodeDryRun: async () => {
       logSuccess('Preflight OK — activateStakingPool would succeed at current head');
     },
-    beforeExecute: () => {
+    beforeEmit: () => {
       if (isProofExpired(ctx.nowSeconds, ctx.proofTimestamp)) {
         throw new Error(
           `Proof window expired at unix ${expiry}. Re-run activate to regenerate proofs.`,

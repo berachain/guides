@@ -12,7 +12,11 @@ function installMocks() {
       return { status: 0, stdout: '0x4242424242424242424242424242424242424242', stderr: '' };
     }
     if (argv[2]?.includes('predictStakingPoolContractsAddresses')) {
-      return { status: 0, stdout: '(0x1,0x2,0x3,0x4)', stderr: '' };
+      return {
+        status: 0,
+        stdout: '(\n0x1,\n0x2,\n0x3,\n0x4\n)',
+        stderr: '',
+      };
     }
     return { status: 0, stdout: '0x', stderr: '' };
   });
@@ -51,21 +55,23 @@ describe('TP-12 shared transaction runner', () => {
     installMocks();
 
     try {
-      await runDeploy({
+      const deployResult = await runDeploy({
         operator: '0x' + '11'.repeat(20),
         sharesRecipient: '0x' + '22'.repeat(20),
         execute: false,
-        env: { BEACOND_HOME: '/tmp', CHAIN: 'bepolia', BEACOND_BIN: 'beacond' },
+        env: { BEACOND_HOME: '/tmp', CLI_CHAIN: 'bepolia', BEACOND_BIN: 'beacond' },
       });
       assert.equal(getSharedTxRunnerId(), SHARED_TX_RUNNER);
+      assert.equal(deployResult.mode, 'emit');
 
-      await runSetMinBalance({
+      const setMinResult = await runSetMinBalance({
         execute: false,
-        env: { BEACOND_HOME: '/tmp', CHAIN: 'bepolia', BEACOND_BIN: 'beacond' },
+        env: { BEACOND_HOME: '/tmp', CLI_CHAIN: 'bepolia', BEACOND_BIN: 'beacond' },
       });
       assert.equal(getSharedTxRunnerId(), SHARED_TX_RUNNER);
+      assert.equal(setMinResult.mode, 'emit');
 
-      await runTransaction(
+      const activateResult = await runTransaction(
         { execute: false, rpcUrl: 'http://rpc', env: {} },
         {
           label: 'activateStakingPool',
@@ -75,6 +81,7 @@ describe('TP-12 shared transaction runner', () => {
         },
       );
       assert.equal(getSharedTxRunnerId(), SHARED_TX_RUNNER);
+      assert.equal(activateResult.mode, 'emit');
     } finally {
       setCastRunner(null);
       setBeacondRunner(null);

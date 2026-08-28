@@ -60,12 +60,26 @@ export function getValidatorPubkey(env = process.env) {
   throw new Error('Could not parse validator pubkey from beacond output');
 }
 
+export function assertValidatorPreflight(env = process.env) {
+  const home = env.BEACOND_HOME?.trim();
+  if (!home) {
+    throw new Error(
+      'BEACOND_HOME is required. Set BEACOND_HOME to your beacond data directory on this validator host.',
+    );
+  }
+  const result = runBeacond(['deposit', 'validator-keys'], env);
+  if (result.status !== 0) {
+    const detail = (result.stderr || result.stdout).trim() || 'beacond deposit validator-keys failed';
+    throw new Error(`Cannot read validator keys from BEACOND_HOME=${home}: ${detail}`);
+  }
+}
+
 export function detectNetwork(env = process.env) {
-  const explicit = env.CLI_CHAIN?.trim() || env.CHAIN?.trim();
+  const explicit = env.CLI_CHAIN?.trim();
   if (explicit) return explicit;
   const home = env.BEACOND_HOME?.trim();
   if (!home) {
-    throw new Error('Could not detect network. Set CHAIN or BEACOND_HOME.');
+    throw new Error('Could not detect network. Set CLI_CHAIN or BEACOND_HOME.');
   }
   const result = runBeacond(
     ['genesis', 'validator-root', `${home}/config/genesis.json`],

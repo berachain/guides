@@ -29,17 +29,25 @@ export function runCast(argv, options = {}) {
   return getCastRunner()(argv, options);
 }
 
-export function buildWalletArgs(env = process.env) {
-  if (env.PRIVATE_KEY && env.PRIVATE_KEY.trim()) {
-    return ['--private-key', env.PRIVATE_KEY.trim()];
-  }
+export function buildEmitWalletArgs() {
   return ['--ledger'];
 }
 
+export function buildWalletArgs(env = process.env) {
+  const privateKey = env.PRIVATE_KEY?.trim();
+  if (!privateKey) {
+    throw new Error('PRIVATE_KEY is required for --execute');
+  }
+  return ['--private-key', privateKey];
+}
+
 export function parseCastTuple(raw) {
-  return raw
+  const normalized = String(raw)
     .replace(/^\(/, '')
     .replace(/\)$/, '')
+    .replace(/[\r\n]+/g, ' ')
+    .trim();
+  return normalized
     .split(',')
     .map((part) => part.trim())
     .filter(Boolean);
@@ -59,4 +67,8 @@ export async function castFromWei(wei, unit = 'ether') {
     return stripScientificNotation(wei);
   }
   return result.stdout.trim();
+}
+
+export function formatCastCommand(argv) {
+  return ['cast', ...argv].join(' ');
 }
