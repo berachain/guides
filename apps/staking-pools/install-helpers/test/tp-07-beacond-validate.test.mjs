@@ -1,8 +1,16 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { setCastRunner } from '../lib/cast.mjs';
 import { setBeacondRunner } from '../lib/beacond.mjs';
 import { runDeploy } from '../lib/commands/deploy.mjs';
+
+const liveFourAddresses = readFileSync(
+  join(dirname(fileURLToPath(import.meta.url)), 'fixtures/cast-four-addresses.txt'),
+  'utf8',
+);
 
 describe('TP-7 deploy deposit validation', () => {
   it('shells to beacond deposit validate and fails on non-zero exit', async () => {
@@ -11,7 +19,7 @@ describe('TP-7 deploy deposit validation', () => {
         return { status: 0, stdout: '0x4242424242424242424242424242424242424242', stderr: '' };
       }
       if (argv[2]?.includes('predictStakingPoolContractsAddresses')) {
-        return { status: 0, stdout: '(0x1,0x2,0x3,0x4)', stderr: '' };
+        return { status: 0, stdout: liveFourAddresses, stderr: '' };
       }
       return { status: 0, stdout: '0x', stderr: '' };
     });

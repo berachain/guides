@@ -45,10 +45,9 @@ export function parseCastTuple(raw) {
   const normalized = String(raw)
     .replace(/^\(/, '')
     .replace(/\)$/, '')
-    .replace(/[\r\n]+/g, ' ')
     .trim();
   return normalized
-    .split(',')
+    .split(/[,\s]+/)
     .map((part) => part.trim())
     .filter(Boolean);
 }

@@ -185,9 +185,24 @@ export function predictPoolAddresses(factory, rpc, pubkey) {
   if (result.status !== 0) {
     throw new Error(result.stderr || result.stdout || 'prediction call failed');
   }
+  const parsed = parseCastTuple(result.stdout.trim());
   const [smartOperator, stakingPool, stakingRewardsVault, incentiveCollector] =
-    parseCastTuple(result.stdout.trim());
+    parsed;
+  if (
+    !isEvmAddress(smartOperator) ||
+    !isEvmAddress(stakingPool) ||
+    !isEvmAddress(stakingRewardsVault) ||
+    !isEvmAddress(incentiveCollector)
+  ) {
+    throw new Error(
+      `predictStakingPoolContractsAddresses: expected 4 addresses, got ${JSON.stringify(parsed)}`,
+    );
+  }
   return { smartOperator, stakingPool, stakingRewardsVault, incentiveCollector };
+}
+
+function isEvmAddress(value) {
+  return /^0x[0-9a-fA-F]{40}$/.test(String(value ?? '').trim());
 }
 
 export async function getValidatorIndex(clBase, pubkey, fetchImpl = globalThis.fetch) {

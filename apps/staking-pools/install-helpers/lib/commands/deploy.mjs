@@ -68,7 +68,7 @@ export async function runDeploy(options) {
     ],
     decodeDryRun: async () => {
       logSuccess('Preflight OK');
-      logInfo('Decoded StakingPoolContractsDeployed:');
+      logInfo('Predicted pool contracts (predictStakingPoolContractsAddresses):');
       console.log(`  smartOperator:       ${ctx.predicted.smartOperator}`);
       console.log(`  stakingPool:         ${ctx.predicted.stakingPool}`);
       console.log(

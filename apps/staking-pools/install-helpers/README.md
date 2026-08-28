@@ -8,7 +8,7 @@ Retail **stake** and **unstake** are not in this toolkit. Use the sample fronten
 
 Install Node.js 22+, Foundry `cast`, and `beacond` on the **validator host**. Set `BEACOND_HOME` to your beacond data directory. The CLI refuses to run deploy/activate/set-min-balance if `BEACOND_HOME` is missing or `beacond` cannot read validator keys.
 
-Copy `env.sh.template` to `env.sh` for delegation scripts (BERA-944) and optional env vars:
+Copy `env.sh.template` to `env.sh` for optional env vars and for the retained delegation scripts:
 
 ```bash
 cp env.sh.template env.sh
@@ -24,7 +24,7 @@ source env.sh
 | Foundry `cast` | All EVM reads and writes |
 | `beacond` | Validator pubkey, deposit validation, genesis network detection |
 
-No npm packages, lockfile, or `node_modules` on CLI-owned files. Legacy `package.json` in this directory is retained for the Foundation-delegated flow (BERA-944).
+No npm packages, lockfile, or `node_modules` on CLI-owned files. Legacy `package.json` in this directory is retained for the Foundation-delegated flow.
 
 Forbidden in CLI code paths: `jq`, `bc`, `python3`, `curl`, ethers, web3.
 
@@ -69,7 +69,7 @@ node pool-cli.mjs deploy --op 0xOperator --sr 0xSharesRecipient
 node pool-cli.mjs deploy --op 0x... --sr 0x... --execute   # requires PRIVATE_KEY
 ```
 
-Dry-run: `beacond deposit validate`, predicted addresses, `cast call` preflight, decoded `StakingPoolContractsDeployed` summary, 10,000 BERA value shown before emit.
+Dry-run: `beacond deposit validate`, predicted addresses from `predictStakingPoolContractsAddresses`, `cast call` preflight, 10,000 BERA value shown before emit. Not an event decode.
 
 ### `activate`
 
@@ -105,6 +105,6 @@ From this directory:
 node --test test/*.test.mjs
 ```
 
-## Retained bash (BERA-944)
+## Retained bash
 
 Until the delegated CLI lands: `lib-common.sh`, `env.sh.template`, `package.json`, `delegator-*.sh`, `delegated-*.sh`, and `generate-frontend-config.sh`.

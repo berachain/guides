@@ -1,10 +1,18 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { getSharedTxRunnerId, runTransaction, SHARED_TX_RUNNER } from '../lib/tx-runner.mjs';
 import { runDeploy } from '../lib/commands/deploy.mjs';
 import { runSetMinBalance } from '../lib/commands/set-min-balance.mjs';
 import { setCastRunner } from '../lib/cast.mjs';
 import { setBeacondRunner } from '../lib/beacond.mjs';
+
+const liveFourAddresses = readFileSync(
+  join(dirname(fileURLToPath(import.meta.url)), 'fixtures/cast-four-addresses.txt'),
+  'utf8',
+);
 
 function installMocks() {
   setCastRunner((argv) => {
@@ -14,7 +22,7 @@ function installMocks() {
     if (argv[2]?.includes('predictStakingPoolContractsAddresses')) {
       return {
         status: 0,
-        stdout: '(\n0x1,\n0x2,\n0x3,\n0x4\n)',
+        stdout: liveFourAddresses,
         stderr: '',
       };
     }
