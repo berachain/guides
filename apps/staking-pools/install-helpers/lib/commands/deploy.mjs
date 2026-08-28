@@ -7,6 +7,7 @@ import {
   predictPoolAddresses,
 } from '../beacond.mjs';
 import { logInfo, logSuccess } from '../log.mjs';
+import { decodeDeployRevert } from '../revert-decoder.mjs';
 import { runTransaction } from '../tx-runner.mjs';
 
 function normalizeAddress(address) {
@@ -54,6 +55,7 @@ export async function runDeploy(options) {
     target: factory,
     signature:
       'deployStakingPoolContracts(bytes,bytes,bytes,address,address)',
+    decodePreflightError: decodeDeployRevert,
     value: DEPLOY_VALUE,
     buildCalldataArgs: () => [
       ctx.deposit.pubkey,

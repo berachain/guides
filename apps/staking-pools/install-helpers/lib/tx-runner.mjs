@@ -19,6 +19,7 @@ export async function runTransaction(ctx, descriptor) {
     buildCalldataArgs,
     prelude,
     decodeDryRun,
+    decodePreflightError,
     beforeExecute,
     onExecuteSuccess,
   } = descriptor;
@@ -45,8 +46,9 @@ export async function runTransaction(ctx, descriptor) {
   ctx.lastDryRunArgv = ['cast', ...dryRunArgv];
 
   if (dryRun.status !== 0) {
-    const message = dryRun.stderr || dryRun.stdout;
-    throw new Error(message.trim() || `${label} preflight failed`);
+    const message = (dryRun.stderr || dryRun.stdout).trim() || `${label} preflight failed`;
+    const decoded = decodePreflightError ? decodePreflightError(message) : message;
+    throw new Error(decoded);
   }
 
   if (decodeDryRun) {

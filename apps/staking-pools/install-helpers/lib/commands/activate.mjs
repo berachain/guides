@@ -145,6 +145,7 @@ export async function runActivate(options) {
     target: factory,
     signature:
       'activateStakingPool((bytes,bytes,uint64,uint64),(bytes32[],bytes32[],bytes32[],bytes32),uint64)',
+    decodePreflightError: decodeActivationRevert,
     buildCalldataArgs: () => [ctx.validatorTuple, ctx.proofTuple, String(ctx.proofTimestamp)],
     decodeDryRun: async () => {
       logSuccess('Preflight OK — activateStakingPool would succeed at current head');
@@ -160,10 +161,6 @@ export async function runActivate(options) {
       if (txHash) logSuccess(`activateStakingPool broadcast: ${txHash}`);
     },
   });
-}
-
-export function decodePreflightError(message) {
-  return decodeActivationRevert(message);
 }
 
 export async function verifyOperatorMatch(factory, rpcUrl, pubkey) {
