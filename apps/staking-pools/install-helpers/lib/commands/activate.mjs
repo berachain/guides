@@ -1,4 +1,4 @@
-import { MIN_ACTIVATION_BALANCE_GWEI, PROOF_MAX_AGE_SECONDS } from '../constants.mjs';
+import { MIN_ACTIVATION_BALANCE_GWEI, PROOF_MAX_AGE_SECONDS, PROOF_SLOT_LAG } from '../constants.mjs';
 import { resolveRpcUrl, resolveClApiUrl, getFactoryAddress, isLoopbackHttp } from '../config.mjs';
 import { BEACON_DEPOSIT_CONTRACT } from '../constants.mjs';
 import {
@@ -9,7 +9,7 @@ import {
   predictPoolAddresses,
   getWithdrawalVault,
 } from '../beacond.mjs';
-import { runCast, parseCastTuple, unwrapCastJson } from '../cast.mjs';
+import { runCast, parseCastTuple, unwrapCastJson, parseCastBlockNumber } from '../cast.mjs';
 import { decodeActivationRevert } from '../revert-decoder.mjs';
 import {
   assertProofSlotMatchesPinned,
@@ -18,7 +18,8 @@ import {
   fetchJson,
   formatProofTuple,
   formatValidatorDataTuple,
-  isProofExpired,
+  eip4788ElBlockNumber,
+  pinActivationSlot,
   proofExpiryTimestamp,
 } from '../proofs.mjs';
 import { logInfo, logSuccess, logWarn, logError } from '../log.mjs';
@@ -80,8 +81,21 @@ export async function runActivate(options) {
     'beacon head',
     options.fetchImpl,
   );
-  const pinnedSlot = head.data.header.message.slot;
-  logInfo(`Pinned CL slot: ${pinnedSlot}`);
+  const clHead = head.data.header.message.slot;
+  const elLatestRaw = runCast(['block-number', '-r', rpcUrl], { env });
+  if (elLatestRaw.status !== 0) {
+    throw new Error(
+      `Failed to read EL block number from ${rpcUrl}: ${(elLatestRaw.stderr || elLatestRaw.stdout).trim()}`,
+    );
+  }
+  const elLatest = parseCastBlockNumber(elLatestRaw.stdout);
+  const pinnedSlot = pinActivationSlot(clHead, elLatest, PROOF_SLOT_LAG);
+  const elBlockNumber = eip4788ElBlockNumber(pinnedSlot);
+  logInfo(`CL head: ${clHead}`);
+  logInfo(`EL latest: ${elLatest.toString()}`);
+  logInfo(
+    `Pinned CL slot: ${pinnedSlot.toString()} (head minus lag ${PROOF_SLOT_LAG.toString()}; EIP-4788 uses EL block slot+1 = ${elBlockNumber.toString()})`,
+  );
 
   const pubkeyProof = await fetchJson(
     `${clBase}/bkit/v1/proof/validator_pubkey/${pinnedSlot}/${validatorIndex}`,
@@ -104,7 +118,6 @@ export async function runActivate(options) {
   }
   logSuccess(`All proofs pinned to slot ${pinnedSlot}`);
 
-  const elBlockNumber = BigInt(pinnedSlot) + 1n;
   logInfo(`Reading EIP-4788 timestamp from EL block ${elBlockNumber.toString()} via ${rpcUrl}...`);
   const blockResult = runCast(['block', elBlockNumber.toString(), '--json', '-r', rpcUrl], {
     env,

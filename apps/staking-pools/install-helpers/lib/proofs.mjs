@@ -1,3 +1,5 @@
+import { PROOF_SLOT_LAG } from './constants.mjs';
+
 export function parseProofSlot(slotValue) {
   if (typeof slotValue === 'number') return BigInt(slotValue);
   const raw = String(slotValue).trim();
@@ -70,6 +72,30 @@ export function deriveEip4788Timestamp(pinnedSlot, elBlockJson) {
     throw new Error(`Missing timestamp on EL block ${elBlockNumber.toString()}`);
   }
   return Number(parseProofSlot(timestampHex));
+}
+
+export function eip4788ElBlockNumber(pinnedSlot) {
+  return parseProofSlot(pinnedSlot) + 1n;
+}
+
+export function pinActivationSlot(clHead, elLatest, lag = PROOF_SLOT_LAG) {
+  const cl = parseProofSlot(clHead);
+  const el = parseProofSlot(elLatest);
+  const lagSlots = typeof lag === 'bigint' ? lag : BigInt(lag);
+  if (el === 0n) {
+    throw new Error('EL latest block is 0; cannot pin an activation slot');
+  }
+  const maxSlotForEip4788 = el - 1n;
+  let slot = cl < maxSlotForEip4788 ? cl : maxSlotForEip4788;
+  if (slot > lagSlots) {
+    slot -= lagSlots;
+  }
+  if (slot === 0n) {
+    throw new Error(
+      `Cannot pin activation slot: CL head ${cl.toString()}, EL latest ${el.toString()}`,
+    );
+  }
+  return slot;
 }
 
 export function proofExpiryTimestamp(proofTimestamp) {

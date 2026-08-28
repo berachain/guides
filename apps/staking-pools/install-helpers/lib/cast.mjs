@@ -1,5 +1,6 @@
 import { spawnSync } from 'node:child_process';
 import { assertNoForbiddenCommands } from './deps.mjs';
+import { parseProofSlot } from './proofs.mjs';
 
 let castRunner = null;
 
@@ -82,4 +83,19 @@ export function unwrapCastJson(raw) {
     return parsed.data;
   }
   return parsed;
+}
+
+export function parseCastBlockNumber(raw) {
+  const trimmed = String(raw ?? '').trim();
+  if (!trimmed) {
+    throw new Error('cast block-number returned empty output');
+  }
+  if (trimmed.startsWith('{')) {
+    const data = unwrapCastJson(trimmed);
+    if (data && typeof data === 'object' && data.number != null) {
+      return parseProofSlot(data.number);
+    }
+    return parseProofSlot(data);
+  }
+  return parseProofSlot(trimmed.split(/\s+/)[0]);
 }
