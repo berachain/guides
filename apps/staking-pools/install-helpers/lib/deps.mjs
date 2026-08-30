@@ -3,7 +3,6 @@ import { FORBIDDEN_SHELL_COMMANDS } from './constants.mjs';
 
 const REQUIRED_TOOLS = [
   { name: 'node', install: 'Install Node.js 18+ (22 recommended).' },
-  { name: 'cast', install: 'Install Foundry: https://book.getfoundry.sh/' },
   { name: 'beacond', install: 'Install beacond or set BEACOND_BIN.' },
 ];
 

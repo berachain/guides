@@ -28,11 +28,14 @@ export function extractProofFields(pubkeyProof, credentialsProof, balanceProof) 
     validatorWithdrawalCredentials:
       credentialsProof.validator_withdrawal_credentials,
     validatorBalance: balanceProof.validator_balance,
+    pubkeyProofArray: pubkeyProof.validator_pubkey_proof,
+    withdrawalCredentialsProofArray: credentialsProof.withdrawal_credentials_proof,
+    balanceProofArray: balanceProof.balance_proof,
+    balanceLeaf: balanceProof.balance_leaf,
     pubkeyProofCast: pubkeyProof.validator_pubkey_proof.join(','),
     withdrawalCredentialsProofCast:
       credentialsProof.withdrawal_credentials_proof.join(','),
     balanceProofCast: balanceProof.balance_proof.join(','),
-    balanceLeaf: balanceProof.balance_leaf,
   };
 }
 
@@ -42,6 +45,24 @@ export function formatProofTuple(fields) {
 
 export function formatValidatorDataTuple(fields, validatorIndex) {
   return `(${fields.validatorPubkey},${fields.validatorWithdrawalCredentials},${fields.validatorBalance},${validatorIndex})`;
+}
+
+export function buildValidatorDataArgs(fields, validatorIndex) {
+  return [
+    fields.validatorPubkey,
+    fields.validatorWithdrawalCredentials,
+    fields.validatorBalance,
+    validatorIndex,
+  ];
+}
+
+export function buildProofDataArgs(fields) {
+  return [
+    fields.pubkeyProofArray,
+    fields.withdrawalCredentialsProofArray,
+    fields.balanceProofArray,
+    fields.balanceLeaf,
+  ];
 }
 
 export async function fetchJson(url, label = url, fetchImpl = globalThis.fetch) {

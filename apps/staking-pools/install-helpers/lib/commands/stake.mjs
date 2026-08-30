@@ -1,10 +1,12 @@
 import { logInfo, logSuccess } from '../log.mjs';
-import { resolveOperatorPool } from '../pool-target.mjs';
-import { runTransaction } from '../tx-runner.mjs';
+import { resolveOperatorPool, resolveFromAddress } from '../pool-target.mjs';
+import { createSignerFromEnv } from '../signers.mjs';
+import { runTransaction } from '../tx-pipeline.mjs';
 import { beraToWei, normalizeAddress } from '../units.mjs';
 
 export async function runStake(options) {
   const env = options.env ?? process.env;
+  const verbose = Boolean(options.verbose);
   const receiver = normalizeAddress(options.receiver);
   if (!receiver) {
     throw new Error('--receiver must be a valid EVM address (gets stBERA)');
@@ -15,19 +17,30 @@ export async function runStake(options) {
     throw new Error('--from must be a valid EVM address');
   }
 
-  const pool = resolveOperatorPool(options, env);
+  const pool = await resolveOperatorPool(options, env);
+  const signer = createSignerFromEnv({
+    env,
+    rpcUrl: pool.rpcUrl,
+    fetchImpl: options.fetchImpl,
+    signingPreference: options.signingPreference,
+  });
 
-  logInfo(`Staking pool / stBERA: ${pool.stakingPool}`);
-  logInfo(`Amount: ${decimal} BERA (${wei} wei)`);
-  logInfo(`Receiver of stBERA: ${receiver}`);
+  if (verbose) {
+    logInfo(`Staking pool / stBERA: ${pool.stakingPool}`);
+    logInfo(`Amount: ${decimal} BERA (${wei} wei)`);
+    logInfo(`Receiver of stBERA: ${receiver}`);
+  }
 
   const ctx = {
-    execute: options.execute,
+    execute: signer.mode === 'hot-key',
     env,
     rpcUrl: pool.rpcUrl,
     from,
     stakingPool: pool.stakingPool,
     receiver,
+    chainReader: pool.chainReader,
+    signer,
+    verbose,
     value: `${decimal}ether`,
   };
 
@@ -38,7 +51,9 @@ export async function runStake(options) {
     value: ctx.value,
     buildCalldataArgs: () => [ctx.receiver],
     decodeDryRun: async () => {
-      logSuccess(`Preflight OK — submit(${ctx.receiver}) value ${ctx.value}`);
+      if (verbose) {
+        logSuccess(`Preflight OK — submit(${ctx.receiver}) value ${ctx.value}`);
+      }
     },
   });
 }

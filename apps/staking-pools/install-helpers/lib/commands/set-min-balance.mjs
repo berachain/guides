@@ -9,8 +9,10 @@ import {
   getValidatorPubkey,
   predictPoolAddresses,
 } from '../beacond.mjs';
+import { createChainReader } from '../chain-reader.mjs';
+import { createSignerFromEnv } from '../signers.mjs';
 import { logInfo, logSuccess } from '../log.mjs';
-import { runTransaction } from '../tx-runner.mjs';
+import { runTransaction } from '../tx-pipeline.mjs';
 import { beraToWei } from '../units.mjs';
 
 export function resolveMinBalanceAmount(options) {
@@ -26,24 +28,37 @@ export function resolveMinBalanceAmount(options) {
 
 export async function runSetMinBalance(options) {
   const env = options.env ?? process.env;
+  const verbose = Boolean(options.verbose);
   assertValidatorPreflight(env);
   const network = detectNetwork(env);
   const rpcUrl = resolveRpcUrl(network, env);
   const factory = getFactoryAddress(network);
   const pubkey = getValidatorPubkey(env);
-  const predicted = predictPoolAddresses(factory, rpcUrl, pubkey);
+  const chainReader = createChainReader(rpcUrl, options.fetchImpl);
+  const predicted = await predictPoolAddresses(factory, rpcUrl, pubkey, chainReader);
+  const signer = createSignerFromEnv({
+    env,
+    rpcUrl,
+    fetchImpl: options.fetchImpl,
+    signingPreference: options.signingPreference,
+  });
   const { bera, wei } = resolveMinBalanceAmount(options);
 
-  logInfo(`Target pool: ${predicted.stakingPool}`);
-  logInfo(`setMinEffectiveBalance amount: ${bera} BERA (${wei} wei)`);
+  if (verbose) {
+    logInfo(`Target pool: ${predicted.stakingPool}`);
+    logInfo(`setMinEffectiveBalance amount: ${bera} BERA (${wei} wei)`);
+  }
 
   const ctx = {
-    execute: options.execute,
+    execute: signer.mode === 'hot-key',
     env,
     rpcUrl,
     stakingPool: predicted.stakingPool,
     wei,
     bera,
+    chainReader,
+    signer,
+    verbose,
   };
 
   return runTransaction(ctx, {
@@ -52,7 +67,9 @@ export async function runSetMinBalance(options) {
     signature: 'setMinEffectiveBalance(uint256)',
     buildCalldataArgs: () => [ctx.wei],
     decodeDryRun: async () => {
-      logSuccess(`Preflight OK — setMinEffectiveBalance(${ctx.wei})`);
+      if (verbose) {
+        logSuccess(`Preflight OK — setMinEffectiveBalance(${ctx.wei})`);
+      }
     },
   });
 }

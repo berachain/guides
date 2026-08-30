@@ -1,0 +1,51 @@
+=== VC-5 output modes (install --help shows milestone vs verbose flags) ===
+
+--- default install milestone shape (from installation.mdx) ---
+Deployed. Predicted pool: 0x...
+Waiting for validator registration...
+Registered (index N).
+Activated.
+Staked N BERA.
+Done.
+
+--- verbose flag surface ---
+pool-cli — staking pool operator helper (Node stdlib + vendored ethers + beacond)
+
+Run on the validator host with BEACOND_HOME set. Hot-key mode (PRIVATE_KEY set) signs and
+broadcasts. Cold-signing mode prints cast send commands for a separate signing machine.
+
+Usage:
+  node pool-cli.mjs <command> [options]
+
+Commands:
+  install         Hands-off installer (deploy → wait → activate → stake-if-funded)
+  deploy          Deploy staking pool contracts
+  activate        Activate a deployed pool with CL proofs
+  status          EL operator, beacon inclusion, and pool isActive
+  set-min-balance Optional min effective balance update
+  stake           Deposit BERA, mint stBERA to --receiver
+  unstake         Request or finalize withdrawal
+
+Global options:
+  --verbose       Per-fact detail (tx hashes, RPC calls, pinned slots)
+  --help          Show command help
+
+Install:
+  [--funding-address 0x...] [--operator 0x...] [--shares-recipient 0x...]
+
+Deploy:
+  --op 0xOPERATOR --sr 0xSHARES_RECIPIENT
+
+Stake:
+  --amount BERA --receiver 0x... [--from 0x...] [--staking-pool 0x...]
+
+Unstake:
+  --amount BERA | --shares stBERA | --finalize REQUEST_ID
+  --from 0x...   stBERA holder (or --receiver as alias; or PRIVATE_KEY)
+  [--staking-pool 0x...] [--max-fee BERA]
+
+Environment:
+  BEACOND_HOME (required), BEACOND_BIN, CLI_CHAIN, RPC_URL, EL_RPC_URL
+  CL_NODE_API_URL or NODE_API_ADDRESS (default http://127.0.0.1:3500)
+  PRIVATE_KEY (hot-key mode on validator host; unset for cold-signing)
+

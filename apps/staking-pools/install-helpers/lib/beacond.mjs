@@ -2,7 +2,8 @@ import { spawnSync } from 'node:child_process';
 import { assertNoForbiddenCommands } from './deps.mjs';
 import { networkFromValidatorRoot } from './config.mjs';
 import { resolveRpcUrl, getFactoryAddress } from './config.mjs';
-import { runCast, parseCastTuple } from './cast.mjs';
+import { createChainReader } from './chain-reader.mjs';
+import { parseProofSlot } from './proofs.mjs';
 import { DEPOSIT_AMOUNT_GWEI } from './constants.mjs';
 
 export function resolveBeacondBin(env = process.env) {
@@ -157,70 +158,55 @@ function parseDepositOutput(output) {
   return fields;
 }
 
-export function getWithdrawalVault(network, env = process.env) {
+export async function getWithdrawalVault(network, env = process.env, chainReader = null) {
   const factory = getFactoryAddress(network);
   const rpc = resolveRpcUrl(network, env);
-  const result = runCast([
-    'call',
+  const reader = chainReader ?? createChainReader(rpc);
+  const result = await reader.call(factory, 'withdrawalVault()(address)');
+  return String(result.decoded?.[0] ?? result.decoded).trim();
+}
+
+export async function predictPoolAddresses(factory, rpc, pubkey, chainReader = null) {
+  const reader = chainReader ?? createChainReader(rpc);
+  const result = await reader.call(
     factory,
-    'withdrawalVault()(address)',
-    '-r',
-    rpc,
-  ]);
-  if (result.status !== 0) {
-    throw new Error(result.stderr || result.stdout || 'withdrawalVault lookup failed');
-  }
-  return result.stdout.trim();
+    'predictStakingPoolContractsAddresses(bytes)(address,address,address,address)',
+    [pubkey],
+  );
+  return parseFourAddressesFromDecoded(result.decoded, 'predictStakingPoolContractsAddresses');
 }
 
-export function predictPoolAddresses(factory, rpc, pubkey) {
-  return parseFourAddresses(
-    runCast([
-      'call',
-      factory,
-      'predictStakingPoolContractsAddresses(bytes)(address,address,address,address)',
-      pubkey,
-      '-r',
-      rpc,
-    ]),
-    'predictStakingPoolContractsAddresses',
+export async function getCoreContracts(factory, rpc, pubkey, chainReader = null) {
+  const reader = chainReader ?? createChainReader(rpc);
+  const result = await reader.call(
+    factory,
+    'getCoreContracts(bytes)(address,address,address,address)',
+    [pubkey],
   );
-}
-
-export function getCoreContracts(factory, rpc, pubkey) {
-  const addresses = parseFourAddresses(
-    runCast([
-      'call',
-      factory,
-      'getCoreContracts(bytes)(address,address,address,address)',
-      pubkey,
-      '-r',
-      rpc,
-    ]),
-    'getCoreContracts',
-  );
+  const addresses = parseFourAddressesFromDecoded(result.decoded, 'getCoreContracts');
   if (addresses.smartOperator === '0x0000000000000000000000000000000000000000') {
     throw new Error('Staking pool has not been deployed yet');
   }
   return addresses;
 }
 
-function parseFourAddresses(result, label) {
-  if (result.status !== 0) {
-    throw new Error(result.stderr || result.stdout || `${label} call failed`);
+function parseFourAddressesFromDecoded(decoded, label) {
+  const tuple = decoded;
+  const [smartOperator, stakingPool, stakingRewardsVault, incentiveCollector] = Array.isArray(tuple)
+    ? tuple
+    : [tuple];
+  const addresses = {
+    smartOperator: String(smartOperator).toLowerCase(),
+    stakingPool: String(stakingPool).toLowerCase(),
+    stakingRewardsVault: String(stakingRewardsVault).toLowerCase(),
+    incentiveCollector: String(incentiveCollector).toLowerCase(),
+  };
+  for (const [name, addr] of Object.entries(addresses)) {
+    if (!isEvmAddress(addr)) {
+      throw new Error(`${label}: invalid ${name} address ${addr}`);
+    }
   }
-  const parsed = parseCastTuple(result.stdout.trim());
-  const [smartOperator, stakingPool, stakingRewardsVault, incentiveCollector] =
-    parsed;
-  if (
-    !isEvmAddress(smartOperator) ||
-    !isEvmAddress(stakingPool) ||
-    !isEvmAddress(stakingRewardsVault) ||
-    !isEvmAddress(incentiveCollector)
-  ) {
-    throw new Error(`${label}: expected 4 addresses, got ${JSON.stringify(parsed)}`);
-  }
-  return { smartOperator, stakingPool, stakingRewardsVault, incentiveCollector };
+  return addresses;
 }
 
 function isEvmAddress(value) {
@@ -262,4 +248,20 @@ export async function getBeaconValidator(clBase, pubkey, fetchImpl = globalThis.
 export async function getValidatorIndex(clBase, pubkey, fetchImpl = globalThis.fetch) {
   const record = await getBeaconValidator(clBase, pubkey, fetchImpl);
   return record.found ? record.index : '';
+}
+
+// Legacy sync wrappers used during migration — prefer async versions above.
+export function getWithdrawalVaultSync(network, env = process.env) {
+  const factory = getFactoryAddress(network);
+  const rpc = resolveRpcUrl(network, env);
+  const reader = createChainReader(rpc);
+  return getWithdrawalVault(network, env, reader);
+}
+
+export function predictPoolAddressesSync(factory, rpc, pubkey) {
+  return predictPoolAddresses(factory, rpc, pubkey);
+}
+
+export function getCoreContractsSync(factory, rpc, pubkey) {
+  return getCoreContracts(factory, rpc, pubkey);
 }

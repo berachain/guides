@@ -12,12 +12,14 @@ import {
   getValidatorPubkey,
   getWithdrawalVault,
 } from '../beacond.mjs';
-import { runCast, parseCastTuple, castFromWei, stripScientificNotation } from '../cast.mjs';
+import { createChainReader, walletAddressFromPrivateKey } from '../chain-reader.mjs';
+import { formatWeiToDecimal, stripScientificNotation } from '../format.mjs';
 import { logInfo, logSuccess, logWarn, logError } from '../log.mjs';
 import { classifyPoolPhase } from '../pool-phase.mjs';
 
 export async function runStatus(options = {}) {
   const env = options.env ?? process.env;
+  const verbose = Boolean(options.verbose);
   if (!env.BEACOND_HOME?.trim()) {
     throw new Error('BEACOND_HOME is required');
   }
@@ -26,26 +28,22 @@ export async function runStatus(options = {}) {
   const rpcUrl = resolveRpcUrl(network, env);
   const pubkey = getValidatorPubkey(env);
   const factory = getFactoryAddress(network);
+  const chainReader = createChainReader(rpcUrl, options.fetchImpl);
 
-  logInfo(`Chain: ${network}`);
-  logInfo(`Validator pubkey: ${pubkey}`);
+  if (verbose) {
+    logInfo(`Chain: ${network}`);
+    logInfo(`Validator pubkey: ${pubkey}`);
+  }
 
   const delegationFactory = getDelegationHandlerFactory(network);
   if (delegationFactory && delegationFactory !== '0x0000000000000000000000000000000000000000') {
-    const handler = runCast([
-      'call',
+    const handler = await chainReader.call(
       delegationFactory,
       'delegationHandlers(bytes)(address)',
-      pubkey,
-      '-r',
-      rpcUrl,
-    ]);
-    const handlerAddr = handler.stdout?.trim();
-    if (
-      handler.status === 0 &&
-      handlerAddr &&
-      handlerAddr !== '0x0000000000000000000000000000000000000000'
-    ) {
+      [pubkey],
+    );
+    const handlerAddr = String(handler.decoded[0]);
+    if (handlerAddr && handlerAddr !== '0x0000000000000000000000000000000000000000') {
       logInfo('✓ Delegated pool detected');
       logInfo(`  DelegationHandler: ${handlerAddr}`);
     }
@@ -54,7 +52,7 @@ export async function runStatus(options = {}) {
 
   let core;
   try {
-    core = getCoreContracts(factory, rpcUrl, pubkey);
+    core = await getCoreContracts(factory, rpcUrl, pubkey, chainReader);
   } catch (error) {
     if (/not been deployed/i.test(error.message)) {
       throw new Error(
@@ -72,8 +70,8 @@ export async function runStatus(options = {}) {
     ['StakingRewardsVault', stakingRewardsVault],
     ['IncentiveCollector', incentiveCollector],
   ]) {
-    const code = runCast(['code', addr, '-r', rpcUrl]);
-    if (code.status !== 0 || !code.stdout.trim() || code.stdout.trim() === '0x') {
+    const code = await chainReader.getCode(addr);
+    if (!code || code === '0x') {
       logError(`  ✗ ${name}: ${addr} (no code deployed)`);
       throw new Error('Some contracts do not have code deployed');
     }
@@ -81,42 +79,24 @@ export async function runStatus(options = {}) {
   }
   console.log('');
 
-  const registered = runCast([
-    'call',
+  const registered = await chainReader.call(
     BEACON_DEPOSIT_CONTRACT,
     'getOperator(bytes)(address)',
-    pubkey,
-    '-r',
-    rpcUrl,
-  ]);
-  if (registered.status !== 0) {
-    throw new Error('Failed to get operator from beacon deposit contract');
-  }
-  const registeredOp = registered.stdout.trim().toLowerCase();
+    [pubkey],
+  );
+  const registeredOp = String(registered.decoded[0]).toLowerCase();
   if (registeredOp !== smartOperator.toLowerCase()) {
     throw new Error(
       `Operator mismatch. Expected ${smartOperator}, registered ${registeredOp}`,
     );
   }
 
-  const isActive = runCast(['call', stakingPool, 'isActive()(bool)', '-r', rpcUrl]);
-  const threshold = runCast([
-    'call',
-    stakingPool,
-    'activeThresholdReached()(bool)',
-    '-r',
-    rpcUrl,
-  ]);
-  const fullyExited = runCast([
-    'call',
-    stakingPool,
-    'isFullyExited()(bool)',
-    '-r',
-    rpcUrl,
-  ]);
+  const isActive = await chainReader.call(stakingPool, 'isActive()(bool)');
+  const threshold = await chainReader.call(stakingPool, 'activeThresholdReached()(bool)');
+  const fullyExited = await chainReader.call(stakingPool, 'isFullyExited()(bool)');
 
-  const poolActive = isActive.status === 0 && isActive.stdout.trim() === 'true';
-  const poolExited = fullyExited.status === 0 && fullyExited.stdout.trim() === 'true';
+  const poolActive = isActive.decoded?.[0] === true;
+  const poolExited = fullyExited.decoded?.[0] === true;
 
   const clBase = resolveClApiUrl(env);
   let beacon = { found: false, index: '', status: '', error: '' };
@@ -143,7 +123,9 @@ export async function runStatus(options = {}) {
   } else {
     logInfo(`Beacon:          not in head state (queried ${clBase})`);
   }
-  logInfo(`Pool isActive:   ${poolActive}  (factory activateStakingPool has ${poolActive ? 'been' : 'not been'} called)`);
+  logInfo(
+    `Pool isActive:   ${poolActive}  (factory activateStakingPool has ${poolActive ? 'been' : 'not been'} called)`,
+  );
   if (phase.phase === 'ready_to_activate' || phase.phase === 'pool_active') {
     logSuccess(phase.headline);
   } else {
@@ -157,147 +139,106 @@ export async function runStatus(options = {}) {
     return { active: false, phase: phase.phase, beacon };
   }
 
-  const totalAssets = runCast(['call', stakingPool, 'totalAssets()(uint256)', '-r', rpcUrl]);
-  const totalSupply = runCast(['call', stakingPool, 'totalSupply()(uint256)', '-r', rpcUrl]);
-  if (totalAssets.status === 0 && totalSupply.status === 0) {
-    const assetsEth = await castFromWei(stripScientificNotation(totalAssets.stdout));
-    const supplyEth = await castFromWei(stripScientificNotation(totalSupply.stdout));
-    console.log(`  Total assets (BERA):    ${assetsEth}`);
-    console.log(`  Total supply (stBERA):  ${supplyEth}`);
-  }
+  const totalAssets = await chainReader.call(stakingPool, 'totalAssets()(uint256)');
+  const totalSupply = await chainReader.call(stakingPool, 'totalSupply()(uint256)');
+  const assetsEth = formatWeiToDecimal(String(totalAssets.decoded[0]));
+  const supplyEth = formatWeiToDecimal(String(totalSupply.decoded[0]));
+  console.log(`  Total assets (BERA):    ${assetsEth}`);
+  console.log(`  Total supply (stBERA):  ${supplyEth}`);
   console.log('');
 
   logInfo('=== Checking Withdrawal Availability ===');
-  if (threshold.status === 0) logInfo(`Threshold Reached: ${threshold.stdout.trim()}`);
-  if (fullyExited.status === 0) logInfo(`Fully Exited: ${fullyExited.stdout.trim()}`);
+  logInfo(`Threshold Reached: ${threshold.decoded[0]}`);
+  logInfo(`Fully Exited: ${fullyExited.decoded[0]}`);
   console.log('');
 
   logInfo('=== Pool Telemetry ===');
-  await printWeiField('Buffered Assets', stakingPool, 'bufferedAssets()(uint256)', rpcUrl, 'BERA');
+  await printWeiField(chainReader, 'Buffered Assets', stakingPool, 'bufferedAssets()(uint256)', 'BERA');
   await printWeiField(
+    chainReader,
     'Min Effective Balance',
     stakingPool,
     'minEffectiveBalance()(uint256)',
-    rpcUrl,
     'BERA',
   );
 
   logInfo('=== WBERA Disposition ===');
   await printWeiField(
+    chainReader,
     'Available WBERA (operator-side liquidity)',
     smartOperator,
     'availableWBERABalance()(uint256)',
-    rpcUrl,
     'WBERA',
   );
   await printWeiField(
+    chainReader,
     'Rebaseable WBERA (in pool assets)',
     smartOperator,
     'rebaseableWberaAmount()(uint256)',
-    rpcUrl,
     'WBERA',
   );
-  await printFeeState(
-    'WBERA',
-    smartOperator,
-    'getEarnedWBERAFeeState()(uint256,uint256,uint256,uint96)',
-    rpcUrl,
-  );
+  await printFeeState(chainReader, 'WBERA', smartOperator, 'getEarnedWBERAFeeState()(uint256,uint256,uint256,uint96)');
 
-  await printLegacyBgt(smartOperator, rpcUrl);
+  await printLegacyBgt(chainReader, smartOperator);
 
   if (env.PRIVATE_KEY?.trim()) {
-    await printWalletHoldings(env, stakingPool, network, rpcUrl);
+    await printWalletHoldings(env, stakingPool, network, rpcUrl, chainReader);
   }
 
   return { active: true, phase: phase.phase, stakingPool, smartOperator, beacon };
 }
 
-async function printWeiField(label, target, signature, rpcUrl, unit) {
-  const result = runCast(['call', target, signature, '-r', rpcUrl]);
-  if (result.status !== 0) {
-    logWarn(`Could not get ${label}: ${result.stderr || result.stdout}`);
-    return;
+async function printWeiField(chainReader, label, target, signature, unit) {
+  try {
+    const result = await chainReader.call(target, signature);
+    const value = formatWeiToDecimal(String(result.decoded[0]));
+    logInfo(`${label}: ${value} ${unit}`);
+  } catch (error) {
+    logWarn(`Could not get ${label}: ${error.message}`);
   }
-  const value = await castFromWei(stripScientificNotation(result.stdout));
-  logInfo(`${label}: ${value} ${unit}`);
 }
 
-async function printFeeState(label, target, signature, rpcUrl) {
-  const result = runCast(['call', target, signature, '-r', rpcUrl]);
-  if (result.status !== 0) {
-    logWarn(`Could not get ${label} fee state: ${result.stderr || result.stdout}`);
-    return;
+async function printFeeState(chainReader, label, target, signature) {
+  try {
+    const result = await chainReader.call(target, signature);
+    const [current, charged, chargeable, feeBps] = result.decoded;
+    logInfo(`Total ${label} Balance: ${formatWeiToDecimal(String(current))} ${label}`);
+    logInfo(`${label} Already Charged Fees: ${formatWeiToDecimal(String(charged))} ${label}`);
+    logInfo(`${label} Chargeable (new earnings): ${formatWeiToDecimal(String(chargeable))} ${label}`);
+    const pct = Number(feeBps) / 100;
+    logInfo(`Protocol Fee: ${pct.toFixed(2)}%`);
+  } catch (error) {
+    logWarn(`Could not get ${label} fee state: ${error.message}`);
   }
-  const [current, charged, chargeable, feeBps] = parseCastTuple(result.stdout.trim());
-  logInfo(`Total ${label} Balance: ${await castFromWei(current)} ${label}`);
-  logInfo(`${label} Already Charged Fees: ${await castFromWei(charged)} ${label}`);
-  logInfo(`${label} Chargeable (new earnings): ${await castFromWei(chargeable)} ${label}`);
-  const pct = Number(feeBps) / 100;
-  logInfo(`Protocol Fee: ${pct.toFixed(2)}%`);
 }
 
-async function printLegacyBgt(smartOperator, rpcUrl) {
-  const unboosted = runCast([
-    'call',
-    smartOperator,
-    'unboostedBalance()(uint256)',
-    '-r',
-    rpcUrl,
-  ]);
-  const feeState = runCast([
-    'call',
+async function printLegacyBgt(chainReader, smartOperator) {
+  const unboosted = await chainReader.call(smartOperator, 'unboostedBalance()(uint256)');
+  const feeState = await chainReader.call(
     smartOperator,
     'getEarnedBGTFeeState()(uint256,uint256,uint256,uint96)',
-    '-r',
-    rpcUrl,
-  ]);
-  const unboostedNum = unboosted.status === 0 ? stripScientificNotation(unboosted.stdout) : '0';
-  let current = '0';
-  let chargeable = '0';
-  if (feeState.status === 0) {
-    [current, , chargeable] = parseCastTuple(feeState.stdout.trim());
-  }
+  );
+  const unboostedNum = stripScientificNotation(String(unboosted.decoded[0]));
+  const current = String(feeState.decoded[0]);
+  const chargeable = String(feeState.decoded[2]);
   if (unboostedNum === '0' && current === '0' && chargeable === '0') {
     return;
   }
   logInfo('=== Legacy BGT Disposition ===');
-  await printWeiField('Unboosted BGT', smartOperator, 'unboostedBalance()(uint256)', rpcUrl, 'BGT');
-  await printFeeState('BGT', smartOperator, 'getEarnedBGTFeeState()(uint256,uint256,uint256,uint96)', rpcUrl);
+  await printWeiField(chainReader, 'Unboosted BGT', smartOperator, 'unboostedBalance()(uint256)', 'BGT');
+  await printFeeState(chainReader, 'BGT', smartOperator, 'getEarnedBGTFeeState()(uint256,uint256,uint256,uint96)');
 }
 
-async function printWalletHoldings(env, stakingPool, network, rpcUrl) {
+async function printWalletHoldings(env, stakingPool, network, rpcUrl, chainReader) {
   console.log('');
   logInfo('=== Wallet Holdings (PRIVATE_KEY) ===');
-  const wallet = runCast(['wallet', 'address', '--private-key', env.PRIVATE_KEY.trim()]);
-  if (wallet.status !== 0) {
-    logWarn('Could not derive wallet address from PRIVATE_KEY');
-    return;
-  }
-  const walletAddr = wallet.stdout.trim();
+  const walletAddr = (await walletAddressFromPrivateKey(env.PRIVATE_KEY.trim())).toLowerCase();
   logInfo(`Address: ${walletAddr}`);
 
-  const shares = runCast([
-    'call',
-    stakingPool,
-    'balanceOf(address)(uint256)',
-    walletAddr,
-    '-r',
-    rpcUrl,
-  ]);
-  const sharesPretty =
-    shares.status === 0 ? await castFromWei(stripScientificNotation(shares.stdout)) : '0';
-  logInfo(`stBERA Shares: ${sharesPretty}`);
+  const shares = await chainReader.call(stakingPool, 'balanceOf(address)(uint256)', [walletAddr]);
+  logInfo(`stBERA Shares: ${formatWeiToDecimal(String(shares.decoded[0]))}`);
 
-  const withdrawalVault = getWithdrawalVault(network, env);
-  const nftCount = runCast([
-    'call',
-    withdrawalVault,
-    'balanceOf(address)(uint256)',
-    walletAddr,
-    '-r',
-    rpcUrl,
-  ]);
-  const count = nftCount.status === 0 ? stripScientificNotation(nftCount.stdout) : '0';
-  logInfo(`Withdrawal NFTs: ${count}`);
+  const withdrawalVault = await getWithdrawalVault(network, env, chainReader);
+  const nftCount = await chainReader.call(withdrawalVault, 'balanceOf(address)(uint256)', [walletAddr]);
+  logInfo(`Withdrawal NFTs: ${stripScientificNotation(String(nftCount.decoded[0]))}`);
 }

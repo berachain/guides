@@ -34,8 +34,7 @@ export const FORBIDDEN_SHELL_COMMANDS = [
   'bc',
   'python3',
   'curl',
-  'ethers',
-  'web3',
+  'cast',
 ];
 
 export const WITHDRAWAL_FEE_CANDIDATES_WEI = [

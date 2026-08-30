@@ -1,224 +1,57 @@
-import { MIN_ACTIVATION_BALANCE_GWEI, PROOF_MAX_AGE_SECONDS, PROOF_SLOT_LAG } from '../constants.mjs';
-import { resolveRpcUrl, resolveClApiUrl, getFactoryAddress, isLoopbackHttp } from '../config.mjs';
-import { BEACON_DEPOSIT_CONTRACT } from '../constants.mjs';
+import { resolveRpcUrl, getFactoryAddress } from '../config.mjs';
 import {
   assertValidatorPreflight,
   detectNetwork,
   getValidatorPubkey,
-  getValidatorIndex,
   predictPoolAddresses,
-  getWithdrawalVault,
 } from '../beacond.mjs';
-import { runCast, parseCastTuple, unwrapCastJson, parseCastBlockNumber } from '../cast.mjs';
-import { decodeActivationRevert } from '../revert-decoder.mjs';
-import {
-  assertProofSlotMatchesPinned,
-  deriveEip4788Timestamp,
-  extractProofFields,
-  fetchJson,
-  formatProofTuple,
-  formatValidatorDataTuple,
-  eip4788ElBlockNumber,
-  pinActivationSlot,
-  proofExpiryTimestamp,
-  isProofExpired,
-} from '../proofs.mjs';
-import { logInfo, logSuccess, logWarn, logError } from '../log.mjs';
-import { runTransaction } from '../tx-runner.mjs';
+import { createChainReader } from '../chain-reader.mjs';
+import { createSignerFromEnv } from '../signers.mjs';
+import { prepareActivationContext, runActivationTransaction } from '../activation.mjs';
 
 export async function runActivate(options) {
   const env = options.env ?? process.env;
+  const verbose = Boolean(options.verbose);
   assertValidatorPreflight(env);
   const network = detectNetwork(env);
   const rpcUrl = resolveRpcUrl(network, env);
-  const clBase = resolveClApiUrl(env);
   const factory = getFactoryAddress(network);
   const pubkey = getValidatorPubkey(env);
-  const withdrawalVault = getWithdrawalVault(network, env);
-
-  logInfo(`Network: ${network}`);
-  logInfo(`Validator pubkey: ${pubkey}`);
-  logInfo(`CL node API: ${clBase}`);
-  logInfo(`EL RPC: ${rpcUrl}`);
-  if (isLoopbackHttp(clBase) && !isLoopbackHttp(rpcUrl)) {
-    logWarn(
-      `CL is local but EL RPC is ${rpcUrl}. EIP-4788 reads the EL. Set EL_RPC_URL to this host's execution RPC.`,
-    );
-  }
-  console.log('');
-
-  const predicted = predictPoolAddresses(factory, rpcUrl, pubkey);
-  logInfo('Predicted contract addresses:');
-  console.log(`  StakingPool: ${predicted.stakingPool}`);
-  console.log('');
-
-  const code = runCast(['code', predicted.stakingPool, '-r', rpcUrl]);
-  if (code.status !== 0 || !code.stdout.trim() || code.stdout.trim() === '0x') {
-    throw new Error(
-      `Staking pool contract not found at ${predicted.stakingPool}. Deploy first.`,
-    );
-  }
-
-  const active = runCast([
-    'call',
-    predicted.stakingPool,
-    'isActive()(bool)',
-    '-r',
+  const chainReader = createChainReader(rpcUrl, options.fetchImpl);
+  const signer = createSignerFromEnv({
+    env,
     rpcUrl,
-  ]);
-  if (active.status === 0 && active.stdout.trim() === 'true') {
-    logSuccess('Pool is already activated — no action needed');
+    fetchImpl: options.fetchImpl,
+    signingPreference: options.signingPreference,
+  });
+  const predicted = await predictPoolAddresses(factory, rpcUrl, pubkey, chainReader);
+
+  const activationCtx = await prepareActivationContext({
+    env,
+    network,
+    rpcUrl,
+    factory,
+    pubkey,
+    predicted,
+    chainReader,
+    fetchImpl: options.fetchImpl,
+    now: options.now,
+    verbose,
+  });
+
+  if (activationCtx.skipped) {
     return { skipped: true };
   }
 
-  const validatorIndex = await getValidatorIndex(clBase, pubkey, options.fetchImpl);
-  if (!validatorIndex) {
-    throw new Error('Validator not yet registered on beacon chain');
-  }
-  logSuccess(`Validator registered on beacon chain (index: ${validatorIndex})`);
-
-  const head = await fetchJson(
-    `${clBase}/eth/v1/beacon/headers/head`,
-    'beacon head',
-    options.fetchImpl,
-  );
-  const clHead = head.data.header.message.slot;
-  const elLatestRaw = runCast(['block-number', '-r', rpcUrl], { env });
-  if (elLatestRaw.status !== 0) {
-    throw new Error(
-      `Failed to read EL block number from ${rpcUrl}: ${(elLatestRaw.stderr || elLatestRaw.stdout).trim()}`,
-    );
-  }
-  const elLatest = parseCastBlockNumber(elLatestRaw.stdout);
-  const pinnedSlot = pinActivationSlot(clHead, elLatest, PROOF_SLOT_LAG);
-  const elBlockNumber = eip4788ElBlockNumber(pinnedSlot);
-  logInfo(`CL head: ${clHead}`);
-  logInfo(`EL latest: ${elLatest.toString()}`);
-  logInfo(
-    `Pinned CL slot: ${pinnedSlot.toString()} (head minus lag ${PROOF_SLOT_LAG.toString()}; EIP-4788 uses EL block slot+1 = ${elBlockNumber.toString()})`,
-  );
-
-  const pubkeyProof = await fetchJson(
-    `${clBase}/bkit/v1/proof/validator_pubkey/${pinnedSlot}/${validatorIndex}`,
-    'validator_pubkey proof',
-    options.fetchImpl,
-  );
-  const credentialsProof = await fetchJson(
-    `${clBase}/bkit/v1/proof/validator_credentials/${pinnedSlot}/${validatorIndex}`,
-    'validator_credentials proof',
-    options.fetchImpl,
-  );
-  const balanceProof = await fetchJson(
-    `${clBase}/bkit/v1/proof/validator_balance/${pinnedSlot}/${validatorIndex}`,
-    'validator_balance proof',
-    options.fetchImpl,
-  );
-
-  for (const proof of [pubkeyProof, credentialsProof, balanceProof]) {
-    assertProofSlotMatchesPinned(proof, pinnedSlot);
-  }
-  logSuccess(`All proofs pinned to slot ${pinnedSlot}`);
-
-  logInfo(`Reading EIP-4788 timestamp from EL block ${elBlockNumber.toString()} via ${rpcUrl}...`);
-  const blockResult = runCast(['block', elBlockNumber.toString(), '--json', '-r', rpcUrl], {
-    env,
-  });
-  if (blockResult.status !== 0) {
-    const detail = (blockResult.stderr || blockResult.stdout).trim();
-    throw new Error(
-      `Failed to read EL block ${elBlockNumber.toString()} from ${rpcUrl}${detail ? `: ${detail}` : ''}`,
-    );
-  }
-  let blockJson;
-  try {
-    blockJson = unwrapCastJson(blockResult.stdout);
-  } catch (error) {
-    throw new Error(
-      `Failed to parse EL block ${elBlockNumber.toString()} from ${rpcUrl}: ${error.message}`,
-    );
-  }
-  const proofTimestamp = deriveEip4788Timestamp(pinnedSlot, blockJson);
-  logSuccess(`EIP-4788 timestamp: ${proofTimestamp}`);
-
-  const fields = extractProofFields(pubkeyProof, credentialsProof, balanceProof);
-  const expectedWc = `0x010000000000000000000000${withdrawalVault.slice(2).toLowerCase()}`;
-  if (fields.validatorWithdrawalCredentials.toLowerCase() !== expectedWc) {
-    throw new Error(
-      `Validator withdrawal credentials mismatch. Expected ${expectedWc}, got ${fields.validatorWithdrawalCredentials}`,
-    );
-  }
-
-  const balanceDec = BigInt(fields.validatorBalance);
-  if (balanceDec < MIN_ACTIVATION_BALANCE_GWEI) {
-    throw new Error(
-      `Validator balance too low for activation: ${balanceDec.toString()}`,
-    );
-  }
-
-  const validatorTuple = formatValidatorDataTuple(fields, validatorIndex);
-  const proofTuple = formatProofTuple(fields);
-
   const ctx = {
-    execute: options.execute,
+    execute: signer.mode === 'hot-key',
     env,
     rpcUrl,
     factory,
-    proofTimestamp,
-    nowSeconds: options.now ?? Math.floor(Date.now() / 1000),
-    validatorTuple,
-    proofTuple,
+    chainReader,
+    signer,
+    verbose,
   };
 
-  const expiry = proofExpiryTimestamp(proofTimestamp);
-  logWarn(
-    `Proof expiry: unix ${expiry} (${PROOF_MAX_AGE_SECONDS}s after timestamp ${proofTimestamp})`,
-  );
-
-  return runTransaction(ctx, {
-    label: 'activateStakingPool',
-    target: factory,
-    signature:
-      'activateStakingPool((bytes,bytes,uint64,uint64),(bytes32[],bytes32[],bytes32[],bytes32),uint64)',
-    decodePreflightError: decodeActivationRevert,
-    buildCalldataArgs: () => [ctx.validatorTuple, ctx.proofTuple, String(ctx.proofTimestamp)],
-    decodeDryRun: async () => {
-      logSuccess('Preflight OK — activateStakingPool would succeed at current head');
-    },
-    beforeEmit: () => {
-      if (isProofExpired(ctx.nowSeconds, ctx.proofTimestamp)) {
-        throw new Error(
-          `Proof window expired at unix ${expiry}. Re-run activate to regenerate proofs.`,
-        );
-      }
-    },
-    onExecuteSuccess: (_ctx, txHash) => {
-      if (txHash) logSuccess(`activateStakingPool broadcast: ${txHash}`);
-    },
-  });
-}
-
-export async function verifyOperatorMatch(factory, rpcUrl, pubkey) {
-  const coreRaw = runCast([
-    'call',
-    factory,
-    'getCoreContracts(bytes)((address,address,address,address))',
-    pubkey,
-    '-r',
-    rpcUrl,
-  ]);
-  if (coreRaw.status !== 0) return null;
-  const [smartOperator] = parseCastTuple(coreRaw.stdout.trim());
-  const beaconOp = runCast([
-    'call',
-    BEACON_DEPOSIT_CONTRACT,
-    'getOperator(bytes)(address)',
-    pubkey,
-    '-r',
-    rpcUrl,
-  ]);
-  if (beaconOp.status !== 0) return null;
-  return {
-    smartOperator: smartOperator.toLowerCase(),
-    beaconOperator: beaconOp.stdout.trim().toLowerCase(),
-  };
+  return runActivationTransaction(ctx, activationCtx);
 }

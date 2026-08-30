@@ -1,30 +1,40 @@
 import { WITHDRAWAL_FEE_CANDIDATES_WEI } from '../constants.mjs';
-import { runCast } from '../cast.mjs';
+import { ethCallRevertData } from '../chain-reader.mjs';
+import { createSignerFromEnv } from '../signers.mjs';
 import { logInfo, logSuccess } from '../log.mjs';
 import { resolveFromAddress, resolveOperatorPool } from '../pool-target.mjs';
 import { decodeWithdrawalRevert } from '../revert-decoder.mjs';
-import { runTransaction } from '../tx-runner.mjs';
+import { runTransaction } from '../tx-pipeline.mjs';
 import { beraToGwei, beraToWei } from '../units.mjs';
 
 export async function runUnstake(options) {
   const env = options.env ?? process.env;
+  const verbose = Boolean(options.verbose);
   const mode = resolveUnstakeMode(options);
-  const pool = resolveOperatorPool(options, env);
-  const from = resolveFromAddress(options, env);
+  const pool = await resolveOperatorPool(options, env);
+  const from = await resolveFromAddress(options, env);
+  const signer = createSignerFromEnv({
+    env,
+    rpcUrl: pool.rpcUrl,
+    fetchImpl: options.fetchImpl,
+    signingPreference: options.signingPreference,
+  });
 
-  assertPoolActive(pool.stakingPool, pool.rpcUrl, env);
+  await assertPoolActive(pool.stakingPool, pool.chainReader);
 
-  logInfo(`Staking pool: ${pool.stakingPool}`);
-  logInfo(`Withdrawal vault: ${pool.withdrawalVault}`);
-  logInfo(`From (stBERA holder): ${from}`);
+  if (verbose) {
+    logInfo(`Staking pool: ${pool.stakingPool}`);
+    logInfo(`Withdrawal vault: ${pool.withdrawalVault}`);
+    logInfo(`From (stBERA holder): ${from}`);
+  }
 
   if (mode === 'finalize') {
-    return finalizeRequest(options, pool, from, env);
+    return finalizeRequest(options, pool, from, env, signer, verbose);
   }
   if (mode === 'assets') {
-    return requestByAssets(options, pool, from, env);
+    return requestByAssets(options, pool, from, env, signer, verbose);
   }
-  return requestByShares(options, pool, from, env);
+  return requestByShares(options, pool, from, env, signer, verbose);
 }
 
 export function resolveUnstakeMode(options) {
@@ -44,28 +54,33 @@ function hasValue(value) {
   return value !== undefined && value !== null && String(value).trim() !== '';
 }
 
-function assertPoolActive(stakingPool, rpcUrl, env) {
-  const result = runCast(['call', stakingPool, 'isActive()(bool)', '-r', rpcUrl], { env });
-  if (result.status !== 0 || result.stdout.trim() !== 'true') {
+async function assertPoolActive(stakingPool, chainReader) {
+  const result = await chainReader.call(stakingPool, 'isActive()(bool)');
+  if (result.decoded?.[0] !== true) {
     throw new Error('Pool is not active. Cannot request withdrawal.');
   }
 }
 
-async function finalizeRequest(options, pool, from, env) {
+async function finalizeRequest(options, pool, from, env, signer, verbose) {
   const requestId = String(options.finalize).trim();
   if (!/^[0-9]+$/.test(requestId)) {
     throw new Error('--finalize must be a request id (uint256)');
   }
 
-  logInfo(`Finalize withdrawal request: ${requestId}`);
+  if (verbose) {
+    logInfo(`Finalize withdrawal request: ${requestId}`);
+  }
 
   const ctx = {
-    execute: options.execute,
+    execute: signer.mode === 'hot-key',
     env,
     rpcUrl: pool.rpcUrl,
     from,
     withdrawalVault: pool.withdrawalVault,
     requestId,
+    chainReader: pool.chainReader,
+    signer,
+    verbose,
   };
 
   return runTransaction(ctx, {
@@ -75,28 +90,32 @@ async function finalizeRequest(options, pool, from, env) {
     buildCalldataArgs: () => [ctx.requestId],
     decodePreflightError: decodeWithdrawalRevert,
     decodeDryRun: async () => {
-      logSuccess(`Preflight OK — finalizeWithdrawalRequest(${ctx.requestId})`);
+      if (verbose) {
+        logSuccess(`Preflight OK — finalizeWithdrawalRequest(${ctx.requestId})`);
+      }
     },
   });
 }
 
-async function requestByAssets(options, pool, from, env) {
+async function requestByAssets(options, pool, from, env, signer, verbose) {
   const { decimal, gwei } = beraToGwei(options.amount, '--amount');
-  const feeWei = resolveFee({
+  const feeWei = await resolveFee({
     options,
-    env,
     from,
     vault: pool.withdrawalVault,
     rpcUrl: pool.rpcUrl,
+    chainReader: pool.chainReader,
     signature: 'requestWithdrawal(bytes,uint64,uint256)(uint256)',
     argsBeforeFee: [pool.pubkey, gwei],
   });
 
-  logInfo(`Withdraw: ${decimal} BERA (${gwei} gwei)`);
-  logInfo(`EIP-7002 max fee: ${feeWei} wei`);
+  if (verbose) {
+    logInfo(`Withdraw: ${decimal} BERA (${gwei} gwei)`);
+    logInfo(`EIP-7002 max fee: ${feeWei} wei`);
+  }
 
   const ctx = {
-    execute: options.execute,
+    execute: signer.mode === 'hot-key',
     env,
     rpcUrl: pool.rpcUrl,
     from,
@@ -104,6 +123,9 @@ async function requestByAssets(options, pool, from, env) {
     pubkey: pool.pubkey,
     gwei,
     feeWei,
+    chainReader: pool.chainReader,
+    signer,
+    verbose,
   };
 
   return runTransaction(ctx, {
@@ -114,34 +136,40 @@ async function requestByAssets(options, pool, from, env) {
     buildCalldataArgs: () => [ctx.pubkey, ctx.gwei, ctx.feeWei],
     decodePreflightError: decodeWithdrawalRevert,
     decodeDryRun: async (_ctx, dryRun) => {
-      const requestId = dryRun.stdout.trim();
-      logSuccess(
-        `Preflight OK — requestWithdrawal creates NFT${requestId ? ` (preview id ${requestId})` : ''}`,
-      );
+      if (verbose) {
+        const requestId = dryRun.decoded?.[0]?.toString?.() ?? '';
+        logSuccess(
+          `Preflight OK — requestWithdrawal creates NFT${requestId ? ` (preview id ${requestId})` : ''}`,
+        );
+      }
     },
     beforeEmit: () => {
-      logInfo('After the cooldown, finalize with: node pool-cli.mjs unstake --finalize <requestId>');
+      if (verbose) {
+        logInfo('After the cooldown, finalize with: node pool-cli.mjs unstake --finalize <requestId>');
+      }
     },
   });
 }
 
-async function requestByShares(options, pool, from, env) {
+async function requestByShares(options, pool, from, env, signer, verbose) {
   const { decimal, wei } = beraToWei(options.shares, '--shares');
-  const feeWei = resolveFee({
+  const feeWei = await resolveFee({
     options,
-    env,
     from,
     vault: pool.withdrawalVault,
     rpcUrl: pool.rpcUrl,
+    chainReader: pool.chainReader,
     signature: 'requestRedeem(bytes,uint256,uint256)(uint256)',
     argsBeforeFee: [pool.pubkey, wei],
   });
 
-  logInfo(`Redeem: ${decimal} stBERA (${wei} wei)`);
-  logInfo(`EIP-7002 max fee: ${feeWei} wei`);
+  if (verbose) {
+    logInfo(`Redeem: ${decimal} stBERA (${wei} wei)`);
+    logInfo(`EIP-7002 max fee: ${feeWei} wei`);
+  }
 
   const ctx = {
-    execute: options.execute,
+    execute: signer.mode === 'hot-key',
     env,
     rpcUrl: pool.rpcUrl,
     from,
@@ -149,6 +177,9 @@ async function requestByShares(options, pool, from, env) {
     pubkey: pool.pubkey,
     sharesWei: wei,
     feeWei,
+    chainReader: pool.chainReader,
+    signer,
+    verbose,
   };
 
   return runTransaction(ctx, {
@@ -159,47 +190,44 @@ async function requestByShares(options, pool, from, env) {
     buildCalldataArgs: () => [ctx.pubkey, ctx.sharesWei, ctx.feeWei],
     decodePreflightError: decodeWithdrawalRevert,
     decodeDryRun: async (_ctx, dryRun) => {
-      const requestId = dryRun.stdout.trim();
-      logSuccess(
-        `Preflight OK — requestRedeem creates NFT${requestId ? ` (preview id ${requestId})` : ''}`,
-      );
+      if (verbose) {
+        const requestId = dryRun.decoded?.[0]?.toString?.() ?? '';
+        logSuccess(
+          `Preflight OK — requestRedeem creates NFT${requestId ? ` (preview id ${requestId})` : ''}`,
+        );
+      }
     },
     beforeEmit: () => {
-      logInfo('After the cooldown, finalize with: node pool-cli.mjs unstake --finalize <requestId>');
+      if (verbose) {
+        logInfo('After the cooldown, finalize with: node pool-cli.mjs unstake --finalize <requestId>');
+      }
     },
   });
 }
 
-function resolveFee({ options, env, from, vault, rpcUrl, signature, argsBeforeFee }) {
+async function resolveFee({ options, from, vault, rpcUrl, chainReader, signature, argsBeforeFee }) {
   if (hasValue(options.maxFee)) {
     return beraToWei(options.maxFee, '--max-fee').wei;
   }
-  return probeWithdrawalFee({ env, from, vault, rpcUrl, signature, argsBeforeFee });
+  return probeWithdrawalFee({ from, vault, rpcUrl, chainReader, signature, argsBeforeFee });
 }
 
-export function probeWithdrawalFee({ env, from, vault, rpcUrl, signature, argsBeforeFee }) {
+export async function probeWithdrawalFee({ from, vault, rpcUrl, chainReader, signature, argsBeforeFee }) {
   let lastError = '';
   for (const fee of WITHDRAWAL_FEE_CANDIDATES_WEI) {
-    const result = runCast(
-      [
-        'call',
-        vault,
-        signature,
-        ...argsBeforeFee,
-        fee,
-        '-r',
-        rpcUrl,
-        '--from',
-        from,
-        '--value',
-        fee,
-      ],
-      { env },
+    const args = [...argsBeforeFee, fee];
+    const result = await ethCallRevertData(
+      rpcUrl,
+      vault,
+      signature,
+      args,
+      { from, value: fee },
+      chainReader.fetchImpl,
     );
-    if (result.status === 0) {
+    if (result.ok) {
       return fee;
     }
-    lastError = (result.stderr || result.stdout).trim();
+    lastError = (result.message || '').trim();
   }
   throw new Error(
     decodeWithdrawalRevert(lastError) ||

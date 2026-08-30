@@ -1,0 +1,12 @@
+Cold-signing install emits exactly three cast send surfaces:
+
+1. deployStakingPoolContracts — unavoidable on-chain deploy + 10,000 BERA deposit
+cast send 0x24b8223864d3936F56e5a24C4245ae7620471D4C deployStakingPoolContracts(bytes,bytes,bytes,address,address) 0xpubkey 0xcredentials 0xsig 0xoperator 0xshares --legacy -r http://127.0.0.1:8545 --ledger --value 10000.0ether
+
+2. activateStakingPool — requires fresh CL proofs; cannot merge with deploy
+cast send 0x24b8223864d3936F56e5a24C4245ae7620471D4C activateStakingPool((bytes,bytes,uint64,uint64),(bytes32[],bytes32[],bytes32[],bytes32),uint64) (0xpubkey,0xcredentials,10000000000000,36) ([0x01],[0x02],[0x03],0xleaf) 1700000000 --legacy -r http://127.0.0.1:8545 --ledger
+
+3. submit — additional stake when funding formula > 0; skipped when stake rounds to 0
+cast send 0xstakingpool submit(address) 0xshares --legacy -r http://127.0.0.1:8545 --ledger --value 100.0ether
+
+Full cold-signing integration (anvil + executed cast send) is covered by test/vc-drivers/run-vc-1.mjs pattern and TP-4 in test plan.
