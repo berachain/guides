@@ -3,9 +3,17 @@ import { FORBIDDEN_SHELL_COMMANDS } from './constants.mjs';
 
 const REQUIRED_TOOLS = [
   { name: 'node', install: 'Install Node.js 18+ (22 recommended).' },
-  { name: 'cast', install: 'Install Foundry: https://book.getfoundry.sh/' },
-  { name: 'beacond', install: 'Install beacond or set BEACOND_BIN.' },
 ];
+
+const BEACOND_TOOL = { name: 'beacond', install: 'Install beacond or set BEACOND_BIN.' };
+
+function requiredToolsForLocality(env, locality) {
+  const resolved = locality ?? (env.BEACOND_HOME?.trim() ? 'local' : 'remote');
+  if (resolved === 'remote') {
+    return REQUIRED_TOOLS;
+  }
+  return [...REQUIRED_TOOLS, BEACOND_TOOL];
+}
 
 export function findExecutable(name, env = process.env) {
   if (name === 'beacond') {
@@ -30,9 +38,9 @@ export function findExecutable(name, env = process.env) {
   return which.status === 0 ? which.stdout.trim() : '';
 }
 
-export function checkDependencies(env = process.env) {
+export function checkDependencies(env = process.env, { locality } = {}) {
   const missing = [];
-  for (const tool of REQUIRED_TOOLS) {
+  for (const tool of requiredToolsForLocality(env, locality)) {
     const resolved = findExecutable(tool.name, env);
     if (!resolved) {
       missing.push({ ...tool, resolved: '' });

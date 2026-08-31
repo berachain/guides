@@ -1,21 +1,15 @@
 import { resolveRpcUrl, getFactoryAddress } from './config.mjs';
-import {
-  assertValidatorPreflight,
-  detectNetwork,
-  getCoreContracts,
-  getValidatorPubkey,
-  getWithdrawalVault,
-} from './beacond.mjs';
-import { runCast } from './cast.mjs';
+import { getCoreContracts, getWithdrawalVault } from './beacond.mjs';
+import { createChainReader, walletAddressFromPrivateKey } from './chain-reader.mjs';
+import { resolveStandaloneIdentity } from './identity.mjs';
 import { normalizeAddress } from './units.mjs';
 
-export function resolveOperatorPool(options = {}, env = process.env) {
-  assertValidatorPreflight(env);
-  const network = detectNetwork(env);
+export async function resolveOperatorPool(options = {}, env = process.env) {
+  const { network, pubkey } = resolveStandaloneIdentity(env, options);
   const rpcUrl = resolveRpcUrl(network, env);
   const factory = getFactoryAddress(network);
-  const pubkey = getValidatorPubkey(env);
-  const withdrawalVault = getWithdrawalVault(network, env);
+  const chainReader = createChainReader(rpcUrl, options.fetchImpl);
+  const withdrawalVault = await getWithdrawalVault(network, env, chainReader);
 
   let stakingPool = '';
   if (options.stakingPool) {
@@ -24,13 +18,21 @@ export function resolveOperatorPool(options = {}, env = process.env) {
       throw new Error('--staking-pool must be a valid EVM address');
     }
   } else {
-    stakingPool = getCoreContracts(factory, rpcUrl, pubkey).stakingPool;
+    stakingPool = (await getCoreContracts(factory, rpcUrl, pubkey, chainReader)).stakingPool;
   }
 
-  return { network, rpcUrl, factory, pubkey, withdrawalVault, stakingPool };
+  return {
+    network,
+    rpcUrl,
+    factory,
+    pubkey,
+    withdrawalVault,
+    stakingPool,
+    chainReader,
+  };
 }
 
-export function resolveFromAddress(options = {}, env = process.env) {
+export async function resolveFromAddress(options = {}, env = process.env) {
   const explicit = options.from || options.receiver;
   if (explicit) {
     const address = normalizeAddress(explicit);
@@ -45,10 +47,5 @@ export function resolveFromAddress(options = {}, env = process.env) {
       'Pass --from (the address that holds BERA / stBERA), or set PRIVATE_KEY to derive it',
     );
   }
-  const result = runCast(['wallet', 'address', '--private-key', privateKey], { env });
-  const address = normalizeAddress(result.stdout.trim());
-  if (result.status !== 0 || !address) {
-    throw new Error('Could not derive --from from PRIVATE_KEY');
-  }
-  return address;
+  return (await walletAddressFromPrivateKey(privateKey)).toLowerCase();
 }

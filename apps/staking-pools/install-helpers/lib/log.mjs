@@ -13,3 +13,7 @@ export function logSuccess(message) {
 export function logWarn(message) {
   console.log(`[warn] ${message}`);
 }
+
+export function logMilestone(message) {
+  console.log(message);
+}

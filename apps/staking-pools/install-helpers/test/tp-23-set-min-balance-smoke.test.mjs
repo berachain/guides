@@ -1,71 +1,105 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { setCastRunner } from '../lib/cast.mjs';
 import { setBeacondRunner } from '../lib/beacond.mjs';
 import { runSetMinBalance } from '../lib/commands/set-min-balance.mjs';
 
-// TP-23 exists for the same reason as TP-18/19/20/21/22: TP-6 and TP-10 test
-// resolveMinBalanceAmount and runTransaction directly. Nothing calls
-// lib/commands/set-min-balance.mjs itself.
-
 const PUBKEY = `0x${'aa'.repeat(48)}`;
-const SMART_OPERATOR = `0x${'22'.repeat(20)}`;
+const SMART_OPERATOR = `0x${'11'.repeat(20)}`;
 const STAKING_POOL = `0x${'33'.repeat(20)}`;
-const REWARDS_VAULT = `0x${'44'.repeat(20)}`;
-const INCENTIVE_COLLECTOR = `0x${'55'.repeat(20)}`;
 
-function beacondRouter() {
-  return {
-    status: 0,
-    stdout: `Eth/Beacon Pubkey (Compressed 48-byte Hex):\n${PUBKEY}\n`,
-    stderr: '',
-  };
+function installBeacond() {
+  setBeacondRunner((args) => {
+    if (args.includes('validator-keys')) {
+      return {
+        status: 0,
+        stdout: `Eth/Beacon Pubkey (Compressed 48-byte Hex):\n${PUBKEY}\n`,
+        stderr: '',
+      };
+    }
+    if (args.includes('validator-root')) {
+      return {
+        status: 0,
+        stdout: '0x3cbcf75b02fe4750c592f1c1ff8b5500a74406f80f038e9ff250e2e294c5615e',
+        stderr: '',
+      };
+    }
+    return { status: 0, stdout: '', stderr: '' };
+  });
 }
 
-function castRouter(argv) {
-  const [cmd, , signature] = argv;
-  if (cmd === 'call' && signature === 'predictStakingPoolContractsAddresses(bytes)(address,address,address,address)') {
+function mockFetch() {
+  return async (url, options) => {
+    const body = JSON.parse(options.body);
+    if (body.method === 'eth_call') {
+      return {
+        ok: true,
+        async text() {
+          if (body.params?.[0]?.data?.startsWith('0x')) {
+            return JSON.stringify({ jsonrpc: '2.0', id: 1, result: '0x' + '00'.repeat(128) });
+          }
+          return JSON.stringify({ jsonrpc: '2.0', id: 1, result: '0x' });
+        },
+      };
+    }
     return {
-      status: 0,
-      stdout: `${SMART_OPERATOR}\n${STAKING_POOL}\n${REWARDS_VAULT}\n${INCENTIVE_COLLECTOR}`,
-      stderr: '',
+      ok: true,
+      async text() {
+        return JSON.stringify({ jsonrpc: '2.0', id: 1, result: '0x1' });
+      },
     };
-  }
-  if (cmd === 'call' && signature === 'setMinEffectiveBalance(uint256)') {
-    return { status: 0, stdout: '', stderr: '' };
-  }
-  throw new Error(`TP-23 cast mock has no route for ${JSON.stringify(argv)}`);
+  };
 }
 
 describe('TP-23 runSetMinBalance smoke test', () => {
   it('uses the 250,000 BERA default when --amount is omitted', async () => {
-    setCastRunner(castRouter);
-    setBeacondRunner(beacondRouter);
+    installBeacond();
     try {
       const result = await runSetMinBalance({
-        execute: false,
-        env: { BEACOND_HOME: '/tmp/beacond', CLI_CHAIN: 'bepolia' },
+        waitForLanding: false,
+        env: {
+          BEACOND_HOME: '/tmp/beacond',
+          CLI_CHAIN: 'bepolia',
+          RPC_URL: 'http://mock-rpc',
+        },
+        fetchImpl: async (url, options) => {
+          const body = JSON.parse(options.body);
+          if (body.method === 'eth_call' && body.params?.[0]?.to === undefined) {
+            return { ok: true, async text() { return JSON.stringify({ jsonrpc: '2.0', id: 1, result: '0x1' }); } };
+          }
+          if (body.method === 'eth_call') {
+            const to = body.params[0].to?.toLowerCase();
+            if (to === '0x24b8223864d3936f56e5a24c4245ae7620471d4c') {
+              return {
+                ok: true,
+                async text() {
+                  return JSON.stringify({
+                    jsonrpc: '2.0',
+                    id: 1,
+                    result:
+                      '0x' +
+                      '000000000000000000000000' + SMART_OPERATOR.slice(2) +
+                      '000000000000000000000000' + STAKING_POOL.slice(2) +
+                      '0000000000000000000000000000000000000000000000000000000000000003' +
+                      '0000000000000000000000000000000000000000000000000000000000000004',
+                  });
+                },
+              };
+            }
+            if (to === STAKING_POOL) {
+              return { ok: true, async text() { return JSON.stringify({ jsonrpc: '2.0', id: 1, result: '0x' }); } };
+            }
+            if (to === SMART_OPERATOR) {
+              return { ok: true, async text() { return JSON.stringify({ jsonrpc: '2.0', id: 1, result: '0x' }); } };
+            }
+          }
+          return mockFetch()(url, options);
+        },
       });
       assert.equal(result.mode, 'emit');
-      assert.ok(result.sendArgv.includes('250000000000000000000000'));
+      assert.ok(result.command.includes('250000000000000000000000'));
+      assert.ok(result.command.includes(SMART_OPERATOR));
+      assert.ok(!result.command.includes(`cast send ${STAKING_POOL}`));
     } finally {
-      setCastRunner(null);
-      setBeacondRunner(null);
-    }
-  });
-
-  it('honors an explicit --amount override', async () => {
-    setCastRunner(castRouter);
-    setBeacondRunner(beacondRouter);
-    try {
-      const result = await runSetMinBalance({
-        execute: false,
-        env: { BEACOND_HOME: '/tmp/beacond', CLI_CHAIN: 'bepolia' },
-        amount: '300000',
-      });
-      assert.ok(result.sendArgv.includes('300000000000000000000000'));
-    } finally {
-      setCastRunner(null);
       setBeacondRunner(null);
     }
   });

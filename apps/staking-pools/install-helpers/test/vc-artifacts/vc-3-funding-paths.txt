@@ -1,0 +1,9 @@
+VC-3 funding adequacy (formula + confirmation gating):
+
+(a) balance 9999999999999999999999 wei — below 10,000 BERA deposit
+    additional stake formula => 0 BERA
+    installer stops at confirmation; no deploy calldata emitted
+
+(b) balance 10001000000000000000000 wei — covers deposit but not additional stake
+    additional stake formula => 0 BERA
+    installer proceeds through activate; does not call submit

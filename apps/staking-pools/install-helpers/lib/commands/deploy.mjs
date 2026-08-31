@@ -7,14 +7,13 @@ import {
   getWithdrawalVault,
   predictPoolAddresses,
 } from '../beacond.mjs';
+import { createChainReader } from '../chain-reader.mjs';
+import { createSignerFromEnv } from '../signers.mjs';
 import { logInfo, logSuccess } from '../log.mjs';
 import { decodeDeployRevert } from '../revert-decoder.mjs';
-import { runTransaction } from '../tx-runner.mjs';
-
-function normalizeAddress(address) {
-  const lower = address.trim().toLowerCase();
-  return /^0x[0-9a-f]{40}$/.test(lower) ? lower : '';
-}
+import { awaitConfirmedWrite } from '../confirmed-write.mjs';
+import { runTransaction } from '../tx-pipeline.mjs';
+import { normalizeAddress } from '../units.mjs';
 
 export async function runDeploy(options) {
   const operator = normalizeAddress(options.operator);
@@ -23,25 +22,39 @@ export async function runDeploy(options) {
   if (!sharesRecipient) throw new Error('--sr must be a valid EVM address');
 
   const env = options.env ?? process.env;
-  assertValidatorPreflight(env);
-  const network = detectNetwork(env);
+  const verbose = Boolean(options.verbose);
+  if (!options.deposit) {
+    assertValidatorPreflight(env);
+  }
+  const network = options.network ?? detectNetwork(env);
   const rpcUrl = resolveRpcUrl(network, env);
   const factory = getFactoryAddress(network);
-  const withdrawalVault = getWithdrawalVault(network, env);
-  const deposit = createValidatorDeposit(withdrawalVault, env);
+  const chainReader = createChainReader(rpcUrl, options.fetchImpl);
+  const withdrawalVault = await getWithdrawalVault(network, env, chainReader);
+  const deposit = options.deposit ?? createValidatorDeposit(withdrawalVault, env);
+  const signer = options.signer ?? createSignerFromEnv({
+    env,
+    rpcUrl,
+    fetchImpl: options.fetchImpl,
+    signingPreference: options.signingPreference,
+  });
 
-  logSuccess('Deposit validation: OK');
+  if (verbose) {
+    logSuccess('Deposit validation: OK');
+  }
 
-  const predicted = predictPoolAddresses(factory, rpcUrl, deposit.pubkey);
-  logInfo('Predicted contract addresses:');
-  console.log(`  SmartOperator:          ${predicted.smartOperator}`);
-  console.log(`  StakingPool:            ${predicted.stakingPool}`);
-  console.log(`  StakingRewardsVault:    ${predicted.stakingRewardsVault}`);
-  console.log(`  IncentiveCollector:     ${predicted.incentiveCollector}`);
-  console.log('');
+  const predicted = await predictPoolAddresses(factory, rpcUrl, deposit.pubkey, chainReader);
+  if (verbose) {
+    logInfo('Predicted contract addresses:');
+    console.log(`  SmartOperator:          ${predicted.smartOperator}`);
+    console.log(`  StakingPool:            ${predicted.stakingPool}`);
+    console.log(`  StakingRewardsVault:    ${predicted.stakingRewardsVault}`);
+    console.log(`  IncentiveCollector:     ${predicted.incentiveCollector}`);
+    console.log('');
+  }
 
   const ctx = {
-    execute: options.execute,
+    execute: signer.mode === 'hot-key',
     env,
     rpcUrl,
     network,
@@ -50,9 +63,15 @@ export async function runDeploy(options) {
     operator,
     sharesRecipient,
     predicted,
+    chainReader,
+    signer,
+    verbose,
+    receiptsPath: options.receiptsPath,
+    pollIntervalMs: options.pollIntervalMs,
+    pollTimeoutMs: options.pollTimeoutMs,
   };
 
-  return runTransaction(ctx, {
+  const descriptor = {
     label: 'deployStakingPoolContracts',
     target: factory,
     signature:
@@ -67,15 +86,37 @@ export async function runDeploy(options) {
       ctx.sharesRecipient,
     ],
     decodeDryRun: async () => {
-      logSuccess('Preflight OK');
-      logInfo('Predicted pool contracts (predictStakingPoolContractsAddresses):');
-      console.log(`  smartOperator:       ${ctx.predicted.smartOperator}`);
-      console.log(`  stakingPool:         ${ctx.predicted.stakingPool}`);
-      console.log(
-        `  stakingRewardsVault: ${ctx.predicted.stakingRewardsVault}`,
-      );
-      console.log(`  incentiveCollector:  ${ctx.predicted.incentiveCollector}`);
-      logInfo(`Value transfer authorized: ${DEPLOY_VALUE} initial deposit`);
+      if (verbose) {
+        logSuccess('Preflight OK');
+        logInfo('Predicted pool contracts (predictStakingPoolContractsAddresses):');
+        console.log(`  smartOperator:       ${ctx.predicted.smartOperator}`);
+        console.log(`  stakingPool:         ${ctx.predicted.stakingPool}`);
+        console.log(
+          `  stakingRewardsVault: ${ctx.predicted.stakingRewardsVault}`,
+        );
+        console.log(`  incentiveCollector:  ${ctx.predicted.incentiveCollector}`);
+        logInfo(`Value transfer authorized: ${DEPLOY_VALUE} initial deposit`);
+      }
     },
+  };
+
+  return awaitConfirmedWrite({
+    ctx,
+    runTx: () => runTransaction(ctx, descriptor),
+    landedFn: async () => {
+      const code = await ctx.chainReader.getCode(ctx.predicted.stakingPool);
+      return Boolean(code && code !== '0x');
+    },
+    action: 'deploy',
+    addresses: {
+      pool: ctx.predicted.stakingPool,
+      operator: ctx.operator,
+      sharesRecipient: ctx.sharesRecipient,
+      smartOperator: ctx.predicted.smartOperator,
+      factory,
+    },
+    amount: '10000',
+    scanAddress: factory,
+    waitForLanding: options.waitForLanding !== false,
   });
 }

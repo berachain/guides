@@ -2,61 +2,94 @@
 
 import { fileURLToPath } from 'node:url';
 import { checkDependencies, formatMissingDependency } from './lib/deps.mjs';
+import { resolveValidatorLocality } from './lib/interview.mjs';
 import { logError } from './lib/log.mjs';
 import { runDeploy } from './lib/commands/deploy.mjs';
 import { runActivate } from './lib/commands/activate.mjs';
+import { runInstall } from './lib/commands/install.mjs';
 import { runStatus } from './lib/commands/status.mjs';
 import { runSetMinBalance } from './lib/commands/set-min-balance.mjs';
 import { runStake } from './lib/commands/stake.mjs';
 import { runUnstake } from './lib/commands/unstake.mjs';
 
 function printRootHelp() {
-  console.log(`pool-cli — staking pool operator helper (Node stdlib + cast + beacond)
+  console.log(`pool-cli — staking pool operator helper (Node stdlib + vendored ethers + beacond)
 
-Run on the validator host with BEACOND_HOME set. Dry-run by default; prints copy-paste
-cast send for ledger signing on another machine. Optional --execute requires PRIVATE_KEY.
+Run on the validator host with BEACOND_HOME set. Hot-key mode (PRIVATE_KEY set) signs and
+broadcasts. Cold-signing mode prints cast send commands for a separate signing machine.
+
+status/activate/set-min-balance/stake/unstake also resolve identity from an \`install\`-written
+scenario file when present (working directory, or --scenario PATH) — no BEACOND_HOME needed for
+those five. --chain/--pubkey (or CLI_CHAIN/VALIDATOR_PUBKEY) take precedence over the scenario
+file when supplied. deploy still requires a local validator or a full --deposit.
 
 Usage:
   node pool-cli.mjs <command> [options]
 
 Commands:
-  deploy          Deploy staking pool contracts (dry-run + emit default)
-  activate        Activate a deployed pool with CL proofs (dry-run + emit default)
+  install         Hands-off installer (deploy → wait → activate → stake-if-funded)
+  deploy          Deploy staking pool contracts
+  activate        Activate a deployed pool with CL proofs
   status          EL operator, beacon inclusion, and pool isActive
-  set-min-balance Optional min effective balance update (dry-run + emit default)
-  stake           Deposit BERA, mint stBERA to --receiver (dry-run + emit default)
-  unstake         Request or finalize withdrawal (dry-run + emit default)
+  set-min-balance Optional min effective balance update
+  stake           Deposit BERA, mint stBERA to --receiver
+  unstake         Request or finalize withdrawal
 
 Global options:
-  --execute       Broadcast on validator (requires PRIVATE_KEY; hot key only)
+  --verbose       Per-fact detail (tx hashes, RPC calls, pinned slots)
   --help          Show command help
+
+Install:
+  [--funding-address 0x...] [--operator 0x...] [--shares-recipient 0x...]
+  [--signing-preference ledger|key] [--chain mainnet|bepolia] [--pubkey 0x...]
+  [--deposit-output FILE] [--scenario FILE]
+
+Deploy:
+  --op 0xOPERATOR --sr 0xSHARES_RECIPIENT
 
 Stake:
   --amount BERA --receiver 0x... [--from 0x...] [--staking-pool 0x...]
 
 Unstake:
-  --amount BERA | --shares stBERA | --finalize REQUEST_ID
+  --amount BERA | --shares stBERA | --finalize [REQUEST_ID]
+  --finalize with no id finalizes every ready request for --from in one
+  batch transaction; --finalize <id> finalizes just that one request.
   --from 0x...   stBERA holder (or --receiver as alias; or PRIVATE_KEY)
   [--staking-pool 0x...] [--max-fee BERA]
 
 Environment:
   BEACOND_HOME (required), BEACOND_BIN, CLI_CHAIN, RPC_URL, EL_RPC_URL
   CL_NODE_API_URL or NODE_API_ADDRESS (default http://127.0.0.1:3500)
-  PRIVATE_KEY (required for --execute on validator)
+  PRIVATE_KEY (hot-key mode on validator host; unset for cold-signing)
 `);
 }
 
 function parseGlobal(args) {
-  const execute = args.includes('--execute');
+  const verbose = args.includes('--verbose');
   const help = args.includes('--help') || args.includes('-h');
-  const filtered = args.filter((arg) => arg !== '--execute');
-  return { execute, help, args: filtered };
+  const filtered = args.filter((arg) => arg !== '--verbose');
+  return { verbose, help, args: filtered };
 }
 
 function parseFlagValue(args, flag) {
   const index = args.indexOf(flag);
   if (index === -1) return undefined;
   return args[index + 1];
+}
+
+/**
+ * --finalize is special: present with no following token, or immediately
+ * followed by another recognized flag (e.g. `--from`), means "finalize
+ * every ready request" (empty-string sentinel), not "consume that flag as
+ * --finalize's value." A following token that isn't a recognized flag is
+ * taken as the request id, same as any other flag value.
+ */
+function parseFinalizeFlag(args) {
+  const index = args.indexOf('--finalize');
+  if (index === -1) return undefined;
+  const next = args[index + 1];
+  if (next === undefined || next.startsWith('--')) return '';
+  return next;
 }
 
 function parseDeployArgs(args) {
@@ -66,21 +99,54 @@ function parseDeployArgs(args) {
   };
 }
 
+function parseInstallArgs(args) {
+  return {
+    fundingAddress: parseFlagValue(args, '--funding-address'),
+    operator: parseFlagValue(args, '--operator'),
+    sharesRecipient: parseFlagValue(args, '--shares-recipient'),
+    signingPreference: parseFlagValue(args, '--signing-preference'),
+    network: parseFlagValue(args, '--chain'),
+    pubkey: parseFlagValue(args, '--pubkey'),
+    depositOutput: parseFlagValue(args, '--deposit-output'),
+    scenarioPath: parseFlagValue(args, '--scenario'),
+  };
+}
+
+/**
+ * Standalone identity overrides shared by status/activate/set-min-balance/
+ * stake/unstake: explicit --chain/--pubkey/--scenario, ahead of the
+ * scenario file `install` writes, ahead of local beacond (Phase D).
+ */
+function parseStandaloneIdentityArgs(args) {
+  return {
+    network: parseFlagValue(args, '--chain'),
+    pubkey: parseFlagValue(args, '--pubkey'),
+    scenarioPath: parseFlagValue(args, '--scenario'),
+  };
+}
+
+function parseStatusArgs(args) {
+  return parseStandaloneIdentityArgs(args);
+}
+
 function parseActivateArgs(args) {
   const nowRaw = parseFlagValue(args, '--now');
   return {
+    ...parseStandaloneIdentityArgs(args),
     now: nowRaw !== undefined ? Number(nowRaw) : undefined,
   };
 }
 
 function parseSetMinBalanceArgs(args) {
   return {
+    ...parseStandaloneIdentityArgs(args),
     amount: parseFlagValue(args, '--amount'),
   };
 }
 
 function parseStakeArgs(args) {
   return {
+    ...parseStandaloneIdentityArgs(args),
     amount: parseFlagValue(args, '--amount'),
     receiver: parseFlagValue(args, '--receiver'),
     from: parseFlagValue(args, '--from'),
@@ -88,11 +154,12 @@ function parseStakeArgs(args) {
   };
 }
 
-function parseUnstakeArgs(args) {
+export function parseUnstakeArgs(args) {
   return {
+    ...parseStandaloneIdentityArgs(args),
     amount: parseFlagValue(args, '--amount'),
     shares: parseFlagValue(args, '--shares'),
-    finalize: parseFlagValue(args, '--finalize'),
+    finalize: parseFinalizeFlag(args),
     from: parseFlagValue(args, '--from'),
     receiver: parseFlagValue(args, '--receiver'),
     stakingPool: parseFlagValue(args, '--staking-pool'),
@@ -108,14 +175,15 @@ export async function main(argv = process.argv.slice(2)) {
 
   const command = argv[0];
   const rest = argv.slice(1);
-  const { execute, help, args } = parseGlobal(rest);
+  const { verbose, help, args } = parseGlobal(rest);
 
   if (help) {
     printRootHelp();
     return 0;
   }
 
-  const missing = checkDependencies();
+  const { locality } = resolveValidatorLocality();
+  const missing = checkDependencies(process.env, { locality });
   if (missing.length > 0) {
     logError(formatMissingDependency(missing[0]));
     return 1;
@@ -123,23 +191,26 @@ export async function main(argv = process.argv.slice(2)) {
 
   try {
     switch (command) {
+      case 'install':
+        await runInstall({ ...parseInstallArgs(args), verbose });
+        return 0;
       case 'deploy':
-        await runDeploy({ ...parseDeployArgs(args), execute });
+        await runDeploy({ ...parseDeployArgs(args), verbose });
         return 0;
       case 'activate':
-        await runActivate({ ...parseActivateArgs(args), execute });
+        await runActivate({ ...parseActivateArgs(args), verbose });
         return 0;
       case 'status':
-        await runStatus();
+        await runStatus({ ...parseStatusArgs(args), verbose });
         return 0;
       case 'set-min-balance':
-        await runSetMinBalance({ ...parseSetMinBalanceArgs(args), execute });
+        await runSetMinBalance({ ...parseSetMinBalanceArgs(args), verbose });
         return 0;
       case 'stake':
-        await runStake({ ...parseStakeArgs(args), execute });
+        await runStake({ ...parseStakeArgs(args), verbose });
         return 0;
       case 'unstake':
-        await runUnstake({ ...parseUnstakeArgs(args), execute });
+        await runUnstake({ ...parseUnstakeArgs(args), verbose });
         return 0;
       default:
         logError(`Unknown command: ${command}`);
@@ -151,7 +222,6 @@ export async function main(argv = process.argv.slice(2)) {
     return 1;
   }
 }
-
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   main().then((code) => process.exit(code));

@@ -3,15 +3,14 @@ import {
   DEFAULT_MIN_EFFECTIVE_BALANCE_WEI,
 } from '../constants.mjs';
 import { resolveRpcUrl, getFactoryAddress } from '../config.mjs';
-import {
-  assertValidatorPreflight,
-  detectNetwork,
-  getValidatorPubkey,
-  predictPoolAddresses,
-} from '../beacond.mjs';
+import { predictPoolAddresses } from '../beacond.mjs';
+import { createChainReader } from '../chain-reader.mjs';
+import { resolveStandaloneIdentity } from '../identity.mjs';
+import { createSignerFromEnv } from '../signers.mjs';
 import { logInfo, logSuccess } from '../log.mjs';
-import { runTransaction } from '../tx-runner.mjs';
-import { beraToWei } from '../units.mjs';
+import { awaitConfirmedWrite } from '../confirmed-write.mjs';
+import { runTransaction } from '../tx-pipeline.mjs';
+import { beraToWei, normalizeAddress } from '../units.mjs';
 
 export function resolveMinBalanceAmount(options) {
   if (options.amount === undefined || options.amount === null || options.amount === '') {
@@ -26,33 +25,76 @@ export function resolveMinBalanceAmount(options) {
 
 export async function runSetMinBalance(options) {
   const env = options.env ?? process.env;
-  assertValidatorPreflight(env);
-  const network = detectNetwork(env);
+  const verbose = Boolean(options.verbose);
+  const { network, pubkey } = resolveStandaloneIdentity(env, options);
   const rpcUrl = resolveRpcUrl(network, env);
   const factory = getFactoryAddress(network);
-  const pubkey = getValidatorPubkey(env);
-  const predicted = predictPoolAddresses(factory, rpcUrl, pubkey);
-  const { bera, wei } = resolveMinBalanceAmount(options);
-
-  logInfo(`Target pool: ${predicted.stakingPool}`);
-  logInfo(`setMinEffectiveBalance amount: ${bera} BERA (${wei} wei)`);
-
-  const ctx = {
-    execute: options.execute,
+  const chainReader = createChainReader(rpcUrl, options.fetchImpl);
+  const predicted = await predictPoolAddresses(factory, rpcUrl, pubkey, chainReader);
+  const signer = options.signer ?? createSignerFromEnv({
     env,
     rpcUrl,
-    stakingPool: predicted.stakingPool,
+    fetchImpl: options.fetchImpl,
+    signingPreference: options.signingPreference,
+  });
+  const { bera, wei } = resolveMinBalanceAmount(options);
+
+  if (verbose) {
+    logInfo(`Target SmartOperator: ${predicted.smartOperator}`);
+    logInfo(`setMinEffectiveBalance amount: ${bera} BERA (${wei} wei)`);
+  }
+
+  let from = normalizeAddress(options.from);
+  if (!from && signer.mode === 'hot-key' && signer.getFundingAddress) {
+    from = await signer.getFundingAddress();
+  }
+
+  const ctx = {
+    execute: signer.mode === 'hot-key',
+    env,
+    rpcUrl,
+    from,
+    smartOperator: predicted.smartOperator,
     wei,
     bera,
+    chainReader,
+    signer,
+    verbose,
+    receiptsPath: options.receiptsPath,
+    stakingPool: predicted.stakingPool,
+    pollIntervalMs: options.pollIntervalMs,
+    pollTimeoutMs: options.pollTimeoutMs,
   };
 
-  return runTransaction(ctx, {
+  const descriptor = {
     label: 'setMinEffectiveBalance',
-    target: ctx.stakingPool,
+    target: ctx.smartOperator,
     signature: 'setMinEffectiveBalance(uint256)',
     buildCalldataArgs: () => [ctx.wei],
     decodeDryRun: async () => {
-      logSuccess(`Preflight OK — setMinEffectiveBalance(${ctx.wei})`);
+      if (verbose) {
+        logSuccess(`Preflight OK — setMinEffectiveBalance(${ctx.wei})`);
+      }
     },
+  };
+
+  return awaitConfirmedWrite({
+    ctx,
+    runTx: () => runTransaction(ctx, descriptor),
+    landedFn: async () => {
+      const current = await ctx.chainReader.call(
+        predicted.stakingPool,
+        'minEffectiveBalance()(uint256)',
+      );
+      return BigInt(current.decoded?.[0] ?? 0) === BigInt(ctx.wei);
+    },
+    action: 'set-min-balance',
+    addresses: {
+      pool: predicted.stakingPool,
+      operator: predicted.smartOperator,
+    },
+    amount: bera,
+    scanAddress: predicted.stakingPool,
+    waitForLanding: options.waitForLanding !== false,
   });
 }

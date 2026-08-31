@@ -1,0 +1,5 @@
+print_time_receipts=0
+after_land_receipts=1
+action=deploy
+hash=0x9f7b254def3e49e52bfe088f7bdd138a0412b3a2d0a4ef9615f267ecb1205905
+landed_hash=0x9f7b254def3e49e52bfe088f7bdd138a0412b3a2d0a4ef9615f267ecb1205905

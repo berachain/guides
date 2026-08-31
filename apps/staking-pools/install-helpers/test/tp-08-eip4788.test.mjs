@@ -8,7 +8,7 @@ import {
   eip4788ElBlockNumber,
   pinActivationSlot,
 } from '../lib/proofs.mjs';
-import { parseCastBlockNumber, unwrapCastJson } from '../lib/cast.mjs';
+import { parseCastBlockNumber, unwrapCastJson } from '../lib/format.mjs';
 
 const fixtureDir = path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures');
 

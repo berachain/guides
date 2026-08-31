@@ -33,3 +33,33 @@ export function classifyPoolPhase({ fullyExited, poolActive, beacon }) {
     next: 'Run: node pool-cli.mjs activate',
   };
 }
+
+export function detectInstallPhase({
+  deployed,
+  fullyExited,
+  poolActive,
+  beacon,
+  stakeTargetBera,
+  stakeComplete,
+}) {
+  if (fullyExited) {
+    return 'fully_exited';
+  }
+  if (!deployed) {
+    return 'not_deployed';
+  }
+  if (beacon?.error) {
+    return 'cl_unreachable';
+  }
+  if (!beacon?.found) {
+    return 'deposited_awaiting_registration';
+  }
+  if (!poolActive) {
+    return 'registered_awaiting_activation';
+  }
+  const target = BigInt(stakeTargetBera || '0');
+  if (target > 0n && !stakeComplete) {
+    return 'active_under_stake_target';
+  }
+  return 'done';
+}

@@ -1,0 +1,11 @@
+VC-4 resume is phase-detection only (no run file):
+
+Interruption A: deployed, beacon not included
+  phase=deposited_awaiting_registration
+  re-run install => waits for registration, does not re-deploy
+
+Interruption B: active, stake target pending
+  phase=active_under_stake_target
+  re-run install => submits stake only
+
+Live kill/resume transcript: run node test/vc-drivers/run-vc-1.mjs and interrupt mid-wait.
