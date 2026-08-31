@@ -8,4 +8,8 @@ generated/
 *.bak
 *.old
 
+# Forge output for the TP-2 vault double
+test/helpers/mock-vault/out/
+test/helpers/mock-vault/cache/
+
 

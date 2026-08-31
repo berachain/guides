@@ -19,6 +19,7 @@ import {
   isProofExpired,
 } from './proofs.mjs';
 import { logInfo, logSuccess, logWarn } from './log.mjs';
+import { awaitConfirmedWrite } from './confirmed-write.mjs';
 import { runTransaction } from './tx-pipeline.mjs';
 
 export async function prepareActivationContext({
@@ -163,7 +164,8 @@ export async function prepareActivationContext({
 }
 
 export async function runActivationTransaction(ctx, activationCtx) {
-  return runTransaction(ctx, {
+  const pool = ctx.predicted?.stakingPool || ctx.stakingPool || '';
+  const descriptor = {
     label: 'activateStakingPool',
     target: ctx.factory,
     signature:
@@ -191,6 +193,21 @@ export async function runActivationTransaction(ctx, activationCtx) {
         logSuccess(`activateStakingPool broadcast: ${txHash}`);
       }
     },
+  };
+
+  return awaitConfirmedWrite({
+    ctx,
+    runTx: () => runTransaction(ctx, descriptor),
+    landedFn: async () => {
+      const active = await ctx.chainReader.call(pool, 'isActive()(bool)');
+      return active.decoded?.[0] === true;
+    },
+    refresh: ctx.refreshProofs,
+    action: 'activate',
+    addresses: { pool, factory: ctx.factory },
+    amount: '0',
+    scanAddress: ctx.factory,
+    waitForLanding: ctx.waitForLanding !== false,
   });
 }
 

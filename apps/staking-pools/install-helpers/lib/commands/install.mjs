@@ -12,7 +12,7 @@ import {
 import { createChainReader } from '../chain-reader.mjs';
 import { prepareActivationContext, runActivationTransaction } from '../activation.mjs';
 import { formatBeraAmount } from '../format.mjs';
-import { logInfo, logMilestone, logWarn } from '../log.mjs';
+import { logMilestone } from '../log.mjs';
 import { detectInstallPhase } from '../pool-phase.mjs';
 import { pollUntil, sleep } from '../poll.mjs';
 import {
@@ -29,7 +29,6 @@ import {
   depositWei,
   HOT_KEY_GAS_BUFFER_BERA,
 } from '../stake-formula.mjs';
-import { runTransaction } from '../tx-pipeline.mjs';
 import {
   assertScenarioMatchesIdentity,
   DEFAULT_SCENARIO_FILENAME,
@@ -37,9 +36,11 @@ import {
   writeScenarioFile,
 } from '../scenario.mjs';
 import { normalizeAddress } from '../units.mjs';
+import { runColdSigningTransition } from '../cold-signing.mjs';
 import { runDeploy } from './deploy.mjs';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { runStakeSubmit } from './stake.mjs';
 
 export async function runInstall(options = {}) {
   const env = options.env ?? process.env;
@@ -132,7 +133,7 @@ export async function runInstall(options = {}) {
   let signingPreference = interview.answers.signingPreference || options.signingPreference || 'ledger';
   let fundingAddress = normalizeAddress(interview.answers.fundingAddress || options.fundingAddress);
 
-  const signer = createSignerFromEnv({
+  const signer = options.signer ?? createSignerFromEnv({
     env,
     rpcUrl,
     fetchImpl,
@@ -216,6 +217,9 @@ export async function runInstall(options = {}) {
     signingPreference,
     locality,
     deposit: interview.answers.deposit || options.deposit || null,
+    receiptsPath: options.receiptsPath,
+    pollIntervalMs: options.pollIntervalMs,
+    pollTimeoutMs: options.pollTimeoutMs,
   };
 
   let announcedWaiting = false;
@@ -397,6 +401,10 @@ function deployOptions(plan) {
     signingPreference: plan.signingPreference,
     network: plan.network,
     deposit: plan.deposit,
+    signer: plan.signer,
+    receiptsPath: plan.receiptsPath,
+    pollIntervalMs: plan.pollIntervalMs,
+    pollTimeoutMs: plan.pollTimeoutMs,
   };
 }
 
@@ -447,6 +455,11 @@ async function runActivatePhase(plan, state) {
       chainReader: plan.chainReader,
       signer: plan.signer,
       verbose: plan.verbose,
+      receiptsPath: plan.receiptsPath,
+      predicted: state.predicted,
+      stakingPool: state.stakingPool,
+      pollIntervalMs: plan.pollIntervalMs,
+      pollTimeoutMs: plan.pollTimeoutMs,
     };
     await runActivationTransaction(ctx, activationCtx);
     return;
@@ -463,6 +476,11 @@ async function runActivatePhase(plan, state) {
       chainReader: plan.chainReader,
       signer: plan.signer,
       verbose: plan.verbose,
+      receiptsPath: plan.receiptsPath,
+      predicted: state.predicted,
+      stakingPool: state.stakingPool,
+      pollIntervalMs: plan.pollIntervalMs,
+      pollTimeoutMs: plan.pollTimeoutMs,
     };
     return runActivationTransaction(ctx, activationCtx);
   }, async () => {
@@ -480,6 +498,9 @@ async function runActivatePhase(plan, state) {
         chainReader: plan.chainReader,
         signer: plan.signer,
         verbose: plan.verbose,
+        receiptsPath: plan.receiptsPath,
+        predicted: state.predicted,
+        stakingPool: state.stakingPool,
       };
       return runActivationTransaction(ctx, activationCtx);
     },
@@ -499,17 +520,13 @@ async function runStakePhase(plan, state) {
     signer: plan.signer,
     verbose: plan.verbose,
     value: `${stakeAmount}ether`,
+    receiptsPath: plan.receiptsPath,
+    amount: String(stakeAmount),
+    pollIntervalMs: plan.pollIntervalMs,
+    pollTimeoutMs: plan.pollTimeoutMs,
   };
 
-  const runStakeTx = async () =>
-    runTransaction(ctx, {
-      label: 'submit',
-      target: ctx.stakingPool,
-      signature: 'submit(address)',
-      value: ctx.value,
-      buildCalldataArgs: () => [ctx.receiver],
-      decodeDryRun: async () => {},
-    });
+  const runStakeTx = async () => runStakeSubmit(ctx);
 
   if (plan.signer.mode === 'hot-key') {
     await runStakeTx();
@@ -520,31 +537,4 @@ async function runStakePhase(plan, state) {
     const next = await gatherInstallState(plan);
     return next.stakeComplete;
   });
-}
-
-async function runColdSigningTransition(plan, emitFn, landedFn, { refresh } = {}) {
-  let lastCommand = '';
-  while (true) {
-    const result = await emitFn();
-    if (result?.skipped) {
-      return result;
-    }
-    lastCommand = result?.command ?? result?.sendArgv?.join(' ') ?? lastCommand;
-
-    const landed = await pollUntil(landedFn, { intervalMs: 1500, timeoutMs: 600000 });
-    if (landed) {
-      return result;
-    }
-
-    if (refresh) {
-      const refreshed = await refresh();
-      if (refreshed?.command && refreshed.command !== lastCommand) {
-        lastCommand = refreshed.command;
-      }
-    }
-
-    if (plan.verbose) {
-      logWarn('Printed cast send did not land yet. Reprinting command...');
-    }
-  }
 }

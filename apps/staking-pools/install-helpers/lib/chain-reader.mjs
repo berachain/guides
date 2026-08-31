@@ -19,6 +19,7 @@ export function createChainReader(rpcUrl, fetchImpl = globalThis.fetch) {
       jsonRpc(rpcUrl, 'eth_getTransactionReceipt', [hash], fetchImpl),
     estimateGas: (tx) => jsonRpc(rpcUrl, 'eth_estimateGas', [tx], fetchImpl),
     getChainId: () => jsonRpc(rpcUrl, 'eth_chainId', [], fetchImpl),
+    getLogs: (filter) => jsonRpc(rpcUrl, 'eth_getLogs', [filter], fetchImpl),
   };
 }
 
@@ -118,8 +119,17 @@ export async function ethCallRevertData(rpcUrl, target, signature, args = [], op
   const body = await response.text();
   const json = JSON.parse(body);
   if (!json.error) {
-    const decoded = iface.decodeFunctionResult(functionFragmentName(signature), json.result);
-    return { ok: true, decoded, message: '' };
+    try {
+      const decoded = iface.decodeFunctionResult(functionFragmentName(signature), json.result);
+      return { ok: true, decoded, message: '' };
+    } catch (error) {
+      return {
+        ok: false,
+        decoded: null,
+        message: error.message || String(error),
+        revertData: typeof json.result === 'string' ? json.result : '',
+      };
+    }
   }
 
   const message = json.error.message || JSON.stringify(json.error);

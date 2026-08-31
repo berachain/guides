@@ -15,7 +15,7 @@ export async function resolveOperatorPool(options = {}, env = process.env) {
   const rpcUrl = resolveRpcUrl(network, env);
   const factory = getFactoryAddress(network);
   const pubkey = getValidatorPubkey(env);
-  const chainReader = createChainReader(rpcUrl);
+  const chainReader = createChainReader(rpcUrl, options.fetchImpl);
   const withdrawalVault = await getWithdrawalVault(network, env, chainReader);
 
   let stakingPool = '';
