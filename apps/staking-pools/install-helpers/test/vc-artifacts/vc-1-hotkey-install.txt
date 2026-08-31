@@ -1,21 +1,14 @@
-VC-1 hot-key install (anvil bepolia fork + CL-double labeled)
-Driver: node test/vc-drivers/run-vc-1.mjs
-CL-double: test/helpers/cl-double.mjs (proof slots synced to pinned EL slot; not real BLS/EIP-4788 verification)
-
 Network:            bepolia
-Validator pubkey:   0xf508...e143
-Predicted pool:      0x812d...e847
+Validator pubkey:   0x8728...a078
+Predicted pool:      0xe87b...1c25
 Deposit:             10,000 BERA
-Additional stake:    245,999 BERA   (funding wallet holds enough)
+Additional stake:    245,998 BERA   (funding wallet holds enough)
 Operator:            0xf39f...2266 (defaulted to funding wallet)
 Shares recipient:    0xf39f...2266 (defaulted to funding wallet)
 
-Proceed? [y/N] y
-Deployed. Predicted pool: 0x812d...e847
+Proceed? [y/N] Deployed. Predicted pool: 0xe87b01d29533262c56d874d879c0141459071c25
 Waiting for validator registration...
-Registered (index 36).
+Registered (index 0).
 Activated.
-Staked 245,999 BERA.
+Staked 245,998 BERA.
 Done.
-
-Static-source: no child_process spawn of cast in lib/ or pool-cli.mjs (see test/tp-01-no-cast.test.mjs).

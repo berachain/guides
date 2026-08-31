@@ -8,28 +8,20 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createClDouble } from '../helpers/cl-double.mjs';
-import {
-  startAnvilFork,
-} from '../helpers/anvil-harness.mjs';
+import { startAnvilFork } from '../helpers/anvil-harness.mjs';
+import { loadValidatorProofFixtures } from '../helpers/validator-proof-fixtures.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const ARTIFACT_DIR = join(ROOT, 'vc-artifacts');
 const FAKE_BEACOND = join(ROOT, 'helpers/fake-beacond.sh');
-
-function randomPubkey() {
-  return `0x${Array.from({ length: 48 }, () =>
-    Math.floor(Math.random() * 256).toString(16).padStart(2, '0'),
-  ).join('')}`;
-}
+const FIXTURE_PUBKEY = loadValidatorProofFixtures().pubkey;
 
 async function main() {
   mkdirSync(ARTIFACT_DIR, { recursive: true });
-  const pubkey = randomPubkey();
   const anvil = await startAnvilFork();
   const cl = await createClDouble({
     rpcUrl: anvil.rpcUrl,
-    pubkey,
-    validatorIndex: '36',
+    pubkey: FIXTURE_PUBKEY,
     includeValidator: false,
   });
   const clUrl = await cl.listen(13501);
@@ -41,7 +33,7 @@ async function main() {
     ...process.env,
     BEACOND_HOME: '/tmp/beacond-vc1',
     BEACOND_BIN: FAKE_BEACOND,
-    VC_PUBKEY: pubkey,
+    VC_PUBKEY: FIXTURE_PUBKEY,
     CLI_CHAIN: 'bepolia',
     RPC_URL: anvil.rpcUrl,
     CL_NODE_API_URL: clUrl,
@@ -75,6 +67,9 @@ async function main() {
 
   if (code !== 0) {
     process.exit(code ?? 1);
+  }
+  if (!out.includes('Activated.') || !out.includes('Done.')) {
+    throw new Error('VC-1 install did not reach Activated./Done.');
   }
 }
 

@@ -2,6 +2,8 @@ import { spawn, execSync } from 'node:child_process';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { setBeacondRunner } from '../../lib/beacond.mjs';
+import { STAKING_POOL_FACTORY_BEPOLIA } from '../../lib/constants.mjs';
+import { loadValidatorProofFixtures } from './validator-proof-fixtures.mjs';
 
 const CONTRACTS_ROOT = join(
   dirname(fileURLToPath(import.meta.url)),
@@ -13,8 +15,10 @@ const BEACON_DEPOSIT = '0x4242424242424242424242424242424242424242';
 const BEACON_ROOTS = '0x000F3df6D732807Ef1319fB7B8bB8522d0Beac02';
 const BEPOLIA_VALIDATOR_ROOT =
   '0x3cbcf75b02fe4750c592f1c1ff8b5500a74406f80f038e9ff250e2e294c5615e';
+/** withdrawalVault storage slot on the forked StakingPoolContractsFactory proxy. */
+const FACTORY_WITHDRAWAL_VAULT_SLOT = '0x34';
 
-export async function startAnvilFork({ port } = {}) {
+export async function startAnvilFork({ port, configureProofFixtures = true } = {}) {
   const chosenPort = port ?? 18540 + Math.floor(Math.random() * 500);
   const rpcUrl = `http://127.0.0.1:${chosenPort}`;
   const proc = spawn(
@@ -27,6 +31,9 @@ export async function startAnvilFork({ port } = {}) {
   etchMockContract('test/mock/MockBeaconDeposit.sol:MockBeaconDeposit', BEACON_DEPOSIT, rpcUrl);
   etchMockContract('test/mock/MockEIP4788.sol:MockEIP4788', BEACON_ROOTS, rpcUrl);
   fundAccount('0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266', rpcUrl);
+  if (configureProofFixtures) {
+    configureAnvilForValidatorProofs(rpcUrl);
+  }
 
   return {
     proc,
@@ -97,6 +104,20 @@ async function waitForRpc(rpcUrl, timeoutMs = 60000) {
 function fundAccount(address, rpcUrl) {
   execSync(
     `cast rpc anvil_setBalance ${address} 0x3635c9adc5dea0000000 -r ${rpcUrl}`,
+    { encoding: 'utf8' },
+  );
+}
+
+function configureAnvilForValidatorProofs(rpcUrl) {
+  const fixtures = loadValidatorProofFixtures();
+  execSync(
+    `cast send ${BEACON_ROOTS} 'setMockBeaconBlockRoot(bytes32)' ${fixtures.beaconBlockRoot} --rpc-url ${rpcUrl} --private-key ${ANVIL_PRIVATE_KEY}`,
+    { encoding: 'utf8' },
+  );
+  const paddedVault =
+    `0x${fixtures.withdrawalAddress.slice(2).toLowerCase().padStart(64, '0')}`;
+  execSync(
+    `cast rpc anvil_setStorageAt ${STAKING_POOL_FACTORY_BEPOLIA} ${FACTORY_WITHDRAWAL_VAULT_SLOT} ${paddedVault} --rpc-url ${rpcUrl}`,
     { encoding: 'utf8' },
   );
 }

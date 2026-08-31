@@ -1,38 +1,54 @@
 import http from 'node:http';
-import { readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { STAKING_POOL_FACTORY_BEPOLIA } from '../../lib/constants.mjs';
 import { createChainReader } from '../../lib/chain-reader.mjs';
 import { pinActivationSlot } from '../../lib/proofs.mjs';
-
-const fixtureDir = join(dirname(fileURLToPath(import.meta.url)), '../fixtures');
+import { loadValidatorProofFixtures } from './validator-proof-fixtures.mjs';
 
 export async function createClDouble({
   rpcUrl,
   pubkey,
-  validatorIndex = '36',
+  validatorIndex,
   includeValidator = true,
+  fixtures = loadValidatorProofFixtures(),
 } = {}) {
+  if (!pubkey) {
+    throw new Error('createClDouble requires pubkey matching validator_proofs.json fixture');
+  }
   const chainReader = createChainReader(rpcUrl);
   const elLatest = BigInt(await chainReader.getBlockNumber());
   const pinnedSlot = pinActivationSlot(elLatest, elLatest);
+  const resolvedIndex = validatorIndex ?? fixtures.validatorIndex;
 
   const vaultResult = await chainReader.call(
     STAKING_POOL_FACTORY_BEPOLIA,
     'withdrawalVault()(address)',
   );
   const vault = String(vaultResult.decoded[0]).toLowerCase();
-  const withdrawalCredentials = `0x010000000000000000000000${vault.slice(2)}`;
+  const withdrawalCredentials = fixtures.withdrawalCredentials;
+  const expectedVault = fixtures.withdrawalAddress.toLowerCase();
+  if (vault !== expectedVault) {
+    throw new Error(
+      `Anvil factory withdrawalVault ${vault} does not match proof fixture ${expectedVault}. ` +
+        'Call startAnvilFork() so configureAnvilForValidatorProofs runs.',
+    );
+  }
 
-  const pubkeyProof = JSON.parse(readFileSync(join(fixtureDir, 'cl-proof-pubkey.json'), 'utf8'));
-  const credentialsProof = JSON.parse(
-    readFileSync(join(fixtureDir, 'cl-proof-credentials.json'), 'utf8'),
-  );
-  const balanceProof = JSON.parse(readFileSync(join(fixtureDir, 'cl-proof-balance.json'), 'utf8'));
-
-  credentialsProof.validator_withdrawal_credentials = withdrawalCredentials;
-  pubkeyProof.validator_pubkey = pubkey;
+  const pubkeyProof = {
+    beacon_block_header: { slot: '0x0' },
+    validator_pubkey: pubkey,
+    validator_pubkey_proof: fixtures.pubkeyProof,
+  };
+  const credentialsProof = {
+    beacon_block_header: { slot: '0x0' },
+    validator_withdrawal_credentials: withdrawalCredentials,
+    withdrawal_credentials_proof: fixtures.credentialsProof,
+  };
+  const balanceProof = {
+    beacon_block_header: { slot: '0x0' },
+    validator_balance: fixtures.balance,
+    balance_proof: fixtures.balanceProof,
+    balance_leaf: fixtures.balanceLeaf,
+  };
 
   let validatorIncluded = includeValidator;
 
@@ -74,9 +90,9 @@ export async function createClDouble({
       res.end(
         JSON.stringify({
           data: {
-            index: validatorIndex,
+            index: resolvedIndex,
             status: 'pending_initialized',
-            balance: '10000000000000',
+            balance: fixtures.balance,
           },
         }),
       );
@@ -116,6 +132,7 @@ export async function createClDouble({
   return {
     server,
     pinnedSlot,
+    fixtures,
     setValidatorIncluded(value) {
       validatorIncluded = value;
     },
