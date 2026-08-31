@@ -58,9 +58,11 @@ Unstake:
   [--staking-pool 0x...] [--max-fee BERA]
 
 Environment:
-  BEACOND_HOME (required), BEACOND_BIN, CLI_CHAIN, RPC_URL, EL_RPC_URL
+  BEACOND_HOME (required for deploy; optional elsewhere, see above), BEACOND_BIN, CLI_CHAIN,
+  RPC_URL, EL_RPC_URL
   CL_NODE_API_URL or NODE_API_ADDRESS (default http://127.0.0.1:3500)
   PRIVATE_KEY (hot-key mode on validator host; unset for cold-signing)
+  VALIDATOR_PUBKEY (explicit pubkey override for the five commands above)
 `);
 }
 
