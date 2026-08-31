@@ -18,7 +18,7 @@ describe('TP-10 set-min-balance default amount', () => {
       value: 0n,
     });
     assert.ok(command.startsWith('cast send'));
-    assert.ok(command.includes('setMinEffectiveBalance(uint256)'));
+    assert.ok(command.includes("'setMinEffectiveBalance(uint256)'"));
     assert.ok(command.includes(resolved.wei));
     assert.ok(command.includes('--ledger'));
   });

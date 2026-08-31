@@ -137,7 +137,7 @@ export function formatCalldataArgsForCast(signature, args = []) {
   const fragment = iface.getFunction(signature.split('(')[0]);
   return fragment.format('minimal').includes('(')
     ? formatCastArgsFromValues(fragment, args)
-    : args.map(castFormatValue).join(' ');
+    : args.map((arg, idx) => castFormatValue(arg, fragment.inputs[idx]?.type ?? ''));
 }
 
 function formatCastArgsFromValues(fragment, args) {
@@ -156,7 +156,7 @@ function formatCastArgsFromValues(fragment, args) {
       argIndex += 1;
     }
   }
-  return formatted.join(' ');
+  return formatted;
 }
 
 function castFormatValue(value, type = '') {

@@ -57,7 +57,7 @@ export function createColdSigningSigner({ rpcUrl, signingPreference = 'ledger' }
         'send',
         target,
         signature,
-        ...calldataArgs.split(/\s+/).filter(Boolean),
+        ...calldataArgs,
         '--legacy',
         '-r',
         rpcUrl,

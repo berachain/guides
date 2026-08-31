@@ -45,7 +45,7 @@ export async function runSetMinBalance(options) {
   const { bera, wei } = resolveMinBalanceAmount(options);
 
   if (verbose) {
-    logInfo(`Target pool: ${predicted.stakingPool}`);
+    logInfo(`Target SmartOperator: ${predicted.smartOperator}`);
     logInfo(`setMinEffectiveBalance amount: ${bera} BERA (${wei} wei)`);
   }
 
@@ -53,7 +53,7 @@ export async function runSetMinBalance(options) {
     execute: signer.mode === 'hot-key',
     env,
     rpcUrl,
-    stakingPool: predicted.stakingPool,
+    smartOperator: predicted.smartOperator,
     wei,
     bera,
     chainReader,
@@ -63,7 +63,7 @@ export async function runSetMinBalance(options) {
 
   return runTransaction(ctx, {
     label: 'setMinEffectiveBalance',
-    target: ctx.stakingPool,
+    target: ctx.smartOperator,
     signature: 'setMinEffectiveBalance(uint256)',
     buildCalldataArgs: () => [ctx.wei],
     decodeDryRun: async () => {

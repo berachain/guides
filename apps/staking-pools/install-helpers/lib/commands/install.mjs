@@ -231,7 +231,7 @@ function truncateHex(value) {
   return `${raw.slice(0, 6)}...${raw.slice(-4)}`;
 }
 
-async function gatherInstallState(plan) {
+export async function gatherInstallState(plan) {
   let deployed = false;
   let predicted = plan.predicted;
   let stakingPool = predicted.stakingPool;
@@ -242,8 +242,12 @@ async function gatherInstallState(plan) {
     predicted = core;
     stakingPool = core.stakingPool;
     plan.predicted = core;
-  } catch {
-    deployed = false;
+  } catch (error) {
+    if (/not been deployed/i.test(error.message)) {
+      deployed = false;
+    } else {
+      throw error;
+    }
   }
 
   let poolActive = false;

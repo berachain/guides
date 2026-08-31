@@ -4,6 +4,7 @@ import { setBeacondRunner } from '../lib/beacond.mjs';
 import { runSetMinBalance } from '../lib/commands/set-min-balance.mjs';
 
 const PUBKEY = `0x${'aa'.repeat(48)}`;
+const SMART_OPERATOR = `0x${'11'.repeat(20)}`;
 const STAKING_POOL = `0x${'33'.repeat(20)}`;
 
 function installBeacond() {
@@ -74,15 +75,19 @@ describe('TP-23 runSetMinBalance smoke test', () => {
                     jsonrpc: '2.0',
                     id: 1,
                     result:
-                      '0x0000000000000000000000000000000000000000000000000000000000000000' +
+                      '0x' +
+                      '000000000000000000000000' + SMART_OPERATOR.slice(2) +
                       '000000000000000000000000' + STAKING_POOL.slice(2) +
-                      '0000000000000000000000000000000000000000000000000000000000000000' +
-                      '0000000000000000000000000000000000000000000000000000000000000000',
+                      '0000000000000000000000000000000000000000000000000000000000000003' +
+                      '0000000000000000000000000000000000000000000000000000000000000004',
                   });
                 },
               };
             }
             if (to === STAKING_POOL) {
+              return { ok: true, async text() { return JSON.stringify({ jsonrpc: '2.0', id: 1, result: '0x' }); } };
+            }
+            if (to === SMART_OPERATOR) {
               return { ok: true, async text() { return JSON.stringify({ jsonrpc: '2.0', id: 1, result: '0x' }); } };
             }
           }
@@ -91,6 +96,8 @@ describe('TP-23 runSetMinBalance smoke test', () => {
       });
       assert.equal(result.mode, 'emit');
       assert.ok(result.command.includes('250000000000000000000000'));
+      assert.ok(result.command.includes(SMART_OPERATOR));
+      assert.ok(!result.command.includes(`cast send ${STAKING_POOL}`));
     } finally {
       setBeacondRunner(null);
     }
