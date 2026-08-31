@@ -127,7 +127,7 @@ node pool-cli.mjs unstake --finalize 42 --from 0xHOLDER
 
 `--from` is the stBERA holder (required for preflight). `--receiver` is accepted as an alias. If both are omitted, the CLI derives the address from `PRIVATE_KEY`.
 
-EIP-7002 fee: omit `--max-fee` to probe candidates up to 0.01 BERA, or pass `--max-fee` in BERA. The fee is both `maxFeeToPay` and `--value`.
+EIP-7002 fee: omit `--max-fee` to read the current fee directly from the contract (`WithdrawalVault.getWithdrawalRequestFee()`), or pass `--max-fee` in BERA to override it. The fee is both `maxFeeToPay` and `--value`.
 
 The pool must already be active. `status` lists withdrawal NFTs when `PRIVATE_KEY` is set.
 

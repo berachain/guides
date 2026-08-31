@@ -1,5 +1,3 @@
-import { WITHDRAWAL_FEE_CANDIDATES_WEI } from '../constants.mjs';
-import { ethCallRevertData } from '../chain-reader.mjs';
 import { createSignerFromEnv } from '../signers.mjs';
 import { logInfo, logSuccess } from '../log.mjs';
 import { resolveFromAddress, resolveOperatorPool } from '../pool-target.mjs';
@@ -143,12 +141,8 @@ async function requestByAssets(options, pool, from, env, signer, verbose, extras
   const { decimal, gwei } = beraToGwei(options.amount, '--amount');
   const feeWei = await resolveFee({
     options,
-    from,
-    vault: pool.withdrawalVault,
-    rpcUrl: pool.rpcUrl,
     chainReader: pool.chainReader,
-    signature: 'requestWithdrawal(bytes,uint64,uint256)(uint256)',
-    argsBeforeFee: [pool.pubkey, gwei],
+    vault: pool.withdrawalVault,
   });
 
   if (verbose) {
@@ -210,12 +204,8 @@ async function requestByShares(options, pool, from, env, signer, verbose, extras
   const { decimal, wei } = beraToWei(options.shares, '--shares');
   const feeWei = await resolveFee({
     options,
-    from,
-    vault: pool.withdrawalVault,
-    rpcUrl: pool.rpcUrl,
     chainReader: pool.chainReader,
-    signature: 'requestRedeem(bytes,uint256,uint256)(uint256)',
-    argsBeforeFee: [pool.pubkey, wei],
+    vault: pool.withdrawalVault,
   });
 
   if (verbose) {
@@ -273,32 +263,14 @@ async function requestByShares(options, pool, from, env, signer, verbose, extras
   });
 }
 
-async function resolveFee({ options, from, vault, rpcUrl, chainReader, signature, argsBeforeFee }) {
+export async function resolveFee({ options, chainReader, vault }) {
   if (hasValue(options.maxFee)) {
     return beraToWei(options.maxFee, '--max-fee').wei;
   }
-  return probeWithdrawalFee({ from, vault, rpcUrl, chainReader, signature, argsBeforeFee });
-}
-
-export async function probeWithdrawalFee({ from, vault, rpcUrl, chainReader, signature, argsBeforeFee }) {
-  let lastError = '';
-  for (const fee of WITHDRAWAL_FEE_CANDIDATES_WEI) {
-    const args = [...argsBeforeFee, fee];
-    const result = await ethCallRevertData(
-      rpcUrl,
-      vault,
-      signature,
-      args,
-      { from, value: fee },
-      chainReader.fetchImpl,
-    );
-    if (result.ok) {
-      return fee;
-    }
-    lastError = (result.message || '').trim();
+  const result = await chainReader.call(vault, 'getWithdrawalRequestFee()(uint256)');
+  const fee = result.decoded?.[0];
+  if (fee === undefined || fee === null) {
+    throw new Error('Could not read the EIP-7002 withdrawal request fee from the vault');
   }
-  throw new Error(
-    decodeWithdrawalRevert(lastError) ||
-      'Could not find a sufficient EIP-7002 fee (tried up to 0.01 BERA). Pass --max-fee.',
-  );
+  return String(fee);
 }
