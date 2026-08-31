@@ -1,0 +1,13 @@
+install: done=true
+
+--- Hot-key mode ---
+created request 1 (will backdate — ready) and 2 (left recent — not ready)
+$ node pool-cli.mjs unstake --finalize --from 0xf39F...9226
+finalized in one batch tx: hash=0xa7d347791d3f6b67fa13f2b9e3d2bbfaffeb05ebb655ffee5351313bbea549f7 requestIds=["1"]
+not-ready request left untouched, named: [{"requestId":"2","readyAtBlock":"24792770"}]
+
+--- Cold-signing mode ---
+$ node pool-cli.mjs unstake --finalize --from 0xf39F...9226   (cold-signing)
+printed cast send count: 1 (must be exactly 1)
+printed: cast send 0x8eE802de0E03bBfb6951E307Be5f4b36Dd11B723 'finalizeWithdrawalRequests(uint256[])' [3,4] ...
+landed: hash=0x459f66b90fa966a7467feb71c9f44096ed0cbc40494a70b8c839969ad0a340df requestIds=["3","4"]

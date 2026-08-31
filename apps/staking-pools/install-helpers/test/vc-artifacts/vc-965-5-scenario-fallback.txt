@@ -1,0 +1,18 @@
+$ cd /var/folders/l0/h143trs134df0hj370823p000000gn/T/vc-965-5-6TlvXs
+$ node pool-cli.mjs install ...
+install: done=true
+
+staking-pool-scenario.json written by install:
+{
+  "network": "bepolia",
+  "locality": "remote",
+  "pubkey": "0x8728e65936bef30338214e7619b7073baf196628042f1e1e491260011f0f7f4cf49f4e3ceb4edb08441ab83ce24ea078",
+  "operator": "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266",
+  "sharesRecipient": "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266"
+}
+
+$ node pool-cli.mjs status     (no BEACOND_HOME, no --chain, no --pubkey)
+status: active=true phase=pool_active (resolved identity from the scenario file, no refusal)
+
+$ node pool-cli.mjs stake --amount 1 --receiver 0xf39F...9226   (no BEACOND_HOME)
+stake: mode=execute hash=0xe2b5ec9dd135a60a78b5df1c9b7a3844a46cea1197a74491448b886d5e906efd

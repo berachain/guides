@@ -1,0 +1,7 @@
+VC-1 (BERA-965): signing-preference never asked, cold-signing mode.
+
+Prompts asked during the interview: (none)
+interview.answers.signingPreference (unset by the operator): ""
+
+Printed cast send defaults to --ledger without ever asking:
+cast send 0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa 'setMinEffectiveBalance(uint256)' 250000000000000000000000 --legacy -r http://127.0.0.1:8545 --ledger
