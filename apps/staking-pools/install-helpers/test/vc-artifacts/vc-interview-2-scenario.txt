@@ -1,0 +1,18 @@
+=== (a) first run writes scenario ===
+first run done=true
+scenario keys: network, locality, pubkey, operator, sharesRecipient
+scenario: {
+  "network": "bepolia",
+  "locality": "remote",
+  "pubkey": "0x8728e65936bef30338214e7619b7073baf196628042f1e1e491260011f0f7f4cf49f4e3ceb4edb08441ab83ce24ea078",
+  "operator": "0x1111111111111111111111111111111111111111",
+  "sharesRecipient": "0x2222222222222222222222222222222222222222"
+}
+
+=== (b) second run reads scenario and skips interview ===
+second run done=true
+
+=== (c) third run refuses mismatched pubkey ===
+mismatch refusal: Scenario file pubkey conflict: recorded 0xcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd, current identity is 0x8728e65936bef30338214e7619b7073baf196628042f1e1e491260011f0f7f4cf49f4e3ceb4edb08441ab83ce24ea078.
+
+VC-2 pass: write, resume-without-questions, named pubkey conflict.
