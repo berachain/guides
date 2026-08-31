@@ -163,6 +163,13 @@ export async function prepareActivationContext({
 }
 
 export async function runActivationTransaction(ctx, activationCtx) {
+  const result = await runActivationTransactionInner(ctx, activationCtx);
+  // Cold-signing callers need this to refresh proactively before the proof
+  // actually expires, instead of waiting the full window and refreshing late.
+  return { ...result, expiresAtSeconds: activationCtx.expiry };
+}
+
+async function runActivationTransactionInner(ctx, activationCtx) {
   return runTransaction(ctx, {
     label: 'activateStakingPool',
     target: ctx.factory,
