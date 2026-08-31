@@ -5,28 +5,19 @@ import {
   resolveClApiUrl,
   resolveRpcUrl,
 } from '../config.mjs';
-import {
-  detectNetwork,
-  getBeaconValidator,
-  getCoreContracts,
-  getValidatorPubkey,
-  getWithdrawalVault,
-} from '../beacond.mjs';
+import { getBeaconValidator, getCoreContracts, getWithdrawalVault } from '../beacond.mjs';
 import { createChainReader, walletAddressFromPrivateKey } from '../chain-reader.mjs';
 import { formatWeiToDecimal, stripScientificNotation } from '../format.mjs';
+import { resolveStandaloneIdentity } from '../identity.mjs';
 import { logInfo, logSuccess, logWarn, logError } from '../log.mjs';
 import { classifyPoolPhase } from '../pool-phase.mjs';
 
 export async function runStatus(options = {}) {
   const env = options.env ?? process.env;
   const verbose = Boolean(options.verbose);
-  if (!env.BEACOND_HOME?.trim()) {
-    throw new Error('BEACOND_HOME is required');
-  }
+  const { network, pubkey } = resolveStandaloneIdentity(env, options);
 
-  const network = detectNetwork(env);
   const rpcUrl = resolveRpcUrl(network, env);
-  const pubkey = getValidatorPubkey(env);
   const factory = getFactoryAddress(network);
   const chainReader = createChainReader(rpcUrl, options.fetchImpl);
 

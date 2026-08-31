@@ -4,7 +4,7 @@ Node standard-library CLI for validator operators **on the validator host** (nex
 
 ## Run on the validator
 
-Install Node.js 22+, Foundry `cast`, and `beacond` on the **validator host**. Set `BEACOND_HOME` to your beacond data directory. The CLI refuses to run deploy/activate/set-min-balance/stake/unstake if `BEACOND_HOME` is missing or `beacond` cannot read validator keys.
+Install Node.js 22+, Foundry `cast`, and `beacond` on the **validator host**. Set `BEACOND_HOME` to your beacond data directory. `deploy` refuses to run if `BEACOND_HOME` is missing or `beacond` cannot read validator keys and no full `--deposit` is supplied. `status`, `activate`, `set-min-balance`, `stake`, and `unstake` accept the same local-validator path, or an explicit `--chain`/`--pubkey` (or `CLI_CHAIN`/`VALIDATOR_PUBKEY`), or the scenario file `install` already wrote in the working directory (or `--scenario PATH`) — see each command's section below. Precedence: explicit flag/env, then the scenario file, then local `beacond`. With none of the three, they fail closed pointing at `install`, same as `deploy`.
 
 Copy `env.sh.template` to `env.sh` for optional env vars and for the retained delegation scripts:
 
@@ -79,6 +79,8 @@ node pool-cli.mjs activate --execute   # requires PRIVATE_KEY on validator
 
 Fetches three CL proofs via Node `fetch` from the local CL API (default `http://127.0.0.1:3500`). Pins `min(CL head, EL latest - 1) - 5` so the EIP-4788 EL block (`slot+1`) already exists. The CL and EL stay in lockstep on Berachain, so a 5-slot cushion should never be exhausted in practice. Preflights `activateStakingPool` and enforces 10-minute expiry before emit. Test hook: `--now <unix>` injects clock for expiry checks.
 
+Standalone on a remote validator: reads network/pubkey from `install`'s scenario file (or `--scenario PATH`) when `BEACOND_HOME` isn't set; `--chain`/`--pubkey` still override it.
+
 ### `status`
 
 ```bash
@@ -95,6 +97,8 @@ Read-only via `cast` plus one Beacon API lookup (`GET /eth/v1/beacon/states/head
 
 When the pool is active: contract addresses (with code checks), assets/supply, threshold, buffered assets, min effective balance, WBERA disposition, legacy BGT when present. With `PRIVATE_KEY`, also wallet stBERA and withdrawal NFTs.
 
+Standalone on a remote validator: reads network/pubkey from `install`'s scenario file (or `--scenario PATH`) — its own check, not the `activate`/`stake`/`unstake` preflight path, since `status` never went through the old fail-closed refusal either.
+
 ### `set-min-balance` (optional)
 
 ```bash
@@ -104,6 +108,8 @@ node pool-cli.mjs set-min-balance --amount 300000 --execute
 
 Omission of this command is not an error. Default amount when `--amount` is omitted: **250,000 BERA**.
 
+Standalone on a remote validator: reads network/pubkey from `install`'s scenario file (or `--scenario PATH`) when `BEACOND_HOME` isn't set; `--chain`/`--pubkey` still override it.
+
 ### `stake`
 
 ```bash
@@ -112,6 +118,8 @@ node pool-cli.mjs stake --amount 100 --receiver 0xRECEIVER --execute   # require
 ```
 
 Calls `StakingPool.submit(address)` with `--value <amount>ether`. `--receiver` gets the stBERA. Dry-run simulates `--from` the receiver unless you pass `--from`. Optional `--staking-pool` skips `getCoreContracts` lookup. The sample frontend at `../frontend/` remains available.
+
+Standalone on a remote validator: reads network/pubkey from `install`'s scenario file (or `--scenario PATH`) when `BEACOND_HOME` isn't set; `--chain`/`--pubkey` still override it.
 
 ### `unstake`
 
@@ -133,6 +141,8 @@ node pool-cli.mjs unstake --finalize 42 --from 0xHOLDER    # finalize just reque
 EIP-7002 fee: omit `--max-fee` to read the current fee directly from the contract (`WithdrawalVault.getWithdrawalRequestFee()`), or pass `--max-fee` in BERA to override it. The fee is both `maxFeeToPay` and `--value`.
 
 The pool must already be active. `status` lists withdrawal NFTs when `PRIVATE_KEY` is set.
+
+Standalone on a remote validator: reads network/pubkey from `install`'s scenario file (or `--scenario PATH`) when `BEACOND_HOME` isn't set; `--chain`/`--pubkey` still override it.
 
 ## Tests
 

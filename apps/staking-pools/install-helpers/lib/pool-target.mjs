@@ -1,20 +1,13 @@
 import { resolveRpcUrl, getFactoryAddress } from './config.mjs';
-import {
-  assertValidatorPreflight,
-  detectNetwork,
-  getCoreContracts,
-  getValidatorPubkey,
-  getWithdrawalVault,
-} from './beacond.mjs';
+import { getCoreContracts, getWithdrawalVault } from './beacond.mjs';
 import { createChainReader, walletAddressFromPrivateKey } from './chain-reader.mjs';
+import { resolveStandaloneIdentity } from './identity.mjs';
 import { normalizeAddress } from './units.mjs';
 
 export async function resolveOperatorPool(options = {}, env = process.env) {
-  assertValidatorPreflight(env);
-  const network = detectNetwork(env);
+  const { network, pubkey } = resolveStandaloneIdentity(env, options);
   const rpcUrl = resolveRpcUrl(network, env);
   const factory = getFactoryAddress(network);
-  const pubkey = getValidatorPubkey(env);
   const chainReader = createChainReader(rpcUrl, options.fetchImpl);
   const withdrawalVault = await getWithdrawalVault(network, env, chainReader);
 

@@ -1,22 +1,16 @@
 import { resolveRpcUrl, getFactoryAddress } from '../config.mjs';
-import {
-  assertValidatorPreflight,
-  detectNetwork,
-  getValidatorPubkey,
-  predictPoolAddresses,
-} from '../beacond.mjs';
+import { predictPoolAddresses } from '../beacond.mjs';
 import { createChainReader } from '../chain-reader.mjs';
+import { resolveStandaloneIdentity } from '../identity.mjs';
 import { createSignerFromEnv } from '../signers.mjs';
 import { prepareActivationContext, runActivationTransaction } from '../activation.mjs';
 
 export async function runActivate(options) {
   const env = options.env ?? process.env;
   const verbose = Boolean(options.verbose);
-  assertValidatorPreflight(env);
-  const network = detectNetwork(env);
+  const { network, pubkey } = resolveStandaloneIdentity(env, options);
   const rpcUrl = resolveRpcUrl(network, env);
   const factory = getFactoryAddress(network);
-  const pubkey = getValidatorPubkey(env);
   const chainReader = createChainReader(rpcUrl, options.fetchImpl);
   const signer = options.signer ?? createSignerFromEnv({
     env,
