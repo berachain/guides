@@ -1,0 +1,1 @@
+[error] Non-interactive stdin cannot prompt for missing facts. Supply --signing-preference via flags or environment variables.

@@ -22,13 +22,15 @@ export async function runDeploy(options) {
 
   const env = options.env ?? process.env;
   const verbose = Boolean(options.verbose);
-  assertValidatorPreflight(env);
-  const network = detectNetwork(env);
+  if (!options.deposit) {
+    assertValidatorPreflight(env);
+  }
+  const network = options.network ?? detectNetwork(env);
   const rpcUrl = resolveRpcUrl(network, env);
   const factory = getFactoryAddress(network);
   const chainReader = createChainReader(rpcUrl, options.fetchImpl);
   const withdrawalVault = await getWithdrawalVault(network, env, chainReader);
-  const deposit = createValidatorDeposit(withdrawalVault, env);
+  const deposit = options.deposit ?? createValidatorDeposit(withdrawalVault, env);
   const signer = createSignerFromEnv({
     env,
     rpcUrl,

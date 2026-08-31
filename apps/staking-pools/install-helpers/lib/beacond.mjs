@@ -4,7 +4,11 @@ import { networkFromValidatorRoot } from './config.mjs';
 import { resolveRpcUrl, getFactoryAddress } from './config.mjs';
 import { createChainReader } from './chain-reader.mjs';
 import { parseProofSlot } from './proofs.mjs';
-import { DEPOSIT_AMOUNT_GWEI } from './constants.mjs';
+import {
+  BEPOLIA_VALIDATOR_ROOT,
+  DEPOSIT_AMOUNT_GWEI,
+  MAINNET_VALIDATOR_ROOT,
+} from './constants.mjs';
 
 export function resolveBeacondBin(env = process.env) {
   const configured = env.BEACOND_BIN?.trim() || 'beacond';
@@ -65,13 +69,17 @@ export function assertValidatorPreflight(env = process.env) {
   const home = env.BEACOND_HOME?.trim();
   if (!home) {
     throw new Error(
-      'BEACOND_HOME is required. Set BEACOND_HOME to your beacond data directory on this validator host.',
+      'This command needs a local validator (BEACOND_HOME with readable keys). ' +
+        'For a remote validator, run `install` instead.',
     );
   }
   const result = runBeacond(['deposit', 'validator-keys'], env);
   if (result.status !== 0) {
     const detail = (result.stderr || result.stdout).trim() || 'beacond deposit validator-keys failed';
-    throw new Error(`Cannot read validator keys from BEACOND_HOME=${home}: ${detail}`);
+    throw new Error(
+      `Cannot read validator keys from BEACOND_HOME=${home}: ${detail}. ` +
+        'For a remote validator, run `install` instead.',
+    );
   }
 }
 
@@ -105,6 +113,17 @@ export function getGenesisValidatorRoot(env = process.env) {
     throw new Error('Could not read genesis validator root');
   }
   return result.stdout.trim();
+}
+
+export function genesisRootForNetwork(network) {
+  if (network === 'mainnet') return MAINNET_VALIDATOR_ROOT;
+  if (network === 'bepolia') return BEPOLIA_VALIDATOR_ROOT;
+  throw new Error(`Cannot print a deposit command for unknown network: ${network}`);
+}
+
+export function formatCreateValidatorCommand(withdrawalVault, network) {
+  const genesisRoot = genesisRootForNetwork(network);
+  return `beacond deposit create-validator ${withdrawalVault} ${DEPOSIT_AMOUNT_GWEI} -g ${genesisRoot}`;
 }
 
 export function createValidatorDeposit(withdrawalVault, env = process.env) {
@@ -143,7 +162,7 @@ export function createValidatorDeposit(withdrawalVault, env = process.env) {
   return fields;
 }
 
-function parseDepositOutput(output) {
+export function parseDepositOutput(output) {
   const lines = output.split('\n');
   const fields = {};
   for (const line of lines) {

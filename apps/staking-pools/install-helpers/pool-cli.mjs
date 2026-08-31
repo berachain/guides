@@ -2,6 +2,7 @@
 
 import { fileURLToPath } from 'node:url';
 import { checkDependencies, formatMissingDependency } from './lib/deps.mjs';
+import { resolveValidatorLocality } from './lib/interview.mjs';
 import { logError } from './lib/log.mjs';
 import { runDeploy } from './lib/commands/deploy.mjs';
 import { runActivate } from './lib/commands/activate.mjs';
@@ -35,6 +36,8 @@ Global options:
 
 Install:
   [--funding-address 0x...] [--operator 0x...] [--shares-recipient 0x...]
+  [--signing-preference ledger|key] [--chain mainnet|bepolia] [--pubkey 0x...]
+  [--deposit-output FILE] [--scenario FILE]
 
 Deploy:
   --op 0xOPERATOR --sr 0xSHARES_RECIPIENT
@@ -79,6 +82,11 @@ function parseInstallArgs(args) {
     fundingAddress: parseFlagValue(args, '--funding-address'),
     operator: parseFlagValue(args, '--operator'),
     sharesRecipient: parseFlagValue(args, '--shares-recipient'),
+    signingPreference: parseFlagValue(args, '--signing-preference'),
+    network: parseFlagValue(args, '--chain'),
+    pubkey: parseFlagValue(args, '--pubkey'),
+    depositOutput: parseFlagValue(args, '--deposit-output'),
+    scenarioPath: parseFlagValue(args, '--scenario'),
   };
 }
 
@@ -131,7 +139,8 @@ export async function main(argv = process.argv.slice(2)) {
     return 0;
   }
 
-  const missing = checkDependencies();
+  const { locality } = resolveValidatorLocality();
+  const missing = checkDependencies(process.env, { locality });
   if (missing.length > 0) {
     logError(formatMissingDependency(missing[0]));
     return 1;

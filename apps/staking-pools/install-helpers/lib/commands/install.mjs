@@ -2,8 +2,6 @@ import { ethers } from '../ethers-bundle.mjs';
 import { BEACON_DEPOSIT_CONTRACT } from '../constants.mjs';
 import { resolveRpcUrl, resolveClApiUrl, getFactoryAddress, getDelegationHandlerFactory } from '../config.mjs';
 import {
-  assertValidatorPreflight,
-  createValidatorDeposit,
   detectNetwork,
   getBeaconValidator,
   getCoreContracts,
@@ -17,7 +15,13 @@ import { formatBeraAmount } from '../format.mjs';
 import { logInfo, logMilestone, logWarn } from '../log.mjs';
 import { detectInstallPhase } from '../pool-phase.mjs';
 import { pollUntil, sleep } from '../poll.mjs';
-import { confirmProceed, promptFundingAddress, promptSigningPreference } from '../prompt.mjs';
+import {
+  conductInterview,
+  resolveInterviewNetwork,
+  resolveInterviewPubkey,
+  resolveValidatorLocality,
+} from '../interview.mjs';
+import { confirmProceed } from '../prompt.mjs';
 import { createSignerFromEnv, resolveSignerMode } from '../signers.mjs';
 import {
   DEPOSIT_BERA,
@@ -26,35 +30,107 @@ import {
   HOT_KEY_GAS_BUFFER_BERA,
 } from '../stake-formula.mjs';
 import { runTransaction } from '../tx-pipeline.mjs';
+import {
+  assertScenarioMatchesIdentity,
+  DEFAULT_SCENARIO_FILENAME,
+  readScenarioFile,
+  writeScenarioFile,
+} from '../scenario.mjs';
 import { normalizeAddress } from '../units.mjs';
 import { runDeploy } from './deploy.mjs';
+import { existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 export async function runInstall(options = {}) {
   const env = options.env ?? process.env;
   const verbose = Boolean(options.verbose);
   const fetchImpl = options.fetchImpl ?? globalThis.fetch;
   const promptOptions = options.promptOptions ?? {};
+  if (options.depositOutput && existsSync(options.depositOutput)) {
+    options = { ...options, depositOutput: readFileSync(options.depositOutput, 'utf8') };
+  }
 
-  assertValidatorPreflight(env);
-  const network = detectNetwork(env);
+  const resolvedLocality = resolveValidatorLocality(env);
+  const locality = resolvedLocality.locality;
+  const scenarioPath = options.scenarioPath ?? join(process.cwd(), DEFAULT_SCENARIO_FILENAME);
+  const scenario = readScenarioFile(scenarioPath);
+
+  let network =
+    locality === 'local' ? detectNetwork(env) : resolveInterviewNetwork(env, options);
+  let pubkey =
+    locality === 'local' ? getValidatorPubkey(env) : resolveInterviewPubkey(env, options);
+
+  if (scenario) {
+    assertScenarioMatchesIdentity(scenario, { network, pubkey });
+    if (!network) network = scenario.network;
+    if (!pubkey) pubkey = scenario.pubkey;
+  }
+
+  const clBase = resolveClApiUrl(env);
+  let deploying = false;
+  let withdrawalVault = '';
+  if (locality === 'remote' && network && pubkey && !options.deposit && !options.depositOutput) {
+    const probeRpc = resolveRpcUrl(network, env);
+    const probeFactory = getFactoryAddress(network);
+    const probeReader = createChainReader(probeRpc, fetchImpl);
+    deploying = await detectNeedsDeploy(probeFactory, probeRpc, pubkey, probeReader);
+    if (deploying) {
+      withdrawalVault = await getWithdrawalVault(network, env, probeReader);
+    }
+  } else if (options.deposit || options.depositOutput) {
+    deploying = true;
+  }
+
+  const interview = await conductInterview({
+    locality,
+    env,
+    options: {
+      ...options,
+      network,
+      pubkey,
+      fundingAddress: normalizeAddress(options.fundingAddress),
+      signingPreference: options.signingPreference,
+      deposit: options.deposit,
+      depositOutput: options.depositOutput,
+      withdrawalVault,
+    },
+    deploying,
+    isTTY: options.isTTY ?? process.stdin.isTTY,
+    promptOptions,
+  });
+
+  network = interview.answers.network || network;
+  pubkey = interview.answers.pubkey || pubkey;
   const rpcUrl = resolveRpcUrl(network, env);
   const factory = getFactoryAddress(network);
-  const pubkey = getValidatorPubkey(env);
   const chainReader = createChainReader(rpcUrl, fetchImpl);
-  const clBase = resolveClApiUrl(env);
 
-  const mode = resolveSignerMode(env);
-  let signingPreference = options.signingPreference ?? 'ledger';
-  let fundingAddress = normalizeAddress(options.fundingAddress);
-
-  if (mode === 'cold-signing') {
-    if (!fundingAddress) {
-      fundingAddress = await promptFundingAddress(promptOptions);
-    }
-    if (!options.signingPreference) {
-      signingPreference = await promptSigningPreference(promptOptions);
+  if (locality === 'remote' && !interview.answers.deposit && !options.deposit && !options.depositOutput) {
+    deploying = await detectNeedsDeploy(factory, rpcUrl, pubkey, chainReader);
+    if (deploying) {
+      withdrawalVault = await getWithdrawalVault(network, env, chainReader);
+      const depositInterview = await conductInterview({
+        locality,
+        env,
+        options: {
+          ...options,
+          network,
+          pubkey,
+          fundingAddress: interview.answers.fundingAddress,
+          signingPreference: interview.answers.signingPreference || 'ledger',
+          withdrawalVault,
+        },
+        deploying: true,
+        isTTY: options.isTTY ?? process.stdin.isTTY,
+        promptOptions,
+      });
+      interview.answers.deposit = depositInterview.answers.deposit;
     }
   }
+
+  const mode = resolveSignerMode(env);
+  let signingPreference = interview.answers.signingPreference || options.signingPreference || 'ledger';
+  let fundingAddress = normalizeAddress(interview.answers.fundingAddress || options.fundingAddress);
 
   const signer = createSignerFromEnv({
     env,
@@ -67,7 +143,7 @@ export async function runInstall(options = {}) {
     fundingAddress = await signer.getFundingAddress();
   }
 
-  const withdrawalVault = await getWithdrawalVault(network, env, chainReader);
+  withdrawalVault = withdrawalVault || (await getWithdrawalVault(network, env, chainReader));
   const predicted = await predictPoolAddresses(factory, rpcUrl, pubkey, chainReader);
   const balanceWei = await chainReader.getBalance(fundingAddress);
   const additionalStakeBera = computeAdditionalStakeBera(balanceWei, {
@@ -76,8 +152,20 @@ export async function runInstall(options = {}) {
   const depositAmountWei = depositWei();
   const canCoverDeposit = BigInt(balanceWei) >= depositAmountWei;
 
-  const operator = normalizeAddress(options.operator) || fundingAddress;
-  const sharesRecipient = normalizeAddress(options.sharesRecipient) || fundingAddress;
+  const operator =
+    normalizeAddress(options.operator) || normalizeAddress(scenario?.operator) || fundingAddress;
+  const sharesRecipient =
+    normalizeAddress(options.sharesRecipient) ||
+    normalizeAddress(scenario?.sharesRecipient) ||
+    fundingAddress;
+
+  writeScenarioFile(scenarioPath, {
+    network,
+    locality,
+    pubkey,
+    operator,
+    sharesRecipient,
+  });
 
   const confirmation = buildConfirmation({
     network,
@@ -90,7 +178,8 @@ export async function runInstall(options = {}) {
     balanceWei,
   });
 
-  if (!canCoverDeposit) {
+  const needsDeploy = await detectNeedsDeploy(factory, rpcUrl, pubkey, chainReader);
+  if (!canCoverDeposit && needsDeploy) {
     throw new Error(
       `Funding wallet ${fundingAddress} cannot cover the ${DEPOSIT_BERA.toLocaleString()} BERA deposit. Shortfall before any on-chain write.`,
     );
@@ -125,6 +214,8 @@ export async function runInstall(options = {}) {
     withdrawalVault,
     predicted,
     signingPreference,
+    locality,
+    deposit: interview.answers.deposit || options.deposit || null,
   };
 
   let announcedWaiting = false;
@@ -286,28 +377,37 @@ export async function gatherInstallState(plan) {
   };
 }
 
+async function detectNeedsDeploy(factory, rpcUrl, pubkey, chainReader) {
+  try {
+    await getCoreContracts(factory, rpcUrl, pubkey, chainReader);
+    return false;
+  } catch (error) {
+    if (/not been deployed/i.test(error.message)) return true;
+    throw error;
+  }
+}
+
+function deployOptions(plan) {
+  return {
+    operator: plan.operator,
+    sharesRecipient: plan.sharesRecipient,
+    env: plan.env,
+    verbose: plan.verbose,
+    fetchImpl: plan.fetchImpl,
+    signingPreference: plan.signingPreference,
+    network: plan.network,
+    deposit: plan.deposit,
+  };
+}
+
 async function runDeployPhase(plan, state) {
   if (plan.signer.mode === 'hot-key') {
-    await runDeploy({
-      operator: plan.operator,
-      sharesRecipient: plan.sharesRecipient,
-      env: plan.env,
-      verbose: plan.verbose,
-      fetchImpl: plan.fetchImpl,
-      signingPreference: plan.signingPreference,
-    });
+    await runDeploy(deployOptions(plan));
     return;
   }
 
   await runColdSigningTransition(plan, async () => {
-    return runDeploy({
-      operator: plan.operator,
-      sharesRecipient: plan.sharesRecipient,
-      env: plan.env,
-      verbose: plan.verbose,
-      fetchImpl: plan.fetchImpl,
-      signingPreference: plan.signingPreference,
-    });
+    return runDeploy(deployOptions(plan));
   }, async () => {
     const next = await gatherInstallState(plan);
     return next.deployed;
