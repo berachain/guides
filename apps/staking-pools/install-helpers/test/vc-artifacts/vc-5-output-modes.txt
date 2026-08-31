@@ -1,51 +1,62 @@
-=== VC-5 output modes (install --help shows milestone vs verbose flags) ===
+=== VC-5: default vs --verbose install (real anvil bepolia fork + CL-double) ===
 
---- default install milestone shape (from installation.mdx) ---
-Deployed. Predicted pool: 0x...
-Waiting for validator registration...
-Registered (index N).
-Activated.
-Staked N BERA.
-Done.
+--- DEFAULT (node pool-cli.mjs install) ---
+Network:            bepolia
+Validator pubkey:   0x3ff5...b33b
+Predicted pool:      0xd02b...a459
+Deposit:             10,000 BERA
+Additional stake:    245,999 BERA   (funding wallet holds enough)
+Operator:            0xf39f...2266 (defaulted to funding wallet)
+Shares recipient:    0xf39f...2266 (defaulted to funding wallet)
 
---- verbose flag surface ---
-pool-cli — staking pool operator helper (Node stdlib + vendored ethers + beacond)
+Proceed? [y/N] Deployed. Predicted pool: 0xd02b8e1b4a1427172a876b389076afbe50e2a459
+Registered (index 36).
+[error] execution reverted: custom error 0x1b6661c3
 
-Run on the validator host with BEACOND_HOME set. Hot-key mode (PRIVATE_KEY set) signs and
-broadcasts. Cold-signing mode prints cast send commands for a separate signing machine.
+--- VERBOSE (node pool-cli.mjs install --verbose) ---
+Network:            bepolia
+Validator pubkey:   0x7b6d...8699
+Predicted pool:      0xa5e4...b191
+Deposit:             10,000 BERA
+Additional stake:    245,999 BERA   (funding wallet holds enough)
+Operator:            0xf39f...2266 (defaulted to funding wallet)
+Shares recipient:    0xf39f...2266 (defaulted to funding wallet)
 
-Usage:
-  node pool-cli.mjs <command> [options]
+Proceed? [y/N] [success] Deposit validation: OK
+[info] Predicted contract addresses:
+  SmartOperator:          0x1ab6e1cd289377ed0634636a1e82bbc9983bd457
+  StakingPool:            0xa5e4a201873aa0e88584c05bd3e58a6fb32cb191
+  StakingRewardsVault:    0x176c90ff430c6715162d645462fd2ba7b0e4fed0
+  IncentiveCollector:     0xe42ecbbe8fd0503ac95898ae8128bc6d30ff3cc1
 
-Commands:
-  install         Hands-off installer (deploy → wait → activate → stake-if-funded)
-  deploy          Deploy staking pool contracts
-  activate        Activate a deployed pool with CL proofs
-  status          EL operator, beacon inclusion, and pool isActive
-  set-min-balance Optional min effective balance update
-  stake           Deposit BERA, mint stBERA to --receiver
-  unstake         Request or finalize withdrawal
+[info] Preflighting deployStakingPoolContracts via eth_call...
+[success] Preflight OK
+[info] Predicted pool contracts (predictStakingPoolContractsAddresses):
+  smartOperator:       0x1ab6e1cd289377ed0634636a1e82bbc9983bd457
+  stakingPool:         0xa5e4a201873aa0e88584c05bd3e58a6fb32cb191
+  stakingRewardsVault: 0x176c90ff430c6715162d645462fd2ba7b0e4fed0
+  incentiveCollector:  0xe42ecbbe8fd0503ac95898ae8128bc6d30ff3cc1
+[info] Value transfer authorized: 10000ether initial deposit
+[info] Broadcasting deployStakingPoolContracts via vendored ethers wallet...
+[success] deployStakingPoolContracts broadcast: 0xe2131095fe782d5f12f2e7dd276baf9b929a8c8dcb8a9a19e239475b82d64bf9
+[success] deployStakingPoolContracts broadcast: 0xe2131095fe782d5f12f2e7dd276baf9b929a8c8dcb8a9a19e239475b82d64bf9
+Deployed. Predicted pool: 0xa5e4a201873aa0e88584c05bd3e58a6fb32cb191
+Registered (index 36).
+[info] Network: bepolia
+[info] Validator pubkey: 0x7b6dce13096014434f86629737e83e739113af289d4e710d966c847e727ac3239142e056b56bb9df7bf931a33d488699
+[info] CL node API: http://127.0.0.1:13511
+[info] EL RPC: http://127.0.0.1:18592
 
-Global options:
-  --verbose       Per-fact detail (tx hashes, RPC calls, pinned slots)
-  --help          Show command help
+[info] Predicted contract addresses:
+  StakingPool: 0xa5e4a201873aa0e88584c05bd3e58a6fb32cb191
 
-Install:
-  [--funding-address 0x...] [--operator 0x...] [--shares-recipient 0x...]
-
-Deploy:
-  --op 0xOPERATOR --sr 0xSHARES_RECIPIENT
-
-Stake:
-  --amount BERA --receiver 0x... [--from 0x...] [--staking-pool 0x...]
-
-Unstake:
-  --amount BERA | --shares stBERA | --finalize REQUEST_ID
-  --from 0x...   stBERA holder (or --receiver as alias; or PRIVATE_KEY)
-  [--staking-pool 0x...] [--max-fee BERA]
-
-Environment:
-  BEACOND_HOME (required), BEACOND_BIN, CLI_CHAIN, RPC_URL, EL_RPC_URL
-  CL_NODE_API_URL or NODE_API_ADDRESS (default http://127.0.0.1:3500)
-  PRIVATE_KEY (hot-key mode on validator host; unset for cold-signing)
-
+[success] Validator registered on beacon chain (index: 36)
+[info] CL head: 0x1782d21
+[info] EL latest: 24653095
+[info] Pinned CL slot: 24653084 (head minus lag 5; EIP-4788 uses EL block slot+1 = 24653085)
+[success] All proofs pinned to slot 24653084
+[info] Reading EIP-4788 timestamp from EL block 24653085 via http://127.0.0.1:18592...
+[success] EIP-4788 timestamp: 1788177202
+[warn] Proof expiry: unix 1788177802 (600s after timestamp 1788177202)
+[info] Preflighting activateStakingPool via eth_call...
+[error] execution reverted: custom error 0x1b6661c3

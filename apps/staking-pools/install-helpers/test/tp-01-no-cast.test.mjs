@@ -9,27 +9,43 @@ const PRODUCTION_DIRS = ['lib', 'pool-cli.mjs'];
 
 function listProductionFiles() {
   const files = [];
+
+  function walkDir(dir) {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const path = join(dir, entry.name);
+      if (entry.isDirectory()) {
+        walkDir(path);
+      } else if (entry.name.endsWith('.mjs')) {
+        files.push(path);
+      }
+    }
+  }
+
   for (const entry of PRODUCTION_DIRS) {
     const path = join(ROOT, entry);
     if (path.endsWith('.mjs')) {
       files.push(path);
       continue;
     }
-    for (const name of readdirSync(path)) {
-      if (name.endsWith('.mjs')) {
-        files.push(join(path, name));
-      }
-    }
+    walkDir(path);
   }
+
   return files;
 }
 
-const FORBIDDEN_SPAWN = /child_process\.(spawn|spawnSync|exec|execSync|execFile)\s*\(\s*['"`](cast|foundry)/;
+const FORBIDDEN_SPAWN =
+  /child_process\.(spawn|spawnSync|exec|execSync|execFile)\s*\(\s*['"`](cast|foundry)/;
 
 describe('TP-1 no cast subprocess in CLI-owned production files', () => {
   it('does not spawn cast or foundry binaries', () => {
+    const files = listProductionFiles();
+    assert.ok(
+      files.some((file) => file.includes('/lib/commands/install.mjs')),
+      'recursive scan must include lib/commands/*.mjs',
+    );
+
     const hits = [];
-    for (const file of listProductionFiles()) {
+    for (const file of files) {
       const source = readFileSync(file, 'utf8');
       if (FORBIDDEN_SPAWN.test(source) || /spawnSync\(\s*['"`]cast['"`]/.test(source)) {
         hits.push(file);

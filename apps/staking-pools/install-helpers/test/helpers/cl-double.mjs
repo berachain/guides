@@ -16,9 +16,7 @@ export async function createClDouble({
 } = {}) {
   const chainReader = createChainReader(rpcUrl);
   const elLatest = BigInt(await chainReader.getBlockNumber());
-  const clHead = elLatest;
-  const pinnedSlot = pinActivationSlot(clHead, elLatest);
-  const pinnedHex = `0x${pinnedSlot.toString(16)}`;
+  const pinnedSlot = pinActivationSlot(elLatest, elLatest);
 
   const vaultResult = await chainReader.call(
     STAKING_POOL_FACTORY_BEPOLIA,
@@ -33,21 +31,34 @@ export async function createClDouble({
   );
   const balanceProof = JSON.parse(readFileSync(join(fixtureDir, 'cl-proof-balance.json'), 'utf8'));
 
-  pubkeyProof.beacon_block_header.slot = pinnedHex;
-  credentialsProof.beacon_block_header.slot = pinnedHex;
-  balanceProof.beacon_block_header.slot = pinnedHex;
   credentialsProof.validator_withdrawal_credentials = withdrawalCredentials;
   pubkeyProof.validator_pubkey = pubkey;
 
   let validatorIncluded = includeValidator;
 
-  const server = http.createServer((req, res) => {
+  function withPinnedSlot(proof, slotHex) {
+    const copy = structuredClone(proof);
+    copy.beacon_block_header.slot = slotHex;
+    return copy;
+  }
+
+  function slotFromProofUrl(url) {
+    const match = url.match(/\/bkit\/v1\/proof\/[^/]+\/(0x[0-9a-fA-F]+|\d+)\//);
+    if (!match) return null;
+    const raw = match[1];
+    return raw.startsWith('0x') ? raw : `0x${BigInt(raw).toString(16)}`;
+  }
+
+  const server = http.createServer(async (req, res) => {
     const url = req.url ?? '';
     if (url.includes('/eth/v1/beacon/headers/head')) {
+      const elLatest = BigInt(await chainReader.getBlockNumber());
+      const slot = pinActivationSlot(elLatest, elLatest);
+      const slotHex = `0x${slot.toString(16)}`;
       res.writeHead(200, { 'content-type': 'application/json' });
       res.end(
         JSON.stringify({
-          data: { header: { message: { slot: pinnedHex } } },
+          data: { header: { message: { slot: slotHex } } },
         }),
       );
       return;
@@ -72,21 +83,29 @@ export async function createClDouble({
       return;
     }
 
+    const requestedSlot = slotFromProofUrl(url);
+    const slotHex =
+      requestedSlot ??
+      `0x${pinActivationSlot(
+        BigInt(await chainReader.getBlockNumber()),
+        BigInt(await chainReader.getBlockNumber()),
+      ).toString(16)}`;
+
     if (url.includes('/bkit/v1/proof/validator_pubkey/')) {
       res.writeHead(200, { 'content-type': 'application/json' });
-      res.end(JSON.stringify(pubkeyProof));
+      res.end(JSON.stringify(withPinnedSlot(pubkeyProof, slotHex)));
       return;
     }
 
     if (url.includes('/bkit/v1/proof/validator_credentials/')) {
       res.writeHead(200, { 'content-type': 'application/json' });
-      res.end(JSON.stringify(credentialsProof));
+      res.end(JSON.stringify(withPinnedSlot(credentialsProof, slotHex)));
       return;
     }
 
     if (url.includes('/bkit/v1/proof/validator_balance/')) {
       res.writeHead(200, { 'content-type': 'application/json' });
-      res.end(JSON.stringify(balanceProof));
+      res.end(JSON.stringify(withPinnedSlot(balanceProof, slotHex)));
       return;
     }
 
