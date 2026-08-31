@@ -6,6 +6,8 @@ import { afterEach, describe, it } from 'node:test';
 import { setBeacondRunner } from '../lib/beacond.mjs';
 import { runUnstake } from '../lib/commands/unstake.mjs';
 import { STAKING_POOL_FACTORY_BEPOLIA } from '../lib/constants.mjs';
+import { ethers } from '../lib/ethers-bundle.mjs';
+import { RECEIPT_EVENT_ABIS } from '../lib/receipt-events.mjs';
 import { readReceipts } from '../lib/receipts.mjs';
 
 const PUBKEY = `0x${'aa'.repeat(48)}`;
@@ -15,6 +17,15 @@ const HOLDER = `0x${'88'.repeat(20)}`;
 const ASSETS_HASH = `0x${'a1'.repeat(32)}`;
 const SHARES_HASH = `0x${'a2'.repeat(32)}`;
 const FINALIZE_HASH = `0x${'a3'.repeat(32)}`;
+const ASSETS_REQUEST_ID = '7';
+const SHARES_REQUEST_ID = '8';
+
+function withdrawalRequestedLog(requestId) {
+  const iface = new ethers.Interface([RECEIPT_EVENT_ABIS['unstake.requestWithdrawal']]);
+  const fragment = iface.fragments[0];
+  const encoded = iface.encodeEventLog(fragment, [HOLDER, 10n, 0n, BigInt(requestId), false]);
+  return { address: VAULT, topics: encoded.topics, data: encoded.data };
+}
 
 function installBeacond() {
   setBeacondRunner((args) => {
@@ -69,6 +80,16 @@ function mockFetch() {
       }
       return okResult('0x');
     }
+    if (body.method === 'eth_getTransactionReceipt') {
+      const [hash] = body.params;
+      if (hash === ASSETS_HASH) {
+        return okResult({ logs: [withdrawalRequestedLog(ASSETS_REQUEST_ID)] });
+      }
+      if (hash === SHARES_HASH) {
+        return okResult({ logs: [withdrawalRequestedLog(SHARES_REQUEST_ID)] });
+      }
+      return okResult({ logs: [] });
+    }
     return okResult('0x1');
   };
 }
@@ -120,6 +141,7 @@ describe('TP-4 unstake and stake receipt fields', () => {
       assert.equal(record.addresses.pool.toLowerCase(), STAKING_POOL);
       assert.equal(record.addresses.withdrawalVault.toLowerCase(), VAULT);
       assert.equal(record.amount, '10');
+      assert.equal(record.requestId, ASSETS_REQUEST_ID);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -146,6 +168,7 @@ describe('TP-4 unstake and stake receipt fields', () => {
       assert.equal(record.hash, SHARES_HASH);
       assert.equal(record.addresses.pool.toLowerCase(), STAKING_POOL);
       assert.equal(record.amount, '5');
+      assert.equal(record.requestId, SHARES_REQUEST_ID);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

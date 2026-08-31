@@ -1,0 +1,7 @@
+Real EIP-7002 fee read directly off the vault: 1 wei
+
+install: done=true
+
+$ node pool-cli.mjs unstake --amount 1 --from 0xf39F...9226 (no --max-fee)
+unstake: mode=execute hash=0x773abece0aeda02847e5c96c738b2e9decb15d69a16ec90d2154e8aaf432ffdb requestId=1
+receipt: {"timestamp":"2026-08-31T17:28:37.916Z","action":"unstake.requestWithdrawal","hash":"0x773abece0aeda02847e5c96c738b2e9decb15d69a16ec90d2154e8aaf432ffdb","addresses":{"pool":"0xe87b01d29533262c56d874d879c0141459071c25","withdrawalVault":"0x8eE802de0E03bBfb6951E307Be5f4b36Dd11B723"},"amount":"1","requestId":"1"}

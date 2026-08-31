@@ -49,9 +49,6 @@ export function collectMissingFacts({
     if (!options.fundingAddress) {
       missing.push({ fact: 'funding-address', flag: '--funding-address' });
     }
-    if (!options.signingPreference) {
-      missing.push({ fact: 'signing-preference', flag: '--signing-preference' });
-    }
   }
   return missing;
 }
@@ -136,11 +133,6 @@ export async function conductInterview({
         throw new Error('Funding address must be a valid EVM address');
       }
       answers.fundingAddress = raw.toLowerCase();
-    } else if (fact.fact === 'signing-preference') {
-      const raw = String(
-        await ask('Signing machine: Ledger [Enter] or type key for your own private key: '),
-      ).trim();
-      answers.signingPreference = raw.toLowerCase() === 'key' ? 'key' : 'ledger';
     }
   }
 

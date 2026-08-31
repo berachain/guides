@@ -18,6 +18,11 @@ function printRootHelp() {
 Run on the validator host with BEACOND_HOME set. Hot-key mode (PRIVATE_KEY set) signs and
 broadcasts. Cold-signing mode prints cast send commands for a separate signing machine.
 
+status/activate/set-min-balance/stake/unstake also resolve identity from an \`install\`-written
+scenario file when present (working directory, or --scenario PATH) — no BEACOND_HOME needed for
+those five. --chain/--pubkey (or CLI_CHAIN/VALIDATOR_PUBKEY) take precedence over the scenario
+file when supplied. deploy still requires a local validator or a full --deposit.
+
 Usage:
   node pool-cli.mjs <command> [options]
 
@@ -46,7 +51,9 @@ Stake:
   --amount BERA --receiver 0x... [--from 0x...] [--staking-pool 0x...]
 
 Unstake:
-  --amount BERA | --shares stBERA | --finalize REQUEST_ID
+  --amount BERA | --shares stBERA | --finalize [REQUEST_ID]
+  --finalize with no id finalizes every ready request for --from in one
+  batch transaction; --finalize <id> finalizes just that one request.
   --from 0x...   stBERA holder (or --receiver as alias; or PRIVATE_KEY)
   [--staking-pool 0x...] [--max-fee BERA]
 
@@ -70,6 +77,21 @@ function parseFlagValue(args, flag) {
   return args[index + 1];
 }
 
+/**
+ * --finalize is special: present with no following token, or immediately
+ * followed by another recognized flag (e.g. `--from`), means "finalize
+ * every ready request" (empty-string sentinel), not "consume that flag as
+ * --finalize's value." A following token that isn't a recognized flag is
+ * taken as the request id, same as any other flag value.
+ */
+function parseFinalizeFlag(args) {
+  const index = args.indexOf('--finalize');
+  if (index === -1) return undefined;
+  const next = args[index + 1];
+  if (next === undefined || next.startsWith('--')) return '';
+  return next;
+}
+
 function parseDeployArgs(args) {
   return {
     operator: parseFlagValue(args, '--op') ?? '',
@@ -90,21 +112,41 @@ function parseInstallArgs(args) {
   };
 }
 
+/**
+ * Standalone identity overrides shared by status/activate/set-min-balance/
+ * stake/unstake: explicit --chain/--pubkey/--scenario, ahead of the
+ * scenario file `install` writes, ahead of local beacond (Phase D).
+ */
+function parseStandaloneIdentityArgs(args) {
+  return {
+    network: parseFlagValue(args, '--chain'),
+    pubkey: parseFlagValue(args, '--pubkey'),
+    scenarioPath: parseFlagValue(args, '--scenario'),
+  };
+}
+
+function parseStatusArgs(args) {
+  return parseStandaloneIdentityArgs(args);
+}
+
 function parseActivateArgs(args) {
   const nowRaw = parseFlagValue(args, '--now');
   return {
+    ...parseStandaloneIdentityArgs(args),
     now: nowRaw !== undefined ? Number(nowRaw) : undefined,
   };
 }
 
 function parseSetMinBalanceArgs(args) {
   return {
+    ...parseStandaloneIdentityArgs(args),
     amount: parseFlagValue(args, '--amount'),
   };
 }
 
 function parseStakeArgs(args) {
   return {
+    ...parseStandaloneIdentityArgs(args),
     amount: parseFlagValue(args, '--amount'),
     receiver: parseFlagValue(args, '--receiver'),
     from: parseFlagValue(args, '--from'),
@@ -112,11 +154,12 @@ function parseStakeArgs(args) {
   };
 }
 
-function parseUnstakeArgs(args) {
+export function parseUnstakeArgs(args) {
   return {
+    ...parseStandaloneIdentityArgs(args),
     amount: parseFlagValue(args, '--amount'),
     shares: parseFlagValue(args, '--shares'),
-    finalize: parseFlagValue(args, '--finalize'),
+    finalize: parseFinalizeFlag(args),
     from: parseFlagValue(args, '--from'),
     receiver: parseFlagValue(args, '--receiver'),
     stakingPool: parseFlagValue(args, '--staking-pool'),
@@ -158,7 +201,7 @@ export async function main(argv = process.argv.slice(2)) {
         await runActivate({ ...parseActivateArgs(args), verbose });
         return 0;
       case 'status':
-        await runStatus({ verbose });
+        await runStatus({ ...parseStatusArgs(args), verbose });
         return 0;
       case 'set-min-balance':
         await runSetMinBalance({ ...parseSetMinBalanceArgs(args), verbose });

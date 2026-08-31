@@ -17,19 +17,28 @@ export function recordConfirmedReceipt({
   hash,
   addresses = {},
   amount = '0',
+  requestId,
+  requestIds,
   timestamp,
 }) {
   if (!hash) {
     throw new Error('Cannot write a receipt without a confirmed transaction hash');
   }
   const path = resolveReceiptsPath(env, { receiptsPath });
-  appendReceipt(path, {
+  const record = {
     timestamp: timestamp ?? new Date().toISOString(),
     action,
     hash,
     addresses,
     amount: amount == null ? '0' : String(amount),
-  });
+  };
+  if (requestId !== undefined) {
+    record.requestId = requestId;
+  }
+  if (requestIds !== undefined) {
+    record.requestIds = requestIds;
+  }
+  appendReceipt(path, record);
 }
 
 export function appendReceipt(path, record) {

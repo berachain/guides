@@ -33,38 +33,15 @@ describe('TP-8 non-TTY with zero missing facts', () => {
 });
 
 describe('TP-9 non-TTY with any missing fact refuses before prompts', () => {
-  it('refuses one missing fact (local cold-signing, only signing-preference omitted)', async () => {
+  it('refuses the one remaining missing fact (local cold-signing, funding-address omitted)', async () => {
     const missing = collectMissingFacts({
       locality: 'local',
       env: { BEACOND_HOME: '/tmp' },
-      options: { fundingAddress: FUNDING },
+      options: {},
     });
-    assert.deepEqual(missing.map((entry) => entry.fact), ['signing-preference']);
+    assert.deepEqual(missing.map((entry) => entry.fact), ['funding-address']);
 
     let prompted = false;
-    await assert.rejects(
-      () =>
-        conductInterview({
-          locality: 'local',
-          env: { BEACOND_HOME: '/tmp' },
-          options: { fundingAddress: FUNDING },
-          isTTY: false,
-          promptImpl: async () => {
-            prompted = true;
-            return '';
-          },
-        }),
-      (error) => {
-        assert.match(error.message, /Non-interactive stdin cannot prompt/);
-        assert.match(error.message, /--signing-preference/);
-        assert.ok(!/--funding-address/.test(error.message));
-        return true;
-      },
-    );
-    assert.equal(prompted, false);
-  });
-
-  it('refuses two-plus missing facts in validator-local cold-signing', async () => {
     await assert.rejects(
       () =>
         conductInterview({
@@ -73,11 +50,30 @@ describe('TP-9 non-TTY with any missing fact refuses before prompts', () => {
           options: {},
           isTTY: false,
           promptImpl: async () => {
-            throw new Error('must not prompt');
+            prompted = true;
+            return '';
           },
         }),
-      /--funding-address.*--signing-preference|--signing-preference.*--funding-address/,
+      (error) => {
+        assert.match(error.message, /Non-interactive stdin cannot prompt/);
+        assert.match(error.message, /--funding-address/);
+        assert.ok(!/--signing-preference/.test(error.message));
+        return true;
+      },
     );
+    assert.equal(prompted, false);
+  });
+
+  it('never refuses on signing-preference in validator-local cold-signing, even with every other fact supplied', async () => {
+    await conductInterview({
+      locality: 'local',
+      env: { BEACOND_HOME: '/tmp' },
+      options: { fundingAddress: FUNDING },
+      isTTY: false,
+      promptImpl: async () => {
+        throw new Error('must not prompt');
+      },
+    });
   });
 
   it('refuses two-plus missing facts in validator-remote', async () => {
@@ -120,6 +116,6 @@ describe('TP-9 non-TTY with any missing fact refuses before prompts', () => {
     assert.match(message, /--pubkey/);
     assert.match(message, /--deposit-output/);
     assert.match(message, /--funding-address/);
-    assert.match(message, /--signing-preference/);
+    assert.ok(!/--signing-preference/.test(message));
   });
 });
