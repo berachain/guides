@@ -195,7 +195,7 @@ export async function runActivationTransaction(ctx, activationCtx) {
     },
   };
 
-  return awaitConfirmedWrite({
+  const result = await awaitConfirmedWrite({
     ctx,
     runTx: () => runTransaction(ctx, descriptor),
     landedFn: async () => {
@@ -209,6 +209,9 @@ export async function runActivationTransaction(ctx, activationCtx) {
     scanAddress: ctx.factory,
     waitForLanding: ctx.waitForLanding !== false,
   });
+  // Cold-signing callers need this to refresh proactively before the proof
+  // actually expires, instead of waiting the full window and refreshing late.
+  return { ...result, expiresAtSeconds: activationCtx.expiry };
 }
 
 export async function verifyOperatorMatch(factory, rpcUrl, pubkey, chainReader) {
