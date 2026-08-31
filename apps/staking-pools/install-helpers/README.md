@@ -54,7 +54,7 @@ Entrypoint: `node pool-cli.mjs <command> [options]`
 
 ### Copy-paste ledger signing
 
-After dry-run, the CLI prints a complete `cast send … --ledger` command. Run that on your **laptop** (or any machine with your ledger). The validator host does not need a ledger attached.
+After dry-run, the CLI prints a complete `cast send … --ledger` command. Run that on your **laptop** (or any machine with your ledger). The validator host does not need a ledger attached. Cold-signing commands default to `--ledger`; pass `--signing-preference key` (or set it via env) if you'd rather the printed command sign with your own private key. This is a print-string choice only — the CLI never reads a key either way, and it is never asked for interactively.
 
 ### Optional hot-key `--execute`
 

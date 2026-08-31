@@ -11,13 +11,12 @@ describe('install interview slot', () => {
         () =>
           runInstall({
             env: { BEACOND_HOME: '/tmp', CLI_CHAIN: 'bepolia' },
-            fundingAddress: '0x' + '11'.repeat(20),
             isTTY: false,
             confirmAnswer: 'y',
           }),
         (error) => {
           assert.match(error.message, /Non-interactive stdin cannot prompt/);
-          assert.match(error.message, /--signing-preference/);
+          assert.match(error.message, /--funding-address/);
           return true;
         },
       );

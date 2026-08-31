@@ -14,14 +14,13 @@ const HELPERS = join(ROOT, '..');
 const ARTIFACT_DIR = join(ROOT, 'vc-artifacts');
 const OUT = join(ARTIFACT_DIR, 'vc-interview-3-nontty-refusal.txt');
 const FAKE_BEACOND = join(ROOT, 'helpers/fake-beacond.sh');
-const FUNDING = `0x${'11'.repeat(20)}`;
 
 async function main() {
   mkdirSync(ARTIFACT_DIR, { recursive: true });
 
   const child = spawn(
     'node',
-    ['pool-cli.mjs', 'install', '--funding-address', FUNDING],
+    ['pool-cli.mjs', 'install'],
     {
       cwd: HELPERS,
       env: {
@@ -65,8 +64,11 @@ async function main() {
   if (!/Non-interactive stdin cannot prompt/i.test(out)) {
     throw new Error(`VC-3 missing named refusal:\n${out}`);
   }
-  if (!/--signing-preference/.test(out)) {
-    throw new Error(`VC-3 did not name --signing-preference:\n${out}`);
+  if (!/--funding-address/.test(out)) {
+    throw new Error(`VC-3 did not name --funding-address:\n${out}`);
+  }
+  if (/--signing-preference/.test(out)) {
+    throw new Error(`VC-3 must not name --signing-preference (Phase A drops it as a missing fact):\n${out}`);
   }
   if (/Proceed\?/i.test(out)) {
     throw new Error('VC-3 reached confirmation');
