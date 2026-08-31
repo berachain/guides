@@ -1,8 +1,14 @@
+import { WITHDRAWAL_REQUEST_FINALIZATION_BLOCK_DELAY } from '../constants.mjs';
 import { createSignerFromEnv } from '../signers.mjs';
 import { logInfo, logSuccess } from '../log.mjs';
 import { resolveFromAddress, resolveOperatorPool } from '../pool-target.mjs';
 import { awaitConfirmedWrite } from '../confirmed-write.mjs';
-import { exclusiveFromBlock, RECEIPT_EVENT_ABIS, recoverTxHash } from '../receipt-events.mjs';
+import {
+  exclusiveFromBlock,
+  RECEIPT_EVENT_ABIS,
+  recoverEventArgsFromReceipt,
+  recoverTxHash,
+} from '../receipt-events.mjs';
 import { decodeWithdrawalRevert } from '../revert-decoder.mjs';
 import { runTransaction } from '../tx-pipeline.mjs';
 import { beraToGwei, beraToWei } from '../units.mjs';
@@ -62,14 +68,35 @@ function eventLanded(chainReader, address, action, fromBlock) {
 export function resolveUnstakeMode(options) {
   const hasAmount = hasValue(options.amount);
   const hasShares = hasValue(options.shares);
-  const hasFinalize = hasValue(options.finalize);
+  // --finalize's *presence* selects finalize mode, regardless of whether a
+  // valid id followed it — an empty string means "finalize every ready
+  // request," not "no --finalize passed." See resolveFinalizeTarget.
+  const hasFinalize = options.finalize !== undefined;
   const count = [hasAmount, hasShares, hasFinalize].filter(Boolean).length;
   if (count !== 1) {
-    throw new Error('Pass exactly one of --amount, --shares, or --finalize <requestId>');
+    throw new Error('Pass exactly one of --amount, --shares, or --finalize [requestId]');
   }
   if (hasFinalize) return 'finalize';
   if (hasAmount) return 'assets';
   return 'shares';
+}
+
+/**
+ * Decides single-ID vs finalize-all from the captured --finalize value.
+ * Empty/absent → finalize-all. A valid non-negative integer → single-ID.
+ * Anything else is a clear parse error (no silent fallback to finalize-all).
+ */
+export function resolveFinalizeTarget(rawValue) {
+  const value = String(rawValue ?? '').trim();
+  if (value === '') {
+    return { mode: 'all' };
+  }
+  if (/^[0-9]+$/.test(value)) {
+    return { mode: 'single', requestId: value };
+  }
+  throw new Error(
+    '--finalize must be a request id (uint256), or omitted to finalize every ready request',
+  );
 }
 
 function hasValue(value) {
@@ -84,10 +111,11 @@ async function assertPoolActive(stakingPool, chainReader) {
 }
 
 async function finalizeRequest(options, pool, from, env, signer, verbose, extras) {
-  const requestId = String(options.finalize).trim();
-  if (!/^[0-9]+$/.test(requestId)) {
-    throw new Error('--finalize must be a request id (uint256)');
+  const target = resolveFinalizeTarget(options.finalize);
+  if (target.mode === 'all') {
+    return finalizeAllReady(pool, from, env, signer, verbose, extras);
   }
+  const requestId = target.requestId;
 
   if (verbose) {
     logInfo(`Finalize withdrawal request: ${requestId}`);
@@ -137,6 +165,117 @@ async function finalizeRequest(options, pool, from, env, signer, verbose, extras
   });
 }
 
+async function enumerateWithdrawalRequests(chainReader, vault, holder) {
+  const balanceResult = await chainReader.call(vault, 'balanceOf(address)(uint256)', [holder]);
+  const count = Number(balanceResult.decoded?.[0] ?? 0);
+  const latestBlock = BigInt(await chainReader.getBlockNumber());
+
+  const ready = [];
+  const notReady = [];
+  for (let i = 0; i < count; i += 1) {
+    const idResult = await chainReader.call(
+      vault,
+      'tokenOfOwnerByIndex(address,uint256)(uint256)',
+      [holder, i],
+    );
+    const requestId = String(idResult.decoded?.[0]);
+    const requestResult = await chainReader.call(
+      vault,
+      'getWithdrawalRequest(uint256)(bytes,uint256,uint256,address,uint256)',
+      [requestId],
+    );
+    const requestBlock = BigInt(requestResult.decoded?.[4] ?? 0);
+    const readyAtBlock = requestBlock + WITHDRAWAL_REQUEST_FINALIZATION_BLOCK_DELAY;
+    if (latestBlock >= readyAtBlock) {
+      ready.push(requestId);
+    } else {
+      notReady.push({ requestId, readyAtBlock: readyAtBlock.toString() });
+    }
+  }
+  return { count, ready, notReady };
+}
+
+async function finalizeAllReady(pool, from, env, signer, verbose, extras) {
+  const { count, ready, notReady } = await enumerateWithdrawalRequests(
+    pool.chainReader,
+    pool.withdrawalVault,
+    from,
+  );
+
+  if (count === 0) {
+    logInfo(`No pending requests for this holder (${from}).`);
+    return { mode: 'none', ready: [], notReady: [] };
+  }
+  if (ready.length === 0) {
+    logInfo('No withdrawal requests are ready to finalize yet:');
+    for (const entry of notReady) {
+      logInfo(`  request ${entry.requestId} becomes ready at block ${entry.readyAtBlock}`);
+    }
+    return { mode: 'none', ready: [], notReady };
+  }
+  if (verbose) {
+    logInfo(`Finalizing ${ready.length} ready withdrawal request(s): ${ready.join(', ')}`);
+    if (notReady.length > 0) {
+      for (const entry of notReady) {
+        logInfo(`  (leaving request ${entry.requestId} — ready at block ${entry.readyAtBlock})`);
+      }
+    }
+  }
+
+  const ctx = {
+    execute: signer.mode === 'hot-key',
+    env,
+    rpcUrl: pool.rpcUrl,
+    from,
+    withdrawalVault: pool.withdrawalVault,
+    requestIds: ready,
+    chainReader: pool.chainReader,
+    signer,
+    verbose,
+    ...extras,
+  };
+
+  const fromBlock =
+    signer.mode === 'cold-signing' ? await exclusiveFromBlock(pool.chainReader) : '0x0';
+
+  const result = await awaitConfirmedWrite({
+    ctx,
+    runTx: () =>
+      runTransaction(ctx, {
+        label: 'finalizeWithdrawalRequests',
+        target: ctx.withdrawalVault,
+        signature: 'finalizeWithdrawalRequests(uint256[])',
+        buildCalldataArgs: () => [ctx.requestIds],
+        decodePreflightError: decodeWithdrawalRevert,
+        decodeDryRun: async () => {
+          if (verbose) {
+            logSuccess(`Preflight OK — finalizeWithdrawalRequests([${ctx.requestIds.join(',')}])`);
+          }
+        },
+      }),
+    landedFn: eventLanded(
+      pool.chainReader,
+      pool.withdrawalVault,
+      'unstake.finalizeWithdrawalRequests',
+      fromBlock,
+    ),
+    action: 'unstake.finalizeWithdrawalRequests',
+    addresses: { pool: pool.stakingPool, withdrawalVault: pool.withdrawalVault },
+    amount: String(ready.length),
+    scanAddress: pool.withdrawalVault,
+    waitForLanding: extras.waitForLanding !== false,
+    deriveReceiptFields: async (hash) => ({
+      requestIds: await recoverEventArgsFromReceipt(pool.chainReader, {
+        hash,
+        address: pool.withdrawalVault,
+        eventAbi: RECEIPT_EVENT_ABIS['unstake.finalizeWithdrawalRequests'],
+        argName: 'requestId',
+      }),
+    }),
+  });
+  return { notReady, ...result };
+}
+
 async function requestByAssets(options, pool, from, env, signer, verbose, extras) {
   const { decimal, gwei } = beraToGwei(options.amount, '--amount');
   const feeWei = await resolveFee({
@@ -167,7 +306,7 @@ async function requestByAssets(options, pool, from, env, signer, verbose, extras
 
   const fromBlock =
     signer.mode === 'cold-signing' ? await exclusiveFromBlock(pool.chainReader) : '0x0';
-  return awaitConfirmedWrite({
+  const result = await awaitConfirmedWrite({
     ctx,
     runTx: () =>
       runTransaction(ctx, {
@@ -187,7 +326,7 @@ async function requestByAssets(options, pool, from, env, signer, verbose, extras
         },
         beforeEmit: () => {
           if (verbose) {
-            logInfo('After the cooldown, finalize with: node pool-cli.mjs unstake --finalize <requestId>');
+            logInfo('After the cooldown, finalize with: node pool-cli.mjs unstake --finalize <requestId> (or --finalize with no id, for every ready request)');
           }
         },
       }),
@@ -197,7 +336,19 @@ async function requestByAssets(options, pool, from, env, signer, verbose, extras
     amount: decimal,
     scanAddress: pool.withdrawalVault,
     waitForLanding: extras.waitForLanding !== false,
+    deriveReceiptFields: async (hash) => ({
+      requestId: (await recoverEventArgsFromReceipt(pool.chainReader, {
+        hash,
+        address: pool.withdrawalVault,
+        eventAbi: RECEIPT_EVENT_ABIS['unstake.requestWithdrawal'],
+        argName: 'requestId',
+      }))[0],
+    }),
   });
+  if (result.requestId) {
+    logSuccess(`Withdrawal request created: id ${result.requestId}`);
+  }
+  return result;
 }
 
 async function requestByShares(options, pool, from, env, signer, verbose, extras) {
@@ -230,7 +381,7 @@ async function requestByShares(options, pool, from, env, signer, verbose, extras
 
   const fromBlock =
     signer.mode === 'cold-signing' ? await exclusiveFromBlock(pool.chainReader) : '0x0';
-  return awaitConfirmedWrite({
+  const result = await awaitConfirmedWrite({
     ctx,
     runTx: () =>
       runTransaction(ctx, {
@@ -250,7 +401,7 @@ async function requestByShares(options, pool, from, env, signer, verbose, extras
         },
         beforeEmit: () => {
           if (verbose) {
-            logInfo('After the cooldown, finalize with: node pool-cli.mjs unstake --finalize <requestId>');
+            logInfo('After the cooldown, finalize with: node pool-cli.mjs unstake --finalize <requestId> (or --finalize with no id, for every ready request)');
           }
         },
       }),
@@ -260,7 +411,19 @@ async function requestByShares(options, pool, from, env, signer, verbose, extras
     amount: decimal,
     scanAddress: pool.withdrawalVault,
     waitForLanding: extras.waitForLanding !== false,
+    deriveReceiptFields: async (hash) => ({
+      requestId: (await recoverEventArgsFromReceipt(pool.chainReader, {
+        hash,
+        address: pool.withdrawalVault,
+        eventAbi: RECEIPT_EVENT_ABIS['unstake.requestRedeem'],
+        argName: 'requestId',
+      }))[0],
+    }),
   });
+  if (result.requestId) {
+    logSuccess(`Withdrawal request created: id ${result.requestId}`);
+  }
+  return result;
 }
 
 export async function resolveFee({ options, chainReader, vault }) {

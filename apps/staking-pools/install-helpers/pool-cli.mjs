@@ -46,7 +46,9 @@ Stake:
   --amount BERA --receiver 0x... [--from 0x...] [--staking-pool 0x...]
 
 Unstake:
-  --amount BERA | --shares stBERA | --finalize REQUEST_ID
+  --amount BERA | --shares stBERA | --finalize [REQUEST_ID]
+  --finalize with no id finalizes every ready request for --from in one
+  batch transaction; --finalize <id> finalizes just that one request.
   --from 0x...   stBERA holder (or --receiver as alias; or PRIVATE_KEY)
   [--staking-pool 0x...] [--max-fee BERA]
 
@@ -68,6 +70,21 @@ function parseFlagValue(args, flag) {
   const index = args.indexOf(flag);
   if (index === -1) return undefined;
   return args[index + 1];
+}
+
+/**
+ * --finalize is special: present with no following token, or immediately
+ * followed by another recognized flag (e.g. `--from`), means "finalize
+ * every ready request" (empty-string sentinel), not "consume that flag as
+ * --finalize's value." A following token that isn't a recognized flag is
+ * taken as the request id, same as any other flag value.
+ */
+function parseFinalizeFlag(args) {
+  const index = args.indexOf('--finalize');
+  if (index === -1) return undefined;
+  const next = args[index + 1];
+  if (next === undefined || next.startsWith('--')) return '';
+  return next;
 }
 
 function parseDeployArgs(args) {
@@ -112,11 +129,11 @@ function parseStakeArgs(args) {
   };
 }
 
-function parseUnstakeArgs(args) {
+export function parseUnstakeArgs(args) {
   return {
     amount: parseFlagValue(args, '--amount'),
     shares: parseFlagValue(args, '--shares'),
-    finalize: parseFlagValue(args, '--finalize'),
+    finalize: parseFinalizeFlag(args),
     from: parseFlagValue(args, '--from'),
     receiver: parseFlagValue(args, '--receiver'),
     stakingPool: parseFlagValue(args, '--staking-pool'),

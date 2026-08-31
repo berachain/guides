@@ -13,6 +13,7 @@ export async function awaitConfirmedWrite({
   scanAddress,
   eventAbi,
   waitForLanding = true,
+  deriveReceiptFields,
 }) {
   const receiptsPath = ctx.receiptsPath;
   const env = ctx.env ?? {};
@@ -20,6 +21,7 @@ export async function awaitConfirmedWrite({
   if (ctx.signer.mode === 'hot-key') {
     const result = await runTx();
     if (result.mode === 'execute') {
+      const extra = deriveReceiptFields ? await deriveReceiptFields(result.hash) : {};
       recordConfirmedReceipt({
         receiptsPath,
         env,
@@ -27,7 +29,9 @@ export async function awaitConfirmedWrite({
         hash: result.hash,
         addresses,
         amount,
+        ...extra,
       });
+      return { ...result, ...extra };
     }
     return result;
   }
@@ -56,6 +60,7 @@ export async function awaitConfirmedWrite({
     eventAbi: eventAbi ?? RECEIPT_EVENT_ABIS[action],
     fromBlock,
   });
+  const extra = deriveReceiptFields ? await deriveReceiptFields(hash) : {};
   recordConfirmedReceipt({
     receiptsPath,
     env,
@@ -63,6 +68,7 @@ export async function awaitConfirmedWrite({
     hash,
     addresses,
     amount,
+    ...extra,
   });
-  return { ...result, hash };
+  return { ...result, hash, ...extra };
 }

@@ -29,6 +29,8 @@ export const RPC_DEFAULTS = {
   bepolia: 'https://bepolia.rpc.berachain.com',
 };
 
+export const WITHDRAWAL_REQUEST_FINALIZATION_BLOCK_DELAY = 129600n;
+
 export const FORBIDDEN_SHELL_COMMANDS = [
   'jq',
   'bc',

@@ -120,10 +120,13 @@ Withdrawal is two transactions. Request creates an NFT; after the on-chain delay
 ```bash
 node pool-cli.mjs unstake --amount 100 --from 0xHOLDER
 node pool-cli.mjs unstake --shares 50 --from 0xHOLDER
-node pool-cli.mjs unstake --finalize 42 --from 0xHOLDER
+node pool-cli.mjs unstake --finalize --from 0xHOLDER      # finalize every ready request
+node pool-cli.mjs unstake --finalize 42 --from 0xHOLDER    # finalize just request 42
 ```
 
-`--amount` calls `WithdrawalVault.requestWithdrawal(pubkey, assetsInGWei, maxFeeToPay)` (amount must be a multiple of 1 gwei). `--shares` calls `requestRedeem`. `--finalize` calls `finalizeWithdrawalRequest`. Pass exactly one of those three.
+`--amount` calls `WithdrawalVault.requestWithdrawal(pubkey, assetsInGWei, maxFeeToPay)` (amount must be a multiple of 1 gwei) and calls `requestRedeem` for `--shares`. Either surfaces the confirmed request id in its output and receipt. Pass exactly one of `--amount`, `--shares`, or `--finalize`.
+
+`--finalize` with no id (including when immediately followed by another flag, e.g. `--from`) enumerates every withdrawal-request NFT `--from` holds, finalizes every one that has passed the finalization delay in a single `finalizeWithdrawalRequests(uint256[])` transaction (never one call per id — cold-signing prints exactly one `cast send` covering all of them), and reports plainly if none are ready yet (naming each and when it becomes ready) or if there are none at all. `--finalize <id>` finalizes just that one request via `finalizeWithdrawalRequest(uint256)`, unchanged. A batch finalize is recorded as one receipt entry with a `requestIds` array and one transaction hash.
 
 `--from` is the stBERA holder (required for preflight). `--receiver` is accepted as an alias. If both are omitted, the CLI derives the address from `PRIVATE_KEY`.
 
