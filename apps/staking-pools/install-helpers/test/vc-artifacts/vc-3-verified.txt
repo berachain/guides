@@ -1,0 +1,5 @@
+before_kill=1
+after_kill=1
+action=deploy
+hash=0xf5a78b91cf8d8726f5e67af4c8661194e418bf80b50f86bf9ec419d678cb9df6
+parse=ok

@@ -18,7 +18,7 @@ export async function runActivate(options) {
   const factory = getFactoryAddress(network);
   const pubkey = getValidatorPubkey(env);
   const chainReader = createChainReader(rpcUrl, options.fetchImpl);
-  const signer = createSignerFromEnv({
+  const signer = options.signer ?? createSignerFromEnv({
     env,
     rpcUrl,
     fetchImpl: options.fetchImpl,
@@ -51,6 +51,9 @@ export async function runActivate(options) {
     chainReader,
     signer,
     verbose,
+    receiptsPath: options.receiptsPath,
+    predicted,
+    stakingPool: predicted.stakingPool,
   };
 
   return runActivationTransaction(ctx, activationCtx);

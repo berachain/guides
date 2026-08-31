@@ -55,6 +55,7 @@ describe('TP-23 runSetMinBalance smoke test', () => {
     installBeacond();
     try {
       const result = await runSetMinBalance({
+        waitForLanding: false,
         env: {
           BEACOND_HOME: '/tmp/beacond',
           CLI_CHAIN: 'bepolia',

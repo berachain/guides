@@ -11,6 +11,7 @@ import { createChainReader } from '../chain-reader.mjs';
 import { createSignerFromEnv } from '../signers.mjs';
 import { logInfo, logSuccess } from '../log.mjs';
 import { decodeDeployRevert } from '../revert-decoder.mjs';
+import { awaitConfirmedWrite } from '../confirmed-write.mjs';
 import { runTransaction } from '../tx-pipeline.mjs';
 import { normalizeAddress } from '../units.mjs';
 
@@ -29,7 +30,7 @@ export async function runDeploy(options) {
   const chainReader = createChainReader(rpcUrl, options.fetchImpl);
   const withdrawalVault = await getWithdrawalVault(network, env, chainReader);
   const deposit = createValidatorDeposit(withdrawalVault, env);
-  const signer = createSignerFromEnv({
+  const signer = options.signer ?? createSignerFromEnv({
     env,
     rpcUrl,
     fetchImpl: options.fetchImpl,
@@ -63,9 +64,12 @@ export async function runDeploy(options) {
     chainReader,
     signer,
     verbose,
+    receiptsPath: options.receiptsPath,
+    pollIntervalMs: options.pollIntervalMs,
+    pollTimeoutMs: options.pollTimeoutMs,
   };
 
-  return runTransaction(ctx, {
+  const descriptor = {
     label: 'deployStakingPoolContracts',
     target: factory,
     signature:
@@ -92,5 +96,25 @@ export async function runDeploy(options) {
         logInfo(`Value transfer authorized: ${DEPLOY_VALUE} initial deposit`);
       }
     },
+  };
+
+  return awaitConfirmedWrite({
+    ctx,
+    runTx: () => runTransaction(ctx, descriptor),
+    landedFn: async () => {
+      const code = await ctx.chainReader.getCode(ctx.predicted.stakingPool);
+      return Boolean(code && code !== '0x');
+    },
+    action: 'deploy',
+    addresses: {
+      pool: ctx.predicted.stakingPool,
+      operator: ctx.operator,
+      sharesRecipient: ctx.sharesRecipient,
+      smartOperator: ctx.predicted.smartOperator,
+      factory,
+    },
+    amount: '10000',
+    scanAddress: factory,
+    waitForLanding: options.waitForLanding !== false,
   });
 }
