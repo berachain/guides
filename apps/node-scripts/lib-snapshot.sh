@@ -153,14 +153,50 @@ fetch_text() {
   curl -fsSL "$url"
 }
 
+# Pull CHAIN from env.sh without sourcing the rest (MY_IP curl, binary checks).
+read_chain_from_env_file() {
+  local file="$1"
+  local line val
+  [[ -f "$file" ]] || return 0
+  line="$(grep -E '^export CHAIN=' "$file" | head -n1 || true)"
+  [[ -n "$line" ]] || return 0
+  val="${line#export CHAIN=}"
+  val="${val%%#*}"
+  val="${val//[[:space:]]/}"
+  [[ -n "$val" ]] && CHAIN="$val"
+}
+
+apply_network_from_env() {
+  local script_dir="$1"
+  local from_flag="$2"
+  [[ "$from_flag" -eq 0 ]] || return 0
+  if [[ -z "${CHAIN:-}" ]]; then
+    if [[ -f "$script_dir/env.sh" ]]; then
+      read_chain_from_env_file "$script_dir/env.sh"
+    elif [[ -f ./env.sh ]]; then
+      read_chain_from_env_file ./env.sh
+    fi
+  fi
+  NETWORK="${CHAIN:-mainnet}"
+  if [[ "$NETWORK" != mainnet && "$NETWORK" != bepolia ]]; then
+    NETWORK=mainnet
+  fi
+}
+
 source_env_if_needed() {
-  if [[ ! -f ./env.sh ]]; then
+  local here
+  here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  local env_file="$here/env.sh"
+  if [[ ! -f "$env_file" ]]; then
+    env_file="./env.sh"
+  fi
+  if [[ ! -f "$env_file" ]]; then
     die "set BEACOND_DATA and RETH_DATA, or run from a node-scripts directory with env.sh"
   fi
   set +e
   set +u
   # shellcheck disable=SC1091
-  . ./env.sh
+  . "$env_file"
   local rc=$?
   set -e
   set -u

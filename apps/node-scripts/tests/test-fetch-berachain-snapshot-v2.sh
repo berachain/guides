@@ -125,7 +125,9 @@ else
 fi
 
 tmp="$(tmpdir)"
-if (cd "$tmp" && unset BEACOND_DATA RETH_DATA && "$SCRIPT" --network bepolia --beacon-only --catalog-url "$FIXTURE" >/dev/null 2>"$tmp/err"); then
+cp "$ROOT/fetch-berachain-snapshot-v2.sh" "$ROOT/lib-snapshot.sh" "$tmp/"
+chmod +x "$tmp/fetch-berachain-snapshot-v2.sh"
+if (cd "$tmp" && unset BEACOND_DATA RETH_DATA && ./fetch-berachain-snapshot-v2.sh --network bepolia --beacon-only --catalog-url "$FIXTURE" >/dev/null 2>"$tmp/err"); then
   fail "extract without BEACOND_DATA fails" "expected non-zero"
 else
   if grep -q BEACOND_DATA "$tmp/err"; then pass "extract without BEACOND_DATA fails"; else fail "extract without BEACOND_DATA fails" "$(cat "$tmp/err")"; fi
@@ -245,6 +247,20 @@ if CHAIN=bepolia "$SCRIPT" --catalog-url "$FIXTURE" --no-download >"$tmp/out" 2>
   if grep -q -- '--chain bepolia' "$tmp/out"; then pass "CHAIN sets default network"; else fail "CHAIN sets default network" "$(cat "$tmp/out")"; fi
 else
   fail "CHAIN sets default network" "$(cat "$tmp/err")"
+fi
+
+tmp="$(tmpdir)"
+cp "$ROOT/fetch-berachain-snapshot-v2.sh" "$ROOT/lib-snapshot.sh" "$tmp/"
+printf 'export CHAIN=bepolia\n' >"$tmp/env.sh"
+chmod +x "$tmp/fetch-berachain-snapshot-v2.sh"
+if env -u CHAIN "$tmp/fetch-berachain-snapshot-v2.sh" --catalog-url "$FIXTURE" --no-download >"$tmp/out" 2>"$tmp/err"; then
+  if grep -q 'Network: bepolia' "$tmp/out" && grep -q -- '--chain bepolia' "$tmp/out"; then
+    pass "env.sh CHAIN selects network without exporting CHAIN"
+  else
+    fail "env.sh CHAIN selects network without exporting CHAIN" "$(cat "$tmp/out")"
+  fi
+else
+  fail "env.sh CHAIN selects network without exporting CHAIN" "$(cat "$tmp/err")"
 fi
 
 tmp="$(tmpdir)"

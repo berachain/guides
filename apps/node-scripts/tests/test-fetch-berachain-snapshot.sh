@@ -140,6 +140,25 @@ else
   fail "--network overrides CHAIN" "$(cat "$tmp/err")"
 fi
 
+# env.sh CHAIN is used when CHAIN is unset (no --network)
+tmp="$(tmpdir)"; fix="$tmp/files"; mkdir -p "$fix"
+printf x >"$fix/beacon-kit-pruned-100.tar.lz4"
+write_index "$fix"
+bin="$tmp/bin"; mkdir -p "$bin"
+curl_copy_stub "$fix" >"$bin/curl"; chmod +x "$bin/curl"
+cp "$ROOT/fetch-berachain-snapshot.sh" "$ROOT/lib-snapshot.sh" "$tmp/"
+printf 'export CHAIN=bepolia\n' >"$tmp/env.sh"
+chmod +x "$tmp/fetch-berachain-snapshot.sh"
+if PATH="$bin:$PATH" env -u CHAIN "$tmp/fetch-berachain-snapshot.sh" --no-extract --beacon-only -o "$tmp/downloads" >"$tmp/out" 2>"$tmp/err"; then
+  if grep -q 'Network: bepolia' "$tmp/out" && grep -q 'bepolia.snapshots.berachain.com' "$tmp/out"; then
+    pass "env.sh CHAIN selects network without exporting CHAIN"
+  else
+    fail "env.sh CHAIN selects network without exporting CHAIN" "$(cat "$tmp/out")"
+  fi
+else
+  fail "env.sh CHAIN selects network without exporting CHAIN" "$(cat "$tmp/err")"
+fi
+
 # missing snapshot
 tmp="$(tmpdir)"; fix="$tmp/files"; mkdir -p "$fix"
 cat >"$fix/index.csv" <<'EOF'
@@ -155,10 +174,10 @@ else
 fi
 
 # extract without BEACOND_DATA
-tmp="$(tmpdir)"; fix="$tmp/files"; mkdir -p "$fix"
-printf x >"$fix/beacon-kit-pruned-100.tar.lz4"
-write_index "$fix"
-if (cd "$tmp" && unset BEACOND_DATA RETH_DATA && "$SCRIPT" --beacon-only >/dev/null 2>"$tmp/err"); then
+tmp="$(tmpdir)"
+cp "$ROOT/fetch-berachain-snapshot.sh" "$ROOT/lib-snapshot.sh" "$tmp/"
+chmod +x "$tmp/fetch-berachain-snapshot.sh"
+if (cd "$tmp" && unset BEACOND_DATA RETH_DATA CHAIN && ./fetch-berachain-snapshot.sh --beacon-only >/dev/null 2>"$tmp/err"); then
   fail "extract without BEACOND_DATA fails" "expected non-zero"
 else
   if grep -q BEACOND_DATA "$tmp/err"; then pass "extract without BEACOND_DATA fails"; else fail "extract without BEACOND_DATA fails" "$(cat "$tmp/err")"; fi

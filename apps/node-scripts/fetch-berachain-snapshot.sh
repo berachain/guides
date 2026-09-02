@@ -102,6 +102,7 @@ done
 [[ "$BEACON_ONLY" -eq 1 && "$EL_ONLY" -eq 1 ]] && die "use only one of --beacon-only and --el-only"
 [[ "$SNAPSHOT_TYPE" == pruned || "$SNAPSHOT_TYPE" == archive ]] || die "type must be either pruned or archive"
 
+apply_network_from_env "$SCRIPT_DIR" "$NETWORK_FROM_FLAG"
 if [[ "$NETWORK_FROM_FLAG" -eq 1 ]]; then
   export CHAIN="$NETWORK"
 fi
