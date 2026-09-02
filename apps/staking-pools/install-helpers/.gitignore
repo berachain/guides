@@ -1,11 +1,2 @@
-# User configuration
 env.sh
-
-# Generated files directory
-generated/
-
-# Backup files
-*.bak
-*.old
-
-
+staking-pool-receipts.jsonl

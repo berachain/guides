@@ -5,11 +5,15 @@ set -euo pipefail
 # Usage: ./install.sh | --help
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=../install-helpers/lib-common.sh
-source "$SCRIPT_DIR/../install-helpers/lib-common.sh"
+# shellcheck source=lib-common.sh
+source "$SCRIPT_DIR/lib-common.sh"
+load_env_if_present "$SCRIPT_DIR"
 
-readonly INSTALLER_RECEIPTS="${INSTALLER_RECEIPTS:-./staking-pool-receipts.jsonl}"
+readonly INSTALLER_RECEIPTS="$SCRIPT_DIR/staking-pool-receipts.jsonl"
 readonly DEPOSIT_AMOUNT_GWEI="10000000000000"
+readonly REGISTRATION_WAIT_MAX=360
+readonly ACTIVATION_MAX_AGE=600
+ACTIVATION_TIMESTAMP=""
 
 preflight() {
   ensure_cast || return 1
@@ -62,13 +66,13 @@ verify_cl() {
   base=$(normalize_cl_base "$1")
   local http_status body tmp
   tmp=$(mktemp)
-  # shellcheck disable=SC2064
-  trap "rm -f '$tmp'" RETURN
   http_status=$(curl -sS -o "$tmp" -w "%{http_code}" "${base}/eth/v1/node/syncing" 2>&1) || {
+    rm -f "$tmp"
     log_error "CL Node API unreachable at $base"
     return 1
   }
   body=$(cat "$tmp")
+  rm -f "$tmp"
   if [[ "$http_status" != "200" ]]; then
     log_error "CL Node API returned HTTP $http_status: $(echo "$body" | head -c 200)"
     return 1
@@ -77,31 +81,17 @@ verify_cl() {
     log_error "CL Node API returned non-JSON from ${base}/eth/v1/node/syncing"
     return 1
   fi
+  local is_syncing is_optimistic
+  is_syncing=$(echo "$body" | jq -r '.data.is_syncing // empty')
+  is_optimistic=$(echo "$body" | jq -r '.data.is_optimistic // empty')
+  if [[ "$is_syncing" == "true" ]]; then
+    log_error "CL Node API reports syncing=true — wait for sync before landing a pool"
+    return 1
+  fi
+  if [[ "$is_optimistic" == "true" ]]; then
+    log_warn "CL Node API reports is_optimistic=true — activation proofs may be unreliable"
+  fi
   printf '%s' "$base"
-}
-
-require_evm_address() {
-  local label="$1"
-  local value="$2"
-  local normalized
-  normalized=$(normalize_evm_address "$value")
-  if [[ -z "$normalized" ]]; then
-    log_error "$label must be 0x followed by 40 hex characters"
-    return 1
-  fi
-  printf '%s' "$normalized"
-}
-
-require_tx_hash() {
-  local label="$1"
-  local value="$2"
-  local lower
-  lower=$(echo "$value" | tr 'A-F' 'a-f')
-  if [[ ! "$lower" =~ ^0x[0-9a-f]{64}$ ]]; then
-    log_error "$label must be a 32-byte transaction hash (0x + 64 hex)"
-    return 1
-  fi
-  printf '%s' "$lower"
 }
 
 parse_deposit_paste() {
@@ -139,22 +129,15 @@ validate_deposit() {
     return 1
   fi
 
-  local beacond_bin="${BEACOND_BIN:-beacond}"
-  if [[ -z "${BEACOND_HOME:-}" ]] || ! have_cmd "$beacond_bin"; then
-    log_info "Run deposit validate on the validator before pasting (must exit 0, no output):"
-    echo "  beacond --home <BEACOND_HOME> deposit validate \\"
-    echo "    $pubkey $cred $amount_gwei $sig -g $genesis_root"
-    return 0
-  fi
-
-  local vout rc=0
-  vout=$("$beacond_bin" --home "$BEACOND_HOME" deposit validate \
-    "$pubkey" "$cred" "$amount_gwei" "$sig" -g "$genesis_root" 2>&1) || rc=$?
-  if (( rc != 0 )); then
-    log_error "beacond deposit validate failed: $vout"
+  log_info "Run deposit validate on the validator before pasting (must exit 0, no output):"
+  echo "  beacond --home <validator-data-dir> deposit validate \\"
+  echo "    $pubkey $cred $amount_gwei $sig -g $genesis_root"
+  local ans
+  read -r -p "Did you run deposit validate on the validator (exit 0)? [y/N] " ans
+  if [[ ! "$ans" =~ ^[yY] ]]; then
+    log_error "Confirm deposit validate on the validator before continuing"
     return 1
   fi
-  log_success "beacond deposit validate: OK"
 }
 
 lookup_delegation_handler() {
@@ -194,8 +177,10 @@ assert_delegated_landing_ready() {
 
   local handler_pubkey
   handler_pubkey=$(cast call "$handler" "pubkey()(bytes)" -r "$rpc" 2>/dev/null || echo "")
-  handler_pubkey=$(echo "$handler_pubkey" | tr 'A-F' 'a-f')
-  if [[ "$handler_pubkey" != "$(bash_lowercase "$pubkey")" ]]; then
+  handler_pubkey=$(normalize_validator_pubkey "$handler_pubkey" 2>/dev/null || echo "")
+  local normalized_pk
+  normalized_pk=$(normalize_validator_pubkey "$pubkey" 2>/dev/null || echo "")
+  if [[ -z "$handler_pubkey" || "$handler_pubkey" != "$normalized_pk" ]]; then
     log_error "Handler pubkey $handler_pubkey does not match validator pubkey $pubkey"
     return 1
   fi
@@ -239,9 +224,11 @@ funding_address() {
     cast wallet address --private-key "$PRIVATE_KEY" 2>/dev/null | tr 'A-F' 'a-f'
     return
   fi
-  local addr
-  read -r -p "Funding wallet address (0x...): " addr
-  require_evm_address "Funding address" "$addr"
+  local default=""
+  if [[ -n "${FUNDING_ADDRESS:-}" ]]; then
+    default=$(normalize_evm_address "$FUNDING_ADDRESS" || true)
+  fi
+  prompt_evm_address "Funding wallet address" "$default"
 }
 
 run_cast_or_paste() {
@@ -252,7 +239,10 @@ run_cast_or_paste() {
 
   echo "" >&2
   log_info "$label command:"
-  echo "$cast_cmd" >&2
+  echo "$(redact_cast_cmd_for_display "$cast_cmd")" >&2
+  if [[ "$label" == "activate" ]]; then
+    log_warn "Activation proofs expire ${ACTIVATION_MAX_AGE}s after generation — run the command promptly"
+  fi
   echo "" >&2
 
   local tx_hash=""
@@ -300,13 +290,22 @@ wait_for_validator_registration() {
   local cl_base="$1"
   local pubkey="$2"
   local index=""
+  local attempt=0
   log_info "Waiting for validator registration on beacon chain..."
   while [[ -z "$index" ]]; do
+    (( attempt++ )) || true
+    if (( attempt > REGISTRATION_WAIT_MAX )); then
+      log_error "Timed out waiting for validator registration after $((REGISTRATION_WAIT_MAX * 5))s"
+      return 1
+    fi
     index=$(get_validator_index_from_api "$cl_base" "$pubkey")
     if [[ -n "$index" ]]; then
       log_success "Registered (index $index)."
       printf '%s' "$index"
       return 0
+    fi
+    if (( attempt % 12 == 0 )); then
+      log_info "Still waiting for registration (attempt $attempt/$REGISTRATION_WAIT_MAX)..."
     fi
     sleep 5
   done
@@ -317,13 +316,13 @@ fetch_json() {
   local label="${2:-$url}"
   local body http_status tmp
   tmp=$(mktemp)
-  # shellcheck disable=SC2064
-  trap "rm -f '$tmp'" RETURN
   http_status=$(curl -sS -o "$tmp" -w "%{http_code}" "$url" 2>&1) || {
+    rm -f "$tmp"
     log_error "curl failed for $label"
     return 1
   }
   body=$(cat "$tmp")
+  rm -f "$tmp"
   if [[ "$http_status" != "200" ]]; then
     log_error "$label returned HTTP $http_status"
     return 1
@@ -335,6 +334,102 @@ fetch_json() {
   printf '%s' "$body"
 }
 
+decode_activation_revert() {
+  local msg="${1:-}"
+  local lower
+  lower=$(echo "$msg" | tr 'A-F' 'a-f')
+  case "$lower" in
+    *0x7b5d09a5*) echo "InvalidInitialDepositAmount() — validator balance < 10000 ether" ;;
+    *0xccea9e6f*) echo "InvalidOperator() — BeaconDeposit.getOperator(pubkey) != smartOperator" ;;
+    *0x9be73159*) echo "InvalidWithdrawalCredentials() — validator WC != withdrawal vault" ;;
+    *0xb7d09497*) echo "InvalidTimestamp() — proof timestamp in the future or > 10 minutes old" ;;
+    *0xa7baf889*) echo "InvalidBeaconBlockRoot() — EIP-4788 root missing for timestamp" ;;
+    *0x09bde339*) echo "InvalidProof() — SSZ proof failed" ;;
+    *0xc52e3eff*) echo "InvalidBalance() — balanceLeaf mismatch" ;;
+    *0x6cbf06ef*) echo "StakingPoolAlreadyActivated() — pool.isActive() is already true" ;;
+    *) echo "$msg" ;;
+  esac
+}
+
+assert_proof_slots_match() {
+  local pinned_slot="$1"
+  local slot_dec="$((10#$pinned_slot))"
+  shift
+  local json_var got_slot got_slot_dec
+  for json_var in "$@"; do
+    got_slot=$(echo "$json_var" | jq -r '.beacon_block_header.slot // empty')
+    if [[ -z "$got_slot" ]]; then
+      log_error "Proof response missing beacon_block_header.slot"
+      return 1
+    fi
+    if [[ "$got_slot" == 0x* ]]; then
+      got_slot_dec=$((got_slot))
+    else
+      got_slot_dec=$((10#$got_slot))
+    fi
+    if (( got_slot_dec != slot_dec )); then
+      log_error "Proof slot $got_slot_dec does not match pinned slot $slot_dec"
+      return 1
+    fi
+  done
+  return 0
+}
+
+assert_pool_ready_for_activation() {
+  local factory="$1"
+  local rpc="$2"
+  local staking_pool="$3"
+  local pubkey="$4"
+  local withdrawal_vault="$5"
+
+  local pool_code
+  pool_code=$(cast code "$staking_pool" -r "$rpc" 2>/dev/null || echo "0x")
+  if [[ -z "$pool_code" || "$pool_code" == "0x" ]]; then
+    log_error "Staking pool contract not deployed at $staking_pool"
+    return 1
+  fi
+
+  local is_active
+  is_active=$(cast call "$staking_pool" "isActive()(bool)" -r "$rpc" 2>/dev/null | tr -d '[:space:]' || echo "")
+  if [[ "$is_active" == "true" ]]; then
+    log_success "Pool is already activated (isActive=true)"
+    return 2
+  fi
+  if [[ "$is_active" != "false" ]]; then
+    log_error "Could not read isActive() from $staking_pool"
+    return 1
+  fi
+
+  local beacon_deposit core_contracts_raw core_smart_op beacon_deposit_op
+  beacon_deposit=$(get_beacon_deposit_address)
+  core_contracts_raw=$(cast call "$factory" \
+    "getCoreContracts(bytes)((address,address,address,address))" \
+    "$pubkey" -r "$rpc" 2>/dev/null || echo "")
+  if [[ -n "$core_contracts_raw" ]]; then
+    core_smart_op=$(echo "$core_contracts_raw" | tr -d '()' | awk -F',' '{print $1}' | tr -d '[:space:]' | tr 'A-F' 'a-f')
+    beacon_deposit_op=$(cast call "$beacon_deposit" "getOperator(bytes)(address)" "$pubkey" -r "$rpc" 2>/dev/null \
+      | tr -d '[:space:]' | tr 'A-F' 'a-f' || echo "")
+    if [[ -n "$core_smart_op" && -n "$beacon_deposit_op" && "$core_smart_op" != "$beacon_deposit_op" ]]; then
+      log_error "BeaconDeposit.getOperator ($beacon_deposit_op) != smartOperator ($core_smart_op)"
+      return 1
+    fi
+  fi
+
+  local withdrawal_vault_lower expected_wc_lower v_wc_lower v_wc
+  withdrawal_vault_lower=$(echo "$withdrawal_vault" | tr 'A-F' 'a-f')
+  expected_wc_lower="0x010000000000000000000000${withdrawal_vault_lower#0x}"
+  v_wc=$(cast call "$beacon_deposit" "getWithdrawalCredentials(bytes)(bytes32)" "$pubkey" -r "$rpc" 2>/dev/null || echo "")
+  if [[ -n "$v_wc" ]]; then
+    v_wc_lower=$(echo "$v_wc" | tr 'A-F' 'a-f')
+    if [[ "$v_wc_lower" != "$expected_wc_lower" ]]; then
+      log_error "Validator withdrawal credentials mismatch (expected $expected_wc_lower, got $v_wc_lower)"
+      return 1
+    fi
+  fi
+
+  return 0
+}
+
 build_activation_cast() {
   local factory="$1"
   local rpc="$2"
@@ -342,6 +437,17 @@ build_activation_cast() {
   local pubkey="$4"
   local withdrawal_vault="$5"
   local validator_index="$6"
+  local staking_pool="$7"
+
+  local ready_rc=0
+  assert_pool_ready_for_activation "$factory" "$rpc" "$staking_pool" "$pubkey" "$withdrawal_vault" || ready_rc=$?
+  if (( ready_rc == 2 )); then
+    log_info "Activation skipped — pool already active"
+    return 2
+  fi
+  if (( ready_rc != 0 )); then
+    return 1
+  fi
 
   local head_json slot
   head_json=$(fetch_json "${cl_base}/eth/v1/beacon/headers/head" "beacon head") || return 1
@@ -363,6 +469,8 @@ build_activation_cast() {
     "${cl_base}/bkit/v1/proof/validator_balance/${slot}/${validator_index}" \
     "validator_balance proof") || return 1
 
+  assert_proof_slots_match "$slot" "$pubkey_proof_json" "$credentials_proof_json" "$balance_proof_json" || return 1
+
   local el_block_number=$((10#$slot + 1))
   local block_json=""
   local attempt
@@ -382,15 +490,34 @@ build_activation_cast() {
   local timestamp_hex timestamp_dec
   timestamp_hex=$(echo "$block_json" | jq -r '.timestamp // empty')
   timestamp_dec=$((timestamp_hex))
+  ACTIVATION_TIMESTAMP="$timestamp_dec"
 
-  local v_pubkey v_withdrawal_creds v_balance
+  local v_pubkey v_withdrawal_creds v_balance v_balance_dec
   v_pubkey=$(echo "$pubkey_proof_json" | jq -r '.validator_pubkey')
   v_withdrawal_creds=$(echo "$credentials_proof_json" | jq -r '.validator_withdrawal_credentials')
   v_balance=$(echo "$balance_proof_json" | jq -r '.validator_balance')
+  if [[ -z "$v_pubkey" || -z "$v_withdrawal_creds" || -z "$v_balance" ]]; then
+    log_error "Missing fields in proof responses"
+    return 1
+  fi
+
+  local expected_wc_lower withdrawal_vault_lower v_wc_lower
+  withdrawal_vault_lower=$(echo "$withdrawal_vault" | tr 'A-F' 'a-f')
+  expected_wc_lower="0x010000000000000000000000${withdrawal_vault_lower#0x}"
+  v_wc_lower=$(echo "$v_withdrawal_creds" | tr 'A-F' 'a-f')
+  if [[ "$v_wc_lower" != "$expected_wc_lower" ]]; then
+    log_error "Proof withdrawal credentials mismatch (expected $expected_wc_lower)"
+    return 1
+  fi
+
   if [[ "$v_balance" == 0x* ]]; then
-    v_balance=$((v_balance))
+    v_balance_dec=$((v_balance))
   else
-    v_balance=$((10#$v_balance))
+    v_balance_dec=$((10#$v_balance))
+  fi
+  if (( v_balance_dec < DEPOSIT_AMOUNT_GWEI )); then
+    log_error "Validator balance $v_balance_dec gwei is below required $DEPOSIT_AMOUNT_GWEI"
+    return 1
   fi
 
   local pubkey_proof_cast withdrawal_creds_proof_cast balance_proof_cast balance_leaf
@@ -398,13 +525,28 @@ build_activation_cast() {
   withdrawal_creds_proof_cast=$(echo "$credentials_proof_json" | jq -r '.withdrawal_credentials_proof | join(",")')
   balance_proof_cast=$(echo "$balance_proof_json" | jq -r '.balance_proof | join(",")')
   balance_leaf=$(echo "$balance_proof_json" | jq -r '.balance_leaf')
+  if [[ -z "$pubkey_proof_cast" || -z "$withdrawal_creds_proof_cast" || -z "$balance_proof_cast" || -z "$balance_leaf" ]]; then
+    log_error "Missing proof arrays in API response"
+    return 1
+  fi
 
-  local wallet_args
+  local wallet_args preflight_out preflight_rc=0
   wallet_args=$(get_cast_wallet_args)
+  preflight_out=$(cast call "$factory" \
+    'activateStakingPool((bytes,bytes,uint64,uint64),(bytes32[],bytes32[],bytes32[],bytes32),uint64)' \
+    "($v_pubkey,$v_withdrawal_creds,$v_balance_dec,$validator_index)" \
+    "([$pubkey_proof_cast],[$withdrawal_creds_proof_cast],[$balance_proof_cast],$balance_leaf)" \
+    "$timestamp_dec" \
+    -r "$rpc" 2>&1) || preflight_rc=$?
+  if (( preflight_rc != 0 )); then
+    log_error "Activation preflight failed: $(decode_activation_revert "$preflight_out")"
+    return 1
+  fi
+  log_success "Activation preflight OK (timestamp $timestamp_dec, valid ~${ACTIVATION_MAX_AGE}s)"
 
   local cast_cmd
   cast_cmd=$(cat <<EOF
-cast send $factory 'activateStakingPool((bytes,bytes,uint64,uint64),(bytes32[],bytes32[],bytes32[],bytes32),uint64)' "($v_pubkey,$v_withdrawal_creds,$v_balance,$validator_index)" "([$pubkey_proof_cast],[$withdrawal_creds_proof_cast],[$balance_proof_cast],$balance_leaf)" $timestamp_dec -r $rpc $wallet_args
+cast send $factory 'activateStakingPool((bytes,bytes,uint64,uint64),(bytes32[],bytes32[],bytes32[],bytes32),uint64)' "($v_pubkey,$v_withdrawal_creds,$v_balance_dec,$validator_index)" "([$pubkey_proof_cast],[$withdrawal_creds_proof_cast],[$balance_proof_cast],$balance_leaf)" $timestamp_dec -r $rpc $wallet_args
 EOF
 )
   printf '%s' "$cast_cmd"
@@ -430,6 +572,14 @@ Environment:
   EL_RPC_URL          Execution-layer JSON-RPC (required)
   CL_NODE_API_URL     Beacon Kit Node API base URL (required)
   PRIVATE_KEY         Optional — run casts from this host when you confirm
+
+Optional defaults (still prompted; press Enter to accept):
+  VALIDATOR_PUBKEY    Validator pubkey
+  FUNDING_ADDRESS     Funding wallet (cold signing; skipped when PRIVATE_KEY set)
+  OPERATOR_ADDRESS    Self-funded operator address
+  SHARES_RECIPIENT    Self-funded shares recipient
+
+Optional env.sh in this directory is sourced when present.
 USAGE
 }
 
@@ -444,7 +594,7 @@ cmd_install() {
 
   local factory withdrawal_vault
   factory=$(get_factory_address_for_network "$network")
-  withdrawal_vault=$(get_withdrawal_vault_for_network "$network")
+  withdrawal_vault=$(get_withdrawal_vault_for_network "$network" "$rpc_url")
   if [[ -z "$factory" || -z "$withdrawal_vault" ]]; then
     log_error "Could not resolve factory or withdrawal vault for $network"
     exit 1
@@ -453,12 +603,7 @@ cmd_install() {
   local pubkey operator shares funding cred sig dep_pk parsed pasted line
   local delegated_mode=false delegation_handler="" staking_pool wallet_args deploy_cmd
 
-  read -r -p "Validator pubkey (0x...): " pubkey
-  pubkey=$(echo "$pubkey" | tr -d '[:space:]')
-  if [[ -z "$pubkey" ]]; then
-    log_error "Validator pubkey is required"
-    exit 1
-  fi
+  pubkey=$(prompt_validator_pubkey) || exit 1
 
   delegation_handler=$(lookup_delegation_handler "$network" "$pubkey" "$rpc_url" 2>/dev/null || true)
   if [[ -n "$delegation_handler" ]]; then
@@ -468,30 +613,39 @@ cmd_install() {
   else
     log_warn "No DelegationHandler for this pubkey — self-funded deploy (10,000 BERA from your wallet + gas)"
     funding=$(funding_address) || exit 1
-    read -r -p "Operator address [$funding]: " operator
-    operator=${operator:-$funding}
-    operator=$(require_evm_address "Operator address" "$operator") || exit 1
-    read -r -p "Shares recipient [$funding]: " shares
-    shares=${shares:-$funding}
-    shares=$(require_evm_address "Shares recipient" "$shares") || exit 1
+    local op_default="$funding" shares_default="$funding"
+    if [[ -n "${OPERATOR_ADDRESS:-}" ]]; then
+      op_default=$(normalize_evm_address "$OPERATOR_ADDRESS" || echo "$funding")
+      [[ -z "$op_default" ]] && op_default="$funding"
+    fi
+    if [[ -n "${SHARES_RECIPIENT:-}" ]]; then
+      shares_default=$(normalize_evm_address "$SHARES_RECIPIENT" || echo "$funding")
+      [[ -z "$shares_default" ]] && shares_default="$funding"
+    fi
+    operator=$(prompt_evm_address "Operator address" "$op_default") || exit 1
+    shares=$(prompt_evm_address "Shares recipient" "$shares_default") || exit 1
   fi
 
   echo ""
   log_info "On the validator, run beacond deposit create-validator:"
-  echo "  beacond --home <BEACOND_HOME> deposit create-validator \\"
+  echo "  beacond --home <validator-data-dir> deposit create-validator \\"
   echo "    $withdrawal_vault $DEPOSIT_AMOUNT_GWEI -g $genesis_root"
   echo ""
-  log_info "Then verify the signature on the validator (must exit 0, no output):"
-  echo "  beacond --home <BEACOND_HOME> deposit validate \\"
+  log_info "Then verify on the validator (must exit 0, no output):"
+  echo "  beacond --home <validator-data-dir> deposit validate \\"
   echo "    <pubkey> <credentials> <amount> <signature> -g $genesis_root"
   echo "  (use the four values from create-validator output)"
   echo ""
   echo "Paste the full beacond output, then a blank line:"
   pasted=""
-  while IFS= read -r line; do
+  while IFS= read -r line || [[ -n "$line" ]]; do
     [[ -z "$line" && -n "$pasted" ]] && break
     pasted+="${line}"$'\n'
   done
+  if [[ -z "$pasted" ]]; then
+    log_error "No deposit output pasted"
+    exit 1
+  fi
   parsed=$(parse_deposit_paste "$pasted") || exit 1
   cred=$(echo "$parsed" | sed -n '1p')
   sig=$(echo "$parsed" | sed -n '2p')
@@ -519,6 +673,16 @@ cmd_install() {
     log_success "Staking pool: $staking_pool"
   else
     staking_pool=$(predict_and_display_addresses "$factory" "$rpc_url" "$pubkey" | tr -d '[:space:]')
+    if [[ -z "$staking_pool" ]]; then
+      log_error "Could not predict staking pool address"
+      exit 1
+    fi
+    local pool_code
+    pool_code=$(cast code "$staking_pool" -r "$rpc_url" 2>/dev/null || echo "0x")
+    if [[ -n "$pool_code" && "$pool_code" != "0x" ]]; then
+      log_error "Staking pool already deployed at $staking_pool — refusing duplicate deploy"
+      exit 1
+    fi
     echo ""
     deploy_cmd="cast send $factory 'deployStakingPoolContracts(bytes,bytes,bytes,address,address)' \"$pubkey\" \"$cred\" \"$sig\" $operator $shares --value 10000ether -r $rpc_url $wallet_args"
     run_cast_or_paste "deploy" "$deploy_cmd" "10000" "$staking_pool" || exit 1
@@ -533,9 +697,35 @@ cmd_install() {
   fi
 
   log_info "Waiting for activation proofs..."
-  local activate_cmd
-  activate_cmd=$(build_activation_cast "$factory" "$rpc_url" "$cl_base" "$pubkey" "$withdrawal_vault" "$validator_index") || exit 1
-  run_cast_or_paste "activate" "$activate_cmd" "" "$staking_pool" || exit 1
+  local activate_cmd activate_rc activate_attempt=0
+  while (( activate_attempt < 3 )); do
+    (( activate_attempt++ )) || true
+    activate_cmd=$(build_activation_cast "$factory" "$rpc_url" "$cl_base" "$pubkey" "$withdrawal_vault" "$validator_index" "$staking_pool")
+    activate_rc=$?
+    if (( activate_rc == 2 )); then
+      break
+    fi
+    if (( activate_rc != 0 )); then
+      exit 1
+    fi
+    if [[ -n "${PRIVATE_KEY:-}" && -n "$ACTIVATION_TIMESTAMP" ]]; then
+      local now_ts age
+      now_ts=$(date +%s)
+      age=$((now_ts - ACTIVATION_TIMESTAMP))
+      if (( age > ACTIVATION_MAX_AGE - 60 )); then
+        log_warn "Activation proofs near expiry — regenerating"
+        continue
+      fi
+    fi
+    if run_cast_or_paste "activate" "$activate_cmd" "" "$staking_pool"; then
+      break
+    fi
+    if (( activate_attempt >= 3 )); then
+      log_error "Activation failed after $activate_attempt attempts"
+      exit 1
+    fi
+    log_warn "Activation failed — regenerating proofs (attempt $activate_attempt/3)"
+  done
 
   if [[ "$delegated_mode" == true ]]; then
     local deposit_bera amount_wei deposit_cmd
