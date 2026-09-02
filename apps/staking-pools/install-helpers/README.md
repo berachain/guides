@@ -6,12 +6,12 @@ Operator docs: [Staking pool installation](https://docs.berachain.com/nodes/stak
 
 ## Contents
 
-| File | Purpose |
-| --- | --- |
-| [`install.sh`](install.sh) | Land a pool (self-funded or delegated) |
+| File                                             | Purpose                                   |
+| ------------------------------------------------ | ----------------------------------------- |
+| [`install.sh`](install.sh)                       | Land a pool (self-funded or delegated)    |
 | [`delegator-delegate.sh`](delegator-delegate.sh) | Form a `DelegationHandler` before landing |
-| [`lib-common.sh`](lib-common.sh) | Shared helpers (sourced by both scripts) |
-| [`env.sh.template`](env.sh.template) | Copy to `env.sh` for persistent config |
+| [`lib-common.sh`](lib-common.sh)                 | Shared helpers (sourced by both scripts)  |
+| [`env.sh.template`](env.sh.template)             | Copy to `env.sh` for persistent config    |
 
 Confirmed transactions append to `staking-pool-receipts.jsonl` in this directory (git-ignored).
 
@@ -46,15 +46,15 @@ Both scripts source `env.sh` from this directory when present. You can also `exp
 
 ### Required
 
-| Variable | Scripts | Purpose |
-| --- | --- | --- |
-| `EL_RPC_URL` | both | Execution-layer JSON-RPC. Network is inferred from `eth_chainId`. |
-| `CL_NODE_API_URL` | `install.sh` | Node API base URL (`http://host:port`). |
+| Variable          | Scripts      | Purpose                                                           |
+| ----------------- | ------------ | ----------------------------------------------------------------- |
+| `EL_RPC_URL`      | both         | Execution-layer JSON-RPC. Network is inferred from `eth_chainId`. |
+| `CL_NODE_API_URL` | `install.sh` | Node API base URL (`http://host:port`).                           |
 
 ### Signing
 
-| Variable | Purpose |
-| --- | --- |
+| Variable      | Purpose                                                                                                                                                             |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `PRIVATE_KEY` | Optional. When set, scripts can run `cast send` after you confirm. When unset, each step prints a command for your Ledger machine; paste the transaction hash back. |
 
 ### Prompt defaults
@@ -63,20 +63,20 @@ Scripts **always prompt** for identity facts. Set these in `env.sh` to pre-fill 
 
 **`install.sh`**
 
-| Variable | Prompt |
-| --- | --- |
-| `VALIDATOR_PUBKEY` | Validator pubkey |
-| `FUNDING_ADDRESS` | Funding wallet (cold signing; skipped when `PRIVATE_KEY` is set) |
-| `OPERATOR_ADDRESS` | Operator address (self-funded path) |
-| `SHARES_RECIPIENT` | Shares recipient (self-funded path) |
+| Variable           | Prompt                                                           |
+| ------------------ | ---------------------------------------------------------------- |
+| `VALIDATOR_PUBKEY` | Validator pubkey                                                 |
+| `FUNDING_ADDRESS`  | Funding wallet (cold signing; skipped when `PRIVATE_KEY` is set) |
+| `OPERATOR_ADDRESS` | Operator address (self-funded path)                              |
+| `SHARES_RECIPIENT` | Shares recipient (self-funded path)                              |
 
 **`delegator-delegate.sh`**
 
-| Variable | Prompt |
-| --- | --- |
-| `VALIDATOR_PUBKEY` | Validator pubkey |
-| `DELEGATE_AMOUNT_BERA` | Whole BERA to delegate |
-| `VALIDATOR_ADMIN` | Operator address for `VALIDATOR_ADMIN_ROLE` |
+| Variable               | Prompt                                      |
+| ---------------------- | ------------------------------------------- |
+| `VALIDATOR_PUBKEY`     | Validator pubkey                            |
+| `DELEGATE_AMOUNT_BERA` | Whole BERA to delegate                      |
+| `VALIDATOR_ADMIN`      | Operator address for `VALIDATOR_ADMIN_ROLE` |
 
 Flags on `delegator-delegate.sh` (`--pubkey`, `--amount`, `--validator-admin`) skip the matching prompt.
 
