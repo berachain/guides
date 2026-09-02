@@ -43,8 +43,7 @@ Options:
       --beacond-data <dir>    consensus home (default: \$BEACOND_DATA)
       --reth-data <dir>       execution datadir (default: \$RETH_DATA)
       --beacon-only           CL restore only
-      --execution-only, --el-only
-                              EL restore only
+      --el-only               EL restore only
       --full-cl               select cl-archive instead of cl-pruned
       --no-download, --no-extract
                               print restore commands only
@@ -97,7 +96,7 @@ while [[ $# -gt 0 ]]; do
       shift 2
       ;;
     --beacon-only) BEACON_ONLY=1; shift ;;
-    --execution-only|--el-only) EL_ONLY=1; shift ;;
+    --el-only) EL_ONLY=1; shift ;;
     --full-cl) FULL_CL=1; shift ;;
     --no-download|--no-extract) NO_DOWNLOAD=1; shift ;;
     --force) FORCE=1; shift ;;
@@ -105,7 +104,7 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-[[ "$BEACON_ONLY" -eq 1 && "$EL_ONLY" -eq 1 ]] && die "use only one of --beacon-only and --execution-only"
+[[ "$BEACON_ONLY" -eq 1 && "$EL_ONLY" -eq 1 ]] && die "use only one of --beacon-only and --el-only"
 [[ "$SNAPSHOT_TYPE" == pruned || "$SNAPSHOT_TYPE" == archive ]] || die "type must be either pruned or archive"
 
 if [[ "$NETWORK_FROM_FLAG" -eq 1 ]]; then

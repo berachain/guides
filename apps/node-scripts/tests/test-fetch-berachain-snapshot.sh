@@ -16,7 +16,7 @@ tmpdir() { mktemp -d "${TMPDIR:-/tmp}/snapv1-XXXXXX"; }
 
 write_index() {
   local dir="$1"
-  local base="$2"
+  local base="${2:-https://example.test}"
   cat >"$dir/index.csv" <<EOF
 type,url,url_s3,created_at
 beacon-kit-pruned,${base}/beacon-kit-pruned-100.tar.lz4,,2026-01-02T00:00:00Z
@@ -24,7 +24,6 @@ reth-pruned,${base}/reth-pruned-100.tar.lz4,,2026-01-02T00:00:00Z
 beacon-kit-archive,${base}/beacon-kit-archive-100.tar.lz4,,2026-01-02T00:00:00Z
 reth-archive,${base}/reth-archive-100.tar.lz4,,2026-01-02T00:00:00Z
 EOF
-  echo "file://$dir/index.csv"
 }
 
 make_lz4_tar() {
@@ -57,10 +56,15 @@ while [ \$# -gt 0 ]; do
   esac
 done
 name=\$(basename "\$url")
+name=\${name%%\?*}
 src="$fixture/\$name"
 [ -f "\$src" ] || { echo "missing fixture \$src" >&2; exit 1; }
-mkdir -p "\$(dirname "\$out")"
-cp "\$src" "\$out"
+if [ -n "\$out" ]; then
+  mkdir -p "\$(dirname "\$out")"
+  cp "\$src" "\$out"
+else
+  cat "\$src"
+fi
 EOF
 }
 
@@ -81,10 +85,10 @@ tmp="$(tmpdir)"
 fix="$tmp/files"; mkdir -p "$fix" "$tmp/downloads"
 printf x >"$fix/beacon-kit-pruned-100.tar.lz4"
 printf x >"$fix/reth-pruned-100.tar.lz4"
-idx="$(write_index "$tmp" "file://$fix")"
+write_index "$fix"
 bin="$tmp/bin"; mkdir -p "$bin"
 curl_copy_stub "$fix" >"$bin/curl"; chmod +x "$bin/curl"
-if PATH="$bin:$PATH" "$SCRIPT" --type pruned --index-url "$idx" --no-extract -o "$tmp/downloads" >"$tmp/out" 2>"$tmp/err"; then
+if PATH="$bin:$PATH" "$SCRIPT" --type pruned --no-extract -o "$tmp/downloads" >"$tmp/out" 2>"$tmp/err"; then
   if grep -q 'beacon-kit-pruned-100' "$tmp/out" && grep -q 'reth-pruned-100' "$tmp/out" && ! grep -q 'archive-100' "$tmp/out"; then
     pass "--type pruned selects pruned rows"
   else
@@ -99,10 +103,10 @@ tmp="$(tmpdir)"
 fix="$tmp/files"; mkdir -p "$fix"
 printf x >"$fix/beacon-kit-archive-100.tar.lz4"
 printf x >"$fix/reth-archive-100.tar.lz4"
-idx="$(write_index "$tmp" "file://$fix")"
+write_index "$fix"
 bin="$tmp/bin"; mkdir -p "$bin"
 curl_copy_stub "$fix" >"$bin/curl"; chmod +x "$bin/curl"
-if PATH="$bin:$PATH" "$SCRIPT" --type archive --index-url "$idx" --no-extract -o "$tmp/downloads" >"$tmp/out" 2>"$tmp/err"; then
+if PATH="$bin:$PATH" "$SCRIPT" --type archive --no-extract -o "$tmp/downloads" >"$tmp/out" 2>"$tmp/err"; then
   if grep -q 'beacon-kit-archive-100' "$tmp/out" && ! grep -q 'pruned-100' "$tmp/out"; then
     pass "--type archive selects archive rows"
   else
@@ -115,10 +119,10 @@ fi
 # CHAIN default
 tmp="$(tmpdir)"; fix="$tmp/files"; mkdir -p "$fix"
 printf x >"$fix/beacon-kit-pruned-100.tar.lz4"
-idx="$(write_index "$tmp" "file://$fix")"
+write_index "$fix"
 bin="$tmp/bin"; mkdir -p "$bin"
 curl_copy_stub "$fix" >"$bin/curl"; chmod +x "$bin/curl"
-if PATH="$bin:$PATH" CHAIN=bepolia "$SCRIPT" --index-url "$idx" --no-extract --beacon-only -o "$tmp/downloads" >"$tmp/out" 2>"$tmp/err"; then
+if PATH="$bin:$PATH" CHAIN=bepolia "$SCRIPT" --no-extract --beacon-only -o "$tmp/downloads" >"$tmp/out" 2>"$tmp/err"; then
   if grep -q 'Network: bepolia' "$tmp/out"; then pass "CHAIN sets default network"; else fail "CHAIN sets default network" "$(cat "$tmp/out")"; fi
 else
   fail "CHAIN sets default network" "$(cat "$tmp/err")"
@@ -127,22 +131,24 @@ fi
 # --network overrides CHAIN
 tmp="$(tmpdir)"; fix="$tmp/files"; mkdir -p "$fix"
 printf x >"$fix/beacon-kit-pruned-100.tar.lz4"
-idx="$(write_index "$tmp" "file://$fix")"
+write_index "$fix"
 bin="$tmp/bin"; mkdir -p "$bin"
 curl_copy_stub "$fix" >"$bin/curl"; chmod +x "$bin/curl"
-if PATH="$bin:$PATH" CHAIN=mainnet "$SCRIPT" --network bepolia --index-url "$idx" --no-extract --beacon-only -o "$tmp/downloads" >"$tmp/out" 2>"$tmp/err"; then
+if PATH="$bin:$PATH" CHAIN=mainnet "$SCRIPT" --network bepolia --no-extract --beacon-only -o "$tmp/downloads" >"$tmp/out" 2>"$tmp/err"; then
   if grep -q 'Network: bepolia' "$tmp/out"; then pass "--network overrides CHAIN"; else fail "--network overrides CHAIN" "$(cat "$tmp/out")"; fi
 else
   fail "--network overrides CHAIN" "$(cat "$tmp/err")"
 fi
 
 # missing snapshot
-tmp="$(tmpdir)"
-cat >"$tmp/index.csv" <<'EOF'
+tmp="$(tmpdir)"; fix="$tmp/files"; mkdir -p "$fix"
+cat >"$fix/index.csv" <<'EOF'
 type,url,url_s3,created_at
-reth-pruned,file:///nope.tar.lz4,,2026-01-02T00:00:00Z
+reth-pruned,https://example.test/nope.tar.lz4,,2026-01-02T00:00:00Z
 EOF
-if "$SCRIPT" --beacon-only --index-url "file://$tmp/index.csv" --no-extract >/dev/null 2>"$tmp/err"; then
+bin="$tmp/bin"; mkdir -p "$bin"
+curl_copy_stub "$fix" >"$bin/curl"; chmod +x "$bin/curl"
+if PATH="$bin:$PATH" "$SCRIPT" --beacon-only --no-extract >/dev/null 2>"$tmp/err"; then
   fail "missing beacon snapshot fails" "expected non-zero"
 else
   if grep -qi 'no snapshot' "$tmp/err"; then pass "missing beacon snapshot fails"; else fail "missing beacon snapshot fails" "$(cat "$tmp/err")"; fi
@@ -151,8 +157,8 @@ fi
 # extract without BEACOND_DATA
 tmp="$(tmpdir)"; fix="$tmp/files"; mkdir -p "$fix"
 printf x >"$fix/beacon-kit-pruned-100.tar.lz4"
-idx="$(write_index "$tmp" "file://$fix")"
-if (cd "$tmp" && unset BEACOND_DATA RETH_DATA && "$SCRIPT" --beacon-only --index-url "$idx" >/dev/null 2>"$tmp/err"); then
+write_index "$fix"
+if (cd "$tmp" && unset BEACOND_DATA RETH_DATA && "$SCRIPT" --beacon-only >/dev/null 2>"$tmp/err"); then
   fail "extract without BEACOND_DATA fails" "expected non-zero"
 else
   if grep -q BEACOND_DATA "$tmp/err"; then pass "extract without BEACOND_DATA fails"; else fail "extract without BEACOND_DATA fails" "$(cat "$tmp/err")"; fi
@@ -162,13 +168,13 @@ fi
 tmp="$(tmpdir)"; fix="$tmp/files"; mkdir -p "$fix" "$tmp/beacond/config" "$tmp/beacond/data" "$tmp/reth"
 make_lz4_tar "$fix/beacon-kit-pruned-100.tar.lz4" blockstore.db/x blocks
 make_lz4_tar "$fix/reth-pruned-100.tar.lz4" db/x data
-idx="$(write_index "$tmp" "file://$fix")"
+write_index "$fix"
 printf operator >"$tmp/beacond/config/priv_validator_key.json"
 printf jwt >"$tmp/beacond/config/jwt.hex"
 printf unexpected >"$tmp/reth/unexpected.bin"
 bin="$tmp/bin"; mkdir -p "$bin"
 curl_copy_stub "$fix" >"$bin/curl"; chmod +x "$bin/curl"
-if PATH="$bin:$PATH" "$SCRIPT" --index-url "$idx" --beacond-data "$tmp/beacond" --reth-data "$tmp/reth" -o "$tmp/downloads" >/dev/null 2>"$tmp/err"; then
+if PATH="$bin:$PATH" "$SCRIPT" --beacond-data "$tmp/beacond" --reth-data "$tmp/reth" -o "$tmp/downloads" >/dev/null 2>"$tmp/err"; then
   fail "dirty reth without --force fails" "expected non-zero"
 else
   if grep -qi unexpected "$tmp/err"; then pass "dirty reth without --force fails"; else fail "dirty reth without --force fails" "$(cat "$tmp/err")"; fi
@@ -178,13 +184,13 @@ fi
 tmp="$(tmpdir)"; fix="$tmp/files"; mkdir -p "$fix" "$tmp/beacond/config" "$tmp/beacond/data" "$tmp/reth/db" "$tmp/reth/static_files"
 make_lz4_tar "$fix/beacon-kit-pruned-100.tar.lz4" blockstore.db/x blocks
 make_lz4_tar "$fix/reth-pruned-100.tar.lz4" db/mdbx.dat restored
-idx="$(write_index "$tmp" "file://$fix")"
+write_index "$fix"
 printf operator >"$tmp/beacond/config/priv_validator_key.json"
 printf jwt >"$tmp/beacond/config/jwt.hex"
 printf init >"$tmp/reth/db/mdbx.dat"
 bin="$tmp/bin"; mkdir -p "$bin"
 curl_copy_stub "$fix" >"$bin/curl"; chmod +x "$bin/curl"
-if PATH="$bin:$PATH" "$SCRIPT" --index-url "$idx" --beacond-data "$tmp/beacond" --reth-data "$tmp/reth" -o "$tmp/downloads" >"$tmp/out" 2>"$tmp/err"; then
+if PATH="$bin:$PATH" "$SCRIPT" --beacond-data "$tmp/beacond" --reth-data "$tmp/reth" -o "$tmp/downloads" >"$tmp/out" 2>"$tmp/err"; then
   if [[ "$(cat "$tmp/reth/db/mdbx.dat")" == restored ]]; then
     pass "setup-reth init datadir replaced without --force"
   else
@@ -198,12 +204,12 @@ fi
 tmp="$(tmpdir)"; fix="$tmp/files"; mkdir -p "$fix" "$tmp/beacond/config" "$tmp/beacond/data" "$tmp/reth"
 make_lz4_tar "$fix/beacon-kit-pruned-100.tar.lz4" blockstore.db/block.db blocks
 make_lz4_tar "$fix/reth-pruned-100.tar.lz4" db/x data
-idx="$(write_index "$tmp" "file://$fix")"
+write_index "$fix"
 printf operator-key >"$tmp/beacond/config/priv_validator_key.json"
 printf jwt-secret >"$tmp/beacond/config/jwt.hex"
 bin="$tmp/bin"; mkdir -p "$bin"
 curl_copy_stub "$fix" >"$bin/curl"; chmod +x "$bin/curl"
-if PATH="$bin:$PATH" "$SCRIPT" --index-url "$idx" --beacond-data "$tmp/beacond" --reth-data "$tmp/reth" -o "$tmp/downloads" >"$tmp/out" 2>"$tmp/err"; then
+if PATH="$bin:$PATH" "$SCRIPT" --beacond-data "$tmp/beacond" --reth-data "$tmp/reth" -o "$tmp/downloads" >"$tmp/out" 2>"$tmp/err"; then
   if [[ "$(cat "$tmp/beacond/config/priv_validator_key.json")" == operator-key ]] \
     && [[ "$(cat "$tmp/beacond/data/blockstore.db/block.db")" == blocks ]] \
     && [[ -f "$tmp/beacond/data/priv_validator_state.json" ]]; then
@@ -219,13 +225,13 @@ fi
 tmp="$(tmpdir)"; fix="$tmp/files"; mkdir -p "$fix" "$tmp/beacond/config" "$tmp/beacond/data" "$tmp/reth"
 make_lz4_tar "$fix/beacon-kit-pruned-100.tar.lz4" blockstore.db/x blocks
 make_lz4_tar "$fix/reth-pruned-100.tar.lz4" db/x data
-idx="$(write_index "$tmp" "file://$fix")"
+write_index "$fix"
 printf operator >"$tmp/beacond/config/priv_validator_key.json"
 printf jwt >"$tmp/beacond/config/jwt.hex"
 printf '{"height":"0"}' >"$tmp/beacond/data/priv_validator_state.json"
 bin="$tmp/bin"; mkdir -p "$bin"
 curl_copy_stub "$fix" >"$bin/curl"; chmod +x "$bin/curl"
-if PATH="$bin:$PATH" "$SCRIPT" --index-url "$idx" --beacond-data "$tmp/beacond" --reth-data "$tmp/reth" -o "$tmp/downloads" >/dev/null 2>"$tmp/err"; then
+if PATH="$bin:$PATH" "$SCRIPT" --beacond-data "$tmp/beacond" --reth-data "$tmp/reth" -o "$tmp/downloads" >/dev/null 2>"$tmp/err"; then
   if [[ "$(cat "$tmp/beacond/data/priv_validator_state.json")" == '{"height":"0"}' ]]; then
     pass "existing priv_validator_state.json is kept"
   else

@@ -14,13 +14,11 @@ if [[ "$NETWORK" != mainnet && "$NETWORK" != bepolia ]]; then
   NETWORK=mainnet
 fi
 SNAPSHOT_TYPE="pruned"
-EL_CLIENT="reth"
 OUTPUT_DIR="downloads"
 BEACON_ONLY=0
 EL_ONLY=0
 NO_EXTRACT=0
 FORCE=0
-INDEX_URL=""
 NETWORK_FROM_FLAG=0
 
 usage() {
@@ -37,13 +35,10 @@ Options:
   -n, --network <network>     mainnet or bepolia (default: \$CHAIN, or mainnet)
   -t, --type <type>           pruned or archive (default: pruned)
   -o, --output <dir>          tarball cache directory (default: downloads)
-      --el-client <name>      execution row prefix in CSV (default: reth)
       --beacond-data <dir>    consensus home (default: \$BEACOND_DATA)
       --reth-data <dir>       execution datadir (default: \$RETH_DATA)
-      --index-url <url>       override index.csv URL
       --beacon-only           beacon-kit snapshot only
-      --execution-only, --el-only
-                              execution-layer snapshot only
+      --el-only               execution-layer snapshot only
       --no-extract            download tarballs and print extract commands
       --force                 replace unexpected files in the target datadir
   -h, --help                  show this help
@@ -86,11 +81,6 @@ while [[ $# -gt 0 ]]; do
       OUTPUT_DIR="$2"
       shift 2
       ;;
-    --el-client)
-      [[ $# -ge 2 ]] || die "--el-client requires a value (e.g. reth)"
-      EL_CLIENT="$2"
-      shift 2
-      ;;
     --beacond-data)
       [[ $# -ge 2 ]] || die "--beacond-data requires a directory path"
       BEACOND_DATA="$2"
@@ -101,20 +91,15 @@ while [[ $# -gt 0 ]]; do
       RETH_DATA="$2"
       shift 2
       ;;
-    --index-url)
-      [[ $# -ge 2 ]] || die "--index-url requires a URL"
-      INDEX_URL="$2"
-      shift 2
-      ;;
     --beacon-only) BEACON_ONLY=1; shift ;;
-    --execution-only|--el-only) EL_ONLY=1; shift ;;
+    --el-only) EL_ONLY=1; shift ;;
     --no-extract) NO_EXTRACT=1; shift ;;
     --force) FORCE=1; shift ;;
     *) die "Unknown option $1" ;;
   esac
 done
 
-[[ "$BEACON_ONLY" -eq 1 && "$EL_ONLY" -eq 1 ]] && die "use only one of --beacon-only and --execution-only"
+[[ "$BEACON_ONLY" -eq 1 && "$EL_ONLY" -eq 1 ]] && die "use only one of --beacon-only and --el-only"
 [[ "$SNAPSHOT_TYPE" == pruned || "$SNAPSHOT_TYPE" == archive ]] || die "type must be either pruned or archive"
 
 if [[ "$NETWORK_FROM_FLAG" -eq 1 ]]; then
@@ -144,12 +129,11 @@ else
   require_cmd curl
 fi
 
-[[ -n "$INDEX_URL" ]] || INDEX_URL="$(default_index_url "$NETWORK")"
+INDEX_URL="$(default_index_url "$NETWORK")"
 
 echo "Bera Snapshot Restore"
 echo "-------------------------"
 echo "Network: $NETWORK"
-echo "Client: $EL_CLIENT"
 echo "Type: $SNAPSHOT_TYPE"
 echo "Tarball cache: $(mkdir -p "$OUTPUT_DIR" && cd "$OUTPUT_DIR" && pwd)"
 [[ "$RESTORE_CL" -eq 1 && -n "${BEACOND_DATA:-}" ]] && echo "Beacon home: $BEACOND_DATA"
@@ -166,7 +150,7 @@ echo "$HEADER" | grep -q 'type' || die "Unexpected CSV format: missing required 
 echo "$HEADER" | grep -q 'url' || die "Unexpected CSV format: missing required columns"
 
 BEACON_TYPE="beacon-kit-${SNAPSHOT_TYPE}"
-EL_TYPE="${EL_CLIENT}-${SNAPSHOT_TYPE}"
+EL_TYPE="reth-${SNAPSHOT_TYPE}"
 
 # Prefer url_s3 over url. Pick the latest created_at per type.
 select_latest() {
