@@ -2,11 +2,12 @@
 set -euo pipefail
 
 # Tests for fetch-berachain-snapshot-v2.sh
-# Run: ./test-fetch-berachain-snapshot-v2.sh
+# Run: ./tests/test-fetch-berachain-snapshot-v2.sh
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SCRIPT="$SCRIPT_DIR/fetch-berachain-snapshot-v2.sh"
-FIXTURE="file://$SCRIPT_DIR/test-fixtures/v2-catalog.csv"
+TEST_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT="$(cd "$TEST_DIR/.." && pwd)"
+SCRIPT="$ROOT/fetch-berachain-snapshot-v2.sh"
+FIXTURE="file://$TEST_DIR/fixtures/v2-catalog.csv"
 FAILS=0
 
 pass() { echo "  ✓ $1"; }
@@ -124,7 +125,7 @@ else
 fi
 
 tmp="$(tmpdir)"
-if "$SCRIPT" --network bepolia --beacon-only --catalog-url "$FIXTURE" >/dev/null 2>"$tmp/err"; then
+if (cd "$tmp" && unset BEACOND_DATA RETH_DATA && "$SCRIPT" --network bepolia --beacon-only --catalog-url "$FIXTURE" >/dev/null 2>"$tmp/err"); then
   fail "extract without BEACOND_DATA fails" "expected non-zero"
 else
   if grep -q BEACOND_DATA "$tmp/err"; then pass "extract without BEACOND_DATA fails"; else fail "extract without BEACOND_DATA fails" "$(cat "$tmp/err")"; fi

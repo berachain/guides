@@ -2,10 +2,11 @@
 set -euo pipefail
 
 # Tests for fetch-berachain-snapshot.sh
-# Run: ./test-fetch-berachain-snapshot.sh
+# Run: ./tests/test-fetch-berachain-snapshot.sh
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SCRIPT="$SCRIPT_DIR/fetch-berachain-snapshot.sh"
+TEST_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT="$(cd "$TEST_DIR/.." && pwd)"
+SCRIPT="$ROOT/fetch-berachain-snapshot.sh"
 FAILS=0
 
 pass() { echo "  ✓ $1"; }
@@ -151,7 +152,7 @@ fi
 tmp="$(tmpdir)"; fix="$tmp/files"; mkdir -p "$fix"
 printf x >"$fix/beacon-kit-pruned-100.tar.lz4"
 idx="$(write_index "$tmp" "file://$fix")"
-if "$SCRIPT" --beacon-only --index-url "$idx" >/dev/null 2>"$tmp/err"; then
+if (cd "$tmp" && unset BEACOND_DATA RETH_DATA && "$SCRIPT" --beacon-only --index-url "$idx" >/dev/null 2>"$tmp/err"); then
   fail "extract without BEACOND_DATA fails" "expected non-zero"
 else
   if grep -q BEACOND_DATA "$tmp/err"; then pass "extract without BEACOND_DATA fails"; else fail "extract without BEACOND_DATA fails" "$(cat "$tmp/err")"; fi
