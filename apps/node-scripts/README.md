@@ -8,6 +8,6 @@ Requires Beacon Kit and Bera-Reth **v1.4.1** or later. Set `CHAIN` to `mainnet` 
 2. Review and modify `env.sh`.
 3. `./fetch-berachain-params.sh`
 4. `./setup-beacond.sh` then `./setup-reth.sh`
-5. Optional: `. ./env.sh && node fetch-berachain-snapshot.js` to restore the latest official snapshots into `$BEACOND_DATA` and `$RETH_DATA`
+5. Optional: `. ./env.sh && node fetch-berachain-snapshot.js` to restore the latest official snapshots into `$BEACOND_DATA` and `$RETH_DATA`. Storage v2 (Bepolia): `node fetch-berachain-snapshot-v2.js` uses the same env and datadirs.
 6. In one window: `./run-beacond.sh`
 7. In another window: `./run-reth.sh`

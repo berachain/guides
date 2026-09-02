@@ -1,16 +1,16 @@
 #!/usr/bin/env node
 
 /**
- * Berachain storage v2 snapshot restore helper.
- * Reads v2 catalog.csv, creates named empty datadirs, restores CL via curl|lz4|tar
- * and EL via bera-reth download --manifest-url.
+ * Berachain storage v2 snapshot restore. Reads catalog.csv, restores CL via
+ * curl|lz4|tar into $BEACOND_DATA, and EL via bera-reth download --manifest-url
+ * into $RETH_DATA. Catalog shape is the same for bepolia and mainnet.
  */
 
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const child_process = require('child_process');
 
-const DEFAULT_OUTPUT = 'downloads';
 const V2_HEADER = [
     'type',
     'layer',
@@ -23,6 +23,28 @@ const V2_HEADER = [
     'role',
 ];
 const VALID_ROLES = new Set(['el-manifest', 'cl-pruned', 'cl-archive']);
+const PROTECTED_RELATIVE = ['config/priv_validator_key.json', 'config/jwt.hex'];
+const EL_EXPECTED_ENTRIES = new Set([
+    'db',
+    'rocksdb',
+    'blobstore',
+    'static_files',
+    'reth.toml',
+    'logs',
+    'ocvm_logs',
+    'invalid_block_hooks',
+    'exex',
+]);
+const CL_DATA_EXPECTED_ENTRIES = new Set([
+    'blockstore.db',
+    'application.db',
+    'state.db',
+    'deposits.db',
+    'evidence.db',
+    'cs.wal',
+    'tx_index.db',
+    'snapshots',
+]);
 
 const RESTORE_PAIRING = {
     pruned: { elPreset: '--minimal', clRole: 'cl-pruned' },
@@ -37,8 +59,6 @@ function rethChainName(network) {
     return network === 'bepolia' ? 'bepolia' : network;
 }
 
-// Matches env.sh / setup-reth.sh / run-reth.sh: CHAIN is the Quickstart's
-// established way to pick a network. --network/-n still overrides it below.
 function defaultNetwork() {
     const envChain = process.env.CHAIN;
     if (envChain === 'mainnet' || envChain === 'bepolia') {
@@ -47,18 +67,24 @@ function defaultNetwork() {
     return 'mainnet';
 }
 
+function quote(value) {
+    return `'${String(value).replace(/'/g, `'\\''`)}'`;
+}
+
 function parseArgs() {
     const args = process.argv.slice(2);
     const config = {
         network: defaultNetwork(),
         snapshotType: 'pruned',
-        outputDir: DEFAULT_OUTPUT,
         catalogUrl: null,
         beaconOnly: false,
         elOnly: false,
         fullCl: false,
         noDownload: false,
+        force: false,
         rethBin: process.env.RETH_BIN || null,
+        beacondData: process.env.BEACOND_DATA || null,
+        rethData: process.env.RETH_DATA || null,
     };
 
     for (let i = 0; i < args.length; i++) {
@@ -92,14 +118,6 @@ function parseArgs() {
                 }
                 config.snapshotType = args[++i];
                 break;
-            case '--output':
-            case '-o':
-                if (i + 1 >= args.length) {
-                    console.error('Error: --output requires a directory path');
-                    process.exit(1);
-                }
-                config.outputDir = args[++i];
-                break;
             case '--catalog-url':
                 if (i + 1 >= args.length) {
                     console.error('Error: --catalog-url requires a URL');
@@ -114,6 +132,20 @@ function parseArgs() {
                 }
                 config.rethBin = args[++i];
                 break;
+            case '--beacond-data':
+                if (i + 1 >= args.length) {
+                    console.error('Error: --beacond-data requires a directory path');
+                    process.exit(1);
+                }
+                config.beacondData = args[++i];
+                break;
+            case '--reth-data':
+                if (i + 1 >= args.length) {
+                    console.error('Error: --reth-data requires a directory path');
+                    process.exit(1);
+                }
+                config.rethData = args[++i];
+                break;
             case '--beacon-only':
                 config.beaconOnly = true;
                 break;
@@ -125,7 +157,11 @@ function parseArgs() {
                 config.fullCl = true;
                 break;
             case '--no-download':
+            case '--no-extract':
                 config.noDownload = true;
+                break;
+            case '--force':
+                config.force = true;
                 break;
             default:
                 console.error(`Error: Unknown option ${arg}`);
@@ -154,31 +190,35 @@ function showHelp() {
     const defBepolia = defaultCatalogUrl('bepolia');
     const defMainnet = defaultCatalogUrl('mainnet');
     console.log(`
-Bera Snapshot Downloader (storage v2)
+Bera Snapshot Restore (storage v2)
 
-Restores beacon-kit and execution snapshots from the storage v2 catalog.csv.
-Requires Node.js 18+, curl on PATH, lz4 and tar for CL extract, and optionally bera-reth for EL.
+Restores beacon-kit and execution snapshots from catalog.csv into $BEACOND_DATA
+and $RETH_DATA (source env.sh first). Catalog URL shape is the same for both networks.
+Requires Node.js 18+, curl, lz4, and tar on PATH, and bera-reth for EL restore.
 
 Usage: node fetch-berachain-snapshot-v2.js [options]
 
 Options:
   -n, --network <network>     mainnet or bepolia (default: $CHAIN env var, or mainnet)
   -t, --type <type>           pruned or archive — EL preset only (default: pruned)
-  -o, --output <dir>          parent directory for named datadirs (default: downloads)
       --catalog-url <url>     override catalog.csv URL
+      --beacond-data <dir>    consensus home (default: $BEACOND_DATA)
+      --reth-data <dir>       execution datadir (default: $RETH_DATA)
       --beacon-only           CL restore only
       --execution-only, --el-only
                               EL restore only
       --full-cl               select cl-archive instead of cl-pruned
-      --no-download           print restore commands only
-      --reth-bin <path>       bera-reth binary (default: PATH or RETH_BIN)
+      --no-download, --no-extract
+                              print restore commands only
+      --force                 replace unexpected files in the target datadir
+      --reth-bin <path>       bera-reth binary (default: PATH or $RETH_BIN)
   -h, --help                  show this help
 
 Catalog CSV: ${defMainnet} (mainnet), ${defBepolia} (bepolia)
 
-Named directories under --output:
-  <network>-<type>-el   execution datadir
-  <network>-<type>-cl   consensus datadir
+Examples:
+  . ./env.sh && node fetch-berachain-snapshot-v2.js
+  node fetch-berachain-snapshot-v2.js -n bepolia -t pruned
 `);
 }
 
@@ -236,15 +276,6 @@ function resolvePairing(config) {
     return { elPreset: base.elPreset, clRole };
 }
 
-function namedDirs(config) {
-    const base = path.resolve(config.outputDir);
-    const suffix = `${config.network}-${config.snapshotType}`;
-    return {
-        elDir: path.join(base, `${suffix}-el`),
-        clDir: path.join(base, `${suffix}-cl`),
-    };
-}
-
 async function fetchText(url) {
     if (url.startsWith('file://')) {
         try {
@@ -260,18 +291,73 @@ async function fetchText(url) {
     return res.text();
 }
 
-function dirHasEntries(dirPath) {
-    return fs.existsSync(dirPath) && fs.readdirSync(dirPath).length > 0;
+function listTopLevel(dirPath) {
+    if (!fs.existsSync(dirPath)) {
+        return [];
+    }
+    return fs.readdirSync(dirPath);
 }
 
-function ensureEmptyDir(dirPath) {
-    if (fs.existsSync(dirPath)) {
-        if (dirHasEntries(dirPath)) {
-            throw new Error(`target directory is not empty: ${dirPath}`);
-        }
+function prepareTargetDir(dirPath, expectedNames, force, label, keepNames = new Set()) {
+    fs.mkdirSync(dirPath, { recursive: true });
+    const entries = listTopLevel(dirPath);
+    if (entries.length === 0) {
         return;
     }
-    fs.mkdirSync(dirPath, { recursive: true });
+    const unexpected = entries.filter(
+        (name) => !expectedNames.has(name) && !keepNames.has(name),
+    );
+    if (unexpected.length > 0 && !force) {
+        throw new Error(
+            `${label} has unexpected contents (${unexpected.join(', ')}). Pass --force to replace.`,
+        );
+    }
+    for (const name of entries) {
+        if (keepNames.has(name)) {
+            continue;
+        }
+        if (force || expectedNames.has(name)) {
+            fs.rmSync(path.join(dirPath, name), { recursive: true, force: true });
+        }
+    }
+}
+
+function fingerprint(filePath) {
+    if (!fs.existsSync(filePath)) {
+        return null;
+    }
+    return crypto.createHash('sha256').update(fs.readFileSync(filePath)).digest('hex');
+}
+
+function snapshotProtected(beacondData) {
+    const snaps = {};
+    for (const rel of PROTECTED_RELATIVE) {
+        const filePath = path.join(beacondData, rel);
+        snaps[filePath] = fingerprint(filePath);
+    }
+    return snaps;
+}
+
+function assertProtectedUnchanged(before) {
+    for (const [filePath, hash] of Object.entries(before)) {
+        const after = fingerprint(filePath);
+        if (hash && after !== hash) {
+            throw new Error(`refused to overwrite protected file: ${filePath}`);
+        }
+        if (hash && !after) {
+            throw new Error(`protected file missing after extract: ${filePath}`);
+        }
+    }
+}
+
+function ensurePrivValidatorState(beacondData) {
+    const statePath = path.join(beacondData, 'data', 'priv_validator_state.json');
+    if (fs.existsSync(statePath)) {
+        return;
+    }
+    fs.mkdirSync(path.dirname(statePath), { recursive: true });
+    fs.writeFileSync(statePath, `${JSON.stringify({ height: '0', round: 0, step: 0 })}\n`);
+    console.log(`Wrote genesis ${statePath}`);
 }
 
 function findRethBin(config) {
@@ -296,6 +382,42 @@ function findRethBin(config) {
     }
 }
 
+function assertRethSupportsManifest(rethBin) {
+    let help;
+    try {
+        help = child_process.execSync(`${quote(rethBin)} download --help`, {
+            encoding: 'utf8',
+            stdio: ['ignore', 'pipe', 'pipe'],
+        });
+    } catch (err) {
+        throw new Error(`could not run ${rethBin} download --help: ${err.message}`);
+    }
+    if (!help.includes('--manifest-url')) {
+        throw new Error(
+            `${rethBin} does not support download --manifest-url. Storage v2 EL restore needs a bera-reth newer than v1.4.4.`,
+        );
+    }
+}
+
+function requireTool(name) {
+    try {
+        child_process.execSync(`command -v ${name}`, {
+            stdio: ['ignore', 'pipe', 'ignore'],
+            shell: true,
+        });
+    } catch {
+        throw new Error(`${name} is required on PATH`);
+    }
+}
+
+function clExtractDir(beacondData) {
+    return path.join(beacondData, 'data');
+}
+
+function tarExcludeFlags() {
+    return '--exclude=config --exclude=./config --exclude=config/priv_validator_key.json --exclude=config/jwt.hex';
+}
+
 function buildElCommand(config, manifestUrl, elDir, elPreset) {
     const chain = rethChainName(config.network);
     return `bera-reth download --chain ${chain} --manifest-url ${manifestUrl} --datadir ${elDir} ${elPreset}`;
@@ -303,18 +425,17 @@ function buildElCommand(config, manifestUrl, elDir, elPreset) {
 
 function buildClCommand(clUrl, clDir, forDownload) {
     const curlFlags = forDownload ? '-L -C - -fsSL' : '-fsSL';
-    return `curl ${curlFlags} ${clUrl} | lz4 -d | tar -x -C ${clDir}`;
+    return `curl ${curlFlags} ${clUrl} | lz4 -d | tar -x -C ${clDir} ${tarExcludeFlags()}`;
 }
 
 function runClRestore(clUrl, clDir) {
-    const cmd = `${buildClCommand(clUrl, clDir, true)}`;
-    child_process.execSync(cmd, { stdio: 'inherit', shell: true });
+    child_process.execSync(buildClCommand(clUrl, clDir, true), { stdio: 'inherit', shell: true });
 }
 
 function runElDownload(rethBin, config, manifestUrl, elDir, elPreset) {
     const chain = rethChainName(config.network);
     child_process.execSync(
-        `"${rethBin}" download --chain ${chain} --manifest-url ${manifestUrl} --datadir ${elDir} ${elPreset}`,
+        `${quote(rethBin)} download --chain ${quote(chain)} --manifest-url ${quote(manifestUrl)} --datadir ${quote(elDir)} ${elPreset}`,
         { stdio: 'inherit', shell: true },
     );
 }
@@ -322,18 +443,50 @@ function runElDownload(rethBin, config, manifestUrl, elDir, elPreset) {
 async function main() {
     const config = parseArgs();
     const { elPreset, clRole } = resolvePairing(config);
-    const dirs = namedDirs(config);
+    const restoreEl = !config.beaconOnly;
+    const restoreCl = !config.elOnly;
+
+    if (!config.noDownload) {
+        if (restoreCl && !config.beacondData) {
+            console.error('Error: set BEACOND_DATA or pass --beacond-data (source env.sh)');
+            process.exit(1);
+        }
+        if (restoreEl && !config.rethData) {
+            console.error('Error: set RETH_DATA or pass --reth-data (source env.sh)');
+            process.exit(1);
+        }
+        try {
+            requireTool('lz4');
+            requireTool('tar');
+            requireTool('curl');
+        } catch (err) {
+            console.error(`Error: ${err.message}`);
+            process.exit(1);
+        }
+    }
+
+    const beacondData = config.beacondData ? path.resolve(config.beacondData) : null;
+    const rethData = config.rethData ? path.resolve(config.rethData) : null;
+    const clDir = beacondData ? clExtractDir(beacondData) : path.join('$BEACOND_DATA', 'data');
+    const elDir = rethData || '$RETH_DATA';
+
+    console.log('Bera Snapshot Restore (storage v2)');
+    console.log('-------------------------');
+    console.log(`Network: ${config.network}`);
+    console.log(`Type: ${config.snapshotType}`);
+    if (restoreCl && beacondData) {
+        console.log(`Beacon home: ${beacondData}`);
+    }
+    if (restoreEl && rethData) {
+        console.log(`Reth datadir: ${rethData}`);
+    }
+    console.log(`Catalog: ${config.catalogUrl}`);
+    console.log('');
 
     let catalogText;
     try {
         catalogText = await fetchText(config.catalogUrl);
     } catch (err) {
-        if (config.network === 'mainnet') {
-            console.error(
-                `Error: storage v2 catalog unavailable for mainnet (${err.message}). Use fetch-berachain-snapshot.js for v1 snapshots.`,
-            );
-            process.exit(1);
-        }
         console.error(`Error: ${err.message}`);
         process.exit(1);
     }
@@ -356,29 +509,56 @@ async function main() {
         process.exit(1);
     }
 
-    const restoreEl = !config.beaconOnly;
-    const restoreCl = !config.elOnly;
-
     if (config.noDownload) {
         if (restoreEl) {
-            console.log(buildElCommand(config, elManifest.downloadUrl, dirs.elDir, elPreset));
+            console.log(buildElCommand(config, elManifest.downloadUrl, elDir, elPreset));
         }
         if (restoreCl) {
-            console.log(buildClCommand(clRow.downloadUrl, dirs.clDir, false));
+            console.log(buildClCommand(clRow.downloadUrl, clDir, false));
         }
         process.exit(0);
     }
 
+    let rethBin = null;
     if (restoreEl) {
-        ensureEmptyDir(dirs.elDir);
+        rethBin = findRethBin(config);
+        if (!rethBin) {
+            console.error('Error: bera-reth not found. Set RETH_BIN or pass --reth-bin.');
+            process.exit(1);
+        }
+        try {
+            assertRethSupportsManifest(rethBin);
+        } catch (err) {
+            console.error(`Error: ${err.message}`);
+            process.exit(1);
+        }
     }
-    if (restoreCl) {
-        ensureEmptyDir(dirs.clDir);
+
+    const protectedBefore = restoreCl ? snapshotProtected(beacondData) : {};
+
+    try {
+        if (restoreCl) {
+            prepareTargetDir(
+                clDir,
+                CL_DATA_EXPECTED_ENTRIES,
+                config.force,
+                'Beacon data dir',
+                new Set(['priv_validator_state.json']),
+            );
+        }
+        if (restoreEl) {
+            prepareTargetDir(rethData, EL_EXPECTED_ENTRIES, config.force, 'Reth datadir');
+        }
+    } catch (err) {
+        console.error(`Error: ${err.message}`);
+        process.exit(1);
     }
 
     if (restoreCl) {
         try {
-            runClRestore(clRow.downloadUrl, dirs.clDir);
+            console.log(`\nExtracting CL snapshot into ${clDir}`);
+            runClRestore(clRow.downloadUrl, clDir);
+            ensurePrivValidatorState(beacondData);
         } catch (err) {
             console.error(`Error: CL restore failed: ${err.message}`);
             process.exit(1);
@@ -386,19 +566,23 @@ async function main() {
     }
 
     if (restoreEl) {
-        const rethBin = findRethBin(config);
-        if (!rethBin) {
-            console.error('Warning: bera-reth not found on PATH; EL restore was skipped');
-            console.log(buildElCommand(config, elManifest.downloadUrl, dirs.elDir, elPreset));
-        } else {
-            try {
-                runElDownload(rethBin, config, elManifest.downloadUrl, dirs.elDir, elPreset);
-            } catch (err) {
-                console.error(`Error: bera-reth download failed: ${err.message}`);
-                process.exit(1);
-            }
+        try {
+            console.log(`\nDownloading EL snapshot into ${rethData}`);
+            runElDownload(rethBin, config, elManifest.downloadUrl, rethData, elPreset);
+        } catch (err) {
+            console.error(`Error: bera-reth download failed: ${err.message}`);
+            process.exit(1);
         }
     }
+
+    try {
+        assertProtectedUnchanged(protectedBefore);
+    } catch (err) {
+        console.error(`Error: ${err.message}`);
+        process.exit(1);
+    }
+
+    console.log('\nSnapshot restore complete.');
 }
 
 process.on('SIGINT', () => {
