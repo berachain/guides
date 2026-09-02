@@ -443,7 +443,7 @@ class SmartOperatorManager:
             # Check if address is zero (not deployed)
             if self.operator_address == "0x0000000000000000000000000000000000000000":
                 console.print(f"[red]✗ No contracts deployed for this pubkey[/red]")
-                console.print(f"[yellow]Have you run activate.sh to deploy the staking pool?[/yellow]")
+                console.print(f"[yellow]Have you run ../installer/install.sh to deploy the staking pool?[/yellow]")
                 sys.exit(1)
 
             console.print(f"[green]✓[/green] SmartOperator: {self.operator_address}")

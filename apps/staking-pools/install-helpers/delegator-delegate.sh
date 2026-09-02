@@ -171,7 +171,7 @@ echo ""
 echo "Done. Handler funded."
 echo ""
 echo "NEXT: Share generated/safe-multisend-payload.json + generated/foundation-request.txt"
-echo "with a Foundation Safe owner. They execute the Safe tx, then you run delegated-create-pool.sh."
+echo "with a Foundation Safe owner. They execute the Safe tx, then the operator runs ../installer/install.sh."
 EOF
   chmod +x "$cmd_file"
 }
@@ -253,8 +253,8 @@ How to execute
 
 After execution
 ---------------
-The operator ($validator_admin) runs:
-  ./delegated-create-pool.sh
+The operator ($validator_admin) runs from ../installer/:
+  ./install.sh
 EOF
 }
 
@@ -415,7 +415,7 @@ echo ""
 echo "Step 4: grantRole(VALIDATOR_ADMIN_ROLE, $VALIDATOR_ADMIN)..."
 cast send \$HANDLER 'grantRole(bytes32,address)' "$role_hash" "$VALIDATOR_ADMIN" -r $rpc_url \$wallet_args
 echo ""
-echo "Done. Operator can run: ./delegated-create-pool.sh"
+echo "Done. Operator can run ../installer/install.sh"
 EOF
     chmod +x "$cmd_file"
     log_success "Generated: $cmd_file"
@@ -470,7 +470,7 @@ EOF
     log_info "Next steps:"
     echo "  1. Run your steps:  ./generated/operator-steps.sh"
     echo "  2. Send to Foundation: generated/safe-multisend-payload.json + generated/foundation-request.txt"
-    echo "  3. After Foundation Safe tx confirms: ./delegated-create-pool.sh"
+    echo "  3. After Foundation Safe tx confirms: operator runs ../installer/install.sh"
   fi
 }
 

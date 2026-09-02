@@ -1,85 +1,54 @@
 # Staking Pool Install Helpers
 
-Shell scripts that automate staking pool lifecycle operations on Berachain.
-Every script follows the same two-step pattern: **generate, then execute**.
+Validator-local scripts for **post-install ops**, **delegator forming**, and **delegated yield**.
 
-## How It Works
-
-Each script validates inputs, queries on-chain state, and writes a ready-to-run
-`cast send` command into the `generated/` directory. You review the generated
-file, then execute it yourself. Nothing is sent on-chain until you run the
-generated script.
-
-```
-./register.sh --sr 0x... --op 0x...   # step 1: generate
-./generated/deployment-command.sh       # step 2: execute
-```
+**Landing** a pool (self-funded or delegated) is [`../installer/install.sh`](../installer/install.sh) on a remote machine with RPC access. It is not run here.
 
 ## Configuration
 
-Copy the template and fill in your node path:
+Copy `env.sh.template` to `env.sh` on the validator and set `BEACOND_HOME`. Add `STAKING_POOL` if you want stake/unstake without passing `--staking-pool`.
 
-```bash
-cp env.sh.template env.sh
-```
-
-| Variable           | Purpose                                                             |
-| ------------------ | ------------------------------------------------------------------- |
-| `BEACOND_HOME`     | Path to your beacond data directory (required for most scripts)     |
-| `BEACOND_BIN`      | Override beacond binary location (defaults to `beacond` in `$PATH`) |
-| `NODE_API_ADDRESS` | Beacon API endpoint (defaults to `127.0.0.1:3500`)                  |
-| `PRIVATE_KEY`      | EVM private key for signing (see below)                             |
-
-## Transaction Signing: Private Key vs Ledger
-
-If `PRIVATE_KEY` is set in `env.sh`, generated commands use `cast send --private-key`.
-If it is unset or empty, they default to `cast send --ledger` (hardware wallet).
-
-Three ways to supply a private key, in order of preference:
-
-1. **File reference** (recommended) — `PRIVATE_KEY=$(sed -n '1p' "../private-keys.txt")`
-2. **Environment variable** — export it before running the script
-3. **Inline in env.sh** (not recommended) — never commit the file
+| Variable | Purpose |
+| --- | --- |
+| `BEACOND_HOME` | Required for `status.sh` and pubkey auto-detect in stake/unstake |
+| `STAKING_POOL` | Pool address (optional if you pass `--staking-pool`) |
+| `CHAIN` | `mainnet` or `bepolia` |
+| `NODE_API_ADDRESS` | Beacon API host:port |
+| `PRIVATE_KEY` | Optional; defaults to `--ledger` |
 
 ## Prerequisites
 
 - [Foundry](https://book.getfoundry.sh/) (`cast`)
-- `jq`, `bc`
-- A synced `beacond` node (for operator scripts)
+- `jq`, `bc` (for some scripts)
 
-## Script Reference
+## Script reference
 
-### Operator Scripts (self-funded validators)
+### Operator (post-install)
 
-| Script                        | Purpose                                                                                                                                             | Key Inputs                                          |
-| ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
-| `register.sh`                 | Deploy a new staking pool + initial 10 000 BERA deposit                                                                                             | `--sr` (shares recipient), `--op` (operator)        |
-| `activate.sh`                 | Activate a deployed pool using a beacon state proof                                                                                                 | (auto-detected from `BEACOND_HOME`)                 |
-| `stake.sh`                    | Stake BERA into a pool, receive stBERA                                                                                                              | `--amount`, `--receiver`, optional `--staking-pool` |
-| `unstake.sh`                  | Request withdrawal from a pool                                                                                                                      | `--amount` or `--shares`, `--receiver`              |
-| `status.sh`                   | Check deployment, activation, delegation, and WBERA/BGT disposition (primary track is WBERA; legacy BGT block auto-suppresses on a wound-down pool) | (auto-detected)                                     |
-| `generate-frontend-config.sh` | Write a `config.draft.json` for the staking-pool frontend                                                                                           | optional `--out` path                               |
+| Script | Purpose |
+| --- | --- |
+| `stake.sh` | Stake BERA into a pool |
+| `unstake.sh` | Request withdrawal from a pool |
+| `status.sh` | Pool telemetry (needs `BEACOND_HOME`) |
+| `generate-frontend-config.sh` | Frontend `config.draft.json` (needs `BEACOND_HOME`) |
 
-### Delegator Scripts (Foundation / capital provider)
+### Delegator (forming — one script)
 
-| Script                            | Purpose                                                                               |
-| --------------------------------- | ------------------------------------------------------------------------------------- |
-| `delegator-setup-pool.sh`         | Generate deploy-handler + fund + delegate commands (3-step)                           |
-| `delegator-delegate.sh`           | Generate delegation artifacts and simulate the full flow on a local anvil fork        |
-| `delegator-withdraw-principal.sh` | Reclaim original delegated funds (4-step: request → complete → undelegate → withdraw) |
+| Script | Purpose |
+| --- | --- |
+| `delegator-delegate.sh` | Deploy handler, fund, `delegate()`, `grantRole()`, anvil simulation |
+| `delegator-withdraw-principal.sh` | Delegator reclaims principal (4-step) |
 
-### Delegated-Operator Scripts (validator operator with `VALIDATOR_ADMIN_ROLE`)
+### Delegated operator (post-landing)
 
-| Script                        | Purpose                                                                         |
-| ----------------------------- | ------------------------------------------------------------------------------- |
-| `delegated-create-pool.sh`    | Create staking pool using delegated funds (initial 10 000 BERA)                 |
-| `delegated-deposit.sh`        | Deposit remaining delegated funds to reach 250 000 BERA                         |
-| `delegated-withdraw-yield.sh` | Claim earned staking rewards (2-step: request → complete after ~3 day cooldown) |
+| Script | Purpose |
+| --- | --- |
+| `delegated-withdraw-yield.sh` | Claim earned yield (request → complete) |
 
 ### Shared
 
-| File              | Purpose                                                                                       |
-| ----------------- | --------------------------------------------------------------------------------------------- |
-| `lib-common.sh`   | Shared functions: logging, `cast` wrappers, address resolution, network detection, simulation |
-| `env.sh.template` | Configuration template                                                                        |
-| `generated/`      | Output directory for generated commands (git-ignored)                                         |
+| File | Purpose |
+| --- | --- |
+| `lib-common.sh` | Shared library (also sourced by `installer/install.sh`) |
+| `env.sh.template` | Validator-side config template |
+| `generated/` | Script output (git-ignored) |

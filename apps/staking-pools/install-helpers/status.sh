@@ -224,7 +224,7 @@ main() {
     log_info "✓ Staking pool is ACTIVE"
   else
     log_info "⚠ Staking pool is NOT ACTIVE yet"
-    log_info "  Run activate.sh to activate the pool with validator proofs"
+    log_info "  Run ../installer/install.sh from a remote machine to activate the pool"
     exit 0
   fi
   

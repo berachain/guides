@@ -3,10 +3,15 @@
 # Source this file in scripts: source "$SCRIPT_DIR/lib-common.sh"
 
 # === LOGGING ===
-log_error() { echo "[error] $*"; }
-log_info() { echo "[info] $*"; }
-log_success() { echo "[success] $*"; }
-log_warn() { echo "[warn] $*"; }
+log_error() { echo "[error] $*" >&2; }
+log_info() { echo "[info] $*" >&2; }
+log_success() { echo "[success] $*" >&2; }
+log_warn() { echo "[warn] $*" >&2; }
+
+# Bash 3.2-safe lowercase (macOS ships bash 3.2).
+bash_lowercase() {
+  printf '%s' "$1" | tr '[:upper:]' '[:lower:]'
+}
 
 # === CAST OUTPUT HANDLING ===
 strip_scientific_notation() {
@@ -443,6 +448,16 @@ get_delegation_handler_factory_for_network() {
   case "$network" in
     mainnet) echo "$DELEGATION_HANDLER_FACTORY_MAINNET" ;;
     bepolia) echo "$DELEGATION_HANDLER_FACTORY_BEPOLIA" ;;
+    *) echo "" ;;
+  esac
+}
+
+get_genesis_validator_root_for_network() {
+  local network="$1"
+
+  case "$network" in
+    mainnet) echo "$MAINNET_VALIDATOR_ROOT" ;;
+    bepolia) echo "$BEPOLIA_VALIDATOR_ROOT" ;;
     *) echo "" ;;
   esac
 }

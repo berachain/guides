@@ -64,7 +64,7 @@ check_yield_available() {
   
   if [[ "$staking_pool" == "0x0000000000000000000000000000000000000000" ]]; then
     log_error "No staking pool found"
-    log_error "Create a pool first with: delegated-create-pool.sh"
+    log_error "Create a pool first with ../installer/install.sh"
     exit 1
   fi
   
@@ -173,7 +173,7 @@ main() {
   
   if [[ "$handler" == "0x0000000000000000000000000000000000000000" ]]; then
     log_error "No delegation handler found for pubkey: $pubkey"
-    log_error "The delegator must deploy a handler first using: delegator-deploy-handler.sh"
+    log_error "The delegator must form a handler first: delegator-delegate.sh"
     exit 1
   fi
   
