@@ -129,11 +129,11 @@ validate_deposit() {
     return 1
   fi
 
-  log_info "Run deposit validate on the validator before pasting (must exit 0, no output):"
+  log_info "Run deposit validate on the validator. You should see: ✅ Deposit message is valid!"
   echo "  beacond --home <validator-data-dir> deposit validate \\"
   echo "    $pubkey $cred $amount_gwei $sig -g $genesis_root"
   local ans
-  read -r -p "Did you run deposit validate on the validator (exit 0)? [y/N] " ans
+  read -r -p "Did deposit validate print ✅ Deposit message is valid!? [y/N] " ans
   if [[ ! "$ans" =~ ^[yY] ]]; then
     log_error "Confirm deposit validate on the validator before continuing"
     return 1
@@ -631,7 +631,7 @@ cmd_install() {
   echo "  beacond --home <validator-data-dir> deposit create-validator \\"
   echo "    $withdrawal_vault $DEPOSIT_AMOUNT_GWEI -g $genesis_root"
   echo ""
-  log_info "Then verify on the validator (must exit 0, no output):"
+  log_info "Then verify on the validator. You should see: ✅ Deposit message is valid!"
   echo "  beacond --home <validator-data-dir> deposit validate \\"
   echo "    <pubkey> <credentials> <amount> <signature> -g $genesis_root"
   echo "  (use the four values from create-validator output)"
@@ -753,9 +753,13 @@ cmd_install() {
 
 main() {
   case "${1:-}" in
-    -h|--help|help) print_usage ;;
+    -h|--help|help)
+      print_usage
+      exit 0
+      ;;
     "")
       cmd_install
+      exit 0
       ;;
     *)
       log_error "Unknown option: $1"

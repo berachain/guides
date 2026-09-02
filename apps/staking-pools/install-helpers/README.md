@@ -91,7 +91,7 @@ One operator wallet funds the 10,000 BERA deposit and deploy.
 1. Preflight: verify `cast` / `jq` / `curl`, EL RPC, Node API.
 2. Pubkey prompt (default from `VALIDATOR_PUBKEY`).
 3. No `DelegationHandler` for that pubkey → self-funded path: funding wallet, operator, shares recipient.
-4. On the **validator**, run `beacond deposit create-validator`, then `deposit validate` (must exit 0). Paste create-validator output into the script.
+4. On the **validator**, run `beacond deposit create-validator`, then `deposit validate` (look for `✅ Deposit message is valid!`). Paste create-validator output into the script.
 5. Deploy pool (`deployStakingPoolContracts`, 10,000 BERA), wait for beacon registration, activate.
 6. Print pool address; append receipts.
 
@@ -119,7 +119,7 @@ When a formed handler with delegated funds exists for your pubkey, `install.sh` 
 
 `install.sh` prints the exact `beacond` commands with withdrawal vault, amount, and genesis root filled in for your network. You run them on the validator with `--home <validator-data-dir>`. The bastion never runs `beacond`.
 
-After paste-back, the script checks pubkey match, amount (10,000 BERA), and asks you to confirm `deposit validate` succeeded on the validator.
+After paste-back, the script checks pubkey match, amount (10,000 BERA), and asks you to confirm `deposit validate` printed `✅ Deposit message is valid!` on the validator.
 
 ## Help
 
