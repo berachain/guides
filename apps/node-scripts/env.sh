@@ -11,18 +11,17 @@ export MY_IP=`curl -s ipv4.canhazip.com`
 ########
 # VALUES YOU MIGHT WANT TO CHANGE
 export LOG_DIR=$(pwd)/logs
-export BEACOND_BIN=$(command -v bera-beacond || command -v beacond || echo $(pwd)/beacond)
+export BEACOND_BIN=$(command -v beacond || echo $(pwd)/beacond)
 export BEACOND_DATA=$(pwd)/var/beacond
 export BEACOND_CONFIG=$BEACOND_DATA/config  # can't change this. sorry.
 export JWT_PATH=$BEACOND_CONFIG/jwt.hex
 
 export RETH_BIN=$(command -v bera-reth || echo $(pwd)/bera-reth)
 
-# Leave this blank to use the default ports for the various services.
-# Set this to a port number (for example, 30000) to 
-# have the services listen on sequential ports (30000, 30001, 30002, etc)
-export PORT_BASE=50000
-if [[ -n "$PORT_BASE" ]]; then
+# Unset, or leave unset, to use default ports (CL RPC 26657, EL RPC 8545).
+# Set a number (for example, 30000) to have the services listen on
+# sequential ports (30000, 30001, 30002, etc).
+if [[ -n "${PORT_BASE:-}" ]]; then
     export CL_ETHRPC_PORT=$(($PORT_BASE+0))
     export CL_ETHP2P_PORT=$(($PORT_BASE+1))
     export CL_ETHPROXY_PORT=$(($PORT_BASE+2))
