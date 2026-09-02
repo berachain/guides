@@ -150,7 +150,6 @@ main() {
   }
 
   role_hash=$(cast keccak "VALIDATOR_ADMIN_ROLE")
-  wallet_args=$(get_cast_wallet_args)
 
   log_info "Network: $network"
   log_info "Factory: $factory"
@@ -162,9 +161,9 @@ main() {
   handler=$(get_delegation_handler "$factory" "$pubkey" "$rpc_url" | tr -d '[:space:]')
   if [[ "$handler" == "0x0000000000000000000000000000000000000000" || -z "$handler" ]]; then
     log_info "No handler yet — deploy first"
-    local deploy_cmd
-    deploy_cmd="cast send $factory 'deployDelegationHandler(bytes)' \"$pubkey\" -r $rpc_url $wallet_args"
-    run_cast_or_paste "deploy-handler" "$deploy_cmd" "$rpc_url" || exit 1
+    local -a deploy_argv=(send "$factory" 'deployDelegationHandler(bytes)' "$pubkey" -r "$rpc_url")
+    append_cast_wallet_args deploy_argv
+    run_cast_or_paste "deploy-handler" "$rpc_url" "${deploy_argv[@]}" || exit 1
     handler=$(get_delegation_handler "$factory" "$pubkey" "$rpc_url" | tr -d '[:space:]')
     if [[ "$handler" == "0x0000000000000000000000000000000000000000" || -z "$handler" ]]; then
       log_error "Handler still zero after deploy"
@@ -174,16 +173,19 @@ main() {
     log_success "Using existing handler: $handler"
   fi
 
-  local fund_cmd delegate_cmd grant_cmd
-  fund_cmd="cast send $handler --value ${amount_bera}ether -r $rpc_url $wallet_args"
-  run_cast_or_paste "fund-handler" "$fund_cmd" "$rpc_url" || exit 1
+  local -a fund_argv delegate_argv grant_argv
+  fund_argv=(send "$handler" --value "${amount_bera}ether" -r "$rpc_url")
+  append_cast_wallet_args fund_argv
+  run_cast_or_paste "fund-handler" "$rpc_url" "${fund_argv[@]}" || exit 1
 
   log_warn "delegate() and grantRole() require DEFAULT_ADMIN_ROLE on the handler (often the Foundation Safe)"
-  delegate_cmd="cast send $handler 'delegate(uint256)' $amount_wei -r $rpc_url $wallet_args"
-  run_cast_or_paste "delegate" "$delegate_cmd" "$rpc_url" || exit 1
+  delegate_argv=(send "$handler" 'delegate(uint256)' "$amount_wei" -r "$rpc_url")
+  append_cast_wallet_args delegate_argv
+  run_cast_or_paste "delegate" "$rpc_url" "${delegate_argv[@]}" || exit 1
 
-  grant_cmd="cast send $handler 'grantRole(bytes32,address)' $role_hash $validator_admin -r $rpc_url $wallet_args"
-  run_cast_or_paste "grant-role" "$grant_cmd" "$rpc_url" || exit 1
+  grant_argv=(send "$handler" 'grantRole(bytes32,address)' "$role_hash" "$validator_admin" -r "$rpc_url")
+  append_cast_wallet_args grant_argv
+  run_cast_or_paste "grant-role" "$rpc_url" "${grant_argv[@]}" || exit 1
 
   echo ""
   log_success "Done. Handler: $handler"

@@ -14,6 +14,7 @@ readonly DEPOSIT_AMOUNT_GWEI="10000000000000"
 readonly REGISTRATION_WAIT_MAX=360
 readonly ACTIVATION_MAX_AGE=600
 ACTIVATION_TIMESTAMP=""
+ACTIVATION_CAST_ARGV=()
 
 preflight() {
   ensure_cast || return 1
@@ -231,57 +232,18 @@ funding_address() {
   prompt_evm_address "Funding wallet address" "$default"
 }
 
-run_cast_or_paste() {
+run_install_cast_or_paste() {
   local label="$1"
-  local cast_cmd="$2"
-  local amount="${3:-}"
-  local pool="${4:-}"
+  local amount="${2:-}"
+  local pool="${3:-}"
+  shift 3
 
-  echo "" >&2
-  log_info "$label command:"
-  echo "$(redact_cast_cmd_for_display "$cast_cmd")" >&2
   if [[ "$label" == "activate" ]]; then
     log_warn "Activation proofs expire ${ACTIVATION_MAX_AGE}s after generation — run the command promptly"
   fi
-  echo "" >&2
 
-  local tx_hash=""
-  if [[ -n "${PRIVATE_KEY:-}" ]]; then
-    local ans
-    read -r -p "Run this command now? [y/N] " ans
-    if [[ "$ans" =~ ^[yY] ]]; then
-      local out rc=0
-      out=$(eval "$cast_cmd" 2>&1) || rc=$?
-      if (( rc != 0 )); then
-        log_error "$label broadcast failed: $out"
-        return 1
-      fi
-      tx_hash=$(echo "$out" | grep -Eo '0x[0-9a-fA-F]{64}' | head -n1 || true)
-      if [[ -z "$tx_hash" ]]; then
-        log_error "Could not read transaction hash from cast output"
-        return 1
-      fi
-    fi
-  fi
-
-  if [[ -z "$tx_hash" ]]; then
-    read -r -p "Paste $label transaction hash (0x...): " tx_hash
-    tx_hash=$(require_tx_hash "$label transaction hash" "$tx_hash") || return 1
-  fi
-
-  local receipt rc=0
-  receipt=$(cast receipt "$tx_hash" -r "$EL_RPC_URL" --json 2>&1) || rc=$?
-  if (( rc != 0 )); then
-    log_error "Transaction $tx_hash not found or not confirmed yet: $receipt"
-    return 1
-  fi
-  local status
-  status=$(echo "$receipt" | jq -r '.status // empty')
-  if [[ "$status" != "0x1" && "$status" != "1" ]]; then
-    log_error "Transaction $tx_hash failed on chain"
-    return 1
-  fi
-  log_success "$label confirmed: $tx_hash"
+  local tx_hash
+  tx_hash=$(run_cast_or_paste "$label" "$EL_RPC_URL" "$@") || return 1
   append_receipt "$label" "$tx_hash" "$amount" "$pool"
   printf '%s' "$tx_hash"
 }
@@ -530,8 +492,7 @@ build_activation_cast() {
     return 1
   fi
 
-  local wallet_args preflight_out preflight_rc=0
-  wallet_args=$(get_cast_wallet_args)
+  local preflight_out preflight_rc=0
   preflight_out=$(cast call "$factory" \
     'activateStakingPool((bytes,bytes,uint64,uint64),(bytes32[],bytes32[],bytes32[],bytes32),uint64)' \
     "($v_pubkey,$v_withdrawal_creds,$v_balance_dec,$validator_index)" \
@@ -544,12 +505,14 @@ build_activation_cast() {
   fi
   log_success "Activation preflight OK (timestamp $timestamp_dec, valid ~${ACTIVATION_MAX_AGE}s)"
 
-  local cast_cmd
-  cast_cmd=$(cat <<EOF
-cast send $factory 'activateStakingPool((bytes,bytes,uint64,uint64),(bytes32[],bytes32[],bytes32[],bytes32),uint64)' "($v_pubkey,$v_withdrawal_creds,$v_balance_dec,$validator_index)" "([$pubkey_proof_cast],[$withdrawal_creds_proof_cast],[$balance_proof_cast],$balance_leaf)" $timestamp_dec -r $rpc $wallet_args
-EOF
-)
-  printf '%s' "$cast_cmd"
+  ACTIVATION_CAST_ARGV=(
+    send "$factory" 'activateStakingPool((bytes,bytes,uint64,uint64),(bytes32[],bytes32[],bytes32[],bytes32),uint64)'
+    "($v_pubkey,$v_withdrawal_creds,$v_balance_dec,$validator_index)"
+    "([$pubkey_proof_cast],[$withdrawal_creds_proof_cast],[$balance_proof_cast],$balance_leaf)"
+    "$timestamp_dec"
+    -r "$rpc"
+  )
+  append_cast_wallet_args ACTIVATION_CAST_ARGV
 }
 
 print_usage() {
@@ -601,7 +564,8 @@ cmd_install() {
   fi
 
   local pubkey operator shares funding cred sig dep_pk parsed pasted line
-  local delegated_mode=false delegation_handler="" staking_pool wallet_args deploy_cmd
+  local delegated_mode=false delegation_handler="" staking_pool
+  local -a deploy_argv deposit_argv
 
   pubkey=$(prompt_validator_pubkey) || exit 1
 
@@ -660,11 +624,11 @@ cmd_install() {
   log_info "Validator pubkey: ${pubkey:0:10}...${pubkey: -4}"
   echo ""
 
-  wallet_args=$(get_cast_wallet_args)
   if [[ "$delegated_mode" == true ]]; then
     log_info "DelegationHandler: $delegation_handler"
-    deploy_cmd="cast send $delegation_handler 'createStakingPoolWithDelegatedFunds(bytes,bytes,bytes)' \"$pubkey\" \"$cred\" \"$sig\" -r $rpc_url $wallet_args"
-    run_cast_or_paste "delegated-create" "$deploy_cmd" "10000" "" || exit 1
+    deploy_argv=(send "$delegation_handler" 'createStakingPoolWithDelegatedFunds(bytes,bytes,bytes)' "$pubkey" "$cred" "$sig" -r "$rpc_url")
+    append_cast_wallet_args deploy_argv
+    run_install_cast_or_paste "delegated-create" "10000" "" "${deploy_argv[@]}" || exit 1
     staking_pool=$(staking_pool_from_handler "$delegation_handler" "$rpc_url")
     if [[ -z "$staking_pool" || "$staking_pool" == "0x0000000000000000000000000000000000000000" ]]; then
       log_error "Could not read staking pool address from DelegationHandler after create"
@@ -684,8 +648,9 @@ cmd_install() {
       exit 1
     fi
     echo ""
-    deploy_cmd="cast send $factory 'deployStakingPoolContracts(bytes,bytes,bytes,address,address)' \"$pubkey\" \"$cred\" \"$sig\" $operator $shares --value 10000ether -r $rpc_url $wallet_args"
-    run_cast_or_paste "deploy" "$deploy_cmd" "10000" "$staking_pool" || exit 1
+    deploy_argv=(send "$factory" 'deployStakingPoolContracts(bytes,bytes,bytes,address,address)' "$pubkey" "$cred" "$sig" "$operator" "$shares" --value 10000ether -r "$rpc_url")
+    append_cast_wallet_args deploy_argv
+    run_install_cast_or_paste "deploy" "10000" "$staking_pool" "${deploy_argv[@]}" || exit 1
   fi
 
   local validator_index
@@ -697,10 +662,10 @@ cmd_install() {
   fi
 
   log_info "Waiting for activation proofs..."
-  local activate_cmd activate_rc activate_attempt=0
+  local activate_rc activate_attempt=0
   while (( activate_attempt < 3 )); do
     (( activate_attempt++ )) || true
-    activate_cmd=$(build_activation_cast "$factory" "$rpc_url" "$cl_base" "$pubkey" "$withdrawal_vault" "$validator_index" "$staking_pool")
+    build_activation_cast "$factory" "$rpc_url" "$cl_base" "$pubkey" "$withdrawal_vault" "$validator_index" "$staking_pool"
     activate_rc=$?
     if (( activate_rc == 2 )); then
       break
@@ -717,7 +682,7 @@ cmd_install() {
         continue
       fi
     fi
-    if run_cast_or_paste "activate" "$activate_cmd" "" "$staking_pool"; then
+    if run_install_cast_or_paste "activate" "" "$staking_pool" "${ACTIVATION_CAST_ARGV[@]}"; then
       break
     fi
     if (( activate_attempt >= 3 )); then
@@ -728,7 +693,7 @@ cmd_install() {
   done
 
   if [[ "$delegated_mode" == true ]]; then
-    local deposit_bera amount_wei deposit_cmd
+    local deposit_bera amount_wei
     read -r -p "Deposit remaining delegated BERA (whole number, blank to skip): " deposit_bera
     if [[ -n "$deposit_bera" ]]; then
       if ! [[ "$deposit_bera" =~ ^[0-9]+$ ]]; then
@@ -739,8 +704,9 @@ cmd_install() {
         log_error "Could not convert deposit amount to wei"
         exit 1
       }
-      deposit_cmd="cast send $delegation_handler 'depositDelegatedFunds(uint256)' $amount_wei -r $rpc_url $wallet_args"
-      run_cast_or_paste "delegated-deposit" "$deposit_cmd" "$deposit_bera" "$staking_pool" || exit 1
+      deposit_argv=(send "$delegation_handler" 'depositDelegatedFunds(uint256)' "$amount_wei" -r "$rpc_url")
+      append_cast_wallet_args deposit_argv
+      run_install_cast_or_paste "delegated-deposit" "$deposit_bera" "$staking_pool" "${deposit_argv[@]}" || exit 1
     fi
   fi
 

@@ -190,7 +190,38 @@ get_cast_wallet_args() {
   fi
 }
 
+append_cast_wallet_args() {
+  local -n _argv=$1
+  if [[ -n "${PRIVATE_KEY:-}" ]]; then
+    _argv+=(--private-key "$PRIVATE_KEY")
+  else
+    _argv+=(--ledger)
+  fi
+}
+
+format_cast_argv_for_display() {
+  local -a display=("cast")
+  local redact_next=0
+  local arg
+  for arg in "$@"; do
+    if (( redact_next )); then
+      display+=("[REDACTED]")
+      redact_next=0
+      continue
+    fi
+    if [[ "$arg" == "--private-key" ]]; then
+      display+=("$arg")
+      redact_next=1
+      continue
+    fi
+    display+=("$arg")
+  done
+  printf '%q ' "${display[@]}"
+  printf '\n'
+}
+
 redact_cast_cmd_for_display() {
+  # Legacy string helper for printed cast one-liners (cold-signing display only).
   echo "$1" | sed -E 's/--private-key [^ ]+/--private-key [REDACTED]/g'
 }
 
@@ -208,12 +239,13 @@ require_tx_hash() {
 
 run_cast_or_paste() {
   local label="$1"
-  local cast_cmd="$2"
-  local rpc_url="$3"
+  local rpc_url="$2"
+  shift 2
+  local -a cast_argv=("$@")
 
   echo "" >&2
   log_info "$label command:"
-  echo "$(redact_cast_cmd_for_display "$cast_cmd")" >&2
+  format_cast_argv_for_display "${cast_argv[@]}" >&2
   echo "" >&2
 
   local tx_hash=""
@@ -222,7 +254,7 @@ run_cast_or_paste() {
     read -r -p "Run this command now? [y/N] " ans
     if [[ "$ans" =~ ^[yY] ]]; then
       local out rc=0
-      out=$(eval "$cast_cmd" 2>&1) || rc=$?
+      out=$(cast "${cast_argv[@]}" 2>&1) || rc=$?
       if (( rc != 0 )); then
         log_error "$label broadcast failed: $out"
         return 1
@@ -253,6 +285,7 @@ run_cast_or_paste() {
     return 1
   fi
   log_success "$label confirmed: $tx_hash"
+  printf '%s' "$tx_hash"
 }
 
 get_validator_index_from_api() {
