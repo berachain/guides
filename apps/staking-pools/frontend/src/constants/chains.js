@@ -32,8 +32,8 @@ export const CHAINS = {
   [CHAIN_IDS.BEPOLIA]: {
     name: 'Bepolia',
     rpcUrl: 'https://bepolia.rpc.berachain.com',
-    stakingPoolFactoryAddress: '0x176c081E95C82CA68DEa20CA419C7506Aa063C24',
-    delegationHandlerFactoryAddress: '0x8b472791aC2f9e9Bd85f8919401b8Ce3bdFd464c',
+    stakingPoolFactoryAddress: '0x24b8223864d3936F56e5a24C4245ae7620471D4C',
+    delegationHandlerFactoryAddress: '0x0aEf09EC97bAc354d31F180b401454cB76abc395',
     graphqlEndpoint: 'https://bepolia-api.berachain.com/graphql',
     hubBaseUrl: 'https://bepolia.hub.berachain.com',
     explorerUrl: 'https://testnet.berascan.com',
