@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Restore pruned (or archive) Beacon Kit and Bera-Reth snapshots into
-# $BEACOND_DATA / $RETH_DATA. Source env.sh first, or run from node-scripts.
+# $BEACOND_DATA / $RETH_DATA. Reads CHAIN from env.sh when it is not exported.
 # Usage: ./fetch-berachain-snapshot.sh [--help]
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -10,9 +10,6 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/lib-snapshot.sh"
 
 NETWORK="${CHAIN:-mainnet}"
-if [[ "$NETWORK" != mainnet && "$NETWORK" != bepolia ]]; then
-  NETWORK=mainnet
-fi
 SNAPSHOT_TYPE="pruned"
 OUTPUT_DIR="downloads"
 BEACON_ONLY=0
@@ -47,7 +44,7 @@ Index CSV: https://snapshots.berachain.com/index.csv (mainnet)
            https://bepolia.snapshots.berachain.com/index.csv (bepolia)
 
 Examples:
-  . ./env.sh && ./fetch-berachain-snapshot.sh
+  ./fetch-berachain-snapshot.sh
   ./fetch-berachain-snapshot.sh -n bepolia -t pruned
 EOF
 }

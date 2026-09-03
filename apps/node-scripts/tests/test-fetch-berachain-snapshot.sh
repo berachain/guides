@@ -140,6 +140,18 @@ else
   fail "--network overrides CHAIN" "$(cat "$tmp/err")"
 fi
 
+# invalid CHAIN dies (no silent mainnet restore)
+tmp="$(tmpdir)"; fix="$tmp/files"; mkdir -p "$fix"
+printf x >"$fix/beacon-kit-pruned-100.tar.lz4"
+write_index "$fix"
+bin="$tmp/bin"; mkdir -p "$bin"
+curl_copy_stub "$fix" >"$bin/curl"; chmod +x "$bin/curl"
+if PATH="$bin:$PATH" CHAIN=sepolia "$SCRIPT" --no-extract --beacon-only -o "$tmp/downloads" >"$tmp/out" 2>"$tmp/err"; then
+  fail "invalid CHAIN dies" "expected non-zero"
+else
+  if grep -q 'CHAIN must be mainnet or bepolia' "$tmp/err"; then pass "invalid CHAIN dies"; else fail "invalid CHAIN dies" "$(cat "$tmp/err")"; fi
+fi
+
 # env.sh CHAIN is used when CHAIN is unset (no --network)
 tmp="$(tmpdir)"; fix="$tmp/files"; mkdir -p "$fix"
 printf x >"$fix/beacon-kit-pruned-100.tar.lz4"

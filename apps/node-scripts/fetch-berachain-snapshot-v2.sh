@@ -10,9 +10,6 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/lib-snapshot.sh"
 
 NETWORK="${CHAIN:-mainnet}"
-if [[ "$NETWORK" != mainnet && "$NETWORK" != bepolia ]]; then
-  NETWORK=mainnet
-fi
 SNAPSHOT_TYPE="pruned"
 BEACON_ONLY=0
 EL_ONLY=0

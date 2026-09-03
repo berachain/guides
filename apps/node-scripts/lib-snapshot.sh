@@ -178,9 +178,12 @@ apply_network_from_env() {
     fi
   fi
   NETWORK="${CHAIN:-mainnet}"
-  if [[ "$NETWORK" != mainnet && "$NETWORK" != bepolia ]]; then
-    NETWORK=mainnet
-  fi
+  assert_network "$NETWORK"
+}
+
+assert_network() {
+  local n="$1"
+  [[ "$n" == mainnet || "$n" == bepolia ]] || die "CHAIN must be mainnet or bepolia (got: ${n:-empty})"
 }
 
 source_env_if_needed() {

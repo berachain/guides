@@ -272,13 +272,9 @@ fi
 
 tmp="$(tmpdir)"
 if CHAIN=sepolia "$SCRIPT" --catalog-url "$FIXTURE" --no-download >"$tmp/out" 2>"$tmp/err"; then
-  if grep -q 'Network: mainnet' "$tmp/out" && grep -q -- '--chain mainnet' "$tmp/out"; then
-    pass "invalid CHAIN falls back to mainnet catalog shape"
-  else
-    fail "invalid CHAIN falls back to mainnet catalog shape" "$(cat "$tmp/out")"
-  fi
+  fail "invalid CHAIN dies" "expected non-zero"
 else
-  fail "invalid CHAIN falls back to mainnet catalog shape" "$(cat "$tmp/err")"
+  if grep -q 'CHAIN must be mainnet or bepolia' "$tmp/err"; then pass "invalid CHAIN dies"; else fail "invalid CHAIN dies" "$(cat "$tmp/err")"; fi
 fi
 
 tmp="$(tmpdir)"
