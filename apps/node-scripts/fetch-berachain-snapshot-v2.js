@@ -328,12 +328,6 @@ async function main() {
     try {
         catalogText = await fetchText(config.catalogUrl);
     } catch (err) {
-        if (config.network === 'mainnet') {
-            console.error(
-                `Error: storage v2 catalog unavailable for mainnet (${err.message}). Use fetch-berachain-snapshot.js for v1 snapshots.`,
-            );
-            process.exit(1);
-        }
         console.error(`Error: ${err.message}`);
         process.exit(1);
     }

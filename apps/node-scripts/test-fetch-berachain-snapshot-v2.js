@@ -255,11 +255,11 @@ reth,el,,1,1,2026-01-01T00:00:00Z,v2/bepolia/reth/manifest.json,https://example.
         assert.strictEqual(current, V1_BASELINE);
     });
 
-    test('TP-7: mainnet missing v2 catalog fails closed and names v1 script', () => {
+    test('TP-7: mainnet missing v2 catalog fails closed with generic error (not v1 fallback)', () => {
         const missing = `file://${path.join(makeTempDir('snapv2-mainnet-'), 'missing.csv')}`;
         const result = runScript(['--network', 'mainnet', '--catalog-url', missing, '--no-download']);
         assert.notStrictEqual(result.status, 0);
-        assert.match(result.stderr, /fetch-berachain-snapshot\.js/);
+        assert.doesNotMatch(result.stderr, /fetch-berachain-snapshot\.js/);
         assert.doesNotMatch(result.stderr, /index\.csv/);
     });
 
@@ -408,11 +408,12 @@ exit 0
     });
 
     test('TP-12: an invalid CHAIN value is ignored, falling back to mainnet', () => {
-        const result = runScript(['--no-download'], { CHAIN: 'sepolia' });
-        // mainnet has no live v2 catalog yet; this proves the default resolved to
-        // mainnet (fails closed) rather than crashing on the bad env value.
-        assert.notStrictEqual(result.status, 0);
-        assert.match(result.stderr, /mainnet/i);
+        const result = runScript(
+            ['--catalog-url', FIXTURE_CATALOG_URL, '--no-download'],
+            { CHAIN: 'sepolia' },
+        );
+        assert.strictEqual(result.status, 0, result.stderr);
+        assert.match(result.stdout, /--chain mainnet/);
     });
 }
 
