@@ -28,6 +28,11 @@ const INDEXES = {
     testnet: 'https://bepolia.snapshots.berachain.com/index.csv',
 };
 
+const V2_CATALOGS = {
+    mainnet: 'https://bera-snapshots.fsn1.your-objectstorage.com/v2/mainnet/catalog.csv',
+    bepolia: 'https://bera-snapshots.fsn1.your-objectstorage.com/v2/bepolia/catalog.csv',
+};
+
 const TYPES = [
     'beacon-kit-pruned',
     'beacon-kit-archive',
@@ -223,6 +228,18 @@ async function run() {
 
         console.log('');
     }
+
+    console.log(BOLD('── storage v2 catalogs'));
+    for (const [network, catalogUrl] of Object.entries(V2_CATALOGS)) {
+        const result = await (DOWNLOAD_MODE ? checkDownload(catalogUrl) : checkHead(catalogUrl));
+        const icon = result.ok ? PASS : FAIL;
+        const extra = DOWNLOAD_MODE ? ` ${DIM(fmtBytes(result.received))}` : '';
+        const statusStr = typeof result.status === 'number' ? `HTTP ${result.status}` : result.status;
+        console.log(`  ${icon} ${network.padEnd(22)} [s3 ] ${statusStr}${extra}`);
+        console.log(`       ${DIM(catalogUrl)}`);
+        if (!result.ok) failures++;
+    }
+    console.log('');
 
     if (failures === 0) {
         console.log(`${PASS} All checks passed.\n`);
