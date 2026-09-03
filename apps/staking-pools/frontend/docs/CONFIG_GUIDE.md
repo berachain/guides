@@ -79,7 +79,7 @@ Nosy mode is intentionally demanding: it can generate a lot of RPC traffic and w
 
 | Network | Chain ID | RPC URL                             | Explorer                       | Staking Pool Factory                         | Delegation Handler Factory                   |
 | ------- | -------- | ----------------------------------- | ------------------------------ | -------------------------------------------- | -------------------------------------------- |
-| Bepolia | 80069    | `https://bepolia.rpc.berachain.com` | `https://testnet.berascan.com` | `0x176c081E95C82CA68DEa20CA419C7506Aa063C24` | `0x8b472791aC2f9e9Bd85f8919401b8Ce3bdFd464c` |
+| Bepolia | 80069    | `https://bepolia.rpc.berachain.com` | `https://testnet.berascan.com` | `0x24b8223864d3936F56e5a24C4245ae7620471D4C` | `0x0aEf09EC97bAc354d31F180b401454cB76abc395` |
 | Mainnet | 80094    | `https://rpc.berachain.com`         | `https://berascan.com`         | `0xb79b43dBA821Cb67751276Ce050fF4111445fB99` | `0xAd17932a5B1aaeEa73D277a6AE670623F176E0D0` |
 
 ## Getting Your Pool Address
