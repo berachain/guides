@@ -9,8 +9,8 @@
  * first).
  *
  * Usage:
- *   node test-snapshot-urls.js            # HEAD-only (fast)
- *   node test-snapshot-urls.js --download # pull 1 MB / 20 s cap
+ *   node tests/test-snapshot-urls.js            # HEAD-only (fast)
+ *   node tests/test-snapshot-urls.js --download # pull 1 MB / 20 s cap
  */
 
 'use strict';
