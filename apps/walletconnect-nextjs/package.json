@@ -19,7 +19,7 @@
   "dependencies": {
     "@tanstack/react-query": "^5.20.5",
     "@web3modal/wagmi": "5.1.11",
-    "next": "16.3.0",
+    "next": "16.3.3",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "viem": "^2.7.9",
