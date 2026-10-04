@@ -1,11 +1,11 @@
 module enode-tester
 
-go 1.24.0
+go 1.25.0
 
 toolchain go1.26.4
 
 require (
-	github.com/ethereum/go-ethereum v1.17.4
+	github.com/ethereum/go-ethereum v1.17.7
 	github.com/olekukonko/tablewriter v1.1.4
 )
 
@@ -18,7 +18,7 @@ require (
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.0.1 // indirect
 	github.com/fatih/color v1.18.0 // indirect
 	github.com/go-ole/go-ole v1.3.0 // indirect
-	github.com/golang/snappy v1.0.0 // indirect
+	github.com/golang/snappy v1.0.1-0.20260716114414-9ae09f520e93 // indirect
 	github.com/holiman/uint256 v1.3.2 // indirect
 	github.com/huin/goupnp v1.3.0 // indirect
 	github.com/jackpal/go-nat-pmp v1.0.2 // indirect
@@ -42,7 +42,7 @@ require (
 	github.com/tklauser/go-sysconf v0.3.12 // indirect
 	github.com/tklauser/numcpus v0.6.1 // indirect
 	github.com/wlynxg/anet v0.0.5 // indirect
-	golang.org/x/crypto v0.48.0 // indirect
-	golang.org/x/sync v0.19.0 // indirect
-	golang.org/x/sys v0.41.0 // indirect
+	golang.org/x/crypto v0.55.0 // indirect
+	golang.org/x/sync v0.22.0 // indirect
+	golang.org/x/sys v0.47.0 // indirect
 )
