@@ -1,1 +1,7 @@
-.env
+files/*
+!files/allocations.csv
+!files/deposits.csv
+!files/exits.csv
+!files/pubkeys.csv
+!files/validators.csv
+!files/rewards.csv
