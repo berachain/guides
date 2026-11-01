@@ -6,7 +6,7 @@ toolchain go1.26.4
 
 require (
 	github.com/ethereum/go-ethereum v1.17.4
-	github.com/olekukonko/tablewriter v1.1.4
+	github.com/olekukonko/tablewriter v1.1.5
 )
 
 require (
