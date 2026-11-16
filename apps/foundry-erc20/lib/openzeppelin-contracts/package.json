@@ -95,5 +95,8 @@
     "undici": "^6.0.0",
     "web3": "^4.0.0",
     "yargs": "^17.7.2"
+  },
+  "overrides": {
+    "cipher-base": "1.0.5"
   }
 }
