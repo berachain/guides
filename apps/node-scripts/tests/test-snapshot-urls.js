@@ -25,7 +25,7 @@ const DOWNLOAD_TIMEOUT_MS = 20_000;
 
 const INDEXES = {
     mainnet: 'https://bera-snapshots.fsn1.your-objectstorage.com/v1/mainnet/index.csv',
-    testnet: 'https://bera-snapshots.fsn1.your-objectstorage.com/v1/bepolia/index.csv',
+    testnet: 'https://snapshots.bepolia.berachain.com/index.csv',
 };
 
 const TYPES = [

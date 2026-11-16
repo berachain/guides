@@ -41,7 +41,7 @@ Options:
   -h, --help                  show this help
 
 Index CSV: https://bera-snapshots.fsn1.your-objectstorage.com/v1/mainnet/index.csv (mainnet)
-           https://bera-snapshots.fsn1.your-objectstorage.com/v1/bepolia/index.csv (bepolia)
+           https://snapshots.bepolia.berachain.com/index.csv (bepolia)
 Portal UI:  https://snapshots.berachain.com (mainnet)
            https://snapshots.bepolia.berachain.com (bepolia)
 
@@ -54,7 +54,7 @@ EOF
 default_index_url() {
   local network="$1"
   if [[ "$network" == bepolia ]]; then
-    echo "https://bera-snapshots.fsn1.your-objectstorage.com/v1/bepolia/index.csv"
+    echo "https://snapshots.bepolia.berachain.com/index.csv"
   else
     echo "https://bera-snapshots.fsn1.your-objectstorage.com/v1/mainnet/index.csv"
   fi
