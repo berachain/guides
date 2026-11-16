@@ -20,7 +20,11 @@ CATALOG_URL=""
 NETWORK_FROM_FLAG=0
 
 default_catalog_url() {
-  echo "https://bera-snapshots.fsn1.your-objectstorage.com/v2/$1/catalog.csv"
+  if [[ "$1" == bepolia ]]; then
+    echo "https://snapshots.bepolia.berachain.com/v2/catalog.csv"
+  else
+    echo "https://bera-snapshots.fsn1.your-objectstorage.com/v2/$1/catalog.csv"
+  fi
 }
 
 usage() {

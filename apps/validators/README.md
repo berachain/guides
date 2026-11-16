@@ -48,13 +48,13 @@ RPC_URL=https://rpc.berachain.com CHUNK_SIZE=2000 ./scripts/deposits.sh
 
 ## Output files
 
-| File | Script | What each row is |
-| --- | --- | --- |
-| `files/deposits.csv` | `deposits.sh` | One deposit. `source` is `genesis` or `execution`. `amount` is BERA. |
-| `files/exits.csv` | `exits.sh` | One withdrawal request. `request_type` is `Full exit` or `Partial withdrawal`. |
-| `files/validators.csv` | `pubkeys.sh` | One pubkey: name, operator, stake, status, proposal share, estimated daily BERA, and dates. |
-| `files/allocations.csv` | `allocations.sh` | One validator, with up to 10 reward-vault slots. |
-| `files/rewards.csv` | `rewards.sh` | One reward vault, with how many validators direct stake to it. |
+| File                    | Script           | What each row is                                                                            |
+| ----------------------- | ---------------- | ------------------------------------------------------------------------------------------- |
+| `files/deposits.csv`    | `deposits.sh`    | One deposit. `source` is `genesis` or `execution`. `amount` is BERA.                        |
+| `files/exits.csv`       | `exits.sh`       | One withdrawal request. `request_type` is `Full exit` or `Partial withdrawal`.              |
+| `files/validators.csv`  | `pubkeys.sh`     | One pubkey: name, operator, stake, status, proposal share, estimated daily BERA, and dates. |
+| `files/allocations.csv` | `allocations.sh` | One validator, with up to 10 reward-vault slots.                                            |
+| `files/rewards.csv`     | `rewards.sh`     | One reward vault, with how many validators direct stake to it.                              |
 
 `validators.csv` stake is deposited BERA minus partial withdrawals. A full exit sets stake to `0`. Consensus rewards are omitted. `status` is `active` at 250,000 BERA or more, and `inactive` below that. `block_proposal` is that validator's share of total stake. `est_bera_24h` is that share times the on-chain base rate times 43,200 (one day of 2-second blocks).
 

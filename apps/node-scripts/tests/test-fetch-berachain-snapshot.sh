@@ -162,7 +162,7 @@ cp "$ROOT/fetch-berachain-snapshot.sh" "$ROOT/lib-snapshot.sh" "$tmp/"
 printf 'export CHAIN=bepolia\n' >"$tmp/env.sh"
 chmod +x "$tmp/fetch-berachain-snapshot.sh"
 if PATH="$bin:$PATH" env -u CHAIN "$tmp/fetch-berachain-snapshot.sh" --no-extract --beacon-only -o "$tmp/downloads" >"$tmp/out" 2>"$tmp/err"; then
-  if grep -q 'Network: bepolia' "$tmp/out" && grep -q 'bepolia.snapshots.berachain.com' "$tmp/out"; then
+  if grep -q 'Network: bepolia' "$tmp/out" && grep -q 'snapshots.bepolia.berachain.com/index.csv' "$tmp/out"; then
     pass "env.sh CHAIN selects network without exporting CHAIN"
   else
     fail "env.sh CHAIN selects network without exporting CHAIN" "$(cat "$tmp/out")"

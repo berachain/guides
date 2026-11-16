@@ -169,7 +169,7 @@ scrape_configs:
     metrics_path: /metrics.txt
     scrape_interval: 300s
     static_configs:
-      - targets: ['bepolia.snapshots.berachain.com']
+      - targets: ['snapshots.bepolia.berachain.com']
         labels:
           service: 'snapshot-freshness'
           machine: bepolia
@@ -264,7 +264,7 @@ scrape_configs:
           client: 'reth'
 
   # =======================================================
-  # bepolia.snapshots.berachain.com — Testnet (reth-archive, reth-pruned)
+  # snapshots.bepolia.berachain.com — Testnet (reth-archive, reth-pruned)
   # =======================================================
 
   - job_name: 'berabox-testnet-node-exporter'
@@ -275,7 +275,7 @@ scrape_configs:
     metrics_path: /metrics/node-exporter
     scrape_interval: 60s
     static_configs:
-      - targets: ['bepolia.snapshots.berachain.com']
+      - targets: ['snapshots.bepolia.berachain.com']
         labels:
           service: 'berachain-node'
           component: 'system'
@@ -292,7 +292,7 @@ scrape_configs:
     metrics_path: /metrics/reth-archive-cl
     scrape_interval: 60s
     static_configs:
-      - targets: ['bepolia.snapshots.berachain.com']
+      - targets: ['snapshots.bepolia.berachain.com']
         labels:
           service: 'berachain-node'
           component: 'consensus-layer'
@@ -309,7 +309,7 @@ scrape_configs:
     metrics_path: /metrics/reth-archive-el
     scrape_interval: 60s
     static_configs:
-      - targets: ['bepolia.snapshots.berachain.com']
+      - targets: ['snapshots.bepolia.berachain.com']
         labels:
           service: 'berachain-node'
           component: 'execution-layer'
@@ -326,7 +326,7 @@ scrape_configs:
     metrics_path: /metrics/reth-pruned-cl
     scrape_interval: 60s
     static_configs:
-      - targets: ['bepolia.snapshots.berachain.com']
+      - targets: ['snapshots.bepolia.berachain.com']
         labels:
           service: 'berachain-node'
           component: 'consensus-layer'
@@ -343,7 +343,7 @@ scrape_configs:
     metrics_path: /metrics/reth-pruned-el
     scrape_interval: 60s
     static_configs:
-      - targets: ['bepolia.snapshots.berachain.com']
+      - targets: ['snapshots.bepolia.berachain.com']
         labels:
           service: 'berachain-node'
           component: 'execution-layer'
