@@ -290,8 +290,8 @@ fetch_snapshot_index() {
   local snapshot_chain="$1"
   local index_url
   case "$snapshot_chain" in
-    bepolia) index_url="https://bepolia.snapshots.berachain.com/index.csv" ;;
-    mainnet|*) index_url="https://snapshots.berachain.com/index.csv" ;;
+    bepolia) index_url="https://bera-snapshots.fsn1.your-objectstorage.com/v1/bepolia/index.csv" ;;
+    mainnet|*) index_url="https://bera-snapshots.fsn1.your-objectstorage.com/v1/mainnet/index.csv" ;;
   esac
 
   info "Fetching snapshot index from: $index_url" >&2

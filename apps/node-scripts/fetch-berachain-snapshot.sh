@@ -40,8 +40,10 @@ Options:
       --force                 replace unexpected files in the target datadir
   -h, --help                  show this help
 
-Index CSV: https://snapshots.berachain.com/index.csv (mainnet)
-           https://bepolia.snapshots.berachain.com/index.csv (bepolia)
+Index CSV: https://bera-snapshots.fsn1.your-objectstorage.com/v1/mainnet/index.csv (mainnet)
+           https://bera-snapshots.fsn1.your-objectstorage.com/v1/bepolia/index.csv (bepolia)
+Portal UI:  https://snapshots.berachain.com (mainnet)
+           https://snapshots.bepolia.berachain.com (bepolia)
 
 Examples:
   ./fetch-berachain-snapshot.sh
@@ -52,9 +54,9 @@ EOF
 default_index_url() {
   local network="$1"
   if [[ "$network" == bepolia ]]; then
-    echo "https://bepolia.snapshots.berachain.com/index.csv"
+    echo "https://bera-snapshots.fsn1.your-objectstorage.com/v1/bepolia/index.csv"
   else
-    echo "https://snapshots.berachain.com/index.csv"
+    echo "https://bera-snapshots.fsn1.your-objectstorage.com/v1/mainnet/index.csv"
   fi
 }
 

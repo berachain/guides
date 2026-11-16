@@ -24,8 +24,8 @@ const DOWNLOAD_LIMIT_BYTES = 1 * 1024 * 1024; // 1 MB
 const DOWNLOAD_TIMEOUT_MS = 20_000;
 
 const INDEXES = {
-    mainnet: 'https://snapshots.berachain.com/index.csv',
-    testnet: 'https://bepolia.snapshots.berachain.com/index.csv',
+    mainnet: 'https://bera-snapshots.fsn1.your-objectstorage.com/v1/mainnet/index.csv',
+    testnet: 'https://bera-snapshots.fsn1.your-objectstorage.com/v1/bepolia/index.csv',
 };
 
 const TYPES = [
