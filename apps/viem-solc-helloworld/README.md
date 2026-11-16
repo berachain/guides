@@ -95,7 +95,7 @@ The contract is deployed to Berachain Bepolia testnet with the following configu
 - Network Name: Berachain Bepolia
 - Chain ID: 80069
 - RPC URL: https://bepolia.rpc.berachain.com
-- Explorer: https://bepolia.beratrail.io
+- Explorer: https://testnet.berascan.com
 
 ## Additional Resources
 

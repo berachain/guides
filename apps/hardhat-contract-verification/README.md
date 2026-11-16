@@ -1,6 +1,6 @@
 # Bera-HardhatExample
 
-This repo should serve as an example of the config and manual gas-override required for hardhat-based contract deployments on Berachain Bepolia. The repo also should help you verify contracts via hardhat (Routescan api and configs have been provided in the repo).
+This repo should serve as an example of the config and manual gas-override required for hardhat-based contract deployments on Berachain Bepolia. The repo also should help you verify contracts via hardhat (Berascan api and configs have been provided in the repo).
 
 ## Sum-up on the changes made/required for contract deployments on Bepolia.
 

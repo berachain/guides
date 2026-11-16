@@ -18,8 +18,7 @@ export const berachainMainnet = defineChain({
     public: { http: ["https://rpc.berachain.com"] },
   },
   blockExplorers: {
-    default: { name: "BeraScan", url: "https://berascan.com" },
-    beratrail: { name: "BeraTrail", url: "https://beratrail.io" },
+    default: { name: "Berascan", url: "https://berascan.com" },
   },
   testnet: false,
 });
@@ -42,7 +41,7 @@ export const berachainBepolia = defineChain({
     public: { http: ["https://bepolia.rpc.berachain.com"] },
   },
   blockExplorers: {
-    default: { name: "BeraTrail", url: "https://bepolia.beratrail.io" },
+    default: { name: "Berascan", url: "https://testnet.berascan.com" },
   },
   testnet: true,
 });

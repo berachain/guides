@@ -181,7 +181,7 @@ async function getOrCreateVault() {
 
       // Provide instructions to view vault details
       console.log("\nTo view details about the existing vault:");
-      console.log("1. Go to https://bepolia.beratrail.io");
+      console.log("1. Go to https://testnet.berascan.com");
       console.log(
         `2. Search for the rewards vault address: ${existingVaultAddress}`
       );
@@ -223,7 +223,7 @@ async function getOrCreateVault() {
 
     // Provide instructions to view new vault details
     console.log("\nTo view details about the new vault:");
-    console.log("1. Go to https://bepolia.beratrail.io");
+    console.log("1. Go to https://testnet.berascan.com");
     console.log(`2. Search for the rewards vault address: ${newVaultAddress}`);
     console.log(
       '3. Look for the "Create Rewards Vault" method in the transaction history'

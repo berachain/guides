@@ -18,7 +18,7 @@ const berachainBepolia: ChainInfo = {
     decimals: 18,
   },
   rpcUrl: "https://bepolia.rpc.berachain.com",
-  blockExplorerUrl: "https://bepolia.beratrail.io",
+  blockExplorerUrl: "https://testnet.berascan.com",
 };
 
 import("buffer").then(({ Buffer }) => {

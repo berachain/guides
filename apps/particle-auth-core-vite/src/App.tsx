@@ -29,7 +29,7 @@ const berachainBepolia: ChainInfo = {
     decimals: 18,
   },
   rpcUrl: "https://bepolia.rpc.berachain.com",
-  blockExplorerUrl: "https://bepolia.beratrail.io",
+  blockExplorerUrl: "https://testnet.berascan.com",
 };
 
 const App = () => {
@@ -91,7 +91,7 @@ const App = () => {
         <div>
           Transaction Hash:{" "}
           <a
-            href={`https://bepolia.beratrail.io/tx/${txReceipt.transactionHash}`}
+            href={`https://testnet.berascan.com/tx/${txReceipt.transactionHash}`}
             target="_blank"
             rel="noopener noreferrer"
           >
@@ -123,7 +123,7 @@ const App = () => {
         <div>
           Transaction Hash:{" "}
           <a
-            href={`https://bepolia.beratrail.io/tx/${txReceipt.transactionHash}`}
+            href={`https://testnet.berascan.com/tx/${txReceipt.transactionHash}`}
             target="_blank"
             rel="noopener noreferrer"
           >
