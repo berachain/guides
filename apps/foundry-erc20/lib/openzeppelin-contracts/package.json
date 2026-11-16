@@ -97,6 +97,7 @@
     "yargs": "^17.7.2"
   },
   "overrides": {
-    "cipher-base": "1.0.5"
+    "cipher-base": "1.0.5",
+    "elliptic": "6.6.1"
   }
 }
