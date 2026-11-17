@@ -43,8 +43,7 @@ const config = defineConfig({
         network: "berachainBepolia",
         chainId: 80069,
         urls: {
-          apiURL:
-            "https://testnet.berascan.com/api",
+          apiURL: "https://testnet.berascan.com/api",
           browserURL: "https://testnet.berascan.com/",
         },
       },
