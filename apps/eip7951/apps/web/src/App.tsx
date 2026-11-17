@@ -68,7 +68,7 @@ export const NETWORKS = [
     chainId: 80069,
     name: "Berachain Bepolia Testnet",
     rpcUrl: import.meta.env.VITE_BERACHAIN_BEPOLIA_RPC_URL,
-    blockExplorerUrl: "https://bepolia.beratrail.io",
+    blockExplorerUrl: "https://testnet.berascan.com",
     nativeCurrency: { name: "Bera", symbol: "BERA", decimals: 18 },
     supportsP256Precompile: false,
   },

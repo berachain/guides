@@ -80,7 +80,7 @@ const CONTRACT_BYTECODE =
 /**
  * @dev Berachain testnet block explorer
  */
-const BLOCK_EXPLORER = "https://bepolia.beratrail.io/";
+const BLOCK_EXPLORER = "https://testnet.berascan.com/";
 
 // Main Page
 // ========================================================
@@ -210,7 +210,7 @@ export default function Deploy() {
                     href={`${BLOCK_EXPLORER}/tx/${transactionHash}`}
                     target="_blank"
                   >
-                    Beratrail Tx Link
+                    Berascan Tx Link
                   </a>
                 </p>
               ) : null}
@@ -239,7 +239,7 @@ export default function Deploy() {
                     href={`${BLOCK_EXPLORER}/address/${receipt?.data?.contractAddress}`}
                     target="_blank"
                   >
-                    Beratrail Contract Address Link
+                    Berascan Contract Address Link
                   </a>
                 </p>
               ) : null}

@@ -19,7 +19,7 @@ const berachainBepolia = {
         decimals: 18,
     },
     rpcUrl: "https://bepolia.rpc.berachain.com",
-    blockExplorerUrl: "https://bepolia.beratrail.io",
+    blockExplorerUrl: "https://testnet.berascan.com",
 };
 const App = () => {
     const { provider } = useEthereum();
@@ -63,7 +63,7 @@ const App = () => {
         const txReceipt = await txResponse.wait();
         notification.success({
             message: "Transaction Successful",
-            description: (_jsxs("div", { children: ["Transaction Hash:", " ", _jsx("a", { href: `https://bepolia.beratrail.io/tx/${txReceipt.transactionHash}`, target: "_blank", rel: "noopener noreferrer", children: txReceipt.transactionHash })] })),
+            description: (_jsxs("div", { children: ["Transaction Hash:", " ", _jsx("a", { href: `https://testnet.berascan.com/tx/${txReceipt.transactionHash}`, target: "_blank", rel: "noopener noreferrer", children: txReceipt.transactionHash })] })),
         });
     };
     const executeUserOpHONEY = async () => {
@@ -73,7 +73,7 @@ const App = () => {
         const txReceipt = await txResponse.wait();
         notification.success({
             message: "Transaction Successful",
-            description: (_jsxs("div", { children: ["Transaction Hash:", " ", _jsx("a", { href: `https://bepolia.beratrail.io/tx/${txReceipt.transactionHash}`, target: "_blank", rel: "noopener noreferrer", children: txReceipt.transactionHash })] })),
+            description: (_jsxs("div", { children: ["Transaction Hash:", " ", _jsx("a", { href: `https://testnet.berascan.com/tx/${txReceipt.transactionHash}`, target: "_blank", rel: "noopener noreferrer", children: txReceipt.transactionHash })] })),
         });
     };
     return (_jsxs("div", { className: "App", children: [_jsxs("div", { className: "logo-section", children: [_jsx("img", { src: "https://i.imgur.com/EerK7MS.png", alt: "Logo 1", className: "logo logo-big" }), _jsx("img", { src: "https://i.imgur.com/OdR3YLW.png", alt: "Logo 2", className: "logo" })] }), !userInfo ? (_jsxs("div", { className: "login-section", children: [_jsxs("button", { className: "sign-button google-button", onClick: () => handleLogin("google"), children: [_jsx("img", { src: "https://i.imgur.com/nIN9P4A.png", alt: "Google", className: "icon" }), "Sign in with Google"] }), _jsxs("button", { className: "sign-button twitter-button", onClick: () => handleLogin("twitter"), children: [_jsx("img", { src: "https://i.imgur.com/afIaQJC.png", alt: "Twitter", className: "icon" }), "Sign in with X"] }), _jsx("button", { className: "sign-button other-button", onClick: () => handleLogin(""), children: _jsx("img", { src: "https://i.imgur.com/VRftF1b.png", alt: "Twitter", className: "icon" }) })] })) : (_jsxs("div", { className: "profile-card", children: [_jsx("h2", { children: userInfo.name }), _jsxs("div", { className: "balance-section", children: [_jsxs("small", { children: [balance, " BERA"] }), _jsx("button", { className: "sign-message-button", onClick: executeUserOp, children: "Burn 0.001 $BERA" }), _jsx("button", { className: "sign-message-button honey", onClick: executeUserOpHONEY, children: "Burn 1 $HONEY" }), _jsx("button", { className: "disconnect-button", onClick: () => disconnect(), children: "Logout" })] })] }))] }));

@@ -139,7 +139,7 @@ The package works with various development frameworks:
 
 - **Chain ID**: 80085
 - **RPC URL**: https://bepolia.rpc.berachain.com
-- **Block Explorer**: https://bepolia.beratrail.io
+- **Block Explorer**: https://testnet.berascan.com
 - **Currency**: BERA
 - **Symbol**: BERA
 

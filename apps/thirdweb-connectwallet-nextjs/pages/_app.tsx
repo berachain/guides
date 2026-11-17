@@ -22,8 +22,8 @@ const berachainBepolia: Chain = {
   slug: "berachain-bepolia",
   explorers: [
     {
-      name: "Beratrail",
-      url: "https://bepolia.beratrail.io",
+      name: "Berascan",
+      url: "https://testnet.berascan.com",
       standard: "EIP3091",
     },
   ],

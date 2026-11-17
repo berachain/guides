@@ -72,7 +72,7 @@ npm run verify 0x38f8423cc4390938c01616d7a9f761972e7f116a "Hello From Deployed C
 # for verification on the block explorer. Waiting for verification result...
 
 # Successfully verified contract HelloWorld on the block explorer.
-# https://bepolia.beratrail.io/address/0x38f8423cc4390938c01616d7a9f761972e7f116a#code
+# https://testnet.berascan.com/address/0x38f8423cc4390938c01616d7a9f761972e7f116a#code
 ```
 
 ## Run Local Node

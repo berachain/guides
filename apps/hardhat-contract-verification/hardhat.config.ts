@@ -45,9 +45,8 @@ const config = defineConfig({
         network: "berachain-bepolia",
         chainId,
         urls: {
-          apiURL:
-            "https://api.routescan.io/v2/network/testnet/evm/80069/etherscan",
-          browserURL: "https://bepolia.beratrail.io",
+          apiURL: "https://testnet.berascan.com/api",
+          browserURL: "https://testnet.berascan.com",
         },
       },
     ],
