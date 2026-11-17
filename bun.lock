@@ -215,7 +215,7 @@
       "version": "1.0.0",
       "dependencies": {
         "ethers": "^6.9.1",
-        "solc": "0.8.35",
+        "solc": "0.8.38",
       },
       "devDependencies": {
         "@types/jest": "^30.0.0",
@@ -6513,7 +6513,7 @@
 
     "solady": ["solady@0.0.180", "", {}, "sha512-9QVCyMph+wk78Aq/GxtDAQg7dvNoVWx2dS2Zwf11XlwFKDZ+YJG2lrQsK9NEIth9NOebwjBXAYk4itdwOOE4aw=="],
 
-    "solc": ["solc@0.8.35", "", { "dependencies": { "command-exists": "^1.2.8", "commander": "^8.1.0", "follow-redirects": "^1.12.1", "js-sha3": "0.8.0", "memorystream": "^0.3.1", "semver": "^5.5.0", "tmp": "0.0.33" }, "bin": { "solcjs": "solc.js" } }, "sha512-OaP/4zyoKRo2CjqZDxbtkeRlEo6MxP4FLCxntw1Agf9OSoecmwYKoFBSB34UcSKBFBucrTh3Mb0nRoJou62ibw=="],
+    "solc": ["solc@0.8.38", "", { "dependencies": { "command-exists": "^1.2.8", "commander": "^8.1.0", "follow-redirects": "^1.12.1", "js-sha3": "0.8.0", "memorystream": "^0.3.1", "semver": "^5.5.0", "tmp": "0.2.6" }, "bin": { "solcjs": "solc.js" } }, "sha512-DsDLa7uACQVVkE0DYNnUGC49b/yuCJ9ymWlcCEwmaJGcETPC6pTC+BXaRK9ADW8YVeMyxEKUtJsUwRAIG28jtQ=="],
 
     "solidity-bytes-utils": ["solidity-bytes-utils@0.8.4", "", {}, "sha512-/bjac5YR12i0plOKvGlhE51F5IWGP6rI8DJetCQlXcnwKWz/Hgf/vr+Qlk1BWz56xVcwVhmhCaDkTMnx5xvt0g=="],
 
