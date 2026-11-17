@@ -53,10 +53,6 @@ Go-based P2P network peer filtering and management tool.
 
 Analysis tools for studying Proof-of-Liquidity validator performance and reward distribution patterns.
 
-### snapshot-service/
-
-Snapshot generation, publishing, and pruning pipeline for Berachain node snapshots.
-
 ### staking-pools/
 
 Staking pool frontend and install-helper scripts.
